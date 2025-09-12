@@ -1,40 +1,148 @@
 {
   "project_info": {
-    "project_number": "1215704250",
-    "project_id": "groumap-ea452",
-    "storage_bucket": "groumap-ea452.firebasestorage.app"
+    "project_number": "974704293118",
+    "project_id": "groumap-deda4",
+    "storage_bucket": "groumap-deda4.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1215704250:android:f4d72fdc4cabc4181f6683",
+        "mobilesdk_app_id": "1:974704293118:android:edabf9fac208b8d95fa1af",
         "android_client_info": {
-          "package_name": "com.groumap.groumap"
+          "package_name": "com.example.flutter_application_1"
         }
       },
       "oauth_client": [
         {
-          "client_id": "1215704250-p01g6955uhu17koi0qbur3qbi9v98ues.apps.googleusercontent.com",
+          "client_id": "974704293118-e7u25e7ci3u12492is59109ltvpptim0.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyDhD_vjTaz-UhfHWrR56TQ9xKD-LV4I1-I"
+          "current_key": "AIzaSyDugWTKFlE8R_gh-LwE_mOuLXRdHy9D324"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "1215704250-p01g6955uhu17koi0qbur3qbi9v98ues.apps.googleusercontent.com",
+              "client_id": "974704293118-e7u25e7ci3u12492is59109ltvpptim0.apps.googleusercontent.com",
               "client_type": 3
             },
             {
-              "client_id": "1215704250-or5mrp8gm981roohftlgeri618oqreaq.apps.googleusercontent.com",
+              "client_id": "974704293118-72k4aqb7gt4erc16httjdmrm5dl3ae9s.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.groumap.groumap"
+                "bundle_id": "com.stocopo.groumap"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:974704293118:android:bf67528deb2db21f5fa1af",
+        "android_client_info": {
+          "package_name": "com.example.groumapapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "974704293118-e7u25e7ci3u12492is59109ltvpptim0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDugWTKFlE8R_gh-LwE_mOuLXRdHy9D324"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "974704293118-e7u25e7ci3u12492is59109ltvpptim0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "974704293118-72k4aqb7gt4erc16httjdmrm5dl3ae9s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.stocopo.groumap"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:974704293118:android:1cc6d330d4ccee9c5fa1af",
+        "android_client_info": {
+          "package_name": "com.stocopo.groumap"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "974704293118-e7u25e7ci3u12492is59109ltvpptim0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDugWTKFlE8R_gh-LwE_mOuLXRdHy9D324"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "974704293118-e7u25e7ci3u12492is59109ltvpptim0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "974704293118-72k4aqb7gt4erc16httjdmrm5dl3ae9s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.stocopo.groumap"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:974704293118:android:c7829bdfa21d9b315fa1af",
+        "android_client_info": {
+          "package_name": "com.stocopo.groumapstore"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "974704293118-e7u25e7ci3u12492is59109ltvpptim0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDugWTKFlE8R_gh-LwE_mOuLXRdHy9D324"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "974704293118-e7u25e7ci3u12492is59109ltvpptim0.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "974704293118-72k4aqb7gt4erc16httjdmrm5dl3ae9s.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.stocopo.groumap"
               }
             }
           ]

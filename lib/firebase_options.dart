@@ -27,10 +27,7 @@ class DefaultFirebaseOptions {
       case TargetPlatform.macOS:
         return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -44,41 +41,51 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDemo-Web-Key-Replace-With-Real-Key',
-    appId: '1:123456789:web:demo',
-    messagingSenderId: '123456789',
-    projectId: 'groumap-demo',
-    authDomain: 'groumap-demo.firebaseapp.com',
-    storageBucket: 'groumap-demo.appspot.com',
-    measurementId: 'G-DEMO123',
-    databaseURL: 'https://groumap-demo-default-rtdb.firebaseio.com',
+    apiKey: 'AIzaSyBFJwEYUZeSaseeJKVu1tDCdM6PawGqGgk',
+    appId: '1:1215704250:web:36453ad278ef4a171f6683',
+    messagingSenderId: '1215704250',
+    projectId: 'groumap-ea452',
+    authDomain: 'groumap-ea452.firebaseapp.com',
+    storageBucket: 'groumap-ea452.firebasestorage.app',
+    measurementId: 'G-MHF6YHJQKG',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDemo-Android-Key-Replace-With-Real-Key',
-    appId: '1:123456789:android:demo',
-    messagingSenderId: '123456789',
-    projectId: 'groumap-demo',
-    storageBucket: 'groumap-demo.appspot.com',
+    apiKey: 'AIzaSyBFJwEYUZeSaseeJKVu1tDCdM6PawGqGgk',
+    appId: '1:1215704250:android:f4d72fdc4cabc4181f6683',
+    messagingSenderId: '1215704250',
+    projectId: 'groumap-ea452',
+    storageBucket: 'groumap-ea452.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDemo-iOS-Key-Replace-With-Real-Key',
-    appId: '1:123456789:ios:demo',
-    messagingSenderId: '123456789',
-    projectId: 'groumap-demo',
-    storageBucket: 'groumap-demo.appspot.com',
-    iosClientId: 'demo.apps.googleusercontent.com',
-    iosBundleId: 'com.example.groumap',
+    apiKey: 'AIzaSyBFJwEYUZeSaseeJKVu1tDCdM6PawGqGgk',
+    appId: '1:1215704250:ios:235272e01951aec61f6683',
+    messagingSenderId: '1215704250',
+    projectId: 'groumap-ea452',
+    storageBucket: 'groumap-ea452.firebasestorage.app',
+    iosClientId: '1215704250-235272e01951aec61f6683.apps.googleusercontent.com',
+    iosBundleId: 'com.groumap.groumap',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDemo-macOS-Key-Replace-With-Real-Key',
-    appId: '1:123456789:macos:demo',
-    messagingSenderId: '123456789',
-    projectId: 'groumap-demo',
-    storageBucket: 'groumap-demo.appspot.com',
-    iosClientId: 'demo.apps.googleusercontent.com',
-    iosBundleId: 'com.example.groumap',
+    apiKey: 'AIzaSyBFJwEYUZeSaseeJKVu1tDCdM6PawGqGgk',
+    appId: '1:1215704250:ios:235272e01951aec61f6683',
+    messagingSenderId: '1215704250',
+    projectId: 'groumap-ea452',
+    storageBucket: 'groumap-ea452.firebasestorage.app',
+    iosClientId: '1215704250-235272e01951aec61f6683.apps.googleusercontent.com',
+    iosBundleId: 'com.groumap.groumap',
   );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyBFJwEYUZeSaseeJKVu1tDCdM6PawGqGgk',
+    appId: '1:1215704250:web:36453ad278ef4a171f6683',
+    messagingSenderId: '1215704250',
+    projectId: 'groumap-ea452',
+    authDomain: 'groumap-ea452.firebaseapp.com',
+    storageBucket: 'groumap-ea452.firebasestorage.app',
+    measurementId: 'G-MHF6YHJQKG',
+  );
+
 }

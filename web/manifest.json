@@ -1,11 +1,11 @@
 {
-    "name": "groumapapp",
-    "short_name": "groumapapp",
+    "name": "GrouMap",
+    "short_name": "GrouMap",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#E75B41",
+    "theme_color": "#E75B41",
+    "description": "ポイントが貯まる地図アプリ",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
