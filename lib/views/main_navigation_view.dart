@@ -7,7 +7,7 @@ import '../providers/coupon_provider.dart';
 import '../providers/badge_provider.dart';
 import 'home_view.dart';
 import 'map/map_view.dart';
-import 'qr/qr_scanner_view.dart';
+import 'qr/qr_generator_view.dart';
 import 'profile/profile_view.dart';
 import 'coupons/coupons_view.dart';
 
@@ -24,7 +24,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   final List<Widget> _pages = [
     const HomeView(),
     const MapView(),
-    const QRScannerView(),
+    const QRGeneratorView(),
     const CouponsView(),
     const ProfileView(),
   ];

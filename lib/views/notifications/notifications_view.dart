@@ -6,6 +6,29 @@ import '../../providers/auth_provider.dart';
 import '../../models/notification_model.dart' as model;
 import '../../widgets/custom_button.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'announcement_detail_view.dart';
+
+// ユーザーデータプロバイダー（usersコレクションから直接取得）
+final userDataProvider = StreamProvider.family<Map<String, dynamic>?, String>((ref, userId) {
+  try {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.exists) {
+        return snapshot.data();
+      }
+      return null;
+    }).handleError((error) {
+      debugPrint('Error fetching user data: $error');
+      return null;
+    });
+  } catch (e) {
+    debugPrint('Error creating user data stream: $e');
+    return Stream.value(null);
+  }
+});
 
 class NotificationsView extends ConsumerWidget {
   const NotificationsView({Key? key}) : super(key: key);
@@ -13,18 +36,34 @@ class NotificationsView extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateProvider);
-
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('お知らせ'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
       ),
-      body: _buildAnnouncementsList(context, ref),
+      body: authState.when(
+        data: (user) {
+          if (user != null) {
+            return _buildAnnouncementsList(context, ref, user.uid);
+          } else {
+            return const Center(
+              child: Text('ログインが必要です'),
+            );
+          }
+        },
+        loading: () => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        error: (error, _) => Center(
+          child: Text('エラー: $error'),
+        ),
+      ),
     );
   }
 
-  Widget _buildAnnouncementsList(BuildContext context, WidgetRef ref) {
+  Widget _buildAnnouncementsList(BuildContext context, WidgetRef ref, String userId) {
     final announcementsAsync = ref.watch(announcementsProvider);
 
     return announcementsAsync.when(
@@ -53,7 +92,7 @@ class NotificationsView extends ConsumerWidget {
           itemCount: announcements.length,
           itemBuilder: (context, index) {
             final announcement = announcements[index];
-            return _buildAnnouncementItem(context, ref, announcement);
+            return _buildAnnouncementItem(context, ref, announcement, userId);
           },
         );
       },
@@ -166,119 +205,152 @@ class NotificationsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildAnnouncementItem(BuildContext context, WidgetRef ref, Map<String, dynamic> announcement) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () => _showAnnouncementDetails(context, ref, announcement),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getCategoryColor(announcement['category']),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      announcement['category'],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getPriorityColor(announcement['priority']),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      announcement['priority'],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    _formatDate(announcement['publishedAt']),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                announcement['title'],
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                announcement['content'],
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[700],
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(
-                    Icons.visibility,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${announcement['totalViews']} 回閲覧',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Icon(
-                    Icons.person,
-                    size: 16,
-                    color: Colors.grey[600],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '${announcement['readCount']} 人が既読',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+  Widget _buildAnnouncementItem(BuildContext context, WidgetRef ref, Map<String, dynamic> announcement, String userId) {
+    return ref.watch(userDataProvider(userId)).when(
+      data: (userData) {
+        final readNotifications = List<String>.from(userData?['readNotifications'] ?? []);
+        final isRead = readNotifications.contains(announcement['id']);
+        
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: isRead ? 1 : 3,
+          color: isRead ? null : Colors.blue.shade50,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
+          child: InkWell(
+            onTap: () => _navigateToAnnouncementDetail(context, announcement),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _getCategoryColor(announcement['category']),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          announcement['category'],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _getPriorityColor(announcement['priority']),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          announcement['priority'],
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      // 未読の赤いランプ
+                      if (!isRead)
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatDate(announcement['publishedAt']),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    announcement['title'],
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    announcement['content'],
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.visibility,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${announcement['totalViews']} 回閲覧',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Icon(
+                        Icons.person,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${announcement['readCount']} 人が既読',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+      loading: () => Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ),
+      error: (_, __) => Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('読み込みエラー'),
         ),
       ),
     );
@@ -344,68 +416,10 @@ class NotificationsView extends ConsumerWidget {
     );
   }
 
-  void _showAnnouncementDetails(BuildContext context, WidgetRef ref, Map<String, dynamic> announcement) {
-    // 閲覧数を更新
-    ref.read(announcementProvider).updateViewCount(announcement['id']);
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: _getCategoryColor(announcement['category']),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                announcement['category'],
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(child: Text(announcement['title'])),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                announcement['content'],
-                style: const TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              _buildDetailRow('カテゴリ:', announcement['category']),
-              _buildDetailRow('優先度:', announcement['priority']),
-              _buildDetailRow('公開日時:', _formatDateTime(announcement['publishedAt'])),
-              _buildDetailRow('閲覧数:', '${announcement['totalViews']} 回'),
-              _buildDetailRow('既読数:', '${announcement['readCount']} 人'),
-              if (announcement['tags'] != null && (announcement['tags'] as List).isNotEmpty)
-                _buildDetailRow('タグ:', (announcement['tags'] as List).join(', ')),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              // 既読数を更新
-              ref.read(announcementProvider).updateReadCount(announcement['id']);
-              Navigator.of(context).pop();
-            },
-            child: const Text('既読にする'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+  void _navigateToAnnouncementDetail(BuildContext context, Map<String, dynamic> announcement) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => AnnouncementDetailView(announcement: announcement),
       ),
     );
   }

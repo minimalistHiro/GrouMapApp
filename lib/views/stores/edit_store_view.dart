@@ -6,6 +6,8 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 class EditStoreView extends StatefulWidget {
   final String storeId;
@@ -53,6 +55,9 @@ class _EditStoreViewState extends State<EditStoreView> {
   // 位置情報の状態
   double? _selectedLatitude;
   double? _selectedLongitude;
+  
+  // 地図選択の状態
+  LatLng? _selectedMapLocation;
 
   final List<String> _categories = [
     'カフェ',
@@ -101,6 +106,7 @@ class _EditStoreViewState extends State<EditStoreView> {
           _storeImageUrl = data['storeImageUrl'];
           _selectedLatitude = data['location']?['latitude'] ?? 35.6581;
           _selectedLongitude = data['location']?['longitude'] ?? 139.7017;
+          _selectedMapLocation = LatLng(_selectedLatitude!, _selectedLongitude!);
           _tags = List<String>.from(data['tags'] ?? []);
           
           // 営業時間の設定
@@ -172,6 +178,36 @@ class _EditStoreViewState extends State<EditStoreView> {
     setState(() {
       _tags.remove(tag);
     });
+  }
+
+  // 地図から位置を選択するダイアログを表示
+  Future<void> _showMapLocationPicker() async {
+    final result = await showDialog<LatLng>(
+      context: context,
+      builder: (BuildContext context) {
+        return MapLocationPickerDialog(
+          initialLocation: _selectedMapLocation ?? const LatLng(35.6581, 139.7017),
+        );
+      },
+    );
+    
+    if (result != null) {
+      setState(() {
+        _selectedMapLocation = result;
+        _selectedLatitude = result.latitude;
+        _selectedLongitude = result.longitude;
+        _updateLocationControllers();
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('位置を選択しました: ${result.latitude.toStringAsFixed(6)}, ${result.longitude.toStringAsFixed(6)}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 
   // 店舗アイコン画像を選択
@@ -770,6 +806,21 @@ class _EditStoreViewState extends State<EditStoreView> {
             Expanded(child: _buildInputField(controller: _longitudeController, label: '経度', hint: '例：139.7017', icon: Icons.location_on, keyboardType: TextInputType.number, readOnly: true)),
           ],
         ),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _showMapLocationPicker,
+            icon: const Icon(Icons.map, size: 18),
+            label: const Text('地図から読み取る'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+          ),
+        ),
         if (_selectedLatitude != null && _selectedLongitude != null) ...[
           const SizedBox(height: 8),
           Container(
@@ -993,6 +1044,199 @@ class _EditStoreViewState extends State<EditStoreView> {
         const SizedBox(height: 16),
         _buildInputField(controller: _facebookController, label: 'Facebook', hint: '例：https://facebook.com/page', icon: Icons.facebook),
       ],
+    );
+  }
+}
+
+// 地図位置選択ダイアログ
+class MapLocationPickerDialog extends StatefulWidget {
+  final LatLng initialLocation;
+  
+  const MapLocationPickerDialog({
+    super.key,
+    required this.initialLocation,
+  });
+
+  @override
+  State<MapLocationPickerDialog> createState() => _MapLocationPickerDialogState();
+}
+
+class _MapLocationPickerDialogState extends State<MapLocationPickerDialog> {
+  late MapController _mapController;
+  LatLng? _selectedLocation;
+
+  @override
+  void initState() {
+    super.initState();
+    _mapController = MapController();
+    _selectedLocation = widget.initialLocation;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        width: MediaQuery.of(context).size.width * 0.9,
+        height: MediaQuery.of(context).size.height * 0.7,
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          children: [
+            // ヘッダー
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFFF6B35),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.map, color: Colors.white, size: 24),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      '位置を選択してください',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+            
+            // 地図
+            Expanded(
+              child: FlutterMap(
+                mapController: _mapController,
+                options: MapOptions(
+                  initialCenter: _selectedLocation ?? const LatLng(35.6581, 139.7017),
+                  initialZoom: 15.0,
+                  onTap: (tapPosition, point) {
+                    setState(() {
+                      _selectedLocation = point;
+                    });
+                  },
+                ),
+                children: [
+                  // タイルレイヤー
+                  TileLayer(
+                    urlTemplate: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
+                    subdomains: const ['a', 'b', 'c'],
+                    userAgentPackageName: 'com.example.groumapapp',
+                    additionalOptions: const {
+                      'attribution': '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    },
+                  ),
+                  
+                  // マーカーレイヤー
+                  if (_selectedLocation != null)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _selectedLocation!,
+                          width: 40,
+                          height: 40,
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Color(0xFFFF6B35),
+                            size: 40,
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+            
+            // 選択された位置情報表示
+            if (_selectedLocation != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  border: Border(top: BorderSide(color: Colors.grey[300]!)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, color: Color(0xFFFF6B35), size: 20),
+                        const SizedBox(width: 8),
+                        const Text('選択された位置:', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '緯度: ${_selectedLocation!.latitude.toStringAsFixed(6)}',
+                            style: const TextStyle(fontFamily: 'monospace'),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Text(
+                            '経度: ${_selectedLocation!.longitude.toStringAsFixed(6)}',
+                            style: const TextStyle(fontFamily: 'monospace'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            
+            // ボタン
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('キャンセル'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _selectedLocation != null
+                          ? () => Navigator.of(context).pop(_selectedLocation)
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFFF6B35),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('確定'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

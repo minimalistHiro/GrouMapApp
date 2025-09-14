@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import '../../providers/auth_provider.dart';
-import '../../services/qr_service.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
+import '../../providers/qr_token_provider.dart';
 import '../../widgets/custom_button.dart';
-import '../../widgets/custom_text_field.dart';
 
 class QRGeneratorView extends ConsumerStatefulWidget {
   const QRGeneratorView({Key? key}) : super(key: key);
@@ -13,30 +12,41 @@ class QRGeneratorView extends ConsumerStatefulWidget {
   ConsumerState<QRGeneratorView> createState() => _QRGeneratorViewState();
 }
 
-class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
-  final _formKey = GlobalKey<FormState>();
-  final _pointsController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _storeIdController = TextEditingController();
-  
-  QRCodeData? _generatedQRCode;
-  bool _isGenerating = false;
+class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  MobileScannerController? _scannerController;
+  bool _isScanning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _scannerController = MobileScannerController();
+    
+    // タブ変更を監視して、QRコードを読み取るタブが選択された時にカメラを開始
+    _tabController.addListener(() {
+      if (_tabController.index == 1) {
+        _startScanning();
+      } else {
+        _stopScanning();
+      }
+    });
+  }
 
   @override
   void dispose() {
-    _pointsController.dispose();
-    _descriptionController.dispose();
-    _storeIdController.dispose();
+    _tabController.dispose();
+    _scannerController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authStateProvider);
+    final authState = ref.watch(authProvider);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('QRコード生成'),
+        title: const Text('QRコード'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
       ),
@@ -48,7 +58,13 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
             );
           }
 
-          return _buildContent(context, user.uid);
+          return TabBarView(
+            controller: _tabController,
+            children: [
+              _buildQRCodeList(context),
+              _buildQRScanner(context),
+            ],
+          );
         },
         loading: () => const Center(
           child: CircularProgressIndicator(),
@@ -57,192 +73,21 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
           child: Text('エラー: $error'),
         ),
       ),
-    );
-  }
-
-  Widget _buildContent(BuildContext context, String userId) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 生成されたQRコード表示
-          if (_generatedQRCode != null) ...[
-            _buildGeneratedQRCode(context),
-            const SizedBox(height: 24),
-          ],
-          
-          // QRコード生成フォーム
-          Card(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'QRコード情報',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // 店舗ID
-                    CustomTextField(
-                      controller: _storeIdController,
-                      labelText: '店舗ID',
-                      hintText: 'store_001',
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return '店舗IDを入力してください';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // ポイント数
-                    CustomTextField(
-                      controller: _pointsController,
-                      labelText: 'ポイント数',
-                      hintText: '10',
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'ポイント数を入力してください';
-                        }
-                        final points = int.tryParse(value);
-                        if (points == null || points <= 0) {
-                          return '有効なポイント数を入力してください';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    // 説明
-                    CustomTextField(
-                      controller: _descriptionController,
-                      labelText: '説明（任意）',
-                      hintText: 'お得なキャンペーン',
-                      maxLines: 3,
-                    ),
-                    const SizedBox(height: 24),
-                    
-                    // 生成ボタン
-                    SizedBox(
-                      width: double.infinity,
-                      child: CustomButton(
-                        text: _isGenerating ? '生成中...' : 'QRコードを生成',
-                        onPressed: _isGenerating ? null : () => _generateQRCode(context, userId),
-                        backgroundColor: const Color(0xFFFF6B35),
-                        icon: const Icon(Icons.qr_code, size: 20),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+      bottomNavigationBar: Container(
+        color: const Color(0xFFFF6B35),
+        child: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          tabs: const [
+            Tab(
+              icon: Icon(Icons.qr_code),
+              text: 'QRコード',
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGeneratedQRCode(BuildContext context) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const Text(
-              '生成されたQRコード',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // QRコード画像
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: QrImageView(
-                data: _generatedQRCode!.token,
-                version: QrVersions.auto,
-                size: 200.0,
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // QRコード情報
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ポイント: ${_generatedQRCode!.points}pt',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text('店舗ID: ${_generatedQRCode!.storeId}'),
-                  Text('有効期限: ${_formatDateTime(_generatedQRCode!.expiresAt)}'),
-                  if (_generatedQRCode!.description != null) ...[
-                    const SizedBox(height: 4),
-                    Text('説明: ${_generatedQRCode!.description}'),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // アクションボタン
-            Row(
-              children: [
-                Expanded(
-                  child: CustomButton(
-                    text: '新しいQRコード',
-                    onPressed: () {
-                      setState(() {
-                        _generatedQRCode = null;
-                        _formKey.currentState?.reset();
-                      });
-                    },
-                    backgroundColor: Colors.blue,
-                    icon: const Icon(Icons.refresh, size: 20),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: CustomButton(
-                    text: '共有',
-                    onPressed: () {
-                      _shareQRCode(context);
-                    },
-                    backgroundColor: Colors.orange,
-                    icon: const Icon(Icons.share, size: 20),
-                  ),
-                ),
-              ],
+            Tab(
+              icon: Icon(Icons.qr_code_scanner),
+              text: 'QRコードを読み取る',
             ),
           ],
         ),
@@ -250,71 +95,402 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
     );
   }
 
-  Future<void> _generateQRCode(BuildContext context, String userId) async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() {
-      _isGenerating = true;
-    });
-
-    try {
-      final qrService = QRService();
-      final points = int.parse(_pointsController.text);
-      
-      final qrCode = await qrService.generateQRCode(
-        storeId: _storeIdController.text,
-        points: points,
-        createdBy: userId,
-        description: _descriptionController.text.isEmpty 
-            ? null 
-            : _descriptionController.text,
-        expiresIn: const Duration(hours: 24),
-      );
-
-      setState(() {
-        _generatedQRCode = qrCode;
-        _isGenerating = false;
-      });
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('QRコードが生成されました'),
-            backgroundColor: const Color(0xFFFF6B35),
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() {
-        _isGenerating = false;
-      });
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('QRコード生成に失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  void _shareQRCode(BuildContext context) {
-    // TODO: 実際の共有機能を実装
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('共有機能は準備中です'),
-        backgroundColor: Colors.orange,
+  Widget _buildQRCodeList(BuildContext context) {
+    final qrTokenState = ref.watch(qrTokenProvider);
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // QRコード表示
+          _buildQRCodeDisplay(context, qrTokenState),
+        ],
       ),
     );
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    return '${dateTime.year}/${dateTime.month}/${dateTime.day} '
-           '${dateTime.hour.toString().padLeft(2, '0')}:'
-           '${dateTime.minute.toString().padLeft(2, '0')}';
+  Widget _buildQRCodeDisplay(BuildContext context, QRTokenState qrTokenState) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 残り時間表示
+            if (qrTokenState.hasToken) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: qrTokenState.remainingSeconds > 10 
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: qrTokenState.remainingSeconds > 10 
+                        ? Colors.green
+                        : Colors.orange,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.timer,
+                      color: qrTokenState.remainingSeconds > 10 ? Colors.green : Colors.orange,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      '更新まで ${qrTokenState.remainingSeconds} 秒',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: qrTokenState.remainingSeconds > 10 ? Colors.green : Colors.orange,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            
+            // QRコード画像
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: _buildQRCodeContent(qrTokenState),
+            ),
+            const SizedBox(height: 16),
+            
+            // エラー表示
+            if (qrTokenState.error != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error, color: Colors.red, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        qrTokenState.error!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        ref.read(qrTokenProvider.notifier).clearError();
+                        ref.read(qrTokenProvider.notifier).refreshToken();
+                      },
+                      child: const Text('再試行'),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+            
+            // 説明テキスト
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B35).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: const Color(0xFFFF6B35).withOpacity(0.3),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: const Color(0xFFFF6B35),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'このQRコードは60秒ごとに自動更新されます。店舗でスキャンしてもらうとポイントが付与されます。',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: const Color(0xFFFF6B35),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
+
+  Widget _buildQRCodeContent(QRTokenState qrTokenState) {
+    if (qrTokenState.isLoading) {
+      return const SizedBox(
+        width: 200,
+        height: 200,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('トークンを生成中...'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (!qrTokenState.hasToken) {
+      return const SizedBox(
+        width: 200,
+        height: 200,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.qr_code, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text('トークンを取得できませんでした'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return QrImageView(
+      data: qrTokenState.token!,
+      version: QrVersions.auto,
+      size: 200.0,
+      backgroundColor: Colors.white,
+    );
+  }
+
+
+  Widget _buildQRScanner(BuildContext context) {
+    if (!_isScanning) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.qr_code_scanner,
+              size: 120,
+              color: Color(0xFFFF6B35),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'QRコードをスキャン',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFFF6B35),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'カメラをQRコードに向けて\nスキャンしてください',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 32),
+            CustomButton(
+              text: 'スキャンを開始',
+              onPressed: () {
+                _startScanning();
+              },
+              backgroundColor: const Color(0xFFFF6B35),
+              icon: const Icon(Icons.qr_code_scanner, size: 20),
+            ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: () {
+                _showManualInputDialog(context);
+              },
+              child: const Text(
+                '手動でQRコードを入力',
+                style: TextStyle(
+                  color: Color(0xFFFF6B35),
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Stack(
+      children: [
+        MobileScanner(
+          controller: _scannerController!,
+          onDetect: (capture) {
+            final List<Barcode> barcodes = capture.barcodes;
+            if (barcodes.isNotEmpty) {
+              final String? code = barcodes.first.rawValue;
+              if (code != null) {
+                _handleQRCodeDetected(context, code);
+              }
+            }
+          },
+        ),
+        // スキャンエリアのオーバーレイ
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.5),
+          ),
+          child: Center(
+            child: Container(
+              width: 250,
+              height: 250,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.white, width: 2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Center(
+                child: Text(
+                  'QRコードをここに合わせてください',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          ),
+        ),
+        // 停止ボタン
+        Positioned(
+          top: 50,
+          right: 20,
+          child: FloatingActionButton(
+            onPressed: () {
+              _stopScanning();
+            },
+            backgroundColor: Colors.red,
+            child: const Icon(Icons.stop, color: Colors.white),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _startScanning() {
+    setState(() {
+      _isScanning = true;
+    });
+  }
+
+  void _stopScanning() {
+    setState(() {
+      _isScanning = false;
+    });
+  }
+
+  void _handleQRCodeDetected(BuildContext context, String code) {
+    _stopScanning();
+    _processQRCode(context, code);
+  }
+
+  void _showManualInputDialog(BuildContext context) {
+    final TextEditingController qrCodeController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('QRコードを手動入力'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('QRコードの内容を入力してください'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: qrCodeController,
+              decoration: const InputDecoration(
+                labelText: 'QRコード',
+                hintText: 'qr_store001_points10_20241201',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _processQRCode(context, qrCodeController.text);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF6B35),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('処理'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _processQRCode(BuildContext context, String qrCode) {
+    if (qrCode.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('QRコードを入力してください'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // QRコードの処理（モック）
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('QRコード処理完了'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle, size: 64, color: Colors.green),
+            const SizedBox(height: 16),
+            Text('QRコード: $qrCode'),
+            const SizedBox(height: 8),
+            const Text('10ポイントを獲得しました！'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
 }

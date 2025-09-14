@@ -20,6 +20,54 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="GrouMap - ポイントが貯まる地図アプリ">
 
+  <!-- CORS設定 -->
+  <meta http-equiv="Cross-Origin-Embedder-Policy" content="cross-origin">
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="cross-origin">
+  <meta http-equiv="Cross-Origin-Resource-Policy" content="cross-origin">
+  
+  <!-- 追加のCORS設定 -->
+  <meta http-equiv="Access-Control-Allow-Origin" content="*">
+  <meta http-equiv="Access-Control-Allow-Methods" content="GET, POST, PUT, DELETE, OPTIONS">
+  <meta http-equiv="Access-Control-Allow-Headers" content="Content-Type, Authorization">
+  
+  <!-- Flutter Web用の追加設定 -->
+  <meta name="referrer" content="no-referrer">
+  <meta name="referrer-policy" content="no-referrer">
+  
+  <!-- 画像読み込み用の特別な設定 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  
+  <!-- 画像読み込み制限を解除 -->
+  <script>
+    // CORS制限を完全に解除
+    if (typeof window !== 'undefined') {
+      // 画像読み込み制限を解除
+      window.addEventListener('load', function() {
+        // 画像読み込み制限を解除
+        if (window.Image) {
+          const originalImage = window.Image;
+          window.Image = function() {
+            const img = new originalImage();
+            img.crossOrigin = 'anonymous';
+            return img;
+          };
+        }
+        
+        // 画像読み込み制限を解除
+        if (window.HTMLImageElement) {
+          const originalHTMLImageElement = window.HTMLImageElement;
+          window.HTMLImageElement = function() {
+            const img = new originalHTMLImageElement();
+            img.crossOrigin = 'anonymous';
+            return img;
+          };
+        }
+      });
+    }
+  </script>
+
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">

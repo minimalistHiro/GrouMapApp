@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'views/home_view.dart';
 import 'views/auth/sign_in_view.dart';
@@ -11,6 +12,12 @@ import 'providers/auth_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Web用のCORS設定
+  if (kIsWeb) {
+    // Web用の画像読み込み設定
+    debugPrint('Running on web platform');
+  }
   
   try {
     await Firebase.initializeApp(

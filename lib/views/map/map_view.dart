@@ -5,10 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/location_provider.dart';
-import '../../providers/store_provider.dart';
-import '../../models/store_model.dart';
-import '../../widgets/custom_button.dart';
+import '../stores/store_detail_view.dart';
 
 class MapView extends ConsumerStatefulWidget {
   final String? selectedStoreId;
@@ -42,6 +39,10 @@ class _MapViewState extends ConsumerState<MapView> {
   
   // デフォルトの座標（東京駅周辺）
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
+  
+  // 位置情報取得の試行回数
+  int _locationRetryCount = 0;
+  static const int _maxLocationRetries = 3;
 
   @override
   void initState() {
@@ -51,10 +52,15 @@ class _MapViewState extends ConsumerState<MapView> {
   
   // 初期データ読み込み
   Future<void> _initializeMapData() async {
-    await Future.wait([
-      _getCurrentLocation(),
-      _loadStoresFromDatabase(),
-    ]);
+    // 店舗データを先に読み込む
+    await _loadStoresFromDatabase();
+    
+    // 位置情報の取得を試行（失敗してもアプリは動作する）
+    try {
+      await _getCurrentLocation();
+    } catch (e) {
+      print('初期位置情報取得に失敗しましたが、アプリは継続します: $e');
+    }
     
     // 特定の店舗が選択されている場合、その店舗を選択状態にする
     if (widget.selectedStoreId != null) {
@@ -92,6 +98,18 @@ class _MapViewState extends ConsumerState<MapView> {
               'description': data['description'] ?? '',
               'address': data['address'] ?? '',
               'iconImageUrl': data['iconImageUrl'],
+              'storeImageUrl': data['storeImageUrl'], // 店舗詳細画面で使用
+              'backgroundImageUrl': data['backgroundImageUrl'], // 店舗一覧画面で使用
+              'phoneNumber': data['phoneNumber'] ?? '',
+              'phone': data['phoneNumber'] ?? '', // store_detail_view.dartで使用
+              'businessHours': data['businessHours'] ?? {},
+              'location': data['location'], // 位置情報
+              'socialMedia': data['socialMedia'] ?? {},
+              'tags': data['tags'] ?? [],
+              'isActive': data['isActive'] ?? false,
+              'isApproved': data['isApproved'] ?? false,
+              'createdAt': data['createdAt'],
+              'updatedAt': data['updatedAt'],
               'isVisited': false,
               'flowerType': 'unvisited',
             };
@@ -119,6 +137,29 @@ class _MapViewState extends ConsumerState<MapView> {
             'description': 'テスト用のサンプル店舗です',
             'address': '東京都千代田区丸の内1-1-1',
             'iconImageUrl': null,
+            'storeImageUrl': null,
+            'backgroundImageUrl': null,
+            'phoneNumber': '03-1234-5678',
+            'phone': '03-1234-5678',
+            'businessHours': {
+              'monday': {'isOpen': true, 'open': '09:00', 'close': '21:00'},
+              'tuesday': {'isOpen': true, 'open': '09:00', 'close': '21:00'},
+              'wednesday': {'isOpen': true, 'open': '09:00', 'close': '21:00'},
+              'thursday': {'isOpen': true, 'open': '09:00', 'close': '21:00'},
+              'friday': {'isOpen': true, 'open': '09:00', 'close': '21:00'},
+              'saturday': {'isOpen': true, 'open': '10:00', 'close': '20:00'},
+              'sunday': {'isOpen': false, 'open': '', 'close': ''},
+            },
+            'location': {
+              'latitude': 35.6812,
+              'longitude': 139.7671,
+            },
+            'socialMedia': {},
+            'tags': ['人気', 'おすすめ'],
+            'isActive': true,
+            'isApproved': true,
+            'createdAt': DateTime.now(),
+            'updatedAt': DateTime.now(),
             'isVisited': false,
             'flowerType': 'unvisited',
           },
@@ -130,6 +171,29 @@ class _MapViewState extends ConsumerState<MapView> {
             'description': 'テスト用のサンプル店舗です',
             'address': '東京都渋谷区道玄坂1-1-1',
             'iconImageUrl': null,
+            'storeImageUrl': null,
+            'backgroundImageUrl': null,
+            'phoneNumber': '03-2345-6789',
+            'phone': '03-2345-6789',
+            'businessHours': {
+              'monday': {'isOpen': true, 'open': '08:00', 'close': '22:00'},
+              'tuesday': {'isOpen': true, 'open': '08:00', 'close': '22:00'},
+              'wednesday': {'isOpen': true, 'open': '08:00', 'close': '22:00'},
+              'thursday': {'isOpen': true, 'open': '08:00', 'close': '22:00'},
+              'friday': {'isOpen': true, 'open': '08:00', 'close': '22:00'},
+              'saturday': {'isOpen': true, 'open': '09:00', 'close': '21:00'},
+              'sunday': {'isOpen': true, 'open': '09:00', 'close': '21:00'},
+            },
+            'location': {
+              'latitude': 35.6762,
+              'longitude': 139.6503,
+            },
+            'socialMedia': {},
+            'tags': ['コーヒー', '落ち着く'],
+            'isActive': true,
+            'isApproved': true,
+            'createdAt': DateTime.now(),
+            'updatedAt': DateTime.now(),
             'isVisited': false,
             'flowerType': 'unvisited',
           },
@@ -141,6 +205,29 @@ class _MapViewState extends ConsumerState<MapView> {
             'description': 'テスト用のサンプル店舗です',
             'address': '東京都新宿区新宿3-1-1',
             'iconImageUrl': null,
+            'storeImageUrl': null,
+            'backgroundImageUrl': null,
+            'phoneNumber': '03-3456-7890',
+            'phone': '03-3456-7890',
+            'businessHours': {
+              'monday': {'isOpen': true, 'open': '10:00', 'close': '20:00'},
+              'tuesday': {'isOpen': true, 'open': '10:00', 'close': '20:00'},
+              'wednesday': {'isOpen': true, 'open': '10:00', 'close': '20:00'},
+              'thursday': {'isOpen': true, 'open': '10:00', 'close': '20:00'},
+              'friday': {'isOpen': true, 'open': '10:00', 'close': '20:00'},
+              'saturday': {'isOpen': true, 'open': '10:00', 'close': '19:00'},
+              'sunday': {'isOpen': false, 'open': '', 'close': ''},
+            },
+            'location': {
+              'latitude': 35.6581,
+              'longitude': 139.7016,
+            },
+            'socialMedia': {},
+            'tags': ['ファッション', 'トレンド'],
+            'isActive': true,
+            'isApproved': true,
+            'createdAt': DateTime.now(),
+            'updatedAt': DateTime.now(),
             'isVisited': false,
             'flowerType': 'unvisited',
           },
@@ -168,19 +255,20 @@ class _MapViewState extends ConsumerState<MapView> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      // 新しいデータ構造: users/{userId}/stores/{storeId}
       final QuerySnapshot snapshot = await FirebaseFirestore.instance
-          .collection('user_stamps')
-          .where('userId', isEqualTo: user.uid)
+          .collection('users')
+          .doc(user.uid)
+          .collection('stores')
           .get();
 
       final Map<String, Map<String, dynamic>> userStamps = {};
       
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        final storeId = data['storeId'] as String;
+        final storeId = doc.id; // ドキュメントIDがstoreId
         userStamps[storeId] = {
-          'goldStamps': data['goldStamps'] ?? 0,
-          'regularStamps': data['regularStamps'] ?? 0,
+          'stamps': data['stamps'] ?? 0,
           'lastVisited': data['lastVisited'],
           'totalSpending': data['totalSpending'] ?? 0.0,
         };
@@ -206,10 +294,16 @@ class _MapViewState extends ConsumerState<MapView> {
       final userStamp = _userStamps[storeId];
       
       if (userStamp != null) {
-        final goldStamps = userStamp['goldStamps'] ?? 0;
+        final stamps = userStamp['stamps'] ?? 0; // 新しい構造に合わせて'stamps'フィールドを使用
         
-        if (goldStamps > 0) {
-          _stores[i]['flowerType'] = 'gold';
+        if (stamps == 0) {
+          _stores[i]['flowerType'] = 'unvisited'; // 未開拓
+          _stores[i]['isVisited'] = false;
+        } else if (stamps >= 1 && stamps <= 9) {
+          _stores[i]['flowerType'] = 'visited'; // 開拓中
+          _stores[i]['isVisited'] = true;
+        } else if (stamps >= 10) {
+          _stores[i]['flowerType'] = 'regular'; // 常連
           _stores[i]['isVisited'] = true;
         } else {
           _stores[i]['flowerType'] = 'unvisited';
@@ -225,34 +319,137 @@ class _MapViewState extends ConsumerState<MapView> {
   // 現在地を取得
   Future<void> _getCurrentLocation() async {
     try {
+      // 位置情報サービスが有効かチェック
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        print('位置情報サービスが無効です');
+        if (_locationRetryCount < _maxLocationRetries) {
+          _locationRetryCount++;
+          print('位置情報サービスが無効です。リトライします ($_locationRetryCount/$_maxLocationRetries)');
+          await Future.delayed(const Duration(seconds: 2));
+          return _getCurrentLocation();
+        } else {
+          _showLocationErrorDialog('位置情報サービスが無効です。設定から位置情報を有効にしてください。');
+          return;
+        }
+      }
+
       // 位置情報の権限を確認
       LocationPermission permission = await Geolocator.checkPermission();
+      print('現在の位置情報権限: $permission');
+      
       if (permission == LocationPermission.denied) {
+        print('位置情報権限が拒否されています。権限を要求します。');
         permission = await Geolocator.requestPermission();
+        print('権限要求後の状態: $permission');
+        
         if (permission == LocationPermission.denied) {
-          return;
+          print('位置情報権限が拒否されました');
+          if (_locationRetryCount < _maxLocationRetries) {
+            _locationRetryCount++;
+            print('位置情報権限が拒否されました。リトライします ($_locationRetryCount/$_maxLocationRetries)');
+            await Future.delayed(const Duration(seconds: 2));
+            return _getCurrentLocation();
+          } else {
+            _showLocationErrorDialog('位置情報の権限が必要です。設定から位置情報の権限を許可してください。');
+            return;
+          }
         }
       }
       
       if (permission == LocationPermission.deniedForever) {
+        print('位置情報権限が永続的に拒否されています');
+        _showLocationErrorDialog('位置情報の権限が永続的に拒否されています。設定アプリから手動で権限を許可してください。');
         return;
       }
       
-      // 現在地を取得
+      print('位置情報権限が許可されました。現在地を取得します。');
+      
+      // 現在地を取得（タイムアウトを設定）
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
+      
+      print('現在地を取得しました: ${position.latitude}, ${position.longitude}');
       
       if (mounted) {
         setState(() {
           _currentLocation = LatLng(position.latitude, position.longitude);
+          _locationRetryCount = 0; // 成功したらリトライカウントをリセット
         });
         
         // 地図を現在地に移動
         _mapController.move(_currentLocation!, 15.0);
+        print('地図を現在地に移動しました');
       }
     } catch (e) {
       print('現在地の取得に失敗しました: $e');
+      if (_locationRetryCount < _maxLocationRetries) {
+        _locationRetryCount++;
+        print('現在地取得に失敗しました。リトライします ($_locationRetryCount/$_maxLocationRetries)');
+        await Future.delayed(const Duration(seconds: 2));
+        return _getCurrentLocation();
+      } else {
+        _showLocationErrorDialog('現在地の取得に失敗しました。位置情報の設定を確認してください。');
+      }
+    }
+  }
+
+  // 位置情報エラーダイアログを表示
+  void _showLocationErrorDialog(String message) {
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('位置情報エラー'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+            if (message.contains('永続的に拒否'))
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Geolocator.openAppSettings();
+                },
+                child: const Text('設定を開く'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  // スタンプ状況に応じた色を取得
+  Color _getStampStatusColor(int stamps) {
+    if (stamps == 0) {
+      return Colors.grey[400]!; // 未開拓
+    } else if (stamps >= 1 && stamps <= 9) {
+      return Colors.orange[600]!; // 開拓中
+    } else if (stamps >= 10) {
+      return Colors.amber[600]!; // 常連
+    } else {
+      return Colors.grey[400]!;
+    }
+  }
+
+  // スタンプ状況に応じたアイコンを取得
+  IconData _getStampStatusIcon(int stamps) {
+    if (stamps == 0) {
+      return Icons.radio_button_unchecked; // 未開拓
+    } else if (stamps >= 1 && stamps <= 9) {
+      return Icons.radio_button_checked; // 開拓中
+    } else if (stamps >= 10) {
+      return Icons.star; // 常連
+    } else {
+      return Icons.help_outline;
     }
   }
 
@@ -265,16 +462,20 @@ class _MapViewState extends ConsumerState<MapView> {
     IconData iconData;
     
     switch (flowerType) {
-      case 'gold':
-        markerColor = Colors.amber;
-        iconData = Icons.star;
-        break;
-      case 'unvisited':
-        markerColor = Colors.grey;
+      case 'unvisited': // 未開拓（スタンプ0個）
+        markerColor = Colors.grey[400]!;
         iconData = Icons.radio_button_unchecked;
         break;
+      case 'visited': // 開拓中（スタンプ1-9個）
+        markerColor = Colors.orange[600]!;
+        iconData = Icons.radio_button_checked;
+        break;
+      case 'regular': // 常連（スタンプ10個以上）
+        markerColor = Colors.amber[600]!;
+        iconData = Icons.star;
+        break;
       default:
-        markerColor = Colors.grey;
+        markerColor = Colors.grey[400]!;
         iconData = Icons.help_outline;
     }
     
@@ -395,13 +596,20 @@ class _MapViewState extends ConsumerState<MapView> {
           IconButton(
             icon: const Icon(Icons.my_location),
             onPressed: () async {
-              await _getCurrentLocation();
-              setState(() {
-                _expandedMarkerId = '';
-                _isShowStoreInfo = false;
-              });
-              await _loadUserStamps();
-              _createMarkers();
+              try {
+                await _getCurrentLocation();
+                setState(() {
+                  _expandedMarkerId = '';
+                  _isShowStoreInfo = false;
+                });
+                await _loadUserStamps();
+                _createMarkers();
+              } catch (e) {
+                print('位置情報ボタンタップ時のエラー: $e');
+                // エラーが発生してもマーカーは更新する
+                await _loadUserStamps();
+                _createMarkers();
+              }
             },
           ),
         ],
@@ -424,10 +632,14 @@ class _MapViewState extends ConsumerState<MapView> {
               },
             ),
             children: [
-              // OpenStreetMapタイルレイヤー
+              // OpenStreetMapタイルレイヤー（OpenStreetMap.de）
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.example.groumapapp',
+                additionalOptions: const {
+                  'attribution': '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                },
               ),
               // マーカーレイヤー
               MarkerLayer(markers: _markers),
@@ -436,9 +648,6 @@ class _MapViewState extends ConsumerState<MapView> {
           
           // 検索バー
           _buildSearchBar(),
-          
-          // 店舗アイコン
-          _buildStoreIcon(),
           
           // 拡大されたマーカーオーバーレイ
           if (_isShowStoreInfo) _buildStoreInfoCard(),
@@ -461,10 +670,10 @@ class _MapViewState extends ConsumerState<MapView> {
     
     // ユーザーのスタンプ状況を取得
     final userStamp = _userStamps[_selectedStoreUid];
-    final goldStamps = userStamp?['goldStamps'] ?? 0;
+    final stamps = userStamp?['stamps'] ?? 0;
     
     return Positioned(
-      bottom: 100,
+      bottom: 20,
       left: 20,
       right: 20,
       child: Container(
@@ -567,23 +776,23 @@ class _MapViewState extends ConsumerState<MapView> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.amber.withOpacity(0.1),
+                          color: _getStampStatusColor(stamps).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                          border: Border.all(color: _getStampStatusColor(stamps).withOpacity(0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              Icons.star,
-                              color: Colors.amber[700],
+                              _getStampStatusIcon(stamps),
+                              color: _getStampStatusColor(stamps),
                               size: 14,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              'ゴールドスタンプ: $goldStamps/1',
+                              'スタンプ: $stamps/10',
                               style: TextStyle(
-                                color: Colors.amber[700],
+                                color: _getStampStatusColor(stamps),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -595,9 +804,11 @@ class _MapViewState extends ConsumerState<MapView> {
                       // 店舗詳細ボタン
                       GestureDetector(
                         onTap: () {
-                          // TODO: 店舗詳細画面へ遷移
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('店舗詳細画面は今後実装予定です')),
+                          // 店舗詳細画面へ遷移
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => StoreDetailView(store: selectedStore),
+                            ),
                           );
                         },
                         child: Container(
@@ -658,7 +869,7 @@ class _MapViewState extends ConsumerState<MapView> {
     return Positioned(
       top: MediaQuery.of(context).padding.top + 10,
       left: 20,
-      right: 80,
+      right: 20,
       child: Container(
         height: 50,
         decoration: BoxDecoration(
@@ -690,55 +901,37 @@ class _MapViewState extends ConsumerState<MapView> {
                 ),
               ),
             ),
+            const SizedBox(width: 15),
           ],
         ),
       ),
     );
   }
   
-  Widget _buildStoreIcon() {
-    return Positioned(
-      top: MediaQuery.of(context).padding.top + 10,
-      right: 20,
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: const Color(0xFF1E88E5),
-          borderRadius: BorderRadius.circular(25),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: const Icon(
-          Icons.store,
-          color: Colors.white,
-          size: 24,
-        ),
-      ),
-    );
-  }
   
   Widget _buildMapControls() {
     return Positioned(
-      bottom: 150,
+      bottom: 20,
       right: 20,
       child: Column(
         children: [
           // 現在位置ボタン
           GestureDetector(
             onTap: () async {
-              await _getCurrentLocation();
-              setState(() {
-                _expandedMarkerId = '';
-                _isShowStoreInfo = false;
-              });
-              await _loadUserStamps();
-              _createMarkers();
+              try {
+                await _getCurrentLocation();
+                setState(() {
+                  _expandedMarkerId = '';
+                  _isShowStoreInfo = false;
+                });
+                await _loadUserStamps();
+                _createMarkers();
+              } catch (e) {
+                print('現在位置ボタンタップ時のエラー: $e');
+                // エラーが発生してもマーカーは更新する
+                await _loadUserStamps();
+                _createMarkers();
+              }
             },
             child: Container(
               width: 50,

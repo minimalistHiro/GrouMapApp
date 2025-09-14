@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../providers/store_provider.dart';
 import '../../widgets/custom_button.dart';
 import 'store_detail_view.dart';
 
@@ -49,7 +48,8 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
           'description': data['description'] ?? '',
           'address': data['address'] ?? '',
           'iconImageUrl': data['iconImageUrl'],
-          'backgroundImageUrl': data['backgroundImageUrl'],
+          'storeImageUrl': data['storeImageUrl'], // 店舗詳細画面で使用
+          'backgroundImageUrl': data['backgroundImageUrl'], // 店舗一覧画面で使用
           'phoneNumber': data['phoneNumber'] ?? '',
           'businessHours': data['businessHours'] ?? '',
           'isActive': data['isActive'] ?? false,
@@ -210,34 +210,14 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: _getCategoryColor(store['category']).withOpacity(0.1),
+                color: _getCategoryColor(_getStringValue(store['category'], 'その他')).withOpacity(0.1),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: _getCategoryColor(store['category']).withOpacity(0.3),
+                  color: _getCategoryColor(_getStringValue(store['category'], 'その他')).withOpacity(0.3),
                   width: 2,
                 ),
               ),
-              child: store['iconImageUrl']?.isNotEmpty == true
-                  ? ClipOval(
-                      child: Image.network(
-                        store['iconImageUrl'],
-                        width: 60,
-                        height: 60,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Icon(
-                            _getCategoryIcon(store['category']),
-                            color: _getCategoryColor(store['category']),
-                            size: 30,
-                          );
-                        },
-                      ),
-                    )
-                  : Icon(
-                      _getCategoryIcon(store['category']),
-                      color: _getCategoryColor(store['category']),
-                      size: 30,
-                    ),
+              child: _buildStoreIcon(store),
             ),
             
             const SizedBox(height: 8),
@@ -246,7 +226,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
-                store['name'] ?? '店舗名なし',
+                _getStringValue(store['name'], '店舗名なし'),
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -264,17 +244,17 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: _getCategoryColor(store['category']).withOpacity(0.1),
+                color: _getCategoryColor(_getStringValue(store['category'], 'その他')).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: _getCategoryColor(store['category']).withOpacity(0.3),
+                  color: _getCategoryColor(_getStringValue(store['category'], 'その他')).withOpacity(0.3),
                 ),
               ),
               child: Text(
-                store['category'] ?? 'その他',
+                _getStringValue(store['category'], 'その他'),
                 style: TextStyle(
                   fontSize: 8,
-                  color: _getCategoryColor(store['category']),
+                  color: _getCategoryColor(_getStringValue(store['category'], 'その他')),
                   fontWeight: FontWeight.w500,
                 ),
                 textAlign: TextAlign.center,
@@ -284,6 +264,14 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         ),
       ),
     );
+  }
+
+  // 安全にStringを取得するヘルパーメソッド
+  String _getStringValue(dynamic value, String defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is String) return value;
+    if (value is Map) return value.toString();
+    return value.toString();
   }
 
   // カテゴリに応じた色を取得
@@ -307,6 +295,49 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         return Colors.purple;
       default:
         return Colors.grey;
+    }
+  }
+
+  // 店舗アイコンを構築
+  Widget _buildStoreIcon(Map<String, dynamic> store) {
+    final iconImageUrl = _getStringValue(store['iconImageUrl'], '');
+    final category = _getStringValue(store['category'], 'その他');
+    
+    if (iconImageUrl.isNotEmpty) {
+      return ClipOval(
+        child: Image.network(
+          iconImageUrl,
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    : null,
+                color: _getCategoryColor(category),
+                strokeWidth: 2,
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            print('店舗アイコン画像の読み込みエラー: $error');
+            return Icon(
+              _getCategoryIcon(category),
+              color: _getCategoryColor(category),
+              size: 30,
+            );
+          },
+        ),
+      );
+    } else {
+      return Icon(
+        _getCategoryIcon(category),
+        color: _getCategoryColor(category),
+        size: 30,
+      );
     }
   }
 

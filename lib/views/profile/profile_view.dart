@@ -1,18 +1,148 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../../providers/auth_provider.dart';
 import '../../providers/badge_provider.dart';
 import '../../providers/level_provider.dart';
-import '../../widgets/custom_button.dart';
 import 'badges_view.dart';
 import 'level_view.dart';
 import '../settings/settings_view.dart';
 
-class ProfileView extends ConsumerWidget {
+class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileView> createState() => _ProfileViewState();
+}
+
+class _ProfileViewState extends ConsumerState<ProfileView> {
+  Map<String, dynamic>? _userData;
+  bool _isLoadingUserData = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final authState = ref.read(authStateProvider);
+      await authState.when(
+        data: (user) async {
+          if (user != null) {
+            final doc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get();
+            if (doc.exists) {
+              final userData = doc.data();
+              setState(() {
+                _userData = userData;
+                _isLoadingUserData = false;
+              });
+              
+            } else {
+              setState(() {
+                _isLoadingUserData = false;
+              });
+            }
+          } else {
+            setState(() {
+              _isLoadingUserData = false;
+            });
+          }
+        },
+        loading: () {},
+        error: (_, __) {
+          setState(() {
+            _isLoadingUserData = false;
+          });
+        },
+      );
+    } catch (e) {
+      print('ユーザーデータの読み込みエラー: $e');
+      setState(() {
+        _isLoadingUserData = false;
+      });
+    }
+  }
+
+  Future<String?> _loadImageAsBase64(String imageUrl) async {
+    try {
+      print('画像をBase64で読み込み開始: $imageUrl');
+      
+      // CORS制限を回避するためのプロキシ経由での読み込み
+      final proxyUrl = 'https://cors-anywhere.herokuapp.com/$imageUrl';
+      
+      final response = await http.get(
+        Uri.parse(proxyUrl),
+        headers: {
+          'Origin': 'https://your-app-domain.com', // 実際のドメインに変更
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      ).timeout(const Duration(seconds: 10));
+      
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        final base64String = base64Encode(bytes);
+        print('画像をBase64で読み込み成功');
+        return base64String;
+      } else {
+        print('プロキシ経由の画像読み込みが失敗: ${response.statusCode}');
+        
+        // プロキシが失敗した場合は直接読み込みを試行
+        return await _loadImageDirectly(imageUrl);
+      }
+    } catch (e) {
+      print('プロキシ経由の画像読み込みエラー: $e');
+      
+      // プロキシが失敗した場合は直接読み込みを試行
+      return await _loadImageDirectly(imageUrl);
+    }
+  }
+
+  Future<String?> _loadImageDirectly(String imageUrl) async {
+    try {
+      print('直接画像読み込みを試行: $imageUrl');
+      
+      // Firebase Storageの場合は特別なヘッダーを設定
+      final headers = <String, String>{
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      };
+      
+      // Firebase Storageの場合はCORSヘッダーを追加
+      if (imageUrl.contains('firebasestorage.googleapis.com')) {
+        headers['Origin'] = 'https://your-app-domain.com';
+        headers['Referer'] = 'https://your-app-domain.com';
+      }
+      
+      final response = await http.get(
+        Uri.parse(imageUrl),
+        headers: headers,
+      ).timeout(const Duration(seconds: 15));
+      
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        final base64String = base64Encode(bytes);
+        print('直接画像読み込み成功');
+        return base64String;
+      } else {
+        print('直接画像読み込みが失敗: ${response.statusCode}');
+        return null;
+      }
+    } catch (e) {
+      print('直接画像読み込みエラー: $e');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
@@ -30,6 +160,14 @@ class ProfileView extends ConsumerWidget {
             );
           }
 
+          if (_isLoadingUserData) {
+            return const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFFF6B35),
+              ),
+            );
+          }
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -40,15 +178,7 @@ class ProfileView extends ConsumerWidget {
                     padding: const EdgeInsets.all(16.0),
                     child: Column(
                       children: [
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundImage: user.photoURL != null
-                              ? NetworkImage(user.photoURL!)
-                              : null,
-                          child: user.photoURL == null
-                              ? const Icon(Icons.person, size: 40)
-                              : null,
-                        ),
+                        _buildUserAvatar(user, _userData),
                         const SizedBox(height: 16),
                         Text(
                           user.displayName ?? 'ユーザー',
@@ -79,16 +209,6 @@ class ProfileView extends ConsumerWidget {
                 _buildSettingsMenu(context),
                 
                 const SizedBox(height: 24),
-                
-                // ログアウトボタン
-                CustomButton(
-                  text: 'ログアウト',
-                  onPressed: () async {
-                    await ref.read(signInStateProvider.notifier).signOut();
-                    // ログアウト後は自動的にホーム画面に戻る
-                  },
-                  backgroundColor: Colors.red,
-                ),
               ],
             ),
           );
@@ -100,6 +220,280 @@ class ProfileView extends ConsumerWidget {
           child: Text('エラー: $error'),
         ),
       ),
+    );
+  }
+
+  Widget _buildUserAvatar(user, Map<String, dynamic>? userData) {
+    // Firestoreから取得したprofileImageUrlを優先し、なければFirebase AuthのphotoURLを使用
+    String? imageUrl;
+    if (userData != null && userData['profileImageUrl'] != null && userData['profileImageUrl'].toString().isNotEmpty) {
+      imageUrl = userData['profileImageUrl'];
+      print('Firestoreから取得した画像URL: $imageUrl');
+    } else if (user.photoURL != null && user.photoURL!.isNotEmpty) {
+      imageUrl = user.photoURL;
+      print('Firebase Authから取得した画像URL: $imageUrl');
+    } else {
+      print('画像URLが見つかりません');
+    }
+
+    // 画像URLの検証
+    if (imageUrl != null) {
+      print('使用する画像URL: $imageUrl');
+      print('URLの長さ: ${imageUrl.length}');
+      print('URLが有効か: ${Uri.tryParse(imageUrl) != null}');
+    }
+
+    return CircleAvatar(
+      radius: 40,
+      backgroundColor: Colors.grey[300],
+      child: imageUrl != null
+          ? ClipOval(
+              child: _buildImageWidget(imageUrl),
+            )
+          : const Icon(
+              Icons.person,
+              size: 40,
+              color: Colors.grey,
+            ),
+    );
+  }
+
+  Widget _buildImageWidget(String imageUrl) {
+    // CORS制限を回避する画像表示方法
+    if (kIsWeb) {
+      // Web用 - CORS制限を回避する複数の方法
+      return _buildWebImageWithCorsFix(imageUrl);
+    } else {
+      // モバイル用の画像読み込み
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        width: 80,
+        height: 80,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF6B35),
+            strokeWidth: 2,
+          ),
+        ),
+        errorWidget: (context, url, error) {
+          print('画像読み込みエラー: $error');
+          return const Icon(
+            Icons.person,
+            size: 40,
+            color: Colors.grey,
+          );
+        },
+      );
+    }
+  }
+
+  Widget _buildWebImageWithCorsFix(String imageUrl) {
+    // Flutter Webでは、シンプルなImage.networkを使用
+    return _buildSimpleWebImage(imageUrl);
+  }
+
+  Widget _buildFirebaseStorageImage(String imageUrl) {
+    // Firebase Storageの画像を直接表示
+    print('Firebase Storage画像を直接表示: $imageUrl');
+    
+    return _buildSimpleWebImage(imageUrl);
+  }
+
+  Future<String?> _loadImageWithCorsFix(String imageUrl) async {
+    try {
+      print('CORS修正で画像読み込み開始: $imageUrl');
+      
+      // 1. 複数のプロキシサービスを試行
+      final proxyServices = [
+        'https://api.allorigins.win/raw?url=',
+        'https://cors-anywhere.herokuapp.com/',
+        'https://thingproxy.freeboard.io/fetch/',
+      ];
+      
+      for (final proxy in proxyServices) {
+        try {
+          final proxyUrl = '$proxy$imageUrl';
+          print('プロキシ試行: $proxyUrl');
+          
+          final response = await http.get(
+            Uri.parse(proxyUrl),
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+          ).timeout(const Duration(seconds: 8));
+          
+          if (response.statusCode == 200) {
+            final bytes = response.bodyBytes;
+            final base64String = base64Encode(bytes);
+            print('プロキシ経由で画像読み込み成功: $proxy');
+            return base64String;
+          }
+        } catch (e) {
+          print('プロキシ $proxy でエラー: $e');
+          continue;
+        }
+      }
+      
+      // 2. 直接読み込みを試行（ヘッダーなし）
+      try {
+        final directResponse = await http.get(
+          Uri.parse(imageUrl),
+        ).timeout(const Duration(seconds: 5));
+        
+        if (directResponse.statusCode == 200) {
+          final bytes = directResponse.bodyBytes;
+          final base64String = base64Encode(bytes);
+          print('直接読み込みで画像読み込み成功');
+          return base64String;
+        }
+      } catch (e) {
+        print('直接読み込みでエラー: $e');
+      }
+      
+      print('すべての画像読み込み方法が失敗');
+      return null;
+    } catch (e) {
+      print('CORS修正で画像読み込みエラー: $e');
+      return null;
+    }
+  }
+
+  Widget _buildSimpleWebImage(String imageUrl) {
+    // Flutter WebでシンプルなImage.networkを使用
+    print('シンプルなWeb画像表示開始: $imageUrl');
+    
+    return Container(
+      width: 80,
+      height: 80,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.grey[300],
+      ),
+      child: ClipOval(
+        child: Image.network(
+          imageUrl,
+          width: 80,
+          height: 80,
+          fit: BoxFit.cover,
+          // エラーハンドリング（無限ループを防ぐ）
+          errorBuilder: (context, error, stackTrace) {
+            print('シンプルなWeb画像読み込みエラー: $error');
+            return Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.person,
+                color: Colors.grey,
+                size: 40,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebImageWidget(String imageUrl) {
+    // Web用の画像読み込み - 複数の方法でCORS制限を回避
+    return FutureBuilder<String?>(
+      future: _loadImageWithFallback(imageUrl),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFFFF6B35),
+              strokeWidth: 2,
+            ),
+          );
+        }
+        
+        if (snapshot.hasData && snapshot.data != null) {
+          return Image.memory(
+            base64Decode(snapshot.data!),
+            width: 80,
+            height: 80,
+            fit: BoxFit.cover,
+          );
+        }
+        
+        // エラー時は直接Image.networkを試行
+        return _buildDirectWebImage(imageUrl);
+      },
+    );
+  }
+
+  Future<String?> _loadImageWithFallback(String imageUrl) async {
+    // 複数の方法で画像読み込みを試行
+    try {
+      // 1. 直接読み込み（Firebase Storageは直接読み込める）
+      final directResult = await _loadImageDirectly(imageUrl);
+      if (directResult != null) return directResult;
+      
+      // 2. プロキシ経由での読み込み
+      final result = await _loadImageAsBase64(imageUrl);
+      if (result != null) return result;
+      
+      // 3. 代替プロキシサービス
+      return await _loadImageWithAlternativeProxy(imageUrl);
+    } catch (e) {
+      print('すべての画像読み込み方法が失敗: $e');
+      return null;
+    }
+  }
+
+  Future<String?> _loadImageWithAlternativeProxy(String imageUrl) async {
+    try {
+      // 代替のCORSプロキシサービス
+      final proxyUrl = 'https://api.allorigins.win/raw?url=${Uri.encodeComponent(imageUrl)}';
+      
+      final response = await http.get(
+        Uri.parse(proxyUrl),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      ).timeout(const Duration(seconds: 10));
+      
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        final base64String = base64Encode(bytes);
+        print('代替プロキシ経由で画像読み込み成功');
+        return base64String;
+      }
+    } catch (e) {
+      print('代替プロキシ経由の画像読み込みエラー: $e');
+    }
+    return null;
+  }
+
+  Widget _buildDirectWebImage(String imageUrl) {
+    // 最後の手段として直接Image.networkを使用
+    return Image.network(
+      imageUrl,
+      width: 80,
+      height: 80,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF6B35),
+            strokeWidth: 2,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        print('直接画像読み込みも失敗: $error');
+        return const Icon(
+          Icons.person,
+          size: 40,
+          color: Colors.grey,
+        );
+      },
     );
   }
 

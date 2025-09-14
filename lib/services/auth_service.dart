@@ -44,6 +44,7 @@ class AuthService {
             await _saveUserToFirestore(
               user: userCredential.user!,
               displayName: userCredential.user?.displayName ?? '',
+              authProvider: 'google',
               additionalInfo: {
                 'level': 1,
                 'experience': 0,
@@ -87,6 +88,7 @@ class AuthService {
             await _saveUserToFirestore(
               user: userCredential.user!,
               displayName: userCredential.user?.displayName ?? '',
+              authProvider: 'apple',
               additionalInfo: {
                 'level': 1,
                 'experience': 0,
@@ -154,6 +156,7 @@ class AuthService {
           await _saveUserToFirestore(
             user: userCredential.user!,
             displayName: displayName,
+            authProvider: 'email',
             additionalInfo: additionalUserInfo,
           );
         } catch (e) {
@@ -226,11 +229,17 @@ class AuthService {
     required User user,
     required String displayName,
     Map<String, dynamic>? additionalInfo,
+    String? authProvider, // 認証プロバイダー情報を追加
   }) async {
     try {
       debugPrint('Saving user to Firestore: ${user.uid}');
       debugPrint('User email: ${user.email}');
       debugPrint('Display name: $displayName');
+      debugPrint('Auth provider: $authProvider');
+      
+      // 紹介コードを生成
+      final referralCode = _generateReferralCode(user.uid);
+      final storeReferralCode = _generateStoreReferralCode(user.uid);
       
       final userData = {
         'uid': user.uid,
@@ -238,11 +247,17 @@ class AuthService {
         'displayName': displayName,
         'photoURL': user.photoURL,
         'emailVerified': user.emailVerified,
+        'authProvider': authProvider ?? 'email', // 認証プロバイダー情報
         'isOwner': false, // デフォルトで一般ユーザー
         'points': 0, // 初期ポイント
-        'goldStamps': 0, // 初期ゴールドスタンプ
         'paid': 0, // 初期支払額
         'rank': 'ブロンズ', // 初期ランク
+        'referralCode': referralCode, // 友達紹介コード
+        'referralCount': 0, // 招待した友達数
+        'referralEarnings': 0, // 友達紹介で獲得したポイント数
+        'storeReferralCode': storeReferralCode, // 店舗紹介コード
+        'storeReferralCount': 0, // 紹介した店舗数
+        'storeReferralEarnings': 0, // 店舗紹介で獲得したポイント数
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
@@ -309,6 +324,28 @@ class AuthService {
     }
   }
 
+  // 既存ユーザーデータのクリーンアップ（goldStampsとfriendcodeを削除）
+  Future<void> cleanupUserData() async {
+    try {
+      final user = _auth.currentUser;
+      if (user != null) {
+        final userDoc = _firestore.collection('users').doc(user.uid);
+        
+        // 削除するフィールドを指定
+        final fieldsToDelete = {
+          'goldStamps': FieldValue.delete(),
+          'friendcode': FieldValue.delete(),
+        };
+        
+        await userDoc.update(fieldsToDelete);
+        debugPrint('User data cleaned up successfully');
+      }
+    } catch (e) {
+      debugPrint('Error cleaning up user data: $e');
+      // クリーンアップエラーは認証を妨げない
+    }
+  }
+
   // リトライ機能付きの操作実行
   Future<T> _retryOperation<T>(Future<T> Function() operation) async {
     int attempts = 0;
@@ -358,6 +395,18 @@ class AuthService {
       }
     }
     return false;
+  }
+
+  // 友達紹介コードを生成
+  String _generateReferralCode(String userId) {
+    // ユーザーIDの最初の8文字を大文字に変換して友達紹介コードとして使用
+    return userId.substring(0, 8).toUpperCase();
+  }
+
+  // 店舗紹介コードを生成
+  String _generateStoreReferralCode(String userId) {
+    // ユーザーIDの最後の8文字を大文字に変換して店舗紹介コードとして使用
+    return userId.substring(userId.length - 8).toUpperCase();
   }
 
   // 認証エラーのハンドリング

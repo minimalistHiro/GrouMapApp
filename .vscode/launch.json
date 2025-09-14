@@ -1,0 +1,44 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Flutter Web (Chrome)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "chrome",
+            "args": [
+                "--web-port=3000",
+                "--web-hostname=localhost"
+            ],
+            "webBrowser": "chrome"
+        },
+        {
+            "name": "Flutter Web (Chrome Debug)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "chrome",
+            "args": [
+                "--web-port=3000",
+                "--web-hostname=localhost",
+                "--dart-define=FLUTTER_WEB_USE_SKIA=true"
+            ],
+            "webBrowser": "chrome",
+            "flutterMode": "debug"
+        },
+        {
+            "name": "Flutter Web (Chrome Release)",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "chrome",
+            "args": [
+                "--web-port=3000",
+                "--web-hostname=localhost"
+            ],
+            "webBrowser": "chrome",
+            "flutterMode": "release"
+        }
+    ]
+}

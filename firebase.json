@@ -1,1 +1,76 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"groumap-deda4","appId":"1:974704293118:android:bf67528deb2db21f5fa1af","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"groumap-deda4","appId":"1:974704293118:ios:e890d3d983dd9cf85fa1af","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"groumap-deda4","appId":"1:974704293118:ios:e890d3d983dd9cf85fa1af","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"groumap-deda4","configurations":{"android":"1:974704293118:android:bf67528deb2db21f5fa1af","ios":"1:974704293118:ios:e890d3d983dd9cf85fa1af","macos":"1:974704293118:ios:e890d3d983dd9cf85fa1af","web":"1:974704293118:web:1187a229da84f5cc5fa1af","windows":"1:974704293118:web:d242709d902237685fa1af"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "groumap-deda4",
+          "appId": "1:974704293118:android:bf67528deb2db21f5fa1af",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "groumap-deda4",
+          "appId": "1:974704293118:ios:e890d3d983dd9cf85fa1af",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "groumap-deda4",
+          "appId": "1:974704293118:ios:e890d3d983dd9cf85fa1af",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "groumap-deda4",
+          "configurations": {
+            "android": "1:974704293118:android:bf67528deb2db21f5fa1af",
+            "ios": "1:974704293118:ios:e890d3d983dd9cf85fa1af",
+            "macos": "1:974704293118:ios:e890d3d983dd9cf85fa1af",
+            "web": "1:974704293118:web:1187a229da84f5cc5fa1af",
+            "windows": "1:974704293118:web:d242709d902237685fa1af"
+          }
+        }
+      }
+    }
+  },
+  "functions": {
+    "source": "backend/functions",
+    "runtime": "nodejs18",
+    "region": "asia-northeast1"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Access-Control-Allow-Methods",
+            "value": "GET, POST, PUT, DELETE, OPTIONS"
+          },
+          {
+            "key": "Access-Control-Allow-Headers",
+            "value": "Content-Type, Authorization"
+          }
+        ]
+      }
+    ]
+  }
+}

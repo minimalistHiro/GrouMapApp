@@ -5,7 +5,6 @@ import '../../widgets/error_dialog.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'sign_in_view.dart';
-import 'welcome_view.dart';
 import '../main_navigation_view.dart';
 
 class SignUpView extends ConsumerStatefulWidget {
@@ -60,9 +59,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const WelcomeView()),
-            );
+            Navigator.of(context).pop();
           },
         ),
       ),
