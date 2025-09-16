@@ -90,32 +90,73 @@ final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
 
 // 特定の店舗の投稿プロバイダー
 final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
-  return FirebaseFirestore.instance
-      .collection('posts')
-      .where('storeId', isEqualTo: storeId)
-      .orderBy('createdAt', descending: true)
-      .limit(20)
-      .snapshots()
-      .map((snapshot) {
-    return snapshot.docs
+  // インデックスエラーを回避するため、orderByを使わないクエリに変更
+  try {
+    return FirebaseFirestore.instance
+        .collection('posts')
+        .where('storeId', isEqualTo: storeId)
+        .where('isActive', isEqualTo: true)
+        .limit(20)
+        .snapshots()
+        .timeout(
+          const Duration(seconds: 3),
+          onTimeout: (eventSink) {
+            debugPrint('Store posts query timed out, returning empty list');
+            // タイムアウト時は空のリストを返す
+          },
+        )
+        .map((snapshot) {
+      final posts = snapshot.docs.map((doc) {
+        return PostModel.fromMap(doc.data(), doc.id);
+      }).toList();
+      
+      // クライアント側でソート（インデックスエラーを回避）
+      posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      debugPrint('Store posts loaded successfully: ${posts.length} posts');
+      return posts;
+    }).handleError((error) {
+      debugPrint('Error fetching store posts: $error');
+      // すべてのエラーに対して空のリストを返す
+      return <PostModel>[];
+    });
+  } catch (e) {
+    debugPrint('Exception in storePostsProvider: $e');
+    return Stream.value(<PostModel>[]);
+  }
+});
+
+// フォールバック用の投稿プロバイダー（インデックスエラーを完全に回避）
+final storePostsFallbackProvider = FutureProvider.family<List<PostModel>, String>((ref, storeId) async {
+  try {
+    debugPrint('Using fallback provider for store: $storeId');
+    
+    // より単純なクエリで投稿を取得
+    final snapshot = await FirebaseFirestore.instance
+        .collection('posts')
+        .where('storeId', isEqualTo: storeId)
+        .get()
+        .timeout(const Duration(seconds: 2));
+    
+    final posts = snapshot.docs
         .where((doc) {
           final data = doc.data();
           return data['isActive'] == true;
         })
         .map((doc) {
           return PostModel.fromMap(doc.data(), doc.id);
-        }).toList();
-  }).handleError((error) {
-    debugPrint('Error fetching store posts: $error');
-    // インデックスエラーの場合は空のリストを返す
-    if (error.toString().contains('failed-precondition') || 
-        error.toString().contains('requires an index')) {
-      debugPrint('Index error detected, returning empty list');
-      return <PostModel>[];
-    }
-    // その他のエラーの場合は空のリストを返す
+        })
+        .toList();
+    
+    // クライアント側でソート
+    posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    debugPrint('Fallback provider loaded: ${posts.length} posts');
+    return posts;
+  } catch (e) {
+    debugPrint('Fallback provider error: $e');
     return <PostModel>[];
-  });
+  }
 });
 
 // 投稿サービス

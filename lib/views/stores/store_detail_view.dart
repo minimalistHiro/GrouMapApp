@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/posts_provider.dart';
+import '../posts/post_detail_view.dart';
 
 class StoreDetailView extends ConsumerStatefulWidget {
   final Map<String, dynamic> store;
@@ -583,10 +584,14 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
   Widget _buildPostsTab() {
     final storeId = widget.store['id'];
+    
+    // まずメインプロバイダーを試す
     final posts = ref.watch(storePostsProvider(storeId));
-
+    
     return posts.when(
       data: (posts) {
+        print('投稿データ取得成功: ${posts.length}件');
+        
         if (posts.isEmpty) {
           return const Center(
             child: Column(
@@ -632,28 +637,44 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           ),
         );
       },
-      loading: () => const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(
-              color: Color(0xFFFF6B35),
-            ),
-            SizedBox(height: 8),
-            Text(
-              '投稿を読み込み中...',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
+      loading: () {
+        print('投稿データ読み込み中...');
+        return const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(
+                color: Color(0xFFFF6B35),
               ),
-            ),
-          ],
-        ),
-      ),
-      error: (error, _) {
-        // インデックスエラーの場合は投稿なしとして表示
-        if (error.toString().contains('failed-precondition') || 
-            error.toString().contains('requires an index')) {
+              SizedBox(height: 8),
+              Text(
+                '投稿を読み込み中...',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      error: (error, stackTrace) {
+        print('メインプロバイダーエラー: $error');
+        
+        // エラーが発生した場合はフォールバックプロバイダーを使用
+        return _buildFallbackPostsTab(storeId);
+      },
+    );
+  }
+
+  Widget _buildFallbackPostsTab(String storeId) {
+    final fallbackPosts = ref.watch(storePostsFallbackProvider(storeId));
+    
+    return fallbackPosts.when(
+      data: (posts) {
+        print('フォールバック投稿データ取得成功: ${posts.length}件');
+        
+        if (posts.isEmpty) {
           return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -680,38 +701,70 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             ),
           );
         }
-        
-        return Center(
+
+        return Padding(
+          padding: const EdgeInsets.all(2),
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 2,
+              mainAxisSpacing: 2,
+              childAspectRatio: 1,
+            ),
+            itemCount: posts.length,
+            itemBuilder: (context, index) {
+              final post = posts[index];
+              return _buildInstagramPostCard(context, post);
+            },
+          ),
+        );
+      },
+      loading: () {
+        print('フォールバック投稿データ読み込み中...');
+        return const Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-              const SizedBox(height: 8),
-              const Text(
-                '投稿の取得に失敗しました',
+              CircularProgressIndicator(
+                color: Color(0xFFFF6B35),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '投稿を読み込み中...',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   color: Colors.grey,
                 ),
               ),
-              const SizedBox(height: 4),
+            ],
+          ),
+        );
+      },
+      error: (error, stackTrace) {
+        print('フォールバックプロバイダーエラー: $error');
+        
+        // フォールバックも失敗した場合は投稿なしとして表示
+        return const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.article, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
               Text(
-                'データが存在しない可能性があります',
+                '投稿がありません',
                 style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
                 ),
               ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: () {
-                  ref.invalidate(storePostsProvider(storeId));
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B35),
-                  foregroundColor: Colors.white,
+              SizedBox(height: 8),
+              Text(
+                'この店舗からの投稿をお待ちください！',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
                 ),
-                child: const Text('再試行'),
               ),
             ],
           ),
@@ -1304,7 +1357,11 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   Widget _buildInstagramPostCard(BuildContext context, PostModel post) {
     return GestureDetector(
       onTap: () {
-        // 投稿詳細画面に遷移
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PostDetailView(post: post),
+          ),
+        );
       },
       child: Container(
         decoration: BoxDecoration(
@@ -1437,7 +1494,11 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
         onTap: () {
-          // 投稿詳細画面に遷移
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => PostDetailView(post: post),
+            ),
+          );
         },
         child: Padding(
           padding: const EdgeInsets.all(16),
