@@ -14,7 +14,6 @@ class LeaderboardView extends ConsumerStatefulWidget {
 class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
   RankingType _selectedType = RankingType.totalPoints;
   RankingPeriodType _selectedPeriod = RankingPeriodType.allTime;
-  int _selectedPeriodIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +34,7 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              ref.invalidate(rankingDataProvider(query));
+              ref.read(rankingNotifierProvider.notifier).loadRanking(query);
             },
           ),
         ],
@@ -73,7 +72,7 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
                     CustomButton(
                       text: '再試行',
                       onPressed: () {
-                        ref.invalidate(rankingDataProvider(query));
+                        ref.read(rankingNotifierProvider.notifier).loadRanking(query);
                       },
                     ),
                   ],
@@ -210,10 +209,10 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           children: [
             CircleAvatar(
               radius: 16,
-              backgroundImage: ranking.photoURL != null
+              backgroundImage: ranking.photoURL != null && ranking.photoURL!.isNotEmpty
                   ? NetworkImage(ranking.photoURL!)
                   : null,
-              child: ranking.photoURL == null
+              child: ranking.photoURL == null || ranking.photoURL!.isEmpty
                   ? const Icon(Icons.person, size: 16)
                   : null,
             ),
@@ -226,13 +225,6 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
                     ranking.displayName,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    'レベル ${ranking.currentLevel}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -243,17 +235,10 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '${ranking.totalPoints} pt',
+              _getRankingDisplayValue(ranking),
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
-              ),
-            ),
-            Text(
-              '${ranking.badgeCount} バッジ',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
               ),
             ),
           ],
@@ -272,18 +257,23 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (ranking.photoURL != null)
+            if (ranking.photoURL != null && ranking.photoURL!.isNotEmpty)
               Center(
                 child: CircleAvatar(
                   radius: 40,
                   backgroundImage: NetworkImage(ranking.photoURL!),
                 ),
+              )
+            else
+              Center(
+                child: CircleAvatar(
+                  radius: 40,
+                  child: const Icon(Icons.person, size: 40),
+                ),
               ),
             const SizedBox(height: 16),
             _buildDetailRow('順位:', '${ranking.rank}位'),
-            _buildDetailRow('総ポイント:', '${ranking.totalPoints} pt'),
-            _buildDetailRow('レベル:', '${ranking.currentLevel}'),
-            _buildDetailRow('バッジ数:', '${ranking.badgeCount}個'),
+            _buildDetailRow(_getRankingTypeLabel(_selectedType) + ':', _getRankingDisplayValue(ranking)),
             _buildDetailRow('最終更新:', _formatDate(ranking.lastUpdated)),
           ],
         ),
@@ -345,13 +335,15 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
   String _getRankingTypeLabel(RankingType type) {
     switch (type) {
       case RankingType.totalPoints:
-        return '総ポイント';
-      case RankingType.monthlyPoints:
-        return '月間ポイント';
+        return 'ポイント';
       case RankingType.badgeCount:
         return 'バッジ数';
       case RankingType.level:
         return 'レベル';
+      case RankingType.stampCount:
+        return 'スタンプ数';
+      case RankingType.totalPayment:
+        return '総支払額';
     }
   }
 
@@ -370,5 +362,20 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
 
   String _formatDate(DateTime date) {
     return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _getRankingDisplayValue(RankingModel ranking) {
+    switch (_selectedType) {
+      case RankingType.totalPoints:
+        return '${ranking.totalPoints} pt';
+      case RankingType.badgeCount:
+        return '${ranking.badgeCount} バッジ';
+      case RankingType.level:
+        return 'レベル ${ranking.currentLevel}';
+      case RankingType.stampCount:
+        return '${ranking.stampCount} スタンプ';
+      case RankingType.totalPayment:
+        return '¥${ranking.totalPayment.toStringAsFixed(0)}';
+    }
   }
 }

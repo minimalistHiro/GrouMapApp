@@ -41,6 +41,22 @@ final storeProvider = StreamProvider.family<StoreModel?, String>((ref, storeId) 
   });
 });
 
+// 店舗名を取得するプロバイダー
+final storeNameProvider = FutureProvider.family<String?, String>((ref, storeId) async {
+  final firestore = ref.watch(firestoreServiceProvider);
+  
+  try {
+    final doc = await firestore.collection('stores').doc(storeId).get();
+    if (doc.exists) {
+      final data = doc.data()!;
+      return data['name'] as String? ?? data['storeName'] as String?;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+});
+
 // 近くの店舗プロバイダー（位置情報ベース）
 final nearbyStoresProvider = StreamProvider.family<List<StoreModel>, StoreLocation>((ref, location) {
   final firestore = ref.watch(firestoreServiceProvider);

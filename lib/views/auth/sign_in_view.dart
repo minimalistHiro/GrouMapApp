@@ -193,7 +193,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
                   textColor: Colors.black,
                   borderColor: Colors.grey,
                   icon: Image.asset(
-                    'assets/images/google_icon.png',
+                    'assets/images/groumap_icon.png',
                     width: 20,
                     height: 20,
                     errorBuilder: (context, error, stackTrace) => 

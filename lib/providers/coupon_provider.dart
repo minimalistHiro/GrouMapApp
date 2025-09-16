@@ -70,17 +70,16 @@ class CouponService {
       return _firestore
           .collection('coupons')
           .where('storeId', isEqualTo: storeId)
-          .where('isActive', isEqualTo: true)
           .orderBy('createdAt', descending: true)
           .snapshots()
           .timeout(const Duration(seconds: 5))
           .map((snapshot) {
-        return snapshot.docs.map((doc) {
-          return Coupon.fromJson({
-            'id': doc.id,
-            ...doc.data(),
-          });
-        }).toList();
+        return snapshot.docs
+            .map((doc) {
+              return Coupon.fromFirestore(doc.data(), doc.id);
+            })
+            .where((coupon) => coupon.isActive)
+            .toList();
       }).handleError((error) {
         debugPrint('Error getting store coupons: $error');
         return <Coupon>[];
@@ -101,10 +100,7 @@ class CouponService {
           .timeout(const Duration(seconds: 5))
           .map((snapshot) {
         return snapshot.docs.map((doc) {
-          return UserCoupon.fromJson({
-            'id': doc.id,
-            ...doc.data(),
-          });
+          return UserCoupon.fromFirestore(doc.data(), doc.id);
         }).toList();
       }).handleError((error) {
         debugPrint('Error getting user coupons: $error');
@@ -121,15 +117,36 @@ class CouponService {
     try {
       return _firestore
           .collection('coupons')
+          .orderBy('createdAt', descending: true)
           .snapshots()
-          .timeout(const Duration(seconds: 5))
+          .timeout(const Duration(seconds: 10))
           .map((snapshot) {
-        return snapshot.docs.map((doc) {
-          return Coupon.fromJson({
-            'id': doc.id,
-            ...doc.data(),
-          });
-        }).toList();
+        final now = DateTime.now();
+        final coupons = <Coupon>[];
+        
+        for (final doc in snapshot.docs) {
+          try {
+            final data = doc.data();
+            debugPrint('Raw coupon data for ${doc.id}: $data');
+            final coupon = Coupon.fromFirestore(data, doc.id);
+            debugPrint('Parsed coupon: ${coupon.title}, isActive: ${coupon.isActive}, validUntil: ${coupon.validUntil}, usedCount: ${coupon.usedCount}, usageLimit: ${coupon.usageLimit}');
+            
+            // アクティブで期限切れでないクーポンのみをフィルタリング
+            if (coupon.isActive && 
+                coupon.validUntil.isAfter(now) && 
+                coupon.usedCount < coupon.usageLimit) {
+              coupons.add(coupon);
+              debugPrint('Added coupon to list: ${coupon.title}');
+            } else {
+              debugPrint('Filtered out coupon: ${coupon.title} - isActive: ${coupon.isActive}, validUntil: ${coupon.validUntil}, usedCount: ${coupon.usedCount}, usageLimit: ${coupon.usageLimit}');
+            }
+          } catch (e) {
+            debugPrint('Error parsing coupon ${doc.id}: $e');
+            // 個別のクーポンのパースエラーは無視して続行
+          }
+        }
+        
+        return coupons;
       }).handleError((error) {
         debugPrint('Error getting available coupons: $error');
         return <Coupon>[];
@@ -149,10 +166,7 @@ class CouponService {
           .timeout(const Duration(seconds: 5))
           .map((snapshot) {
         return snapshot.docs.map((doc) {
-          return Promotion.fromJson({
-            'id': doc.id,
-            ...doc.data(),
-          });
+          return Promotion.fromFirestore(doc.data(), doc.id);
         }).toList();
       }).handleError((error) {
         debugPrint('Error getting promotions: $error');
@@ -229,10 +243,7 @@ class CouponService {
         throw Exception('クーポンが見つかりません');
       }
 
-      final coupon = Coupon.fromJson({
-        'id': couponDoc.id,
-        ...couponDoc.data()!,
-      });
+      final coupon = Coupon.fromFirestore(couponDoc.data()!, couponDoc.id);
 
       // クーポンが有効かチェック
       if (!coupon.isActive || coupon.validUntil.isBefore(DateTime.now())) {
@@ -274,10 +285,7 @@ class CouponService {
       // クーポンの使用回数を更新
       final userCouponDoc = await _firestore.collection('user_coupons').doc(userCouponId).get();
       if (userCouponDoc.exists) {
-        final userCoupon = UserCoupon.fromJson({
-          'id': userCouponDoc.id,
-          ...userCouponDoc.data()!,
-        });
+        final userCoupon = UserCoupon.fromFirestore(userCouponDoc.data()!, userCouponDoc.id);
 
         await _firestore.collection('coupons').doc(userCoupon.couponId).update({
           'usedCount': FieldValue.increment(1),

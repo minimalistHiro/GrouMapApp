@@ -98,6 +98,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
   Widget _buildQRCodeList(BuildContext context) {
     final qrTokenState = ref.watch(qrTokenProvider);
     
+    // デバッグログ
+    print('QRGeneratorView: QRTokenState - isLoading: ${qrTokenState.isLoading}, hasToken: ${qrTokenState.hasToken}, error: ${qrTokenState.error}');
+    
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -275,11 +278,47 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       );
     }
 
-    return QrImageView(
-      data: qrTokenState.token!,
-      version: QrVersions.auto,
-      size: 200.0,
-      backgroundColor: Colors.white,
+    return Column(
+      children: [
+        QrImageView(
+          data: qrTokenState.token!,
+          version: QrVersions.auto,
+          size: 200.0,
+          backgroundColor: Colors.white,
+        ),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'QRコード文字列:',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                qrTokenState.token!,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontFamily: 'monospace',
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

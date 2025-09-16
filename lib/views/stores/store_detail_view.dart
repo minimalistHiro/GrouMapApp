@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../providers/posts_provider.dart';
 
-class StoreDetailView extends StatefulWidget {
+class StoreDetailView extends ConsumerStatefulWidget {
   final Map<String, dynamic> store;
   
   const StoreDetailView({
@@ -11,10 +13,10 @@ class StoreDetailView extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<StoreDetailView> createState() => _StoreDetailViewState();
+  ConsumerState<StoreDetailView> createState() => _StoreDetailViewState();
 }
 
-class _StoreDetailViewState extends State<StoreDetailView>
+class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   Map<String, dynamic>? _userStamps;
@@ -580,17 +582,141 @@ class _StoreDetailViewState extends State<StoreDetailView>
   }
 
   Widget _buildPostsTab() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: const Center(
-        child: Text(
-          '投稿機能は今後実装予定です',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
+    final storeId = widget.store['id'];
+    final posts = ref.watch(storePostsProvider(storeId));
+
+    return posts.when(
+      data: (posts) {
+        if (posts.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.article, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  '投稿がありません',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'この店舗からの投稿をお待ちください！',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(2),
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 2,
+              mainAxisSpacing: 2,
+              childAspectRatio: 1,
+            ),
+            itemCount: posts.length,
+            itemBuilder: (context, index) {
+              final post = posts[index];
+              return _buildInstagramPostCard(context, post);
+            },
           ),
+        );
+      },
+      loading: () => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: Color(0xFFFF6B35),
+            ),
+            SizedBox(height: 8),
+            Text(
+              '投稿を読み込み中...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+          ],
         ),
       ),
+      error: (error, _) {
+        // インデックスエラーの場合は投稿なしとして表示
+        if (error.toString().contains('failed-precondition') || 
+            error.toString().contains('requires an index')) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.article, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  '投稿がありません',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'この店舗からの投稿をお待ちください！',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+              const SizedBox(height: 8),
+              const Text(
+                '投稿の取得に失敗しました',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'データが存在しない可能性があります',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: () {
+                  ref.invalidate(storePostsProvider(storeId));
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6B35),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('再試行'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1172,6 +1298,280 @@ class _StoreDetailViewState extends State<StoreDetailView>
            _getStringValue(socialMedia['instagram'], '').isNotEmpty ||
            _getStringValue(socialMedia['x'], '').isNotEmpty ||
            _getStringValue(socialMedia['facebook'], '').isNotEmpty;
+  }
+
+  // Instagram風の投稿カードを構築
+  Widget _buildInstagramPostCard(BuildContext context, PostModel post) {
+    return GestureDetector(
+      onTap: () {
+        // 投稿詳細画面に遷移
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.grey[200],
+        ),
+        child: post.imageUrls.isNotEmpty
+            ? Stack(
+                children: [
+                  // メイン画像
+                  Positioned.fill(
+                    child: Image.network(
+                      post.imageUrls[0],
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(
+                              Icons.image,
+                              size: 30,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  
+                  // 複数画像インジケーター（画像が複数ある場合）
+                  if (post.imageUrls.length > 1)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.grid_on,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${post.imageUrls.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  
+                  // いいね数オーバーレイ（いいねがある場合）
+                  if (post.likeCount > 0)
+                    Positioned(
+                      bottom: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.favorite,
+                              size: 12,
+                              color: Colors.red,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${post.likeCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              )
+            : Container(
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(
+                    Icons.image,
+                    size: 30,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
+
+  // 投稿カードを構築（詳細表示用）
+  Widget _buildPostCard(BuildContext context, PostModel post) {
+    // 作成日の表示用フォーマット
+    String formatDate() {
+      try {
+        final date = post.createdAt;
+        final now = DateTime.now();
+        final difference = now.difference(date).inDays;
+        
+        if (difference == 0) return '今日';
+        if (difference == 1) return '昨日';
+        if (difference < 7) return '${difference}日前';
+        
+        return '${date.month}月${date.day}日';
+      } catch (e) {
+        return '日付不明';
+      }
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        onTap: () {
+          // 投稿詳細画面に遷移
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 画像がある場合は表示
+              if (post.imageUrls.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    post.imageUrls[0],
+                    width: double.infinity,
+                    height: 200,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 200,
+                        color: Colors.grey[300],
+                        child: const Center(
+                          child: Icon(
+                            Icons.image,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              
+              Row(
+                children: [
+                  Icon(
+                    Icons.article,
+                    color: Colors.blue,
+                    size: 32,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          post.title,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          post.content,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.blue,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      post.category ?? 'お知らせ',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.store, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    post.storeName ?? '店舗名なし',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    formatDate(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.visibility, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${post.viewCount}回閲覧',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Icon(Icons.favorite, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${post.likeCount}いいね',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // スタンプ増減テスターを構築

@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../providers/auth_provider.dart';
 import '../providers/coupon_provider.dart';
-import '../providers/social_provider.dart';
 import '../providers/announcement_provider.dart';
+import '../providers/posts_provider.dart';
+import '../providers/store_provider.dart';
 import '../widgets/custom_button.dart';
 import 'auth/welcome_view.dart';
 import 'notifications/notifications_view.dart';
@@ -14,6 +15,7 @@ import 'stores/store_list_view.dart';
 import 'stamps/stamp_cards_view.dart';
 import 'referral/friend_referral_view.dart';
 import 'referral/store_referral_view.dart';
+import 'feedback/feedback_view.dart';
 
 // ユーザーデータプロバイダー（usersコレクションから直接取得）
 final userDataProvider = StreamProvider.family<Map<String, dynamic>?, String>((ref, userId) {
@@ -539,7 +541,7 @@ class HomeView extends ConsumerWidget {
                 itemCount: coupons.length,
                 itemBuilder: (context, index) {
                   final coupon = coupons[index];
-                  return _buildCouponCard(coupon);
+                  return _buildCouponCard(context, ref, coupon);
                 },
               );
             },
@@ -596,16 +598,23 @@ class HomeView extends ConsumerWidget {
         const SizedBox(height: 10),
         SizedBox(
           height: 350,
-          child: ref.watch(feedPostsProvider).when(
+          child: ref.watch(allPostsProvider).when(
             data: (posts) {
               if (posts.isEmpty) {
                 return const Center(
-                  child: Text(
-                    '投稿がありません',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                    ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.article, size: 48, color: Colors.grey),
+                      SizedBox(height: 8),
+                      Text(
+                        '投稿がありません',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
                 );
               }
@@ -619,17 +628,45 @@ class HomeView extends ConsumerWidget {
               );
             },
             loading: () => const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(
+                    color: Color(0xFFFF6B35),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    '投稿を読み込み中...',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
               ),
             ),
-            error: (error, _) => const Center(
-              child: Text(
-                '投稿の取得に失敗しました',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.red,
-                ),
+            error: (error, _) => Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '投稿の取得に失敗しました',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'データが存在しない可能性があります',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -638,14 +675,14 @@ class HomeView extends ConsumerWidget {
     );
   }
 
-  Widget _buildCouponCard(dynamic coupon) {
+  Widget _buildCouponCard(BuildContext context, WidgetRef ref, dynamic coupon) {
     // 終了日の表示用フォーマット
     String formatEndDate() {
-      final endDate = coupon.endDate;
+      final endDate = coupon.validUntil;
       if (endDate == null) return '期限不明';
       
       try {
-        final date = endDate.toDate();
+        final date = endDate is DateTime ? endDate : endDate.toDate();
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         final tomorrow = today.add(const Duration(days: 1));
@@ -668,15 +705,15 @@ class HomeView extends ConsumerWidget {
 
     // 割引表示用テキスト
     String getDiscountText() {
-      final discountType = coupon.discountType ?? '割引率';
-      final discountValue = coupon.discountValue ?? '';
+      final discountType = coupon.discountType ?? 'percentage';
+      final discountValue = coupon.discountValue ?? 0.0;
       
-      if (discountType == '割引率') {
-        return '$discountValue%OFF';
-      } else if (discountType == '割引額') {
-        return '${discountValue}円OFF';
-      } else if (discountType == '固定価格') {
-        return '${discountValue}円';
+      if (discountType == 'percentage') {
+        return '${discountValue.toInt()}%OFF';
+      } else if (discountType == 'fixed_amount') {
+        return '${discountValue.toInt()}円OFF';
+      } else if (discountType == 'fixed_price') {
+        return '${discountValue.toInt()}円';
       }
       return '特典あり';
     }
@@ -801,12 +838,26 @@ class HomeView extends ConsumerWidget {
             // 店舗名
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text(
-                coupon.storeName ?? '店舗名なし',
-                style: const TextStyle(fontSize: 9),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: ref.watch(storeNameProvider(coupon.storeId)).when(
+                data: (storeName) => Text(
+                  storeName ?? '店舗名なし',
+                  style: const TextStyle(fontSize: 9),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                loading: () => const Text(
+                  '読み込み中...',
+                  style: TextStyle(fontSize: 9),
+                  textAlign: TextAlign.center,
+                ),
+                error: (_, __) => Text(
+                  coupon.storeId ?? '店舗名なし',
+                  style: const TextStyle(fontSize: 9),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ),
             
@@ -817,14 +868,11 @@ class HomeView extends ConsumerWidget {
     );
   }
 
-  Widget _buildPostCard(dynamic post) {
+  Widget _buildPostCard(PostModel post) {
     // 作成日の表示用フォーマット
     String formatDate() {
-      final createdAt = post.createdAt;
-      if (createdAt == null) return '日付不明';
-      
       try {
-        final date = createdAt.toDate();
+        final date = post.createdAt;
         final now = DateTime.now();
         final difference = now.difference(date).inDays;
         
@@ -868,7 +916,7 @@ class HomeView extends ConsumerWidget {
                 color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(7),
               ),
-              child: post.imageUrls != null && post.imageUrls.isNotEmpty
+              child: post.imageUrls.isNotEmpty
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(7),
                       child: Image.network(
@@ -919,7 +967,7 @@ class HomeView extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Text(
-                post.title ?? 'タイトルなし',
+                post.title,
                 style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
@@ -937,7 +985,7 @@ class HomeView extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Text(
-                  post.content ?? '',
+                  post.content,
                   style: const TextStyle(
                     fontSize: 9,
                     color: Colors.grey,
@@ -1044,9 +1092,11 @@ class HomeView extends ConsumerWidget {
             ),
           );
         } else if (title == 'フィードバック') {
-          // フィードバック画面に遷移（仮の画面）
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('フィードバック機能は準備中です')),
+          // フィードバック画面に遷移
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const FeedbackView(),
+            ),
           );
         }
       },

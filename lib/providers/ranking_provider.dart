@@ -1,27 +1,63 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import '../models/ranking_model.dart';
-import '../models/level_model.dart';
-import '../models/badge_model.dart';
 
 // ランキングサービスプロバイダー
 final rankingProvider = Provider<RankingService>((ref) {
   return RankingService();
 });
 
-// ランキングデータプロバイダー
-final rankingDataProvider = StreamProvider.family<List<RankingModel>, RankingQuery>((ref, query) {
-  final rankingService = ref.watch(rankingProvider);
-  return rankingService.getRankingData(query)
-      .timeout(const Duration(seconds: 5))
-      .handleError((error) {
-    debugPrint('Ranking data provider error: $error');
-    if (error.toString().contains('permission-denied')) {
-      return <RankingModel>[];
+// ランキング状態管理
+class RankingNotifier extends StateNotifier<AsyncValue<List<RankingModel>>> {
+  final RankingService _rankingService;
+  RankingQuery? _lastQuery;
+  
+  RankingNotifier(this._rankingService) : super(const AsyncValue.loading());
+  
+  Future<void> loadRanking(RankingQuery query) async {
+    // 同じクエリの場合は再読み込みしない
+    if (_lastQuery != null && 
+        _lastQuery!.type == query.type && 
+        _lastQuery!.period == query.period &&
+        _lastQuery!.limit == query.limit) {
+      return;
     }
-    return <RankingModel>[];
+    
+    _lastQuery = query;
+    debugPrint('RankingNotifier: Loading ranking for ${query.type}, ${query.period}');
+    
+    state = const AsyncValue.loading();
+    
+    try {
+      final data = await _rankingService.getRankingDataOnce(query);
+      debugPrint('RankingNotifier: Loaded ${data.length} ranking items');
+      state = AsyncValue.data(data);
+    } catch (error, stackTrace) {
+      debugPrint('RankingNotifier: Error loading ranking: $error');
+      state = AsyncValue.error(error, stackTrace);
+    }
+  }
+}
+
+// ランキングプロバイダー
+final rankingNotifierProvider = StateNotifierProvider<RankingNotifier, AsyncValue<List<RankingModel>>>((ref) {
+  final rankingService = ref.watch(rankingProvider);
+  return RankingNotifier(rankingService);
+});
+
+// ランキングデータプロバイダー（StateNotifierProviderに変更）
+final rankingDataProvider = Provider.family<AsyncValue<List<RankingModel>>, RankingQuery>((ref, query) {
+  final notifier = ref.watch(rankingNotifierProvider.notifier);
+  final state = ref.watch(rankingNotifierProvider);
+  
+  // 初回読み込み
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    notifier.loadRanking(query);
   });
+  
+  return state;
 });
 
 // ユーザーのランキング位置プロバイダー
@@ -59,24 +95,168 @@ class RankingQuery {
 class RankingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // ランキングデータを取得
+  // ランキングデータを一度だけ取得（FutureProvider用）
+  Future<List<RankingModel>> getRankingDataOnce(RankingQuery query) async {
+    try {
+      debugPrint('RankingService: Getting ranking data once for type: ${query.type}, period: ${query.period}');
+      
+      final snapshot = await _firestore
+          .collection('users')
+          .get()
+          .timeout(const Duration(seconds: 10));
+      
+      debugPrint('RankingService: Retrieved ${snapshot.docs.length} users from database');
+      
+      if (snapshot.docs.isEmpty) {
+        debugPrint('RankingService: No users found in database');
+        return <RankingModel>[];
+      }
+      
+      // ユーザーデータをRankingModelに変換
+      final rankings = snapshot.docs.map((doc) {
+        try {
+          final data = doc.data();
+          final userId = doc.id;
+          final profileImageUrl = data['profileImageUrl'];
+          
+          debugPrint('RankingService: User $userId - profileImageUrl: $profileImageUrl');
+          
+          return RankingModel(
+            userId: userId,
+            displayName: data['displayName'] ?? 'Unknown User',
+            photoURL: data['profileImageUrl'], // profileImageUrlから取得
+            totalPoints: data['totalPoints'] ?? 0,
+            currentLevel: data['currentLevel'] ?? 1,
+            badgeCount: data['badgeCount'] ?? 0,
+            stampCount: data['stampCount'] ?? 0,
+            totalPayment: data['totalPayment'] ?? 0,
+            rank: 0, // 後で設定
+            lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          );
+        } catch (e) {
+          debugPrint('RankingService: Error parsing user data for ${doc.id}: $e');
+          return null;
+        }
+      }).where((ranking) => ranking != null).cast<RankingModel>().toList();
+      
+      debugPrint('RankingService: Successfully parsed ${rankings.length} user rankings');
+      
+      // ランキングタイプに応じてソート
+      rankings.sort((a, b) {
+        switch (query.type) {
+          case RankingType.totalPoints:
+            return b.totalPoints.compareTo(a.totalPoints);
+          case RankingType.badgeCount:
+            return b.badgeCount.compareTo(a.badgeCount);
+          case RankingType.level:
+            return b.currentLevel.compareTo(a.currentLevel);
+          case RankingType.stampCount:
+            return b.stampCount.compareTo(a.stampCount);
+          case RankingType.totalPayment:
+            return b.totalPayment.compareTo(a.totalPayment);
+        }
+      });
+      
+      // 期間フィルターを適用
+      final filteredRankings = _applyPeriodFilterToList(rankings, query.period);
+      debugPrint('RankingService: After period filter: ${filteredRankings.length} users');
+      
+      // ランクを設定
+      final rankedList = filteredRankings.asMap().entries.map((entry) {
+        final index = entry.key;
+        final ranking = entry.value;
+        return ranking.copyWith(rank: index + 1);
+      }).toList();
+      
+      // 制限を適用
+      final limitedList = rankedList.take(query.limit).toList();
+      
+      debugPrint('RankingService: Generated final ranking with ${limitedList.length} users');
+      return limitedList;
+    } catch (e) {
+      debugPrint('RankingService: Error getting ranking data: $e');
+      return <RankingModel>[];
+    }
+  }
+
+  // ランキングデータを取得（実際のユーザーデータから）
   Stream<List<RankingModel>> getRankingData(RankingQuery query) {
     try {
+      debugPrint('Getting ranking data for type: ${query.type}, period: ${query.period}');
+      
       return _firestore
-          .collection('rankings')
+          .collection('users')
           .snapshots()
-          .timeout(const Duration(seconds: 5))
+          .timeout(const Duration(seconds: 15))
           .map((snapshot) {
-        return snapshot.docs.asMap().entries.map((entry) {
-          final index = entry.key;
-          final doc = entry.value;
-          final data = doc.data() as Map<String, dynamic>;
+        debugPrint('Retrieved ${snapshot.docs.length} users from database');
+        
+        if (snapshot.docs.isEmpty) {
+          debugPrint('No users found in database');
+          return <RankingModel>[];
+        }
+        
+        // ユーザーデータをRankingModelに変換
+        final rankings = snapshot.docs.map((doc) {
+        try {
+          final data = doc.data();
+          final userId = doc.id;
+          final profileImageUrl = data['profileImageUrl'];
           
-          return RankingModel.fromJson({
-            ...data,
-            'rank': index + 1,
-          });
+          debugPrint('RankingService: User $userId - profileImageUrl: $profileImageUrl');
+          
+          return RankingModel(
+            userId: userId,
+            displayName: data['displayName'] ?? 'Unknown User',
+            photoURL: profileImageUrl, // profileImageUrlから取得
+            totalPoints: data['totalPoints'] ?? 0,
+            currentLevel: data['currentLevel'] ?? 1,
+            badgeCount: data['badgeCount'] ?? 0,
+            stampCount: data['stampCount'] ?? 0,
+            totalPayment: data['totalPayment'] ?? 0,
+            rank: 0, // 後で設定
+            lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          );
+          } catch (e) {
+            debugPrint('Error parsing user data for ${doc.id}: $e');
+            return null;
+          }
+        }).where((ranking) => ranking != null).cast<RankingModel>().toList();
+        
+        debugPrint('Successfully parsed ${rankings.length} user rankings');
+        
+        // ランキングタイプに応じてソート
+        rankings.sort((a, b) {
+          switch (query.type) {
+            case RankingType.totalPoints:
+              return b.totalPoints.compareTo(a.totalPoints);
+            case RankingType.badgeCount:
+              return b.badgeCount.compareTo(a.badgeCount);
+            case RankingType.level:
+              return b.currentLevel.compareTo(a.currentLevel);
+            case RankingType.stampCount:
+              return b.stampCount.compareTo(a.stampCount);
+            case RankingType.totalPayment:
+              return b.totalPayment.compareTo(a.totalPayment);
+          }
+        });
+        
+        // 期間フィルターを適用
+        final filteredRankings = _applyPeriodFilterToList(rankings, query.period);
+        debugPrint('After period filter: ${filteredRankings.length} users');
+        
+        // ランクを設定
+        final rankedList = filteredRankings.asMap().entries.map((entry) {
+          final index = entry.key;
+          final ranking = entry.value;
+          return ranking.copyWith(rank: index + 1);
         }).toList();
+        
+        // 制限を適用
+        final limitedList = rankedList.take(query.limit).toList();
+        
+        debugPrint('Generated final ranking with ${limitedList.length} users');
+        return limitedList;
       }).handleError((error) {
         debugPrint('Error in ranking data stream: $error');
         // 権限エラーの場合は空のリストを返す
@@ -227,7 +407,33 @@ class RankingService {
     }
   }
 
-  // 期間フィルターを適用
+  // 期間フィルターをリストに適用
+  List<RankingModel> _applyPeriodFilterToList(List<RankingModel> rankings, RankingPeriodType period) {
+    final now = DateTime.now();
+    
+    switch (period) {
+      case RankingPeriodType.daily:
+        final startOfDay = DateTime(now.year, now.month, now.day);
+        return rankings.where((ranking) => 
+          ranking.lastUpdated.isAfter(startOfDay)).toList();
+      
+      case RankingPeriodType.weekly:
+        final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+        final startOfWeekDay = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day);
+        return rankings.where((ranking) => 
+          ranking.lastUpdated.isAfter(startOfWeekDay)).toList();
+      
+      case RankingPeriodType.monthly:
+        final startOfMonth = DateTime(now.year, now.month, 1);
+        return rankings.where((ranking) => 
+          ranking.lastUpdated.isAfter(startOfMonth)).toList();
+      
+      case RankingPeriodType.allTime:
+        return rankings;
+    }
+  }
+
+  // 期間フィルターを適用（クエリ用 - 将来の拡張用）
   Query _applyPeriodFilter(Query collection, RankingPeriodType period) {
     final now = DateTime.now();
     
@@ -255,12 +461,14 @@ class RankingService {
     switch (type) {
       case RankingType.totalPoints:
         return 'totalPoints';
-      case RankingType.monthlyPoints:
-        return 'monthlyPoints';
       case RankingType.badgeCount:
         return 'badgeCount';
       case RankingType.level:
         return 'currentLevel';
+      case RankingType.stampCount:
+        return 'stampCount';
+      case RankingType.totalPayment:
+        return 'totalPayment';
     }
   }
 }

@@ -32,8 +32,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   @override
   void initState() {
     super.initState();
-    // 初期データ読み込み
-    _loadInitialData();
+    // 初期データ読み込みをフレーム後に実行
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadInitialData();
+    });
   }
 
   // 初期データ読み込み

@@ -12,6 +12,8 @@ class RankingModel with _$RankingModel {
     required int totalPoints,
     required int currentLevel,
     required int badgeCount,
+    required int stampCount,
+    required int totalPayment,
     required DateTime lastUpdated,
     required int rank,
     @Default(0) int previousRank,
@@ -53,12 +55,14 @@ class UserRankingHistory with _$UserRankingHistory {
 enum RankingType {
   @JsonValue('total_points')
   totalPoints,
-  @JsonValue('monthly_points')
-  monthlyPoints,
   @JsonValue('badge_count')
   badgeCount,
   @JsonValue('level')
   level,
+  @JsonValue('stamp_count')
+  stampCount,
+  @JsonValue('total_payment')
+  totalPayment,
 }
 
 enum RankingPeriodType {

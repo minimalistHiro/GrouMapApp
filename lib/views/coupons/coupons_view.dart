@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/coupon_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/social_provider.dart';
+import '../../providers/posts_provider.dart';
+import '../../providers/store_provider.dart';
 import '../../models/coupon_model.dart' as model;
 import '../../widgets/custom_button.dart';
 
@@ -69,7 +70,7 @@ class CouponsView extends ConsumerWidget {
   }
 
   Widget _buildPosts(BuildContext context, WidgetRef ref) {
-    final posts = ref.watch(feedPostsProvider);
+    final posts = ref.watch(allPostsProvider);
 
     return posts.when(
       data: (posts) {
@@ -88,42 +89,67 @@ class CouponsView extends ConsumerWidget {
           );
         }
 
-        return ListView.builder(
+        return Padding(
           padding: const EdgeInsets.all(16),
-          itemCount: posts.length,
-          itemBuilder: (context, index) {
-            final post = posts[index];
-            return _buildPostCard(context, ref, post);
-          },
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.8, // 縦に短くするためにアスペクト比を調整
+            ),
+            itemCount: posts.length,
+            itemBuilder: (context, index) {
+              final post = posts[index];
+              return _buildPostCard(context, ref, post);
+            },
+          ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: Color(0xFFFF6B35),
+            ),
+            SizedBox(height: 8),
+            Text(
+              '投稿を読み込み中...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
       error: (error, _) => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
+            const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+            const SizedBox(height: 8),
             const Text(
-              'データの取得に失敗しました',
+              '投稿の取得に失敗しました',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: Colors.grey,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 4),
             Text(
-              'ネットワーク接続を確認してください',
+              'データが存在しない可能性があります',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 12,
                 color: Colors.grey[600],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             CustomButton(
               text: '再試行',
               onPressed: () {
-                ref.invalidate(feedPostsProvider);
+                ref.invalidate(allPostsProvider);
               },
             ),
           ],
@@ -158,14 +184,11 @@ class CouponsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildPostCard(BuildContext context, WidgetRef ref, dynamic post) {
+  Widget _buildPostCard(BuildContext context, WidgetRef ref, PostModel post) {
     // 作成日の表示用フォーマット
     String formatDate() {
-      final createdAt = post.createdAt;
-      if (createdAt == null) return '日付不明';
-      
       try {
-        final date = createdAt.toDate();
+        final date = post.createdAt;
         final now = DateTime.now();
         final difference = now.difference(date).inDays;
         
@@ -179,91 +202,154 @@ class CouponsView extends ConsumerWidget {
       }
     }
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: InkWell(
-        onTap: () {
-          // 投稿詳細画面に遷移
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.article,
-                    color: Colors.blue,
-                    size: 32,
+    return GestureDetector(
+      onTap: () {
+        // 投稿詳細画面に遷移
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 画像（正方形）
+            AspectRatio(
+              aspectRatio: 1.0, // 正方形にする
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(10),
+                    topRight: Radius.circular(10),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          post.title ?? 'タイトルなし',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                ),
+                child: post.imageUrls.isNotEmpty
+                    ? ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(10),
+                          topRight: Radius.circular(10),
                         ),
-                        Text(
-                          post.content ?? '',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        child: Image.network(
+                          post.imageUrls[0],
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Center(
+                              child: Icon(
+                                Icons.image,
+                                size: 40,
+                                color: Colors.grey,
+                              ),
+                            );
+                          },
                         ),
-                      ],
+                      )
+                    : const Center(
+                        child: Icon(
+                          Icons.image,
+                          size: 40,
+                          color: Colors.grey,
+                        ),
+                      ),
+              ),
+            ),
+            
+            // コンテンツ部分
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // カテゴリバッジ
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B35).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFFFF6B35).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        post.category ?? 'お知らせ',
+                        style: const TextStyle(
+                          fontSize: 8,
+                          color: Color(0xFFFF6B35),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.blue,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      post.category ?? 'お知らせ',
+                    
+                    const SizedBox(height: 4),
+                    
+                    // タイトル
+                    Text(
+                      post.title,
                       style: const TextStyle(
-                        color: Colors.white,
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                    
+                    const SizedBox(height: 2),
+                    
+                    // 内容
+                    Expanded(
+                      child: Text(
+                        post.content,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: Colors.grey,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    
+                    // 店舗名と投稿日
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            post.storeName ?? '店舗名なし',
+                            style: const TextStyle(
+                              fontSize: 8,
+                              color: Colors.grey,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Text(
+                          formatDate(),
+                          style: const TextStyle(
+                            fontSize: 8,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Icon(Icons.store, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    post.storeName ?? '店舗名なし',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    formatDate(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -289,16 +375,41 @@ class CouponsView extends ConsumerWidget {
           );
         }
 
-        return ListView.builder(
+        return Padding(
           padding: const EdgeInsets.all(16),
-          itemCount: coupons.length,
-          itemBuilder: (context, index) {
-            final coupon = coupons[index];
-            return _buildCouponCard(context, ref, coupon, userId);
-          },
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.8, // 縦に短くするためにアスペクト比を調整
+            ),
+            itemCount: coupons.length,
+            itemBuilder: (context, index) {
+              final coupon = coupons[index];
+              return _buildCouponCardGrid(context, ref, coupon, userId);
+            },
+          ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: Color(0xFFFF6B35),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'クーポンを読み込み中...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
       error: (error, _) => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -455,6 +566,197 @@ class CouponsView extends ConsumerWidget {
                 ref.invalidate(promotionsProvider);
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCouponCardGrid(BuildContext context, WidgetRef ref, model.Coupon coupon, String userId) {
+    // 終了日の表示用フォーマット
+    String formatEndDate() {
+      final endDate = coupon.validUntil;
+      
+      try {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final tomorrow = today.add(const Duration(days: 1));
+        final couponDate = DateTime(endDate.year, endDate.month, endDate.day);
+        
+        String dateText;
+        if (couponDate.isAtSameMomentAs(today)) {
+          dateText = '今日';
+        } else if (couponDate.isAtSameMomentAs(tomorrow)) {
+          dateText = '明日';
+        } else {
+          dateText = '${endDate.month}月${endDate.day}日';
+        }
+        
+        return '$dateText ${endDate.hour.toString().padLeft(2, '0')}:${endDate.minute.toString().padLeft(2, '0')}まで';
+      } catch (e) {
+        return '期限不明';
+      }
+    }
+
+    // 割引表示用テキスト
+    String getDiscountText() {
+      final discountType = coupon.discountType;
+      final discountValue = coupon.discountValue;
+      
+      if (discountType == 'percentage') {
+        return '${discountValue.toInt()}%OFF';
+      } else if (discountType == 'fixed_amount') {
+        return '${discountValue.toInt()}円OFF';
+      } else if (discountType == 'fixed_price') {
+        return '${discountValue.toInt()}円';
+      }
+      return '特典あり';
+    }
+
+    return GestureDetector(
+      onTap: () {
+        // クーポン詳細画面に遷移
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // 画像（正方形）
+            AspectRatio(
+              aspectRatio: 1.0, // 正方形にする
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 7, bottom: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: coupon.imageUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(7),
+                        child: Image.network(
+                          coupon.imageUrl!,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.image,
+                              size: 50,
+                              color: Colors.grey,
+                            );
+                          },
+                        ),
+                      )
+                    : const Icon(
+                        Icons.image,
+                        size: 50,
+                        color: Colors.grey,
+                      ),
+              ),
+            ),
+            
+            // 期限
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.red[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Text(
+                formatEndDate(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            
+            const SizedBox(height: 6),
+            
+            // タイトル
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                coupon.title,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            
+            const SizedBox(height: 4),
+            
+            // 割引情報
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B35).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFFF6B35).withOpacity(0.3),
+                ),
+              ),
+              child: Text(
+                getDiscountText(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFFF6B35),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            
+            const Divider(height: 1),
+            
+            // 店舗名
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: ref.watch(storeNameProvider(coupon.storeId)).when(
+                data: (storeName) => Text(
+                  storeName ?? '店舗名なし',
+                  style: const TextStyle(fontSize: 9),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                loading: () => const Text(
+                  '読み込み中...',
+                  style: TextStyle(fontSize: 9),
+                  textAlign: TextAlign.center,
+                ),
+                error: (_, __) => Text(
+                  coupon.storeId,
+                  style: const TextStyle(fontSize: 9),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 1),
           ],
         ),
       ),

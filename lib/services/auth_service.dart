@@ -245,13 +245,16 @@ class AuthService {
         'uid': user.uid,
         'email': user.email,
         'displayName': displayName,
-        'photoURL': user.photoURL,
         'emailVerified': user.emailVerified,
         'authProvider': authProvider ?? 'email', // 認証プロバイダー情報
         'isOwner': false, // デフォルトで一般ユーザー
         'points': 0, // 初期ポイント
+        'totalPoints': 0, // 総ポイント（ランキング用）
         'paid': 0, // 初期支払額
         'rank': 'ブロンズ', // 初期ランク
+        'currentLevel': 1, // 現在のレベル
+        'badgeCount': 0, // 獲得バッジ数
+        'earnedBadges': <String>[], // 獲得したバッジIDのリスト
         'referralCode': referralCode, // 友達紹介コード
         'referralCount': 0, // 招待した友達数
         'referralEarnings': 0, // 友達紹介で獲得したポイント数
@@ -261,6 +264,7 @@ class AuthService {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
+        'lastUpdated': FieldValue.serverTimestamp(), // ランキング更新用
         'isActive': true,
         'showTutorial': true, // 初回ログイン時にチュートリアルを表示
         'readNotifications': <String>[], // 既読通知IDリスト
