@@ -218,7 +218,9 @@ class _CreatePostViewState extends State<CreatePostView> {
           storeIconImageUrl = storeData['iconImageUrl'];
         }
       } catch (e) {
-        print('店舗アイコン画像URL取得エラー: $e');
+        if (kDebugMode) {
+          print('店舗アイコン画像URL取得エラー: $e');
+        }
       }
 
       // Firestoreに投稿情報を保存
@@ -235,7 +237,6 @@ class _CreatePostViewState extends State<CreatePostView> {
         'updatedAt': FieldValue.serverTimestamp(),
         'isActive': true,
         'isPublished': true,
-        'likes': 0,
         'views': 0,
         'comments': [],
         'imageUrls': imageUrls,

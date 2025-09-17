@@ -280,7 +280,6 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
           'gender': widget.userInfo!['gender'],
           'prefecture': widget.userInfo!['prefecture'],
           'city': widget.userInfo!['city'],
-          'friendCode': widget.userInfo!['friendCode'],
           'profileImageUrl': widget.userInfo!['profileImageUrl'],
         });
       }

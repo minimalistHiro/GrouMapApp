@@ -228,19 +228,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     String? imageUrl;
     if (userData != null && userData['profileImageUrl'] != null && userData['profileImageUrl'].toString().isNotEmpty) {
       imageUrl = userData['profileImageUrl'];
-      print('Firestoreから取得した画像URL: $imageUrl');
     } else if (user.photoURL != null && user.photoURL!.isNotEmpty) {
       imageUrl = user.photoURL;
-      print('Firebase Authから取得した画像URL: $imageUrl');
-    } else {
-      print('画像URLが見つかりません');
-    }
-
-    // 画像URLの検証
-    if (imageUrl != null) {
-      print('使用する画像URL: $imageUrl');
-      print('URLの長さ: ${imageUrl.length}');
-      print('URLが有効か: ${Uri.tryParse(imageUrl) != null}');
     }
 
     return CircleAvatar(

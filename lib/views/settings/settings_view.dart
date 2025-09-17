@@ -795,110 +795,154 @@ class SettingsView extends ConsumerWidget {
   }
 
   Future<void> _performAccountDeletion(BuildContext context, WidgetRef ref) async {
+    bool isLoadingDialogOpen = false;
+    
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ユーザーが見つかりません')),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('ユーザーが見つかりません')),
+          );
+        }
         return;
       }
 
       // ローディング表示
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'アカウントを削除中...',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(
+                  color: Color(0xFFFF6B35),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'しばらくお待ちください',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+                const SizedBox(height: 16),
+                const Text(
+                  'アカウントを削除中...',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  'しばらくお待ちください',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-
-      // 1. Firestoreからユーザーデータを取得
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .get();
-
-      // 2. FirebaseStorageの画像を削除
-      if (userDoc.exists) {
-        final userData = userDoc.data() as Map<String, dynamic>?;
-        if (userData != null) {
-          await _deleteUserImages(userData);
-        }
-      }
-
-      // 3. Firestoreのユーザーデータを削除
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .delete();
-
-      // 4. ユーザーのサブコレクション（スタンプカードなど）を削除
-      await _deleteUserSubcollections(user.uid);
-
-      // 5. 関連するデータも削除（必要に応じて）
-      await _deleteRelatedData(user.uid);
-
-      // 6. Firebase Authのアカウントを削除
-      await user.delete();
-
-      // ローディングを閉じる
-      if (context.mounted) {
-        Navigator.of(context).pop();
-      }
-
-      // 退会完了ポップアップを表示
-      if (context.mounted) {
-        await _showDeletionCompleteDialog(context);
-      }
-
-      // Welcome画面に遷移
-      if (context.mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const WelcomeView()),
-          (route) => false,
         );
+        isLoadingDialogOpen = true;
+      }
+
+      try {
+        // 1. Firestoreからユーザーデータを取得
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        // 2. FirebaseStorageの画像を削除
+        if (userDoc.exists) {
+          final userData = userDoc.data() as Map<String, dynamic>?;
+          if (userData != null) {
+            await _deleteUserImages(userData);
+          }
+        }
+
+        // 3. Firestoreのユーザーデータを削除
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .delete();
+
+        // 4. ユーザーのサブコレクション（スタンプカードなど）を削除
+        await _deleteUserSubcollections(user.uid);
+
+        // 5. 関連するデータも削除（必要に応じて）
+        await _deleteRelatedData(user.uid);
+
+        // 6. Firebase Authのアカウントを削除
+        await user.delete();
+
+        // ローディングを閉じる
+        if (context.mounted && isLoadingDialogOpen) {
+          Navigator.of(context).pop();
+          isLoadingDialogOpen = false;
+        }
+
+        // 退会完了ポップアップを表示
+        if (context.mounted) {
+          _showDeletionCompleteDialog(context);
+        }
+
+        // Welcome画面に遷移
+        if (context.mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const WelcomeView()),
+            (route) => false,
+          );
+        }
+      } catch (deletionError) {
+        // 削除処理でエラーが発生した場合
+        if (context.mounted && isLoadingDialogOpen) {
+          Navigator.of(context).pop();
+          isLoadingDialogOpen = false;
+        }
+        
+        if (context.mounted) {
+          String errorMessage = 'アカウント削除に失敗しました';
+          if (deletionError.toString().contains('requires-recent-login')) {
+            errorMessage = 'セキュリティのため、再度ログインしてから削除してください';
+          } else if (deletionError.toString().contains('network')) {
+            errorMessage = 'ネットワークエラーが発生しました。接続を確認してください';
+          } else if (deletionError.toString().contains('permission')) {
+            errorMessage = '権限が不足しています。管理者にお問い合わせください';
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return;
       }
     } catch (e) {
       // ローディングを閉じる
-      if (context.mounted) {
+      if (context.mounted && isLoadingDialogOpen) {
         Navigator.of(context).pop();
+        isLoadingDialogOpen = false;
       }
 
       // エラー表示
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('アカウント削除に失敗しました: $e'),
+            content: Text('予期しないエラーが発生しました: $e'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
+      }
+    } finally {
+      // 確実にローディングダイアログを閉じる
+      if (context.mounted && isLoadingDialogOpen) {
+        Navigator.of(context).pop();
+        isLoadingDialogOpen = false;
       }
     }
   }

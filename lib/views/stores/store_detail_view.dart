@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/posts_provider.dart';
+import '../../providers/coupon_provider.dart';
 import '../posts/post_detail_view.dart';
+import '../coupons/coupon_detail_view.dart';
 
 class StoreDetailView extends ConsumerStatefulWidget {
   final Map<String, dynamic> store;
@@ -26,7 +28,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _loadUserStamps();
   }
 
@@ -133,6 +135,21 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     }
   }
 
+  // いいね数を取得するメソッド
+  Future<int> _getLikeCount(String postId) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(postId)
+          .collection('likes')
+          .get();
+      return snapshot.docs.length;
+    } catch (e) {
+      print('いいね数取得エラー: $e');
+      return 0;
+    }
+  }
+
   // スタンプカード完成ダイアログを表示
   void _showStampCompletionDialog() {
     showDialog(
@@ -203,6 +220,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 indicatorColor: const Color(0xFFFF6B35),
                 tabs: const [
                   Tab(text: '投稿'),
+                  Tab(text: 'クーポン'),
                   Tab(text: 'メニュー'),
                   Tab(text: '店舗詳細'),
                 ],
@@ -216,6 +234,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               controller: _tabController,
               children: [
                 _buildPostsTab(),
+                _buildCouponsTab(),
                 _buildMenuTab(),
                 _buildStoreDetailsTab(),
               ],
@@ -247,11 +266,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     final backgroundImageUrl = _getStringValue(widget.store['backgroundImageUrl'], '');
     final storeImageUrl = _getStringValue(widget.store['storeImageUrl'], '');
     final imageUrl = backgroundImageUrl.isNotEmpty ? backgroundImageUrl : storeImageUrl;
-    
-    print('店舗背景画像URL (backgroundImageUrl): $backgroundImageUrl');
-    print('店舗背景画像URL (storeImageUrl): $storeImageUrl');
-    print('使用する画像URL: $imageUrl');
-    print('URLが空でないか: ${imageUrl.isNotEmpty}');
     
     if (imageUrl.isNotEmpty) {
       return Container(
@@ -318,7 +332,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         ),
       );
     } else {
-      print('背景画像URLが空です');
       // 背景画像がない場合の表示
       return Container(
         width: double.infinity,
@@ -770,6 +783,113 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           ),
         );
       },
+    );
+  }
+
+  Widget _buildCouponsTab() {
+    final storeId = widget.store['id'];
+    final user = FirebaseAuth.instance.currentUser;
+    
+    if (user == null) {
+      return const Center(
+        child: Text('ログインが必要です'),
+      );
+    }
+
+    final coupons = ref.watch(availableCouponsProvider(user.uid));
+
+    return coupons.when(
+      data: (coupons) {
+        // この店舗のクーポンのみをフィルタリング
+        final storeCoupons = coupons.where((coupon) => coupon.storeId == storeId).toList();
+        
+        if (storeCoupons.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.card_giftcard, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text(
+                  'この店舗のクーポンはありません',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  '新しいクーポンをお待ちください！',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: GridView.builder(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              childAspectRatio: 0.8,
+            ),
+            itemCount: storeCoupons.length,
+            itemBuilder: (context, index) {
+              final coupon = storeCoupons[index];
+              return _buildCouponCard(context, coupon);
+            },
+          ),
+        );
+      },
+      loading: () => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: Color(0xFFFF6B35),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'クーポンを読み込み中...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
+      error: (error, _) => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.grey),
+            const SizedBox(height: 8),
+            const Text(
+              'クーポンの取得に失敗しました',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'データが存在しない可能性があります',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1424,37 +1544,45 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                     ),
                   
                   // いいね数オーバーレイ（いいねがある場合）
-                  if (post.likeCount > 0)
-                    Positioned(
-                      bottom: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.favorite,
-                              size: 12,
-                              color: Colors.red,
+                  FutureBuilder<int>(
+                    future: _getLikeCount(post.id),
+                    builder: (context, snapshot) {
+                      final likeCount = snapshot.data ?? 0;
+                      if (likeCount > 0) {
+                        return Positioned(
+                          bottom: 8,
+                          left: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            const SizedBox(width: 2),
-                            Text(
-                              '${post.likeCount}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.favorite,
+                                  size: 12,
+                                  color: Colors.red,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  '$likeCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                  ),
                 ],
               )
             : Container(
@@ -1619,17 +1747,207 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                   const SizedBox(width: 16),
                   Icon(Icons.favorite, size: 16, color: Colors.grey[600]),
                   const SizedBox(width: 4),
-                  Text(
-                    '${post.likeCount}いいね',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
+                  FutureBuilder<int>(
+                    future: _getLikeCount(post.id),
+                    builder: (context, snapshot) {
+                      final likeCount = snapshot.data ?? 0;
+                      return Text(
+                        '${likeCount}いいね',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  // クーポンカードを構築
+  Widget _buildCouponCard(BuildContext context, dynamic coupon) {
+    // 終了日の表示用フォーマット
+    String formatEndDate() {
+      final endDate = coupon.validUntil;
+      if (endDate == null) return '期限不明';
+      
+      try {
+        final date = endDate is DateTime ? endDate : endDate.toDate();
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final tomorrow = today.add(const Duration(days: 1));
+        final couponDate = DateTime(date.year, date.month, date.day);
+        
+        String dateText;
+        if (couponDate.isAtSameMomentAs(today)) {
+          dateText = '今日';
+        } else if (couponDate.isAtSameMomentAs(tomorrow)) {
+          dateText = '明日';
+        } else {
+          dateText = '${date.month}月${date.day}日';
+        }
+        
+        return '$dateText ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}まで';
+      } catch (e) {
+        return '期限不明';
+      }
+    }
+
+    // 割引表示用テキスト
+    String getDiscountText() {
+      final discountType = coupon.discountType ?? 'percentage';
+      final discountValue = coupon.discountValue ?? 0.0;
+      
+      if (discountType == 'percentage') {
+        return '${discountValue.toInt()}%OFF';
+      } else if (discountType == 'fixed_amount') {
+        return '${discountValue.toInt()}円OFF';
+      } else if (discountType == 'fixed_price') {
+        return '${discountValue.toInt()}円';
+      }
+      return '特典あり';
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => CouponDetailView(coupon: coupon),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 3,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            // 画像（正方形）
+            AspectRatio(
+              aspectRatio: 1.0,
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(top: 7, bottom: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: coupon.imageUrl != null
+                    ? ClipRRect(
+                        borderRadius: BorderRadius.circular(7),
+                        child: Image.network(
+                          coupon.imageUrl!,
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Icon(
+                              Icons.image,
+                              size: 50,
+                              color: Colors.grey,
+                            );
+                          },
+                        ),
+                      )
+                    : const Icon(
+                        Icons.image,
+                        size: 50,
+                        color: Colors.grey,
+                      ),
+              ),
+            ),
+            
+            // 期限
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.red[100],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Text(
+                formatEndDate(),
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            
+            const SizedBox(height: 6),
+            
+            // タイトル
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                coupon.title ?? 'タイトルなし',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+                maxLines: 2,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            
+            const SizedBox(height: 4),
+            
+            // 割引情報
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              margin: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B35).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFFF6B35).withOpacity(0.3),
+                ),
+              ),
+              child: Text(
+                getDiscountText(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFFF6B35),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            
+            const Divider(height: 1),
+            
+            // 店舗名
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Text(
+                widget.store['name'] ?? '店舗名なし',
+                style: const TextStyle(fontSize: 9),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            
+            const SizedBox(height: 1),
+          ],
         ),
       ),
     );

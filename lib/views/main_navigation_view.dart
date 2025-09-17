@@ -177,6 +177,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         type: BottomNavigationBarType.fixed,
         currentIndex: _currentIndex,
         onTap: _onTabChanged,
+        selectedItemColor: const Color(0xFFFF6B35),
+        unselectedItemColor: Colors.grey,
+        backgroundColor: Colors.white,
+        elevation: 8,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.home),

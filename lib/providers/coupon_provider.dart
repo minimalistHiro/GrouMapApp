@@ -61,6 +61,20 @@ final promotionsProvider = StreamProvider<List<Promotion>>((ref) {
   });
 });
 
+// 使用済みクーポン一覧プロバイダー
+final usedCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, userId) {
+  final couponService = ref.watch(couponProvider);
+  return couponService.getUsedCoupons(userId)
+      .timeout(const Duration(seconds: 5))
+      .handleError((error) {
+    debugPrint('Used coupons provider error: $error');
+    if (error.toString().contains('permission-denied')) {
+      return <Coupon>[];
+    }
+    return <Coupon>[];
+  });
+});
+
 class CouponService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -174,6 +188,44 @@ class CouponService {
       });
     } catch (e) {
       debugPrint('Error getting promotions: $e');
+      return Stream.value([]);
+    }
+  }
+
+  // 使用済みクーポン一覧を取得
+  Stream<List<Coupon>> getUsedCoupons(String userId) {
+    try {
+      return _firestore
+          .collection('coupons')
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .timeout(const Duration(seconds: 5))
+          .map((snapshot) {
+        final coupons = <Coupon>[];
+        
+        for (final doc in snapshot.docs) {
+          try {
+            final data = doc.data();
+            final usedBy = data['usedBy'] as List<dynamic>? ?? [];
+            
+            // usedByにuserIdが含まれているクーポンのみを取得
+            if (usedBy.contains(userId)) {
+              final coupon = Coupon.fromFirestore(data, doc.id);
+              coupons.add(coupon);
+            }
+          } catch (e) {
+            debugPrint('Error parsing used coupon ${doc.id}: $e');
+            // 個別のクーポンのパースエラーは無視して続行
+          }
+        }
+        
+        return coupons;
+      }).handleError((error) {
+        debugPrint('Error getting used coupons: $error');
+        return <Coupon>[];
+      });
+    } catch (e) {
+      debugPrint('Error getting used coupons: $e');
       return Stream.value([]);
     }
   }

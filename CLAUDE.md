@@ -24,19 +24,6 @@
 - **地図サービス**: Google Maps Platform
 - **タイムゾーン**: Asia/Tokyo
 
-### プロジェクト構成
-```
-lib/
-├── main.dart                    # エントリポイント
-├── core/                        # 共通コア機能
-├── models/                      # データモデル
-├── repositories/                # データアクセス層
-├── services/                    # サービス層
-├── providers/                   # Riverpod状態管理
-├── views/                       # UI画面
-└── widgets/                     # 再利用可能ウィジェット
-```
-
 ## Development Commands
 
 ### 開発コマンド
@@ -52,8 +39,5 @@ lib/
 
 ## 重要な注意事項
 
-- 詳細設計仕様は `詳細設計.pdf` を参照
 - Firebaseプロジェクト: groumapapp
-- 権限管理: `isCompanyAdmin` フラグで会社管理者機能を制御
-- プランシステム: Basic/Premium での機能制限実装必須
 

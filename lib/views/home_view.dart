@@ -16,6 +16,9 @@ import 'stamps/stamp_cards_view.dart';
 import 'referral/friend_referral_view.dart';
 import 'referral/store_referral_view.dart';
 import 'feedback/feedback_view.dart';
+import 'posts/post_detail_view.dart';
+import 'coupons/coupon_detail_view.dart';
+import 'badges/badges_view.dart';
 
 // ユーザーデータプロバイダー（usersコレクションから直接取得）
 final userDataProvider = StreamProvider.family<Map<String, dynamic>?, String>((ref, userId) {
@@ -466,25 +469,41 @@ class HomeView extends ConsumerWidget {
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      width: 320,
-      height: 180,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: GridView.count(
-          crossAxisCount: 4,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          children: menuItems.map((item) => _buildMenuButton(
-            context,
-            item['label'] as String,
-            item['icon'] as String,
-            true, // isLogin
-            isImage: item['isImage'] as bool,
-          )).toList(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // 画面幅に基づいてアイコンサイズとグリッドサイズを動的に調整
+            final screenWidth = constraints.maxWidth;
+            final iconSize = (screenWidth * 0.08).clamp(20.0, 32.0);
+            final fontSize = (screenWidth * 0.03).clamp(8.0, 12.0);
+            
+            // より安定したアスペクト比の計算
+            final itemHeight = 100.0; // 固定の高さを使用
+            final aspectRatio = constraints.maxWidth / (itemHeight * 2);
+            
+            return GridView.count(
+              crossAxisCount: 4,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              childAspectRatio: aspectRatio,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              children: menuItems.map((item) => _buildMenuButton(
+                context,
+                item['label'] as String,
+                item['icon'] as String,
+                true, // isLogin
+                isImage: item['isImage'] as bool,
+                iconSize: iconSize,
+                fontSize: fontSize,
+              )).toList(),
+            );
+          },
         ),
       ),
     );
@@ -623,7 +642,7 @@ class HomeView extends ConsumerWidget {
                 itemCount: posts.length,
                 itemBuilder: (context, index) {
                   final post = posts[index];
-                  return _buildPostCard(post);
+                  return _buildPostCard(context, post);
                 },
               );
             },
@@ -720,7 +739,11 @@ class HomeView extends ConsumerWidget {
 
     return GestureDetector(
       onTap: () {
-        // クーポン詳細画面に遷移
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => CouponDetailView(coupon: coupon),
+          ),
+        );
       },
       child: Container(
         width: 170,
@@ -868,7 +891,7 @@ class HomeView extends ConsumerWidget {
     );
   }
 
-  Widget _buildPostCard(PostModel post) {
+  Widget _buildPostCard(BuildContext context, PostModel post) {
     // 作成日の表示用フォーマット
     String formatDate() {
       try {
@@ -888,7 +911,11 @@ class HomeView extends ConsumerWidget {
 
     return GestureDetector(
       onTap: () {
-        // 投稿詳細画面に遷移
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PostDetailView(post: post),
+          ),
+        );
       },
       child: Container(
         width: 170,
@@ -1035,7 +1062,7 @@ class HomeView extends ConsumerWidget {
     );
   }
 
-  Widget _buildMenuButton(BuildContext context, String title, dynamic icon, bool isLogin, {bool isImage = false}) {
+  Widget _buildMenuButton(BuildContext context, String title, dynamic icon, bool isLogin, {bool isImage = false, double? iconSize, double? fontSize}) {
     return GestureDetector(
       onTap: () {
         if (!isLogin) {
@@ -1059,9 +1086,11 @@ class HomeView extends ConsumerWidget {
             ),
           );
         } else if (title == 'バッジ') {
-          // バッジ画面に遷移（仮の画面）
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('バッジ機能は準備中です')),
+          // バッジ一覧画面に遷移
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const BadgesView(),
+            ),
           );
         } else if (title == '店舗一覧') {
           // 店舗一覧画面に遷移
@@ -1100,50 +1129,58 @@ class HomeView extends ConsumerWidget {
           );
         }
       },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          isImage
-              ? Image.asset(
-                  icon,
-                  width: 24,
-                  height: 24,
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.monetization_on,
-                      size: 24,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: isImage
+                  ? Image.asset(
+                      icon,
+                      width: iconSize ?? 24,
+                      height: iconSize ?? 24,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.monetization_on,
+                          size: iconSize ?? 24,
+                          color: isLogin ? const Color(0xFFFF6B35) : Colors.grey,
+                        );
+                      },
+                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                        if (wasSynchronouslyLoaded) return child;
+                        return AnimatedOpacity(
+                          opacity: frame == null ? 0 : 1,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeOut,
+                          child: child,
+                        );
+                      },
+                    )
+                  : Icon(
+                      icon,
+                      size: iconSize ?? 24,
                       color: isLogin ? const Color(0xFFFF6B35) : Colors.grey,
-                    );
-                  },
-                  frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                    if (wasSynchronouslyLoaded) return child;
-                    return AnimatedOpacity(
-                      opacity: frame == null ? 0 : 1,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeOut,
-                      child: child,
-                    );
-                  },
-                )
-              : Icon(
-                  icon,
-                  size: 24,
-                  color: isLogin ? const Color(0xFFFF6B35) : Colors.grey,
-                ),
-          const SizedBox(height: 5),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: isLogin ? Colors.black : Colors.grey,
+                    ),
             ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
+            SizedBox(height: (iconSize ?? 24) * 0.15),
+            Flexible(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: fontSize ?? 10,
+                  fontWeight: FontWeight.bold,
+                  color: isLogin ? Colors.black : Colors.grey,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

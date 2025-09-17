@@ -29,8 +29,9 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   void initState() {
     super.initState();
     _pageController = PageController();
-    _likeCount = widget.post.likeCount;
     _loadComments();
+    _checkIfLiked();
+    _loadLikeCount();
   }
 
   @override
@@ -38,6 +39,42 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
     _pageController.dispose();
     _commentController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkIfLiked() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final likeDoc = await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .collection('likes')
+          .doc(user.uid)
+          .get();
+
+      setState(() {
+        _isLiked = likeDoc.exists;
+      });
+    } catch (e) {
+      print('いいね状態確認エラー: $e');
+    }
+  }
+
+  Future<void> _loadLikeCount() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .collection('likes')
+          .get();
+
+      setState(() {
+        _likeCount = snapshot.docs.length;
+      });
+    } catch (e) {
+      print('いいね数取得エラー: $e');
+    }
   }
 
   Future<void> _loadComments() async {
@@ -75,25 +112,24 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final postRef = FirebaseFirestore.instance
+      final likeRef = FirebaseFirestore.instance
           .collection('posts')
-          .doc(widget.post.id);
+          .doc(widget.post.id)
+          .collection('likes')
+          .doc(user.uid);
 
       if (_isLiked) {
         // いいねを削除
-        await postRef.update({
-          'likeCount': FieldValue.increment(-1),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+        await likeRef.delete();
         setState(() {
           _isLiked = false;
           _likeCount--;
         });
       } else {
         // いいねを追加
-        await postRef.update({
-          'likeCount': FieldValue.increment(1),
-          'updatedAt': FieldValue.serverTimestamp(),
+        await likeRef.set({
+          'userId': user.uid,
+          'createdAt': FieldValue.serverTimestamp(),
         });
         setState(() {
           _isLiked = true;

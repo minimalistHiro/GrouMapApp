@@ -15,7 +15,6 @@ class PostModel {
   final DateTime updatedAt;
   final bool isActive;
   final int viewCount;
-  final int likeCount;
 
   PostModel({
     required this.id,
@@ -29,7 +28,6 @@ class PostModel {
     required this.updatedAt,
     required this.isActive,
     required this.viewCount,
-    required this.likeCount,
   });
 
   factory PostModel.fromMap(Map<String, dynamic> data, String id) {
@@ -45,7 +43,6 @@ class PostModel {
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isActive: data['isActive'] ?? true,
       viewCount: data['viewCount'] ?? 0,
-      likeCount: data['likeCount'] ?? 0,
     );
   }
 
@@ -61,7 +58,6 @@ class PostModel {
       'updatedAt': Timestamp.fromDate(updatedAt),
       'isActive': isActive,
       'viewCount': viewCount,
-      'likeCount': likeCount,
     };
   }
 }
