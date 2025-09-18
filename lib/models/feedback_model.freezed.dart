@@ -30,9 +30,7 @@ mixin _$FeedbackModel {
   DateTime get createdAt => throw _privateConstructorUsedError;
   String get status =>
       throw _privateConstructorUsedError; // 'pending', 'in_progress', 'resolved', 'closed'
-  String? get adminResponse => throw _privateConstructorUsedError;
-  DateTime? get respondedAt => throw _privateConstructorUsedError;
-  String? get respondedBy => throw _privateConstructorUsedError;
+  DateTime get updatedAt => throw _privateConstructorUsedError;
 
   /// Serializes this FeedbackModel to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -60,9 +58,7 @@ abstract class $FeedbackModelCopyWith<$Res> {
       String category,
       DateTime createdAt,
       String status,
-      String? adminResponse,
-      DateTime? respondedAt,
-      String? respondedBy});
+      DateTime updatedAt});
 }
 
 /// @nodoc
@@ -89,9 +85,7 @@ class _$FeedbackModelCopyWithImpl<$Res, $Val extends FeedbackModel>
     Object? category = null,
     Object? createdAt = null,
     Object? status = null,
-    Object? adminResponse = freezed,
-    Object? respondedAt = freezed,
-    Object? respondedBy = freezed,
+    Object? updatedAt = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -130,18 +124,10 @@ class _$FeedbackModelCopyWithImpl<$Res, $Val extends FeedbackModel>
           ? _value.status
           : status // ignore: cast_nullable_to_non_nullable
               as String,
-      adminResponse: freezed == adminResponse
-          ? _value.adminResponse
-          : adminResponse // ignore: cast_nullable_to_non_nullable
-              as String?,
-      respondedAt: freezed == respondedAt
-          ? _value.respondedAt
-          : respondedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-      respondedBy: freezed == respondedBy
-          ? _value.respondedBy
-          : respondedBy // ignore: cast_nullable_to_non_nullable
-              as String?,
+      updatedAt: null == updatedAt
+          ? _value.updatedAt
+          : updatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime,
     ) as $Val);
   }
 }
@@ -164,9 +150,7 @@ abstract class _$$FeedbackModelImplCopyWith<$Res>
       String category,
       DateTime createdAt,
       String status,
-      String? adminResponse,
-      DateTime? respondedAt,
-      String? respondedBy});
+      DateTime updatedAt});
 }
 
 /// @nodoc
@@ -191,9 +175,7 @@ class __$$FeedbackModelImplCopyWithImpl<$Res>
     Object? category = null,
     Object? createdAt = null,
     Object? status = null,
-    Object? adminResponse = freezed,
-    Object? respondedAt = freezed,
-    Object? respondedBy = freezed,
+    Object? updatedAt = null,
   }) {
     return _then(_$FeedbackModelImpl(
       id: null == id
@@ -232,18 +214,10 @@ class __$$FeedbackModelImplCopyWithImpl<$Res>
           ? _value.status
           : status // ignore: cast_nullable_to_non_nullable
               as String,
-      adminResponse: freezed == adminResponse
-          ? _value.adminResponse
-          : adminResponse // ignore: cast_nullable_to_non_nullable
-              as String?,
-      respondedAt: freezed == respondedAt
-          ? _value.respondedAt
-          : respondedAt // ignore: cast_nullable_to_non_nullable
-              as DateTime?,
-      respondedBy: freezed == respondedBy
-          ? _value.respondedBy
-          : respondedBy // ignore: cast_nullable_to_non_nullable
-              as String?,
+      updatedAt: null == updatedAt
+          ? _value.updatedAt
+          : updatedAt // ignore: cast_nullable_to_non_nullable
+              as DateTime,
     ));
   }
 }
@@ -261,9 +235,7 @@ class _$FeedbackModelImpl implements _FeedbackModel {
       required this.category,
       required this.createdAt,
       required this.status,
-      this.adminResponse,
-      this.respondedAt,
-      this.respondedBy});
+      required this.updatedAt});
 
   factory _$FeedbackModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$FeedbackModelImplFromJson(json);
@@ -288,15 +260,11 @@ class _$FeedbackModelImpl implements _FeedbackModel {
   final String status;
 // 'pending', 'in_progress', 'resolved', 'closed'
   @override
-  final String? adminResponse;
-  @override
-  final DateTime? respondedAt;
-  @override
-  final String? respondedBy;
+  final DateTime updatedAt;
 
   @override
   String toString() {
-    return 'FeedbackModel(id: $id, userId: $userId, userName: $userName, userEmail: $userEmail, subject: $subject, message: $message, category: $category, createdAt: $createdAt, status: $status, adminResponse: $adminResponse, respondedAt: $respondedAt, respondedBy: $respondedBy)';
+    return 'FeedbackModel(id: $id, userId: $userId, userName: $userName, userEmail: $userEmail, subject: $subject, message: $message, category: $category, createdAt: $createdAt, status: $status, updatedAt: $updatedAt)';
   }
 
   @override
@@ -317,30 +285,14 @@ class _$FeedbackModelImpl implements _FeedbackModel {
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.status, status) || other.status == status) &&
-            (identical(other.adminResponse, adminResponse) ||
-                other.adminResponse == adminResponse) &&
-            (identical(other.respondedAt, respondedAt) ||
-                other.respondedAt == respondedAt) &&
-            (identical(other.respondedBy, respondedBy) ||
-                other.respondedBy == respondedBy));
+            (identical(other.updatedAt, updatedAt) ||
+                other.updatedAt == updatedAt));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType,
-      id,
-      userId,
-      userName,
-      userEmail,
-      subject,
-      message,
-      category,
-      createdAt,
-      status,
-      adminResponse,
-      respondedAt,
-      respondedBy);
+  int get hashCode => Object.hash(runtimeType, id, userId, userName, userEmail,
+      subject, message, category, createdAt, status, updatedAt);
 
   /// Create a copy of FeedbackModel
   /// with the given fields replaced by the non-null parameter values.
@@ -369,9 +321,7 @@ abstract class _FeedbackModel implements FeedbackModel {
       required final String category,
       required final DateTime createdAt,
       required final String status,
-      final String? adminResponse,
-      final DateTime? respondedAt,
-      final String? respondedBy}) = _$FeedbackModelImpl;
+      required final DateTime updatedAt}) = _$FeedbackModelImpl;
 
   factory _FeedbackModel.fromJson(Map<String, dynamic> json) =
       _$FeedbackModelImpl.fromJson;
@@ -395,11 +345,7 @@ abstract class _FeedbackModel implements FeedbackModel {
   @override
   String get status; // 'pending', 'in_progress', 'resolved', 'closed'
   @override
-  String? get adminResponse;
-  @override
-  DateTime? get respondedAt;
-  @override
-  String? get respondedBy;
+  DateTime get updatedAt;
 
   /// Create a copy of FeedbackModel
   /// with the given fields replaced by the non-null parameter values.

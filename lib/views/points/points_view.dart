@@ -3,15 +3,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
 import '../../models/point_transaction_model.dart';
-import '../../widgets/custom_button.dart';
-import 'point_usage_view.dart';
-import 'transaction_history_view.dart';
+import '../../models/user_point_balance_model.dart';
 
-class PointsView extends ConsumerWidget {
+class PointsView extends ConsumerStatefulWidget {
   const PointsView({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PointsView> createState() => _PointsViewState();
+}
+
+class _PointsViewState extends ConsumerState<PointsView>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
@@ -19,14 +37,17 @@ class PointsView extends ConsumerWidget {
         title: const Text('ポイント'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: () {
-              _showTransactionHistory(context, ref);
-            },
-          ),
-        ],
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          tabs: const [
+            Tab(text: '全て'),
+            Tab(text: '利用履歴'),
+            Tab(text: '獲得履歴'),
+          ],
+        ),
       ),
       body: authState.when(
         data: (user) {
@@ -73,25 +94,26 @@ class PointsView extends ConsumerWidget {
     final pointBalance = ref.watch(userPointBalanceProvider(userId));
     final transactions = ref.watch(userPointTransactionsProvider(userId));
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ポイント残高カード
-          _buildBalanceCard(context, pointBalance),
-          
-          const SizedBox(height: 24),
-          
-          // アクションボタン
-          _buildActionButtons(context, ref, userId),
-          
-          const SizedBox(height: 24),
-          
-          // 最近の取引履歴
-          _buildRecentTransactions(context, transactions),
-        ],
-      ),
+    return Column(
+      children: [
+        // ポイント残高カード
+        Container(
+          padding: const EdgeInsets.all(16.0),
+          child: _buildBalanceCard(context, pointBalance),
+        ),
+        
+        // タブコンテンツ
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildAllTransactions(context, transactions),
+              _buildUsedTransactions(context, transactions),
+              _buildEarnedTransactions(context, transactions),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -187,95 +209,78 @@ class PointsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildActionButtons(BuildContext context, WidgetRef ref, String userId) {
-    return Row(
-      children: [
-        Expanded(
-          child: CustomButton(
-            text: 'QRコードをスキャン',
-            onPressed: () {
-              _showQRScanner(context, ref, userId);
-            },
-            icon: const Icon(Icons.qr_code_scanner, size: 20),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: CustomButton(
-            text: 'ポイントを使用',
-            onPressed: () {
-              _showUsePoints(context, ref, userId);
-            },
-            backgroundColor: Colors.green,
-            icon: const Icon(Icons.shopping_cart, size: 20),
-          ),
-        ),
-      ],
-    );
+
+  Widget _buildAllTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {
+    return _buildTransactionList(context, transactions, null);
   }
 
-  Widget _buildRecentTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '最近の取引',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 16),
-        transactions.when(
-          data: (transactionList) {
-            if (transactionList.isEmpty) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32.0),
-                  child: Text(
-                    '取引履歴がありません',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
-              );
+  Widget _buildUsedTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {
+    return _buildTransactionList(context, transactions, false);
+  }
+
+  Widget _buildEarnedTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {
+    return _buildTransactionList(context, transactions, true);
+  }
+
+  Widget _buildTransactionList(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions, bool? isEarned) {
+    return transactions.when(
+      data: (transactionList) {
+        // フィルタリング
+        List<PointTransactionModel> filteredList = transactionList;
+        if (isEarned != null) {
+          filteredList = transactionList.where((transaction) {
+            if (isEarned) {
+              return transaction.amount > 0; // 獲得履歴
+            } else {
+              return transaction.amount < 0; // 利用履歴
             }
-            
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: transactionList.length > 5 ? 5 : transactionList.length,
-              itemBuilder: (context, index) {
-                final transaction = transactionList[index];
-                return _buildTransactionItem(transaction);
-              },
-            );
-          },
-          loading: () => const Center(
+          }).toList();
+        }
+
+        if (filteredList.isEmpty) {
+          return const Center(
             child: Padding(
               padding: EdgeInsets.all(32.0),
-              child: CircularProgressIndicator(),
-            ),
-          ),
-          error: (error, _) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32.0),
               child: Text(
-                'エラー: $error',
-                style: const TextStyle(color: Colors.red),
+                '取引履歴がありません',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
               ),
             ),
+          );
+        }
+        
+        return ListView.builder(
+          padding: const EdgeInsets.all(16.0),
+          itemCount: filteredList.length,
+          itemBuilder: (context, index) {
+            final transaction = filteredList[index];
+            return _buildTransactionItem(transaction);
+          },
+        );
+      },
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32.0),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (error, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Text(
+            'エラー: $error',
+            style: const TextStyle(color: Colors.red),
           ),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildTransactionItem(PointTransactionModel transaction) {
-    final isEarned = transaction.points > 0;
-    final isUsed = transaction.points < 0;
+    final isEarned = transaction.amount > 0;
     
     return Card(
       margin: const EdgeInsets.only(bottom: 8.0),
@@ -284,12 +289,12 @@ class PointsView extends ConsumerWidget {
           isEarned ? Icons.add_circle : Icons.remove_circle,
           color: isEarned ? Colors.green : Colors.red,
         ),
-        title: Text(transaction.description),
+        title: Text(transaction.description ?? 'ポイント取引'),
         subtitle: Text(
-          '${transaction.timestamp.month}/${transaction.timestamp.day} ${transaction.timestamp.hour}:${transaction.timestamp.minute.toString().padLeft(2, '0')}',
+          '${transaction.createdAt.month}/${transaction.createdAt.day} ${transaction.createdAt.hour}:${transaction.createdAt.minute.toString().padLeft(2, '0')}',
         ),
         trailing: Text(
-          '${isEarned ? '+' : ''}${transaction.points}pt',
+          '${isEarned ? '+' : ''}${transaction.amount}pt',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -300,35 +305,4 @@ class PointsView extends ConsumerWidget {
     );
   }
 
-  void _showQRScanner(BuildContext context, WidgetRef ref, String userId) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('QRコードスキャン'),
-        content: const Text('QRコードスキャン機能は準備中です'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('閉じる'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showUsePoints(BuildContext context, WidgetRef ref, String userId) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const PointUsageView(),
-      ),
-    );
-  }
-
-  void _showTransactionHistory(BuildContext context, WidgetRef ref) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const TransactionHistoryView(),
-      ),
-    );
-  }
 }

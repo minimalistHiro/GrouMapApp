@@ -17,11 +17,7 @@ _$FeedbackModelImpl _$$FeedbackModelImplFromJson(Map<String, dynamic> json) =>
       category: json['category'] as String,
       createdAt: DateTime.parse(json['createdAt'] as String),
       status: json['status'] as String,
-      adminResponse: json['adminResponse'] as String?,
-      respondedAt: json['respondedAt'] == null
-          ? null
-          : DateTime.parse(json['respondedAt'] as String),
-      respondedBy: json['respondedBy'] as String?,
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
     );
 
 Map<String, dynamic> _$$FeedbackModelImplToJson(_$FeedbackModelImpl instance) =>
@@ -35,7 +31,5 @@ Map<String, dynamic> _$$FeedbackModelImplToJson(_$FeedbackModelImpl instance) =>
       'category': instance.category,
       'createdAt': instance.createdAt.toIso8601String(),
       'status': instance.status,
-      'adminResponse': instance.adminResponse,
-      'respondedAt': instance.respondedAt?.toIso8601String(),
-      'respondedBy': instance.respondedBy,
+      'updatedAt': instance.updatedAt.toIso8601String(),
     };

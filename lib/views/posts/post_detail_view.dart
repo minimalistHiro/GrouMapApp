@@ -24,6 +24,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   final TextEditingController _commentController = TextEditingController();
   List<Map<String, dynamic>> _comments = [];
   bool _isLoadingComments = true;
+  bool _hasRecordedView = false; // 閲覧記録の重複を防ぐフラグ
 
   @override
   void initState() {
@@ -32,6 +33,14 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
     _loadComments();
     _checkIfLiked();
     _loadLikeCount();
+    _recordView(); // 閲覧履歴を記録
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 画面が表示された時にも閲覧を記録（より確実にするため）
+    _recordView();
   }
 
   @override
@@ -104,6 +113,126 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       setState(() {
         _isLoadingComments = false;
       });
+    }
+  }
+
+  Future<void> _recordView() async {
+    // 既に記録済みの場合はスキップ
+    if (_hasRecordedView) {
+      print('既にローカルで閲覧記録済みです: ${widget.post.id}');
+      return;
+    }
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        print('❌ ユーザーがログインしていません');
+        return;
+      }
+
+      print('📊 投稿閲覧を記録開始: ${widget.post.id} by ${user.uid}');
+
+      // 閲覧履歴を記録（重複を避けるため、既存の閲覧記録をチェック）
+      final viewRef = FirebaseFirestore.instance
+          .collection('posts')
+          .doc(widget.post.id)
+          .collection('views')
+          .doc(user.uid);
+
+      print('🔍 既存の閲覧記録をチェック中...');
+      final viewDoc = await viewRef.get();
+      
+      if (!viewDoc.exists) {
+        print('✨ 初回閲覧として記録します');
+        
+        // 初回閲覧の場合のみ記録
+        await _saveViewRecord(viewRef, user);
+        await _updatePostViewCount(widget.post.id);
+
+        // ローカルフラグを設定
+        _hasRecordedView = true;
+
+        print('🎉 閲覧記録が正常に完了しました: ${widget.post.id}');
+      } else {
+        print('ℹ️ 既に閲覧済みです: ${widget.post.id}');
+        print('📄 既存の閲覧記録: ${viewDoc.data()}');
+        _hasRecordedView = true; // 既に記録済みの場合もフラグを設定
+      }
+    } catch (e) {
+      print('❌ 閲覧履歴記録エラー: $e');
+      print('🔍 エラーの詳細: ${e.toString()}');
+      // エラーが発生してもアプリがクラッシュしないようにする
+    }
+  }
+
+  // 閲覧履歴を保存するメソッド
+  Future<void> _saveViewRecord(DocumentReference viewRef, User user) async {
+    int retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      try {
+        print('💾 閲覧履歴をデータベースに保存中... (試行 ${retryCount + 1}/$maxRetries)');
+        
+        // タイムアウトを設定して書き込みを実行
+        await viewRef.set({
+          'userId': user.uid,
+          'userName': user.displayName ?? '匿名ユーザー',
+          'userEmail': user.email ?? '',
+          'viewedAt': FieldValue.serverTimestamp(),
+          'postId': widget.post.id,
+          'postTitle': widget.post.title,
+        }).timeout(const Duration(seconds: 10));
+        
+        print('✅ 閲覧履歴の保存が完了しました');
+        return; // 成功したら終了
+      } catch (e) {
+        retryCount++;
+        print('❌ 閲覧履歴の保存に失敗 (試行 $retryCount/$maxRetries): $e');
+        
+        if (retryCount >= maxRetries) {
+          print('❌ 最大再試行回数に達しました。閲覧履歴の保存を諦めます。');
+          rethrow;
+        }
+        
+        // 再試行前に少し待機
+        await Future.delayed(Duration(seconds: retryCount));
+      }
+    }
+  }
+
+  // 投稿の閲覧数を更新するメソッド
+  Future<void> _updatePostViewCount(String postId) async {
+    int retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries) {
+      try {
+        print('📈 投稿の閲覧数を更新中... (試行 ${retryCount + 1}/$maxRetries)');
+        
+        // タイムアウトを設定して書き込みを実行
+        await FirebaseFirestore.instance
+            .collection('posts')
+            .doc(postId)
+            .update({
+          'viewCount': FieldValue.increment(1),
+          'lastViewedAt': FieldValue.serverTimestamp(),
+        }).timeout(const Duration(seconds: 10));
+        
+        print('✅ 閲覧数の更新が完了しました');
+        return; // 成功したら終了
+      } catch (e) {
+        retryCount++;
+        print('❌ 閲覧数の更新に失敗 (試行 $retryCount/$maxRetries): $e');
+        
+        if (retryCount >= maxRetries) {
+          print('❌ 最大再試行回数に達しました。閲覧数の更新を諦めます。');
+          rethrow;
+        }
+        
+        // 再試行前に少し待機
+        await Future.delayed(Duration(seconds: retryCount));
+      }
     }
   }
 

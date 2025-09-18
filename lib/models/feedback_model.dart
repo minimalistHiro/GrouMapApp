@@ -15,9 +15,7 @@ class FeedbackModel with _$FeedbackModel {
     required String category,
     required DateTime createdAt,
     required String status, // 'pending', 'in_progress', 'resolved', 'closed'
-    String? adminResponse,
-    DateTime? respondedAt,
-    String? respondedBy,
+    required DateTime updatedAt,
   }) = _FeedbackModel;
 
   factory FeedbackModel.fromJson(Map<String, dynamic> json) =>

@@ -1,15 +1,14 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/feedback_model.dart';
 
+// フィードバック送信プロバイダー
 final feedbackProvider = Provider<FeedbackService>((ref) {
-  return FeedbackService(FirebaseFirestore.instance);
+  return FeedbackService();
 });
 
 class FeedbackService {
-  final FirebaseFirestore _firestore;
-
-  FeedbackService(this._firestore);
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // フィードバックを送信
   Future<void> submitFeedback({
@@ -21,85 +20,62 @@ class FeedbackService {
     required String category,
   }) async {
     try {
-      final feedback = FeedbackModel(
-        id: _firestore.collection('feedback').doc().id,
-        userId: userId,
-        userName: userName,
-        userEmail: userEmail,
-        subject: subject,
-        message: message,
-        category: category,
-        createdAt: DateTime.now(),
-        status: 'pending',
-      );
-
-      await _firestore
-          .collection('feedback')
-          .doc(feedback.id)
-          .set(feedback.toJson());
-
-      print('フィードバックが送信されました: ${feedback.id}');
+      await _firestore.collection('feedback').add({
+        'userId': userId,
+        'userName': userName,
+        'userEmail': userEmail,
+        'subject': subject,
+        'message': message,
+        'category': category,
+        'status': 'pending', // pending, reviewed, resolved
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
-      print('フィードバックの送信に失敗しました: $e');
+      debugPrint('Error submitting feedback: $e');
       rethrow;
     }
   }
 
-  // ユーザーのフィードバック履歴を取得
-  Stream<List<FeedbackModel>> getUserFeedback(String userId) {
-    return _firestore
-        .collection('feedback')
-        .where('userId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => FeedbackModel.fromJson(doc.data()))
-          .toList();
-    });
-  }
-
-  // 全フィードバックを取得（管理者用）
-  Stream<List<FeedbackModel>> getAllFeedback() {
-    return _firestore
-        .collection('feedback')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => FeedbackModel.fromJson(doc.data()))
-          .toList();
-    });
-  }
-
-  // フィードバックのステータスを更新（管理者用）
-  Future<void> updateFeedbackStatus({
-    required String feedbackId,
-    required String status,
-    String? adminResponse,
-    String? respondedBy,
-  }) async {
+  // フィードバック一覧を取得
+  Stream<List<Map<String, dynamic>>> getFeedbackList() {
     try {
-      final updateData = <String, dynamic>{
+      return _firestore
+          .collection('feedback')
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs.map((doc) {
+          final data = doc.data();
+          data['id'] = doc.id;
+          return data;
+        }).toList();
+      }).handleError((error) {
+        debugPrint('Error fetching feedback list: $error');
+        return [];
+      });
+    } catch (e) {
+      debugPrint('Error creating feedback stream: $e');
+      return Stream.value([]);
+    }
+  }
+
+  // フィードバックのステータスを更新
+  Future<void> updateFeedbackStatus(String feedbackId, String status) async {
+    try {
+      await _firestore.collection('feedback').doc(feedbackId).update({
         'status': status,
         'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      if (adminResponse != null) {
-        updateData['adminResponse'] = adminResponse;
-        updateData['respondedAt'] = FieldValue.serverTimestamp();
-        updateData['respondedBy'] = respondedBy;
-      }
-
-      await _firestore
-          .collection('feedback')
-          .doc(feedbackId)
-          .update(updateData);
-
-      print('フィードバックステータスが更新されました: $feedbackId');
+      });
     } catch (e) {
-      print('フィードバックステータスの更新に失敗しました: $e');
+      debugPrint('Error updating feedback status: $e');
       rethrow;
     }
   }
 }
+
+// フィードバック一覧プロバイダー
+final feedbackListProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  final feedbackService = ref.read(feedbackProvider);
+  return feedbackService.getFeedbackList();
+});

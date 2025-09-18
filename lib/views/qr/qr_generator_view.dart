@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../widgets/custom_button.dart';
+import '../payment/point_payment_view.dart';
 
 class QRGeneratorView extends ConsumerStatefulWidget {
   const QRGeneratorView({Key? key}) : super(key: key);
@@ -469,9 +471,10 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
               controller: qrCodeController,
               decoration: const InputDecoration(
                 labelText: 'QRコード',
-                hintText: 'qr_store001_points10_20241201',
+                hintText: 'store001',
                 border: OutlineInputBorder(),
               ),
+              autofocus: true,
             ),
           ],
         ),
@@ -482,8 +485,18 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
           ),
           ElevatedButton(
             onPressed: () {
+              final qrCode = qrCodeController.text.trim();
               Navigator.of(context).pop();
-              _processQRCode(context, qrCodeController.text);
+              if (qrCode.isNotEmpty) {
+                _processQRCode(context, qrCode);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('QRコードを入力してください'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFF6B35),
@@ -496,30 +509,157 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     );
   }
 
-  void _processQRCode(BuildContext context, String qrCode) {
+  void _processQRCode(BuildContext context, String qrCode) async {
+    print('QRコード処理開始: $qrCode');
+    
     if (qrCode.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('QRコードを入力してください'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('QRコードを入力してください'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return;
     }
 
-    // QRコードの処理（モック）
+    // QRコードの形式をチェック（店舗IDかどうか）
+    final isStoreId = _isStoreId(qrCode);
+    print('店舗ID判定結果: $isStoreId');
+    
+    if (isStoreId) {
+      print('店舗IDとして処理: $qrCode');
+      // 店舗IDの場合、存在確認してからポイント支払い画面に遷移
+      await _validateStoreAndNavigate(context, qrCode);
+    } else {
+      print('その他のQRコードとして処理: $qrCode');
+      // その他のQRコードの場合、従来の処理
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('QRコード処理完了'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.check_circle, size: 64, color: Colors.green),
+                const SizedBox(height: 16),
+                Text('QRコード: $qrCode'),
+                const SizedBox(height: 8),
+                const Text('10ポイントを獲得しました！'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  // 店舗の存在確認とナビゲーション
+  Future<void> _validateStoreAndNavigate(BuildContext context, String storeId) async {
+    print('店舗存在確認開始: $storeId');
+    
+    // ローディング表示
+    if (!context.mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFFFF6B35),
+        ),
+      ),
+    );
+    
+    try {
+      print('Firestoreで店舗を検索中: $storeId');
+      // 店舗の存在確認
+      final doc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .get();
+
+      print('店舗ドキュメント取得完了: ${doc.exists}');
+
+      // ローディングを必ず閉じる
+      if (context.mounted) {
+        Navigator.of(context).pop(); // ローディングダイアログを閉じる
+      }
+
+      if (!doc.exists) {
+        print('店舗が存在しません: $storeId');
+        // 店舗が存在しない場合
+        if (context.mounted) {
+          _showErrorDialog(
+            context,
+            'この店舗は存在しません',
+            '店舗ID: $storeId',
+          );
+        }
+        return;
+      }
+
+      print('店舗が存在します。ポイント支払い画面に遷移: $storeId');
+      // 店舗が存在する場合、ポイント支払い画面に遷移
+      if (context.mounted) {
+        print('Navigator.push開始');
+        try {
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) {
+                print('PointPaymentView作成開始');
+                return PointPaymentView(storeId: storeId);
+              },
+            ),
+          );
+          print('ポイント支払い画面への遷移完了');
+        } catch (e) {
+          print('画面遷移エラー: $e');
+          if (context.mounted) {
+            _showErrorDialog(
+              context,
+              '画面遷移に失敗しました',
+              'エラー: $e',
+            );
+          }
+        }
+      }
+    } catch (e) {
+      print('店舗存在確認エラー: $e');
+      // エラーが発生した場合
+      if (context.mounted) {
+        // ローディングを必ず閉じる
+        Navigator.of(context).pop(); // ローディングダイアログを閉じる
+        
+        _showErrorDialog(
+          context,
+          '店舗情報の確認中にエラーが発生しました',
+          'エラー: $e',
+        );
+      }
+    }
+  }
+
+  // エラーダイアログを表示する共通メソッド
+  void _showErrorDialog(BuildContext context, String title, String message) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('QRコード処理完了'),
+        title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.check_circle, size: 64, color: Colors.green),
+            const Icon(Icons.error, size: 64, color: Colors.red),
             const SizedBox(height: 16),
-            Text('QRコード: $qrCode'),
-            const SizedBox(height: 8),
-            const Text('10ポイントを獲得しました！'),
+            Text(message),
           ],
         ),
         actions: [
@@ -530,6 +670,17 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         ],
       ),
     );
+  }
+
+  // 店舗IDかどうかを判定する関数
+  bool _isStoreId(String qrCode) {
+    // より柔軟な店舗ID判定
+    // 5文字以上の英数字で、特殊文字を含まない場合を店舗IDと判定
+    if (qrCode.length >= 5) {
+      // 英数字のみかチェック
+      return RegExp(r'^[a-zA-Z0-9]+$').hasMatch(qrCode);
+    }
+    return false;
   }
 
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/qr_token_provider.dart';
 import '../../providers/feedback_provider.dart';
 import '../../widgets/custom_button.dart';
 
@@ -34,7 +34,7 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
     super.initState();
     // ユーザー情報を取得してメールアドレスを設定
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authState = ref.read(authStateProvider);
+      final authState = ref.read(authProvider);
       authState.whenData((user) {
         if (user != null && user.email != null) {
           _emailController.text = user.email!;
@@ -53,7 +53,7 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authStateProvider);
+    final authState = ref.watch(authProvider);
 
     return Scaffold(
       appBar: AppBar(

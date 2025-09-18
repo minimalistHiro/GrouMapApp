@@ -126,97 +126,221 @@ class HomeView extends ConsumerWidget {
       padding: const EdgeInsets.all(16.0),
       child: Row(
         children: [
-          // 左側：アプリアイコン&サービス名
-          Row(
-            children: [
-              Image.asset(
-                'assets/images/groumap_icon.png',
-                width: 40,
-                height: 40,
-                errorBuilder: (context, error, stackTrace) => 
-                    const Icon(Icons.location_on, size: 40, color: Colors.blue),
-              ),
-              const SizedBox(width: 12),
-              const Text(
-                'GrouMap',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          
-          const Spacer(),
-          
-          // 右側：お知らせのベルボタン
-          IconButton(
-            icon: Stack(
+          // 左側：アプリアイコン&サービス名（固定幅）
+          SizedBox(
+            width: 120, // 固定幅を設定
+            child: Row(
               children: [
-                const Icon(
-                  Icons.notifications_outlined,
-                  size: 28,
-                  color: Colors.black87,
+                Image.asset(
+                  'assets/images/groumap_icon.png',
+                  width: 30,
+                  height: 30,
+                  errorBuilder: (context, error, stackTrace) => 
+                      const Icon(Icons.location_on, size: 30, color: Colors.blue),
                 ),
-                // 未読通知のバッジ（readNotificationsフィールドと比較）
-                ref.watch(userDataProvider(userId)).when(
-                  data: (userData) {
-                    if (userData == null) return const SizedBox.shrink();
-                    
-                    final readNotifications = List<String>.from(userData['readNotifications'] ?? []);
-                    
-                    return ref.watch(announcementsProvider).when(
-                      data: (announcements) {
-                        // 未読のお知らせ数を計算
-                        final unreadCount = announcements.where((announcement) => 
-                          !readNotifications.contains(announcement['id'])
-                        ).length;
-                        
-                        if (unreadCount > 0) {
-                          return Positioned(
-                            right: 0,
-                            top: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: Colors.red,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              constraints: const BoxConstraints(
-                                minWidth: 16,
-                                minHeight: 16,
-                              ),
-                              child: Text(
-                                unreadCount > 99 ? '99+' : unreadCount.toString(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          );
-                        }
-                        return const SizedBox.shrink();
-                      },
-                      loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
-                    );
-                  },
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'GrouMap',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const NotificationsView(),
+          ),
+          
+          // 中央：ユーザーアイコンと円形経験値バー
+          Expanded(
+            child: Center(
+              child: ref.watch(userDataProvider(userId)).when(
+                data: (userData) {
+                  if (userData == null) {
+                    return const SizedBox.shrink();
+                  }
+                  
+                  final level = userData['level'] ?? 1;
+                  final experience = userData['experience'] ?? 0;
+                  final profileImageUrl = userData['profileImageUrl'] as String?;
+                  
+                  // 現在のレベルの経験値計算
+                  final currentLevelExp = experience;
+                  final currentLevelRequiredExp = level * 100; // 現在のレベルに必要な経験値
+                  final progressValue = currentLevelExp > currentLevelRequiredExp 
+                      ? 1.0 
+                      : (currentLevelExp - (level - 1) * 100) / 100.0;
+                  
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // 円形の経験値バー
+                      SizedBox(
+                        width: 60,
+                        height: 60,
+                        child: CircularProgressIndicator(
+                          value: progressValue.clamp(0.0, 1.0),
+                          strokeWidth: 4,
+                          backgroundColor: Colors.grey[300],
+                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
+                        ),
+                      ),
+                      // ユーザーアイコン
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: const Color(0xFFFF6B35),
+                            width: 2,
+                          ),
+                        ),
+                        child: profileImageUrl != null && profileImageUrl.isNotEmpty
+                            ? ClipOval(
+                                child: Container(
+                                  width: 50,
+                                  height: 50,
+                                  color: Colors.grey[200],
+                                  child: Image.network(
+                                    profileImageUrl,
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        width: 50,
+                                        height: 50,
+                                        color: Colors.grey[300],
+                                        child: const Icon(
+                                          Icons.person,
+                                          size: 30,
+                                          color: Colors.grey,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                width: 50,
+                                height: 50,
+                                color: Colors.grey[300],
+                                child: const Icon(
+                                  Icons.person,
+                                  size: 30,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                      ),
+                      // レベル表示
+                      Positioned(
+                        bottom: -5,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFF6B35),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            'Lv.$level',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+                loading: () => const SizedBox(
+                  width: 70,
+                  height: 70,
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFFF6B35),
+                    strokeWidth: 2,
+                  ),
                 ),
-              );
-            },
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+          
+          // 右側：お知らせのベルボタン（固定幅）
+          SizedBox(
+            width: 60, // 固定幅を設定
+            child: IconButton(
+              icon: Stack(
+                children: [
+                  const Icon(
+                    Icons.notifications_outlined,
+                    size: 28,
+                    color: Colors.black87,
+                  ),
+                  // 未読通知のバッジ（readNotificationsフィールドと比較）
+                  ref.watch(userDataProvider(userId)).when(
+                    data: (userData) {
+                      if (userData == null) return const SizedBox.shrink();
+                      
+                      final readNotifications = List<String>.from(userData['readNotifications'] ?? []);
+                      
+                      return ref.watch(announcementsProvider).when(
+                        data: (announcements) {
+                          // 未読のお知らせ数を計算
+                          final unreadCount = announcements.where((announcement) => 
+                            !readNotifications.contains(announcement['id'])
+                          ).length;
+                          
+                          if (unreadCount > 0) {
+                            return Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  unreadCount > 99 ? '99+' : unreadCount.toString(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      );
+                    },
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                  ),
+                ],
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const NotificationsView(),
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
