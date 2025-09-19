@@ -8,7 +8,6 @@ class BadgeModel {
   final String iconPath;
   final bool isUnlocked;
   final DateTime? unlockedAt;
-  final int requiredPoints;
   final String category;
 
   BadgeModel({
@@ -18,7 +17,6 @@ class BadgeModel {
     required this.iconPath,
     required this.isUnlocked,
     this.unlockedAt,
-    required this.requiredPoints,
     required this.category,
   });
 }
@@ -34,14 +32,11 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
   String _selectedCategory = 'すべて';
   final List<String> _categories = [
     'すべて',
-    '初回',
-    'ポイント',
-    '店舗',
-    '友達',
-    '特別',
-    'イベント',
-    '長期',
+    '基礎バッジ',
   ];
+  
+  // バッジのロック状態を管理するMap
+  final Map<String, bool> _badgeUnlockStates = {};
 
   @override
   Widget build(BuildContext context) {
@@ -117,7 +112,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
       padding: const EdgeInsets.all(16),
       child: GridView.builder(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 5,
+          crossAxisCount: 4,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
           childAspectRatio: 0.8,
@@ -132,6 +127,9 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
   }
 
   Widget _buildBadgeCard(BadgeModel badge) {
+    // 現在のロック状態を取得（デフォルトはbadge.isUnlocked）
+    final isCurrentlyUnlocked = _badgeUnlockStates[badge.id] ?? badge.isUnlocked;
+    
     return GestureDetector(
       onTap: () => _showBadgeDetail(context, badge),
       child: Container(
@@ -152,26 +150,24 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
           children: [
             // バッジアイコン
             Container(
-              width: 40,
-              height: 40,
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
-                color: badge.isUnlocked 
+                color: isCurrentlyUnlocked 
                     ? const Color(0xFFFF6B35).withOpacity(0.1)
                     : Colors.grey.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: badge.isUnlocked 
-                      ? const Color(0xFFFF6B35)
-                      : Colors.grey,
-                  width: 2,
-                ),
+                borderRadius: BorderRadius.circular(40),
+                border: isCurrentlyUnlocked
+                    ? null
+                    : Border.all(
+                        color: Colors.grey,
+                        width: 2,
+                      ),
               ),
-              child: Icon(
-                _getBadgeIcon(badge.iconPath),
-                size: 24,
-                color: badge.isUnlocked 
-                    ? const Color(0xFFFF6B35)
-                    : Colors.grey,
+              child: _getBadgeIcon(
+                badge.iconPath,
+                isUnlocked: isCurrentlyUnlocked,
+                size: 48,
               ),
             ),
             
@@ -183,7 +179,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
-                color: badge.isUnlocked ? Colors.black87 : Colors.grey,
+                color: isCurrentlyUnlocked ? Colors.black87 : Colors.grey,
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -193,13 +189,11 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
             const SizedBox(height: 4),
             
             // ロック状態
-            if (!badge.isUnlocked)
-              Text(
-                '${badge.requiredPoints}pt',
-                style: const TextStyle(
-                  fontSize: 8,
-                  color: Colors.grey,
-                ),
+            if (!isCurrentlyUnlocked)
+              const Icon(
+                Icons.lock,
+                size: 12,
+                color: Colors.grey,
               )
             else
               const Icon(
@@ -213,140 +207,178 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     );
   }
 
-  IconData _getBadgeIcon(String iconPath) {
-    // アイコンパスに基づいてアイコンを返す
-    switch (iconPath) {
-      case 'first_visit':
-        return Icons.place;
-      case 'points_100':
-        return Icons.monetization_on;
-      case 'points_500':
-        return Icons.account_balance_wallet;
-      case 'points_1000':
-        return Icons.diamond;
-      case 'store_visit':
-        return Icons.store;
-      case 'friend_invite':
-        return Icons.people;
-      case 'special_event':
-        return Icons.celebration;
-      case 'long_term':
-        return Icons.schedule;
-      default:
-        return Icons.star;
+  Widget _getBadgeIcon(String iconPath, {bool isUnlocked = true, double size = 24}) {
+    // アンロック状態に応じて表示を切り替え
+    if (!isUnlocked) {
+      return Icon(
+        Icons.lock,
+        size: size,
+        color: Colors.grey,
+      );
     }
+    
+    // 画像ファイルパスに基づいてアイコンを返す
+    return Image.asset(
+      'assets/images/badges/$iconPath',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        // デバッグ用にエラーをコンソールに出力
+        print('画像読み込みエラー: assets/images/badges/$iconPath - $error');
+        return Icon(
+          Icons.star,
+          size: size,
+          color: isUnlocked ? const Color(0xFFFF6B35) : Colors.grey,
+        );
+      },
+    );
   }
 
   void _showBadgeDetail(BuildContext context, BadgeModel badge) {
+    // 現在のロック状態を取得
+    final isCurrentlyUnlocked = _badgeUnlockStates[badge.id] ?? badge.isUnlocked;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: badge.isUnlocked 
-                    ? const Color(0xFFFF6B35).withOpacity(0.1)
-                    : Colors.grey.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(
-                  color: badge.isUnlocked 
-                      ? const Color(0xFFFF6B35)
-                      : Colors.grey,
-                  width: 2,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Center(
+                child: Container(
+                  width: 300,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    color: isCurrentlyUnlocked 
+                        ? const Color(0xFFFF6B35).withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(150),
+                    border: isCurrentlyUnlocked
+                        ? null
+                        : Border.all(
+                            color: Colors.grey,
+                            width: 2,
+                          ),
+                  ),
+                  child: _getBadgeIcon(
+                    badge.iconPath,
+                    isUnlocked: isCurrentlyUnlocked,
+                    size: 144,
+                  ),
                 ),
               ),
-              child: Icon(
-                _getBadgeIcon(badge.iconPath),
-                size: 30,
-                color: badge.isUnlocked 
-                    ? const Color(0xFFFF6B35)
-                    : Colors.grey,
+              const SizedBox(height: 12),
+              Text(
+                badge.name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    badge.name,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    badge.category,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              badge.description,
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Icon(
-                  Icons.monetization_on,
-                  size: 16,
+              Text(
+                badge.category,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
                   color: Colors.grey[600],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  '必要ポイント: ${badge.requiredPoints}pt',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ],
-            ),
-            if (badge.isUnlocked && badge.unlockedAt != null) ...[
-              const SizedBox(height: 8),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                badge.description,
+                style: const TextStyle(fontSize: 14),
+              ),
+              const SizedBox(height: 16),
+              // テストボタン
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  Icon(
-                    Icons.check_circle,
-                    size: 16,
-                    color: Colors.green[600],
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _badgeUnlockStates[badge.id] = true;
+                      });
+                      setDialogState(() {});
+                    },
+                    icon: const Icon(Icons.lock_open, size: 16),
+                    label: const Text('アンロック'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '獲得日: ${_formatDate(badge.unlockedAt!)}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.green[600],
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _badgeUnlockStates[badge.id] = false;
+                      });
+                      setDialogState(() {});
+                    },
+                    icon: const Icon(Icons.lock, size: 16),
+                    label: const Text('ロック'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              // 現在の状態表示
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isCurrentlyUnlocked 
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.grey.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isCurrentlyUnlocked 
+                        ? Colors.green
+                        : Colors.grey,
+                    width: 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isCurrentlyUnlocked ? Icons.check_circle : Icons.lock,
+                      size: 20,
+                      color: isCurrentlyUnlocked ? Colors.green : Colors.grey,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isCurrentlyUnlocked ? 'アンロック済み' : 'ロック中',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: isCurrentlyUnlocked ? Colors.green : Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('閉じる'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
       ),
     );
   }
@@ -392,104 +424,153 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     final badges = <BadgeModel>[];
     final now = DateTime.now();
     
-    // 初回バッジ（10個）
-    for (int i = 1; i <= 10; i++) {
-      badges.add(BadgeModel(
-        id: 'first_$i',
-        name: '初回訪問$i',
-        description: '初めて店舗を訪問しました',
-        iconPath: 'first_visit',
-        isUnlocked: i <= 3,
-        unlockedAt: i <= 3 ? now.subtract(Duration(days: i * 10)) : null,
-        requiredPoints: i * 10,
-        category: '初回',
-      ));
-    }
-    
-    // ポイントバッジ（20個）
-    for (int i = 1; i <= 20; i++) {
-      final points = i * 50;
-      badges.add(BadgeModel(
-        id: 'points_$i',
-        name: 'ポイント${points}pt',
-        description: '${points}ポイントを獲得しました',
-        iconPath: 'points_100',
-        isUnlocked: i <= 8,
-        unlockedAt: i <= 8 ? now.subtract(Duration(days: i * 5)) : null,
-        requiredPoints: points,
-        category: 'ポイント',
-      ));
-    }
-    
-    // 店舗バッジ（15個）
-    for (int i = 1; i <= 15; i++) {
-      badges.add(BadgeModel(
-        id: 'store_$i',
-        name: '店舗マスター$i',
-        description: '${i}回店舗を訪問しました',
-        iconPath: 'store_visit',
-        isUnlocked: i <= 5,
-        unlockedAt: i <= 5 ? now.subtract(Duration(days: i * 7)) : null,
-        requiredPoints: i * 20,
-        category: '店舗',
-      ));
-    }
-    
-    // 友達バッジ（10個）
-    for (int i = 1; i <= 10; i++) {
-      badges.add(BadgeModel(
-        id: 'friend_$i',
-        name: '友達紹介$i',
-        description: '${i}人の友達を紹介しました',
-        iconPath: 'friend_invite',
-        isUnlocked: i <= 2,
-        unlockedAt: i <= 2 ? now.subtract(Duration(days: i * 15)) : null,
-        requiredPoints: i * 100,
-        category: '友達',
-      ));
-    }
-    
-    // 特別バッジ（15個）
-    for (int i = 1; i <= 15; i++) {
-      badges.add(BadgeModel(
-        id: 'special_$i',
-        name: '特別バッジ$i',
-        description: '特別な条件をクリアしました',
-        iconPath: 'special_event',
-        isUnlocked: i <= 4,
-        unlockedAt: i <= 4 ? now.subtract(Duration(days: i * 20)) : null,
-        requiredPoints: i * 200,
-        category: '特別',
-      ));
-    }
-    
-    // イベントバッジ（15個）
-    for (int i = 1; i <= 15; i++) {
-      badges.add(BadgeModel(
-        id: 'event_$i',
-        name: 'イベント参加$i',
-        description: 'イベントに参加しました',
-        iconPath: 'special_event',
-        isUnlocked: i <= 3,
-        unlockedAt: i <= 3 ? now.subtract(Duration(days: i * 30)) : null,
-        requiredPoints: i * 150,
-        category: 'イベント',
-      ));
-    }
-    
-    // 長期バッジ（15個）
-    for (int i = 1; i <= 15; i++) {
-      badges.add(BadgeModel(
-        id: 'long_$i',
-        name: '継続${i}日',
-        description: '${i}日間継続してログインしました',
-        iconPath: 'long_term',
-        isUnlocked: i <= 6,
-        unlockedAt: i <= 6 ? now.subtract(Duration(days: i * 50)) : null,
-        requiredPoints: i * 300,
-        category: '長期',
-      ));
-    }
+    // 基礎バッジ（16個）
+    badges.addAll([
+      BadgeModel(
+        id: 'hajime_no_ippo',
+        name: 'はじめの一歩',
+        description: '初めてチェックイン',
+        iconPath: 'hajimenoippo_badge_icon.png',
+        isUnlocked: true,
+        unlockedAt: now.subtract(const Duration(days: 30)),
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'san_shoku_course',
+        name: '一日三食コース',
+        description: '同日に3回利用',
+        iconPath: 'san_shoku_course_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'jimoto_ouendan',
+        name: '地元応援団',
+        description: '同じ店舗に10回来店',
+        iconPath: 'jimoto_ouendan_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'hashigo_master',
+        name: 'はしごの達人',
+        description: '同じ日に2店舗以上で利用',
+        iconPath: 'hashigo_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'bouken_sha',
+        name: '冒険者',
+        description: '2市以上で利用',
+        iconPath: 'bouken_sha_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'hayaoki_san',
+        name: '早起きさん',
+        description: '朝7〜9時に来店',
+        iconPath: 'hayaoki_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'yorufukashi_gourmet',
+        name: '夜更かしグルメ',
+        description: '22時以降に来店',
+        iconPath: 'yorufukashi_gourmet_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'weekend_star',
+        name: '週末の主役',
+        description: '土日連続で来店',
+        iconPath: 'weekend_star_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'weekday_lunch_king',
+        name: '平日ランチ王',
+        description: '平日昼（11〜14時）5回利用',
+        iconPath: 'weekday_lunch_king_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'summer_gourmet_trip',
+        name: '夏のグルメ旅',
+        description: '夏に来店（7〜8月）',
+        iconPath: 'summer_gourmet_trip_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'shinshun_start_dash',
+        name: '新春スタートダッシュ',
+        description: '1月に来店',
+        iconPath: 'shinshun_start_dash_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'anniv_half',
+        name: 'ハーフアニバーサリー',
+        description: 'サービス開始半年で来店',
+        iconPath: 'anniv_half_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'anniv_1yr',
+        name: '1周年記念',
+        description: 'サービス開始1周年で来店',
+        iconPath: 'anniv_1yr_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'anniv_2yr',
+        name: '2周年記念',
+        description: 'サービス開始2周年で来店',
+        iconPath: 'anniv_2yr_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'event_participant',
+        name: 'イベント参加者',
+        description: '店舗イベントで来店',
+        iconPath: 'event_participant_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+      BadgeModel(
+        id: 'himitsu_joren',
+        name: '秘密の常連',
+        description: '15〜16時に利用',
+        iconPath: 'himitsu_joren_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: '基礎バッジ',
+      ),
+    ]);
     
     return badges;
   }

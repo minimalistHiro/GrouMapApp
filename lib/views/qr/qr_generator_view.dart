@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/services.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
@@ -300,13 +301,28 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'QRコード文字列:',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
+              Row(
+                children: [
+                  const Text(
+                    'QRコード文字列:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => _copyToClipboard(context, qrTokenState.token!),
+                    icon: const Icon(Icons.copy, size: 16),
+                    tooltip: 'コピー',
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 4),
               SelectableText(
@@ -681,6 +697,28 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       return RegExp(r'^[a-zA-Z0-9]+$').hasMatch(qrCode);
     }
     return false;
+  }
+
+  // クリップボードにコピーする関数
+  void _copyToClipboard(BuildContext context, String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Row(
+          children: [
+            Icon(Icons.check, color: Colors.white, size: 20),
+            SizedBox(width: 8),
+            Text('QRコード文字列をコピーしました'),
+          ],
+        ),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    );
   }
 
 }

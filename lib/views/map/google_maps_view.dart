@@ -4,10 +4,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../providers/location_provider.dart';
-import '../../providers/store_provider.dart';
-import '../../models/store_model.dart';
-import '../../widgets/custom_button.dart';
 
 class GoogleMapsView extends ConsumerStatefulWidget {
   final String? selectedStoreId;
@@ -206,24 +202,18 @@ class _GoogleMapsViewState extends ConsumerState<GoogleMapsView> {
 
   // カスタムマーカーアイコンを作成
   Future<BitmapDescriptor> _createCustomMarkerIcon(String flowerType, bool isExpanded) async {
-    final double size = isExpanded ? 80.0 : 40.0;
-    
     // カスタムアイコンの色とスタイルを決定
     Color markerColor;
-    IconData iconData;
     
     switch (flowerType) {
       case 'gold':
         markerColor = Colors.amber;
-        iconData = Icons.star;
         break;
       case 'unvisited':
         markerColor = Colors.grey;
-        iconData = Icons.radio_button_unchecked;
         break;
       default:
         markerColor = Colors.grey;
-        iconData = Icons.help_outline;
     }
     
     // カスタムマーカーを作成（実際の実装では、より詳細なカスタムアイコンを作成できます）

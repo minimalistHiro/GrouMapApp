@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
-import '../providers/location_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/coupon_provider.dart';
 import '../providers/badge_provider.dart';
@@ -71,8 +70,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   // 位置情報データ読み込み
   Future<void> _loadLocationData() async {
     try {
-      final locationNotifier = ref.read(locationStateProvider.notifier);
-      await locationNotifier.getCurrentPosition();
+      // 位置情報の読み込みは各画面で個別に処理
+      debugPrint('位置情報読み込み（個別処理）');
     } catch (e) {
       debugPrint('位置情報読み込みエラー: $e');
     }
