@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import '../models/badge_model.dart';
-import '../providers/auth_provider.dart';
 
 // バッジプロバイダー
 final badgeProvider = Provider<BadgeService>((ref) {
@@ -49,6 +48,39 @@ class BadgeService {
         return [];
       }
       throw Exception('バッジの取得に失敗しました');
+    }
+  }
+
+  // バッジを手動で付与（重複付与は防止）
+  Future<bool> awardBadge({
+    required String userId,
+    required BadgeModel badge,
+  }) async {
+    try {
+      // 既に同じバッジを持っているか確認
+      final existing = await _firestore
+          .collection('user_badges')
+          .where('userId', isEqualTo: userId)
+          .where('badgeId', isEqualTo: badge.badgeId)
+          .limit(1)
+          .get();
+
+      if (existing.docs.isNotEmpty) {
+        return false; // すでに付与済み
+      }
+
+      await _firestore.collection('user_badges').add({
+        'userId': userId,
+        'badgeId': badge.badgeId,
+        'unlockedAt': FieldValue.serverTimestamp(),
+        'progress': badge.requiredValue,
+        'requiredValue': badge.requiredValue,
+        'isNew': true,
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Error awarding badge: $e');
+      throw Exception('バッジの保存に失敗しました');
     }
   }
 

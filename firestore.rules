@@ -64,6 +64,57 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // バッジマスタ（閲覧のみ）
+    match /badges/{badgeId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.role in ['admin', 'company'];
+    }
+
+    // ユーザーの獲得バッジ（階層: user_badges/{userId}/badges/{badgeId}）
+    match /user_badges/{userId}/badges/{badgeId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['userId','badgeId','unlockedAt','progress','requiredValue','isNew'])
+        && request.resource.data.userId == userId
+        && request.resource.data.badgeId == badgeId
+        && request.resource.data.unlockedAt is timestamp
+        && request.resource.data.progress is int
+        && request.resource.data.requiredValue is int
+        && request.resource.data.isNew is bool;
+
+      // isNew のみ更新可
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.badgeId == resource.data.badgeId
+        && request.resource.data.requiredValue == resource.data.requiredValue
+        && request.resource.data.progress == resource.data.progress
+        && request.resource.data.unlockedAt == resource.data.unlockedAt
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['isNew'])
+        && request.resource.data.isNew is bool;
+
+      // 自分のバッジは削除可（ロックへ戻す用途）
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // バッジ進捗
+    match /badge_progress/{docId} {
+      // 自分の進捗のみ閲覧可
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+
+      // 自分の進捗のみ作成/更新可（基本的な型チェック）
+      allow create, update: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasAll(['userId','badgeType','currentValue'])
+        && request.resource.data.userId is string
+        && request.resource.data.badgeType is string
+        && request.resource.data.currentValue is int;
+
+      allow delete: if false;
+    }
+
     // ポイント取引コレクションのルール
     match /point_transactions/{transactionId} {
       // 認証されたユーザーは自分のポイント取引履歴のみ読み取り可能

@@ -149,7 +149,35 @@ class _BadgesViewState extends ConsumerState<BadgesView> with TickerProviderStat
               itemCount: lockedBadges.length,
               itemBuilder: (context, index) {
                 final badge = lockedBadges[index];
-                return _buildBadgeCard(badge, isUnlocked: false);
+                return Column(
+                  children: [
+                    _buildBadgeCard(badge, isUnlocked: false),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          final svc = ref.read(badgeProvider);
+                          final added = await svc.awardBadge(userId: userId, badge: badge);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(added ? 'バッジを保存しました' : 'このバッジは既に獲得済みです'),
+                              ),
+                            );
+                          }
+                          // リストを更新
+                          ref.invalidate(userBadgesProvider(userId));
+                          ref.invalidate(availableBadgesProvider);
+                        },
+                        icon: const Icon(Icons.save, color: Color(0xFFFF6B35)),
+                        label: const Text(
+                          'このバッジを保存',
+                          style: TextStyle(color: Color(0xFFFF6B35)),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
               },
             );
           },

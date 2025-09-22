@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class BadgeModel {
   final String id;
@@ -33,6 +35,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
   final List<String> _categories = [
     'すべて',
     '基礎バッジ',
+    'ジャンル別バッジ',
   ];
   
   // バッジのロック状態を管理するMap
@@ -306,7 +309,8 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
+                      await _unlockBadge(badge);
                       setState(() {
                         _badgeUnlockStates[badge.id] = true;
                       });
@@ -320,7 +324,8 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
                     ),
                   ),
                   ElevatedButton.icon(
-                    onPressed: () {
+                    onPressed: () async {
+                      await _lockBadge(badge);
                       setState(() {
                         _badgeUnlockStates[badge.id] = false;
                       });
@@ -572,6 +577,470 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
       ),
     ]);
     
+    // ジャンル別バッジ（レストラン/カフェ/居酒屋/ファストフード/ラーメン/寿司/焼肉/スイーツ/パン/バー）
+    badges.addAll([
+      // レストラン系
+      BadgeModel(
+        id: 'restaurant_debut',
+        name: 'レストランデビュー',
+        description: 'レストランを初めて利用',
+        iconPath: 'restaurant_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'restaurant_hunter',
+        name: 'レストランハンター',
+        description: 'レストランを3店舗利用',
+        iconPath: 'restaurant_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'restaurant_master',
+        name: 'レストランマスター',
+        description: 'レストランを10店舗利用',
+        iconPath: 'restaurant_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'restaurant_complete',
+        name: 'レストランコンプリート',
+        description: 'レストランを30店舗利用',
+        iconPath: 'restaurant_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // カフェ系
+      BadgeModel(
+        id: 'cafe_debut',
+        name: 'カフェデビュー',
+        description: 'カフェを初めて利用',
+        iconPath: 'cafe_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'cafe_hunter',
+        name: 'カフェハンター',
+        description: 'カフェを3店舗利用',
+        iconPath: 'cafe_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'cafe_master',
+        name: 'カフェマスター',
+        description: 'カフェを10店舗利用',
+        iconPath: 'cafe_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'cafe_complete',
+        name: 'カフェコンプリート',
+        description: 'カフェを30店舗利用',
+        iconPath: 'cafe_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // 居酒屋系
+      BadgeModel(
+        id: 'izakaya_debut',
+        name: '居酒屋デビュー',
+        description: '居酒屋を初めて利用',
+        iconPath: 'izakaya_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'izakaya_hunter',
+        name: '居酒屋ハンター',
+        description: '居酒屋を3店舗利用',
+        iconPath: 'izakaya_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'izakaya_master',
+        name: '居酒屋マスター',
+        description: '居酒屋を10店舗利用',
+        iconPath: 'izakaya_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'izakaya_complete',
+        name: '居酒屋コンプリート',
+        description: '居酒屋を30店舗利用',
+        iconPath: 'izakaya_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // ファストフード系
+      BadgeModel(
+        id: 'fastfood_debut',
+        name: 'ファストフードデビュー',
+        description: 'ファストフードを初めて利用',
+        iconPath: 'fastfood_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'fastfood_hunter',
+        name: 'ファストフードハンター',
+        description: 'ファストフードを3店舗利用',
+        iconPath: 'fastfood_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'fastfood_master',
+        name: 'ファストフードマスター',
+        description: 'ファストフードを10店舗利用',
+        iconPath: 'fastfood_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'fastfood_complete',
+        name: 'ファストフードコンプリート',
+        description: 'ファストフードを30店舗利用',
+        iconPath: 'fastfood_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // ラーメン系
+      BadgeModel(
+        id: 'ramen_debut',
+        name: 'ラーメンデビュー',
+        description: 'ラーメン屋を初めて利用',
+        iconPath: 'ramen_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'ramen_hunter',
+        name: 'ラーメンハンター',
+        description: 'ラーメン屋を3店舗利用',
+        iconPath: 'restaurant_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'ramen_master',
+        name: 'ラーメンマスター',
+        description: 'ラーメン屋を10店舗利用',
+        iconPath: 'restaurant_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'ramen_complete',
+        name: 'ラーメンコンプリート',
+        description: 'ラーメン屋を30店舗利用',
+        iconPath: 'restaurant_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // 寿司系
+      BadgeModel(
+        id: 'sushi_debut',
+        name: '寿司デビュー',
+        description: '寿司屋を初めて利用',
+        iconPath: 'sushi_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'sushi_hunter',
+        name: '寿司ハンター',
+        description: '寿司屋を3店舗利用',
+        iconPath: 'sushi_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'sushi_master',
+        name: '寿司マスター',
+        description: '寿司屋を10店舗利用',
+        iconPath: 'sushi_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'sushi_complete',
+        name: '寿司コンプリート',
+        description: '寿司屋を30店舗利用',
+        iconPath: 'sushi_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // 焼肉系
+      BadgeModel(
+        id: 'yakiniku_debut',
+        name: '焼肉デビュー',
+        description: '焼肉店を初めて利用',
+        iconPath: 'yakiniku_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'yakiniku_hunter',
+        name: '焼肉ハンター',
+        description: '焼肉店を3店舗利用',
+        iconPath: 'yakiniku_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'yakiniku_master',
+        name: '焼肉マスター',
+        description: '焼肉店を10店舗利用',
+        iconPath: 'yakiniku_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'yakiniku_complete',
+        name: '焼肉コンプリート',
+        description: '焼肉店を30店舗利用',
+        iconPath: 'yakiniku_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // スイーツ系
+      BadgeModel(
+        id: 'sweets_debut',
+        name: 'スイーツデビュー',
+        description: 'スイーツ店を初めて利用',
+        iconPath: 'sweets_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'sweets_hunter',
+        name: 'スイーツハンター',
+        description: 'スイーツ店を3店舗利用',
+        iconPath: 'sweets_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'sweets_master',
+        name: 'スイーツマスター',
+        description: 'スイーツ店を10店舗利用',
+        iconPath: 'sweets_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'sweets_complete',
+        name: 'スイーツコンプリート',
+        description: 'スイーツ店を30店舗利用',
+        iconPath: 'sweets_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // パン系
+      BadgeModel(
+        id: 'bread_debut',
+        name: 'パンデビュー',
+        description: 'パン屋を初めて利用',
+        iconPath: 'bread_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'bread_hunter',
+        name: 'パンハンター',
+        description: 'パン屋を3店舗利用',
+        iconPath: 'bread_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'bread_master',
+        name: 'パンマスター',
+        description: 'パン屋を10店舗利用',
+        iconPath: 'bread_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'bread_complete',
+        name: 'パンコンプリート',
+        description: 'パン屋を30店舗利用',
+        iconPath: 'bread_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+
+      // バー系
+      BadgeModel(
+        id: 'bar_debut',
+        name: 'バーデビュー',
+        description: 'バーを初めて利用',
+        iconPath: 'bar_debut_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'bar_hunter',
+        name: 'バーハンター',
+        description: 'バーを3店舗利用',
+        iconPath: 'bar_hunter_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'bar_master',
+        name: 'バーマスター',
+        description: 'バーを10店舗利用',
+        iconPath: 'bar_master_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+      BadgeModel(
+        id: 'bar_complete',
+        name: 'バーコンプリート',
+        description: 'バーを30店舗利用',
+        iconPath: 'bar_complete_badge_icon.png',
+        isUnlocked: false,
+        unlockedAt: null,
+        category: 'ジャンル別バッジ',
+      ),
+    ]);
+    
     return badges;
+  }
+
+  // Firestore: バッジを付与（user_badges/{userId}/badges/{badgeId}）
+  Future<void> _unlockBadge(BadgeModel badge) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ログインが必要です')),
+        );
+      }
+      return;
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    try {
+      final ref = firestore
+          .collection('user_badges')
+          .doc(user.uid)
+          .collection('badges')
+          .doc(badge.id);
+
+      final snap = await ref.get();
+      if (!snap.exists) {
+        await ref.set({
+          'userId': user.uid,
+          'badgeId': badge.id,
+          'unlockedAt': FieldValue.serverTimestamp(),
+          'progress': 1,
+          'requiredValue': 1,
+          'isNew': true,
+        });
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('バッジを保存しました')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存に失敗しました: $e')),
+        );
+      }
+    }
+  }
+
+  // Firestore: バッジを削除（ロックに戻す）user_badges/{userId}/badges/{badgeId}
+  Future<void> _lockBadge(BadgeModel badge) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ログインが必要です')),
+        );
+      }
+      return;
+    }
+
+    final firestore = FirebaseFirestore.instance;
+    try {
+      final ref = firestore
+          .collection('user_badges')
+          .doc(user.uid)
+          .collection('badges')
+          .doc(badge.id);
+      await ref.delete();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('バッジを削除しました')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('削除に失敗しました: $e')),
+        );
+      }
+    }
   }
 }

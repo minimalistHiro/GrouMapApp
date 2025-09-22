@@ -47,26 +47,6 @@ class QRTokenService {
       
       print('QRTokenService: 結果返却: ${result.keys}');
       return result;
-      
-      // 実際のFirebase Functions呼び出し（コメントアウト）
-      /*
-      final functions = FirebaseFunctions.instance;
-      final callable = functions.httpsCallable('issueQrToken');
-      
-      print('QRTokenService: Firebase Functions callable作成完了');
-      
-      final result = await callable.call({
-        if (deviceId != null) 'deviceId': deviceId,
-      });
-      
-      print('QRTokenService: トークン発行成功: ${result.data}');
-      
-      return {
-        'token': result.data['token'],
-        'expiresAt': result.data['expiresAt'],
-        'jti': result.data['jti'],
-      };
-      */
     } catch (e) {
       print('QRTokenService: トークン発行エラー: $e');
       print('QRTokenService: エラータイプ: ${e.runtimeType}');
@@ -84,19 +64,23 @@ class QRTokenService {
   /// Firebase Functions経由でトークンを検証（店舗アプリ用）
   static Future<Map<String, dynamic>> verifyToken(String token, String storeId) async {
     try {
-      final functions = FirebaseFunctions.instance;
+      // Cloud Functions のリージョンをバックエンドと合わせる
+      final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
       final callable = functions.httpsCallable('verifyQrToken');
-      
+
       final result = await callable.call({
         'token': token,
         'storeId': storeId,
       });
-      
+
       return {
         'uid': result.data['uid'],
         'status': result.data['status'],
         'jti': result.data['jti'],
       };
+    } on FirebaseFunctionsException catch (e) {
+      print('QRTokenService: FunctionsException on verifyToken: code=${e.code}, message=${e.message}, details=${e.details}');
+      rethrow;
     } catch (e) {
       print('トークン検証エラー: $e');
       rethrow;
