@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
+import '../payment/point_request_confirmation_view.dart';
 
 class QRGeneratorView extends ConsumerStatefulWidget {
   const QRGeneratorView({Key? key}) : super(key: key);
@@ -19,12 +22,34 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
   late TabController _tabController;
   MobileScannerController? _scannerController;
   bool _isScanning = false;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pendingRequestSub;
+  String? _lastHandledRequestId;
+  bool _isNavigatingToConfirmation = false;
+  bool _isNavigatingToPayment = false;
+  String? _listeningUserId;
+  ProviderSubscription<dynamic>? _authStateSub; // 未使用化（下位互換のため保持）
+  StreamSubscription<User?>? _authSub;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _scannerController = MobileScannerController();
+    // FirebaseAuth のストリームで認証変化を監視（ref.listenの制約を回避）
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (!mounted) return;
+      if (user != null) {
+        if (_listeningUserId != user.uid) {
+          _listeningUserId = user.uid;
+          _startPendingRequestListener(user.uid);
+        }
+      } else {
+        if (_listeningUserId != null) {
+          _listeningUserId = null;
+          _cancelPendingRequestListener();
+        }
+      }
+    });
     
     // タブ変更を監視して、QRコードを読み取るタブが選択された時にカメラを開始
     _tabController.addListener(() {
@@ -40,6 +65,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
   void dispose() {
     _tabController.dispose();
     _scannerController?.dispose();
+    _cancelPendingRequestListener();
+    _authStateSub?.close();
+    _authSub?.cancel();
     super.dispose();
   }
 
@@ -466,6 +494,83 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     });
   }
 
+  // ユーザー宛の保留中リクエストをリアルタイム監視して自動遷移
+  void _startPendingRequestListener(String userId) {
+    // 既存の購読を解除して再作成
+    _cancelPendingRequestListener();
+
+    _pendingRequestSub = FirebaseFirestore.instance
+        .collection('point_requests')
+        .where('userId', isEqualTo: userId)
+        .where('status', isEqualTo: 'pending')
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) async {
+      if (!mounted) return;
+      if (snapshot.docs.isEmpty) return;
+
+      final requestId = snapshot.docs.first.id;
+      // 同一リクエストの重複ナビゲーション防止
+      if (_isNavigatingToConfirmation || _lastHandledRequestId == requestId) {
+        return;
+      }
+
+      _isNavigatingToConfirmation = true;
+      _lastHandledRequestId = requestId;
+
+      try {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PointRequestConfirmationView(requestId: requestId),
+          ),
+        );
+      } catch (_) {
+      } finally {
+        if (mounted) {
+          _isNavigatingToConfirmation = false;
+        }
+      }
+    });
+
+    // 即時サーバー確認でラグを最小化（スナップショット待ちを回避）
+    _checkPendingRequestOnce(userId);
+  }
+
+  void _cancelPendingRequestListener() {
+    _pendingRequestSub?.cancel();
+    _pendingRequestSub = null;
+  }
+
+  Future<void> _checkPendingRequestOnce(String userId) async {
+    if (_isNavigatingToConfirmation) return;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('point_requests')
+          .where('userId', isEqualTo: userId)
+          .where('status', isEqualTo: 'pending')
+          .limit(1)
+          .get(const GetOptions(source: Source.server));
+
+      if (!mounted || snapshot.docs.isEmpty) return;
+      final requestId = snapshot.docs.first.id;
+
+      if (_lastHandledRequestId == requestId) return;
+      _isNavigatingToConfirmation = true;
+      _lastHandledRequestId = requestId;
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => PointRequestConfirmationView(requestId: requestId),
+        ),
+      );
+    } catch (_) {
+    } finally {
+      if (mounted) {
+        _isNavigatingToConfirmation = false;
+      }
+    }
+  }
+
   void _handleQRCodeDetected(BuildContext context, String code) {
     _stopScanning();
     _processQRCode(context, code);
@@ -540,6 +645,49 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       return;
     }
 
+    // 1) まず、ユーザーに対する保留中のポイント付与リクエストがあるか確認
+    try {
+      final user = ref.read(authProvider).value;
+      if (user != null) {
+        if (context.mounted) {
+          print('保留中リクエスト確認ダイアログを表示');
+          _showLoadingDialog(context);
+        }
+
+        final pendingSnapshot = await FirebaseFirestore.instance
+            .collection('point_requests')
+            .where('userId', isEqualTo: user.uid)
+            .where('status', isEqualTo: 'pending')
+            .limit(1)
+            .get();
+
+        if (context.mounted) {
+          print('保留中リクエスト確認ダイアログを閉じる');
+          _closeLoadingDialog(context);
+        }
+
+        if (pendingSnapshot.docs.isNotEmpty) {
+          final requestId = pendingSnapshot.docs.first.id;
+          if (context.mounted) {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => PointRequestConfirmationView(requestId: requestId),
+              ),
+            );
+          }
+          // 確認画面へ遷移した場合はここで処理終了（従来処理はスキップ）
+          return;
+        }
+      }
+    } catch (e) {
+      print('保留中リクエスト確認中にエラー: $e');
+      // サイレントに続行（従来処理へ）
+      if (context.mounted) {
+        // 万が一ローディングが残っていれば閉じる
+        _closeLoadingDialog(context);
+      }
+    }
+
     // QRコードの形式をチェック（店舗IDかどうか）
     final isStoreId = _isStoreId(qrCode);
     print('店舗ID判定結果: $isStoreId');
@@ -585,15 +733,25 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     // ローディング表示
     if (!context.mounted) return;
     
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFFFF6B35),
-        ),
-      ),
-    );
+    if (_isNavigatingToPayment) {
+      print('支払い画面への遷移は既に進行中のためスキップ');
+      return;
+    }
+    _isNavigatingToPayment = true;
+    _showLoadingDialog(context);
+    
+    // タイムアウト処理（10秒で強制終了）
+    Timer? timeoutTimer;
+    timeoutTimer = Timer(const Duration(seconds: 10), () {
+      print('店舗存在確認がタイムアウトしました');
+      if (!mounted) return;
+      _closeLoadingDialog(context);
+      _showErrorDialog(
+        context,
+        'タイムアウト',
+        '処理がタイムアウトしました。通信環境をご確認のうえ、もう一度お試しください。',
+      );
+    });
     
     try {
       print('Firestoreで店舗を検索中: $storeId');
@@ -606,9 +764,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       print('店舗ドキュメント取得完了: ${doc.exists}');
 
       // ローディングを必ず閉じる
-      if (context.mounted) {
-        Navigator.of(context).pop(); // ローディングダイアログを閉じる
-      }
+      timeoutTimer.cancel();
+      _closeLoadingDialog(context);
 
       if (!doc.exists) {
         print('店舗が存在しません: $storeId');
@@ -620,26 +777,24 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             '店舗ID: $storeId',
           );
         }
+        _isNavigatingToPayment = false;
         return;
       }
 
       print('店舗が存在します。ポイント支払い画面に遷移: $storeId');
       // 店舗が存在する場合、ポイント支払い画面に遷移
       if (context.mounted) {
-        print('Navigator.push開始');
         try {
+          timeoutTimer.cancel();
           await Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (context) {
-                print('PointPaymentView作成開始');
-                return PointPaymentView(storeId: storeId);
-              },
+              builder: (context) => PointPaymentView(storeId: storeId),
             ),
           );
           print('ポイント支払い画面への遷移完了');
         } catch (e) {
           print('画面遷移エラー: $e');
-          if (context.mounted) {
+          if (mounted) {
             _showErrorDialog(
               context,
               '画面遷移に失敗しました',
@@ -652,8 +807,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       print('店舗存在確認エラー: $e');
       // エラーが発生した場合
       if (context.mounted) {
-        // ローディングを必ず閉じる
-        Navigator.of(context).pop(); // ローディングダイアログを閉じる
+        // ローディングを必ず閉じる（タイマーも停止）
+        timeoutTimer.cancel();
+        _closeLoadingDialog(context);
         
         _showErrorDialog(
           context,
@@ -661,6 +817,36 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
           'エラー: $e',
         );
       }
+    }
+    
+    _isNavigatingToPayment = false;
+  }
+
+  // ローディングダイアログを安全に閉じる
+  void _closeLoadingDialog(BuildContext context) {
+    if (!mounted) return;
+    if (context.mounted) {
+      try {
+        Navigator.of(context, rootNavigator: true).maybePop();
+      } catch (_) {}
+    }
+  }
+
+  // ローディングダイアログを安全に開く
+  void _showLoadingDialog(BuildContext context) {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        useRootNavigator: true,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF6B35),
+          ),
+        ),
+      );
+    } catch (e) {
+      print('ローディングダイアログ表示時のエラー: $e');
     }
   }
 
@@ -690,11 +876,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
 
   // 店舗IDかどうかを判定する関数
   bool _isStoreId(String qrCode) {
-    // より柔軟な店舗ID判定
-    // 5文字以上の英数字で、特殊文字を含まない場合を店舗IDと判定
-    if (qrCode.length >= 5) {
-      // 英数字のみかチェック
-      return RegExp(r'^[a-zA-Z0-9]+$').hasMatch(qrCode);
+    // より柔軟な店舗ID判定（英数字・ハイフン・アンダースコアを許可、3文字以上）
+    if (qrCode.length >= 3) {
+      return RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(qrCode);
     }
     return false;
   }

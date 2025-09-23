@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/store_model.dart';
 import '../../models/point_transaction_model.dart';
+import '../home_view.dart';
 
 class PaymentSuccessView extends StatelessWidget {
   final StoreModel store;
@@ -31,22 +32,22 @@ class PaymentSuccessView extends StatelessWidget {
             children: [
               // 成功アイコン
               Container(
-                width: 120,
-                height: 120,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   color: Colors.green,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
                       color: Colors.green.withOpacity(0.3),
-                      blurRadius: 20,
-                      spreadRadius: 5,
+                      blurRadius: 10,
+                      spreadRadius: 2,
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.check,
-                  size: 60,
+                  size: 30,
                   color: Colors.white,
                 ),
               ),
@@ -184,8 +185,13 @@ class PaymentSuccessView extends StatelessWidget {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
-                    // ホーム画面に戻る
-                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    // ホーム画面に戻る（スタックをクリアしてHomeViewへ）
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (context) => const HomeView(),
+                      ),
+                      (route) => false,
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF6B35),

@@ -5,7 +5,6 @@ import '../../providers/store_provider.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../models/store_model.dart';
 import '../../models/point_transaction_model.dart';
-import '../../services/point_transaction_service.dart';
 import 'payment_success_view.dart';
 
 class PointPaymentView extends ConsumerStatefulWidget {
@@ -25,11 +24,36 @@ class PointPaymentView extends ConsumerStatefulWidget {
 class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
   String _amount = '0';
   bool _isProcessing = false;
+  int? _currentPoints;
 
   @override
   void initState() {
     super.initState();
     print('PointPaymentView: 初期化完了 - storeId: ${widget.storeId}');
+    _loadCurrentPoints();
+  }
+
+  Future<void> _loadCurrentPoints() async {
+    try {
+      final authState = ref.read(authProvider);
+      final user = authState.value;
+      if (user == null) return;
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      if (!mounted) return;
+      if (userDoc.exists) {
+        final data = userDoc.data();
+        setState(() {
+          _currentPoints = (data?['points'] as int?) ?? 0;
+        });
+      }
+    } catch (e) {
+      print('現在ポイント取得エラー: $e');
+    }
   }
 
   void _onNumberPressed(String number) {
@@ -155,26 +179,28 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         throw Exception('ポイントが不足しています。現在の残高: ${userPoints}ポイント');
       }
 
-      // ポイントを消費（usersコレクションのpointsフィールドを更新）
-      await _useUserPoints(
+      // ポイントを消費し、取引IDを取得（DBへ記録もここで実施）
+      final transactionId = await _useUserPoints(
         userId: user.uid,
         storeId: widget.storeId,
         points: amount,
         description: 'ポイント支払い',
       );
 
-      // 取引履歴を取得（支払い完了画面で表示するため）
-      final transactionId = await PointTransactionService.createTransaction(
-        storeId: widget.storeId,
-        storeName: store.name,
-        amount: amount,
-        description: 'ポイント支払い',
-        qrCode: null,
-      );
+      // 画面上の現在ポイントを更新
+      if (mounted) {
+        setState(() {
+          if (_currentPoints != null) {
+            _currentPoints = (_currentPoints! - amount).clamp(0, 1 << 31);
+          }
+        });
+      }
 
       // 取引情報を取得
       final transactionDoc = await FirebaseFirestore.instance
           .collection('point_transactions')
+          .doc(widget.storeId)
+          .collection(user.uid)
           .doc(transactionId)
           .get();
 
@@ -234,7 +260,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
   }
 
   // ユーザーのポイントを消費するメソッド
-  Future<void> _useUserPoints({
+  Future<String> _useUserPoints({
     required String userId,
     required String storeId,
     required int points,
@@ -258,11 +284,15 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         description: description,
       );
 
-      // 取引を記録
-      await FirebaseFirestore.instance
+      // 取引を記録（ネスト構造） point_transactions/{storeId}/{userId}/{transactionId}
+      final batch = FirebaseFirestore.instance.batch();
+      final nestedRef = FirebaseFirestore.instance
           .collection('point_transactions')
-          .doc(transactionId)
-          .set(transaction.toJson());
+          .doc(storeId)
+          .collection(userId)
+          .doc(transactionId);
+      batch.set(nestedRef, transaction.toJson());
+      await batch.commit();
 
       // ユーザーのポイントを更新
       await FirebaseFirestore.instance
@@ -274,6 +304,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
       });
 
       print('ユーザーのポイントを消費しました: $pointsポイント');
+      return transactionId;
     } catch (e) {
       throw Exception('ポイント使用に失敗しました: $e');
     }
@@ -479,6 +510,13 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
               color: Color(0xFFFF6B35),
             ),
           ),
+          if (_currentPoints != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              '現在のポイント: $_currentPoints',
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
         ],
       ),
     );

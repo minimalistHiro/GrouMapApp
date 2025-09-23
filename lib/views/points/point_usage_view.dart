@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
-import '../../models/point_transaction_model.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 
@@ -237,6 +237,26 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
             ? 'ポイント使用' 
             : _descriptionController.text,
       );
+
+      // 追加保存: point_transactions/{storeId}/{userId}/(auto-id)
+      final String storeId = _storeIdController.text.trim();
+      final Map<String, dynamic> txData = {
+        'userId': userId,
+        'storeId': storeId,
+        'amount': -points, // 使用はマイナス
+        'description': _descriptionController.text.isEmpty ? 'ポイント使用' : _descriptionController.text,
+        'status': 'completed',
+        'paymentMethod': 'points',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'type': 'use',
+      };
+
+      await FirebaseFirestore.instance
+          .collection('point_transactions')
+          .doc(storeId)
+          .collection(userId)
+          .add(txData);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

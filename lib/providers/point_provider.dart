@@ -4,9 +4,6 @@ import 'package:flutter/foundation.dart';
 import '../models/point_transaction_model.dart';
 import '../models/user_point_balance_model.dart';
 import '../models/qr_code_model.dart';
-import '../models/badge_model.dart';
-import 'badge_provider.dart';
-import 'level_provider.dart';
 
 // ポイントサービスプロバイダー
 final pointServiceProvider = Provider<FirebaseFirestore>((ref) {
@@ -66,11 +63,18 @@ class PointProcessor {
         qrCode: qrCodeId,
       );
 
-      // 取引を記録
+      // 取引を記録（ネスト構造） point_transactions/{storeId}/{userId}/{transactionId}
       await _firestore
           .collection('point_transactions')
+          .doc(storeId)
+          .collection(userId)
           .doc(transactionId)
           .set(transaction.toJson());
+
+      // 旧構造の重複データを念のため削除
+      try {
+        await _firestore.collection('point_transactions').doc(transactionId).delete();
+      } catch (_) {}
 
       // ユーザーのポイント残高を更新
       await _updateUserPointBalance(userId, points, 0);
@@ -125,11 +129,18 @@ class PointProcessor {
         description: description,
       );
 
-      // 取引を記録
+      // 取引を記録（ネスト構造） point_transactions/{storeId}/{userId}/{transactionId}
       await _firestore
           .collection('point_transactions')
+          .doc(storeId)
+          .collection(userId)
           .doc(transactionId)
           .set(transaction.toJson());
+
+      // 旧構造の重複データを念のため削除
+      try {
+        await _firestore.collection('point_transactions').doc(transactionId).delete();
+      } catch (_) {}
 
       // ユーザーのポイント残高を更新
       await _updateUserPointBalance(userId, 0, points);
