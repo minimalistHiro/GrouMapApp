@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/store_model.dart';
 import '../../models/point_transaction_model.dart';
-import '../home_view.dart';
+import '../main_navigation_view.dart';
 
 class PaymentSuccessView extends StatelessWidget {
   final StoreModel store;
@@ -185,10 +185,10 @@ class PaymentSuccessView extends StatelessWidget {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () {
-                    // ホーム画面に戻る（スタックをクリアしてHomeViewへ）
+                    // メインナビゲーションに戻り（デフォルトのホームタブ）
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(
-                        builder: (context) => const HomeView(),
+                        builder: (context) => const MainNavigationView(),
                       ),
                       (route) => false,
                     );

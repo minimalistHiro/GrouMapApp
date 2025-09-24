@@ -29,6 +29,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
   String? _listeningUserId;
   ProviderSubscription<dynamic>? _authStateSub; // 未使用化（下位互換のため保持）
   StreamSubscription<User?>? _authSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _storesSub;
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>> _storeRequestDocSubs = {};
 
   @override
   void initState() {
@@ -41,6 +43,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       if (user != null) {
         if (_listeningUserId != user.uid) {
           _listeningUserId = user.uid;
+          print('PendingListener:init -> auth user=${user.uid}');
           _startPendingRequestListener(user.uid);
         }
       } else {
@@ -499,71 +502,123 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     // 既存の購読を解除して再作成
     _cancelPendingRequestListener();
 
-    _pendingRequestSub = FirebaseFirestore.instance
-        .collection('point_requests')
-        .where('userId', isEqualTo: userId)
-        .where('status', isEqualTo: 'pending')
-        .limit(1)
-        .snapshots()
-        .listen((snapshot) async {
-      if (!mounted) return;
-      if (snapshot.docs.isEmpty) return;
-
-      final requestId = snapshot.docs.first.id;
-      // 同一リクエストの重複ナビゲーション防止
-      if (_isNavigatingToConfirmation || _lastHandledRequestId == requestId) {
-        return;
-      }
-
-      _isNavigatingToConfirmation = true;
-      _lastHandledRequestId = requestId;
-
-      try {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => PointRequestConfirmationView(requestId: requestId),
-          ),
-        );
-      } catch (_) {
-      } finally {
-        if (mounted) {
-          _isNavigatingToConfirmation = false;
-        }
-      }
-    });
+    // インデックス不要のフォールバック監視に直接切り替え
+    print('PendingListener:start -> userId=$userId');
+    _startPendingRequestListenerFallback(userId);
 
     // 即時サーバー確認でラグを最小化（スナップショット待ちを回避）
     _checkPendingRequestOnce(userId);
   }
 
+  // 複合インデックス不要のフォールバック監視（stores/point_requests をリアルタイム購読し、
+  // 各 store の user_requests/{userId} を直接監視）
+  void _startPendingRequestListenerFallback(String userId) {
+    // 既存購読の掃除
+    _storesSub?.cancel();
+    for (final sub in _storeRequestDocSubs.values) {
+      sub.cancel();
+    }
+    _storeRequestDocSubs.clear();
+
+    // stores の一覧をリアルタイム購読（親doc未作成でも storeId は取得できる）
+    _storesSub = FirebaseFirestore.instance
+        .collection('stores')
+        .snapshots()
+        .listen((storesSnap) {
+      if (!mounted) return;
+      print('PendingListener:stores snapshot -> count=${storesSnap.docs.length}');
+      // 既に購読済みの storeId を維持しつつ、新規 storeId を追加監視
+      final currentStoreIds = _storeRequestDocSubs.keys.toSet();
+      final incomingStoreIds = storesSnap.docs.map((d) => d.id).toSet();
+      print('PendingListener:current=${currentStoreIds.toList()} incoming=${incomingStoreIds.toList()}');
+
+      // 新規 storeId に対して購読を追加
+      for (final storeId in incomingStoreIds.difference(currentStoreIds)) {
+        final docRef = FirebaseFirestore.instance
+            .collection('point_requests')
+            .doc(storeId)
+            .collection(userId)
+            .doc('request');
+        print('PendingListener:attach doc sub -> path=point_requests/$storeId/$userId/request');
+        final sub = docRef.snapshots().listen((doc) async {
+          if (!mounted) return;
+          print('PendingListener:doc snapshot -> storeId=$storeId exists=${doc.exists}');
+          if (!doc.exists) return;
+          final data = doc.data() as Map<String, dynamic>;
+          final status = (data['status'] ?? '').toString();
+          print('PendingListener:doc data -> status=$status');
+          if (status != 'pending') return;
+          final combinedRequestId = '${storeId}_$userId';
+          if (_isNavigatingToConfirmation || _lastHandledRequestId == combinedRequestId) return;
+
+          _isNavigatingToConfirmation = true;
+          _lastHandledRequestId = combinedRequestId;
+          try {
+            print('PendingListener:navigate -> requestId=$combinedRequestId');
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => PointRequestConfirmationView(requestId: combinedRequestId),
+              ),
+            );
+          } catch (_) {
+          } finally {
+            if (mounted) {
+              _isNavigatingToConfirmation = false;
+            }
+          }
+        });
+        _storeRequestDocSubs[storeId] = sub;
+      }
+
+      // 無くなった storeId の購読を解除
+      for (final removedId in currentStoreIds.difference(incomingStoreIds)) {
+        _storeRequestDocSubs.remove(removedId)?.cancel();
+      }
+    }, onError: (_) {});
+  }
+
   void _cancelPendingRequestListener() {
     _pendingRequestSub?.cancel();
     _pendingRequestSub = null;
+    _storesSub?.cancel();
+    _storesSub = null;
+    for (final sub in _storeRequestDocSubs.values) {
+      sub.cancel();
+    }
+    _storeRequestDocSubs.clear();
+    print('PendingListener:cancelled all subscriptions');
   }
 
   Future<void> _checkPendingRequestOnce(String userId) async {
     if (_isNavigatingToConfirmation) return;
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('point_requests')
-          .where('userId', isEqualTo: userId)
-          .where('status', isEqualTo: 'pending')
-          .limit(1)
-          .get(const GetOptions(source: Source.server));
-
-      if (!mounted || snapshot.docs.isEmpty) return;
-      final requestId = snapshot.docs.first.id;
-
-      if (_lastHandledRequestId == requestId) return;
-      _isNavigatingToConfirmation = true;
-      _lastHandledRequestId = requestId;
-
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => PointRequestConfirmationView(requestId: requestId),
-        ),
-      );
-    } catch (_) {
+      // インデックス不要: すべての storeId を stores から取得し、各 {userId}/request を直接確認
+      final storesSnap = await FirebaseFirestore.instance.collection('stores').get(const GetOptions(source: Source.server));
+      print('PendingOnce:stores -> count=${storesSnap.docs.length}');
+      for (final storeDoc in storesSnap.docs) {
+        final storeId = storeDoc.id;
+        final doc = await FirebaseFirestore.instance
+            .collection('point_requests')
+            .doc(storeId)
+            .collection(userId)
+            .doc('request')
+            .get(const GetOptions(source: Source.server));
+        print('PendingOnce:check -> storeId=$storeId exists=${doc.exists}');
+        if (!doc.exists) continue;
+        final data = doc.data() as Map<String, dynamic>;
+        if ((data['status'] ?? '').toString() != 'pending') continue;
+        final combinedRequestId = '${storeId}_$userId';
+        print('PendingOnce:found pending -> requestId=$combinedRequestId');
+        if (_lastHandledRequestId == combinedRequestId) return;
+        _isNavigatingToConfirmation = true;
+        _lastHandledRequestId = combinedRequestId;
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PointRequestConfirmationView(requestId: combinedRequestId),
+          ),
+        );
+        return;
+      }
     } finally {
       if (mounted) {
         _isNavigatingToConfirmation = false;
@@ -654,28 +709,34 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
           _showLoadingDialog(context);
         }
 
-        final pendingSnapshot = await FirebaseFirestore.instance
-            .collection('point_requests')
-            .where('userId', isEqualTo: user.uid)
-            .where('status', isEqualTo: 'pending')
-            .limit(1)
-            .get();
+        // この構造では storeId 未特定のため、ここでのクエリは行わない
 
         if (context.mounted) {
           print('保留中リクエスト確認ダイアログを閉じる');
           _closeLoadingDialog(context);
         }
 
-        if (pendingSnapshot.docs.isNotEmpty) {
-          final requestId = pendingSnapshot.docs.first.id;
+        // ストア配下を直接確認して pending を検出（point_requests/{storeId}/{userId}/request）
+        final storesSnap = await FirebaseFirestore.instance.collection('point_requests').get();
+        for (final storeDoc in storesSnap.docs) {
+          final storeId = storeDoc.id;
+          final doc = await FirebaseFirestore.instance
+              .collection('point_requests')
+              .doc(storeId)
+              .collection(user.uid)
+              .doc('request')
+              .get();
+          if (!doc.exists) continue;
+          final data = doc.data() as Map<String, dynamic>;
+          if ((data['status'] ?? '').toString() != 'pending') continue;
+          final combinedRequestId = '${storeId}_${user.uid}';
           if (context.mounted) {
             await Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (context) => PointRequestConfirmationView(requestId: requestId),
+                builder: (context) => PointRequestConfirmationView(requestId: combinedRequestId),
               ),
             );
           }
-          // 確認画面へ遷移した場合はここで処理終了（従来処理はスキップ）
           return;
         }
       }

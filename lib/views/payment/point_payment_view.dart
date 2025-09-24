@@ -183,6 +183,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
       final transactionId = await _useUserPoints(
         userId: user.uid,
         storeId: widget.storeId,
+        storeName: store.name,
         points: amount,
         description: 'ポイント支払い',
       );
@@ -263,6 +264,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
   Future<String> _useUserPoints({
     required String userId,
     required String storeId,
+    required String storeName,
     required int points,
     required String description,
   }) async {
@@ -275,7 +277,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         transactionId: transactionId,
         userId: userId,
         storeId: storeId,
-        storeName: '', // 店舗名は別途取得
+        storeName: storeName,
         amount: -points, // 負の値で使用を表現
         status: 'completed',
         paymentMethod: 'points',

@@ -19,6 +19,25 @@ class PointRequestConfirmationView extends ConsumerStatefulWidget {
 class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfirmationView> {
   bool _isProcessing = false;
 
+  // 新しい構造に対応したリクエストストリームを取得
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _getRequestStream() {
+    // requestIdの形式: "storeId_userId"
+    final parts = widget.requestId.split('_');
+    if (parts.length != 2) {
+      return const Stream<DocumentSnapshot<Map<String, dynamic>>>.empty();
+    }
+    
+    final storeId = parts[0];
+    final userId = parts[1];
+    
+    return FirebaseFirestore.instance
+        .collection('point_requests')
+        .doc(storeId)
+        .collection(userId)
+        .doc('request')
+        .snapshots();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -28,10 +47,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         foregroundColor: Colors.white,
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('point_requests')
-            .doc(widget.requestId)
-            .snapshots(),
+        stream: _getRequestStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -43,7 +59,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
 
           final data = snapshot.data!.data()!;
           final String storeId = (data['storeId'] ?? '').toString();
-          final int points = (data['points'] is int) ? data['points'] as int : int.tryParse('${data['points']}') ?? 0;
+          final int points = (data['userPoints'] is int) ? data['userPoints'] as int : int.tryParse('${data['userPoints']}') ?? 0;
           final num amountNum = (data['amount'] is num) ? data['amount'] as num : num.tryParse('${data['amount']}') ?? 0;
           final String status = (data['status'] ?? '').toString();
 
@@ -137,8 +153,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
     });
 
     final String requestId = widget.requestId;
-    final String storeId = (requestData['storeId'] ?? '').toString();
-    final int points = (requestData['points'] is int) ? requestData['points'] as int : int.tryParse('${requestData['points']}') ?? 0;
+    final int points = (requestData['userPoints'] is int) ? requestData['userPoints'] as int : int.tryParse('${requestData['userPoints']}') ?? 0;
 
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -146,7 +161,21 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         throw Exception('ログインが必要です');
       }
 
-      await FirebaseFirestore.instance.collection('point_requests').doc(requestId).update({
+      // 新しい構造に対応：requestIdの形式: "storeId_userId"
+      final parts = requestId.split('_');
+      if (parts.length != 2) {
+        throw Exception('Invalid request ID format');
+      }
+      
+      final storeId = parts[0];
+      final userId = parts[1];
+      
+      await FirebaseFirestore.instance
+          .collection('point_requests')
+          .doc(storeId)
+          .collection(userId)
+          .doc('request')
+          .update({
         'status': accept ? 'accepted' : 'rejected',
         'respondedAt': FieldValue.serverTimestamp(),
         'respondedBy': user.uid,
