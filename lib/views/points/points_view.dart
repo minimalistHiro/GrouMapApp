@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
 import '../../models/point_transaction_model.dart';
-import '../../models/user_point_balance_model.dart';
+import '../../providers/store_provider.dart';
 
 class PointsView extends ConsumerStatefulWidget {
   const PointsView({Key? key}) : super(key: key);
@@ -91,7 +91,7 @@ class _PointsViewState extends ConsumerState<PointsView>
   }
 
   Widget _buildPointsContent(BuildContext context, WidgetRef ref, String userId) {
-    final pointBalance = ref.watch(userPointBalanceProvider(userId));
+    final userPoints = ref.watch(userPointsProvider(userId));
     final transactions = ref.watch(userPointTransactionsProvider(userId));
 
     return Column(
@@ -99,7 +99,7 @@ class _PointsViewState extends ConsumerState<PointsView>
         // ポイント残高カード
         Container(
           padding: const EdgeInsets.all(16.0),
-          child: _buildBalanceCard(context, pointBalance),
+          child: _buildBalanceCard(context, userPoints),
         ),
         
         // タブコンテンツ
@@ -117,7 +117,7 @@ class _PointsViewState extends ConsumerState<PointsView>
     );
   }
 
-  Widget _buildBalanceCard(BuildContext context, AsyncValue<UserPointBalance?> pointBalance) {
+  Widget _buildBalanceCard(BuildContext context, AsyncValue<int> userPoints) {
     return Card(
       elevation: 4,
       child: Padding(
@@ -133,39 +133,15 @@ class _PointsViewState extends ConsumerState<PointsView>
               ),
             ),
             const SizedBox(height: 16),
-            pointBalance.when(
-              data: (balance) {
-                if (balance == null) {
-                  return const Column(
-                    children: [
-                      Text(
-                        '0',
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'ポイントがありません',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  );
-                }
-                return Text(
-                  '${balance.availablePoints}',
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue,
-                  ),
-                );
-              },
+            userPoints.when(
+              data: (points) => Text(
+                '$points',
+                style: const TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue,
+                ),
+              ),
               loading: () => const CircularProgressIndicator(),
               error: (error, _) => const Column(
                 children: [
@@ -189,20 +165,7 @@ class _PointsViewState extends ConsumerState<PointsView>
               ),
             ),
             const SizedBox(height: 8),
-            pointBalance.when(
-              data: (balance) {
-                if (balance == null) return const SizedBox.shrink();
-                return Text(
-                  '総獲得: ${balance.totalPoints}pt | 使用済み: ${balance.usedPoints}pt',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
-                );
-              },
-              loading: () => const SizedBox.shrink(),
-              error: (error, _) => const SizedBox.shrink(),
-            ),
+            const SizedBox.shrink(),
           ],
         ),
       ),
@@ -257,7 +220,7 @@ class _PointsViewState extends ConsumerState<PointsView>
           itemCount: filteredList.length,
           itemBuilder: (context, index) {
             final transaction = filteredList[index];
-            return _buildTransactionItem(transaction);
+            return _buildTransactionItem(ref, transaction);
           },
         );
       },
@@ -279,17 +242,56 @@ class _PointsViewState extends ConsumerState<PointsView>
     );
   }
 
-  Widget _buildTransactionItem(PointTransactionModel transaction) {
+  Widget _buildTransactionItem(WidgetRef ref, PointTransactionModel transaction) {
     final isEarned = transaction.amount > 0;
-    
+    final storeAsync = ref.watch(storeProvider(transaction.storeId));
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8.0),
       child: ListTile(
-        leading: Icon(
-          isEarned ? Icons.add_circle : Icons.remove_circle,
-          color: isEarned ? Colors.green : Colors.red,
+        leading: storeAsync.when(
+          data: (store) {
+            final iconUrl = (store != null && store.images.isNotEmpty) ? store.images.first : null;
+            final avatar = CircleAvatar(
+              backgroundColor: Colors.white,
+              backgroundImage: (iconUrl != null && iconUrl.isNotEmpty)
+                  ? NetworkImage(iconUrl)
+                  : null,
+              child: (iconUrl == null || iconUrl.isEmpty)
+                  ? const Icon(Icons.store, color: Colors.grey)
+                  : null,
+            );
+            return Stack(
+              alignment: Alignment.center,
+              children: [
+                avatar,
+                Positioned(
+                  bottom: -2,
+                  right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isEarned ? Icons.add_circle : Icons.remove_circle,
+                      size: 16,
+                      color: isEarned ? Colors.green : Colors.red,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+          loading: () => const CircleAvatar(child: Icon(Icons.store)),
+          error: (_, __) => const CircleAvatar(child: Icon(Icons.store)),
         ),
-        title: Text(transaction.description ?? 'ポイント取引'),
+        title: storeAsync.when(
+          data: (store) => Text(store?.name ?? transaction.storeName),
+          loading: () => Text(transaction.storeName),
+          error: (_, __) => Text(transaction.storeName),
+        ),
         subtitle: Text(
           '${transaction.createdAt.month}/${transaction.createdAt.day} ${transaction.createdAt.hour}:${transaction.createdAt.minute.toString().padLeft(2, '0')}',
         ),

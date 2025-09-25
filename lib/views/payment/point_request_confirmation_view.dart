@@ -6,6 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/store_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../models/notification_model.dart' as model;
+import '../../services/point_transaction_service.dart';
+import '../stamps/stamp_punch_view.dart';
 
 class PointRequestConfirmationView extends ConsumerStatefulWidget {
   final String requestId;
@@ -170,16 +172,57 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
       final storeId = parts[0];
       final userId = parts[1];
       
-      await FirebaseFirestore.instance
+      // リクエスト更新とユーザーポイント加算を同一トランザクションで実行
+      final FirebaseFirestore db = FirebaseFirestore.instance;
+      final requestRef = db
           .collection('point_requests')
           .doc(storeId)
           .collection(userId)
-          .doc('request')
-          .update({
-        'status': accept ? 'accepted' : 'rejected',
-        'respondedAt': FieldValue.serverTimestamp(),
-        'respondedBy': user.uid,
+          .doc('request');
+      final userRef = db.collection('users').doc(user.uid);
+
+      await db.runTransaction((txn) async {
+        final reqSnap = await txn.get(requestRef);
+        if (!reqSnap.exists) {
+          throw Exception('リクエストが存在しません');
+        }
+
+        final current = (reqSnap.data() ?? const {}) as Map<String, dynamic>;
+        final currentStatus = (current['status'] ?? '').toString();
+
+        // 既に処理済みならスキップ
+        if (currentStatus != 'pending') {
+          return;
+        }
+
+        // リクエストの状態を更新
+        txn.update(requestRef, {
+          'status': accept ? 'accepted' : 'rejected',
+          'respondedAt': FieldValue.serverTimestamp(),
+          'respondedBy': user.uid,
+        });
+
+        // 承認時のみポイント加算（users/{userId}.points）
+        if (accept) {
+          txn.update(userRef, {
+            'points': FieldValue.increment(points),
+          });
+        }
       });
+
+      // 承認時はポイント付与履歴を保存: point_transactions/{storeId}/{userId}/{transactionId}
+      if (accept) {
+        try {
+          final storeDoc = await FirebaseFirestore.instance.collection('stores').doc(storeId).get();
+          final storeName = (storeDoc.data() ?? const {})['name']?.toString() ?? '店舗';
+          await PointTransactionService.createTransaction(
+            storeId: storeId,
+            storeName: storeName,
+            amount: points,
+            description: 'ポイント付与',
+          );
+        } catch (_) {}
+      }
 
       // 店舗側へ通知
       try {
@@ -203,13 +246,17 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
       } catch (_) {}
 
       if (mounted) {
-        Navigator.of(context).pop();
+        final message = accept ? 'ポイント付与を承認しました' : 'ポイント付与を拒否しました';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(accept ? 'ポイント付与を承認しました' : 'ポイント付与を拒否しました'),
-            backgroundColor: accept ? Colors.green : Colors.red,
-          ),
+          SnackBar(content: Text(message), backgroundColor: accept ? Colors.green : Colors.red),
         );
+        if (accept) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => StampPunchView(storeId: storeId),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

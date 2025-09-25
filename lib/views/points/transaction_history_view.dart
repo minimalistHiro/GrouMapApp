@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../stamps/stamp_punch_view.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
 import '../../models/point_transaction_model.dart';
@@ -100,6 +101,7 @@ class TransactionHistoryView extends ConsumerWidget {
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () {
+                // ignore: unused_result
                 ref.refresh(userPointTransactionsProvider(userId));
               },
               child: const Text('再試行'),
@@ -111,8 +113,8 @@ class TransactionHistoryView extends ConsumerWidget {
   }
 
   Widget _buildTransactionItem(BuildContext context, PointTransactionModel transaction) {
-    final isEarned = transaction.points > 0;
-    final isUsed = transaction.points < 0;
+    final isEarned = transaction.amount > 0;
+    // final isUsed = transaction.amount < 0; // 現状未使用
     
     return Card(
       margin: const EdgeInsets.only(bottom: 8.0),
@@ -125,7 +127,7 @@ class TransactionHistoryView extends ConsumerWidget {
           ),
         ),
         title: Text(
-          transaction.description,
+          transaction.description ?? '取引',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
           ),
@@ -141,17 +143,17 @@ class TransactionHistoryView extends ConsumerWidget {
               ),
             ),
             Text(
-              '${transaction.timestamp.month}/${transaction.timestamp.day} '
-              '${transaction.timestamp.hour.toString().padLeft(2, '0')}:'
-              '${transaction.timestamp.minute.toString().padLeft(2, '0')}',
+              '${transaction.createdAt.month}/${transaction.createdAt.day} '
+              '${transaction.createdAt.hour.toString().padLeft(2, '0')}:'
+              '${transaction.createdAt.minute.toString().padLeft(2, '0')}',
               style: const TextStyle(
                 fontSize: 12,
                 color: Colors.grey,
               ),
             ),
-            if (transaction.qrCodeId != null) ...[
+            if (transaction.qrCode != null) ...[
               Text(
-                'QRコード: ${transaction.qrCodeId}',
+                'QRコード: ${transaction.qrCode}',
                 style: const TextStyle(
                   fontSize: 12,
                   color: Colors.blue,
@@ -165,7 +167,7 @@ class TransactionHistoryView extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(
-              '${isEarned ? '+' : ''}${transaction.points}pt',
+              '${isEarned ? '+' : ''}${transaction.amount}pt',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -179,6 +181,23 @@ class TransactionHistoryView extends ConsumerWidget {
                 color: isEarned ? Colors.green : Colors.red,
               ),
             ),
+            const SizedBox(height: 4),
+            if (isEarned && transaction.storeId.isNotEmpty)
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => StampPunchView(storeId: transaction.storeId),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6B35),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                ),
+                child: const Text('受け取る'),
+              ),
           ],
         ),
         onTap: () {
@@ -197,17 +216,34 @@ class TransactionHistoryView extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDetailRow('説明', transaction.description),
-            _buildDetailRow('ポイント', '${transaction.points}pt'),
+            _buildDetailRow('説明', transaction.description ?? ''),
+            _buildDetailRow('ポイント', '${transaction.amount}pt'),
             _buildDetailRow('店舗ID', transaction.storeId),
-            _buildDetailRow('日時', _formatDateTime(transaction.timestamp)),
-            if (transaction.qrCodeId != null)
-              _buildDetailRow('QRコードID', transaction.qrCodeId!),
+            _buildDetailRow('日時', _formatDateTime(transaction.createdAt)),
+            if (transaction.qrCode != null)
+              _buildDetailRow('QRコードID', transaction.qrCode!),
             _buildDetailRow('取引ID', transaction.transactionId),
-            _buildDetailRow('処理済み', transaction.isProcessed ? 'はい' : 'いいえ'),
+            _buildDetailRow('状態', transaction.status),
           ],
         ),
         actions: [
+          if (transaction.amount > 0 && transaction.storeId.isNotEmpty)
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context, rootNavigator: true).pop();
+                Navigator.of(context, rootNavigator: true).push(
+                  MaterialPageRoute(
+                    builder: (_) => StampPunchView(storeId: transaction.storeId),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B35),
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.check_circle),
+              label: const Text('受け取る'),
+            ),
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('閉じる'),

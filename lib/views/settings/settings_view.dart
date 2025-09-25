@@ -11,6 +11,7 @@ import '../coupons/create_coupon_view.dart';
 import '../stores/create_store_view.dart';
 import '../stores/store_list_for_edit_view.dart';
 import '../auth/welcome_view.dart';
+import './profile_edit_view.dart';
 
 class SettingsView extends ConsumerWidget {
   const SettingsView({Key? key}) : super(key: key);
@@ -56,11 +57,6 @@ class SettingsView extends ConsumerWidget {
               icon: Icons.lock,
               title: 'パスワード変更',
               onTap: () => _showPasswordChange(context),
-            ),
-            _buildMenuItem(
-              icon: Icons.email,
-              title: 'メールアドレス変更',
-              onTap: () => _showEmailChange(context),
             ),
           ]),
           
@@ -322,17 +318,9 @@ class SettingsView extends ConsumerWidget {
   }
 
   void _showProfileEdit(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('プロフィール編集'),
-        content: const Text('プロフィール編集機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const ProfileEditView(),
       ),
     );
   }
@@ -353,21 +341,7 @@ class SettingsView extends ConsumerWidget {
     );
   }
 
-  void _showEmailChange(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('メールアドレス変更'),
-        content: const Text('メールアドレス変更機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
-      ),
-    );
-  }
+  
 
   void _showNotificationSettings(BuildContext context) {
     showDialog(

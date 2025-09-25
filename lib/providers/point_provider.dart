@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/point_transaction_model.dart';
@@ -8,6 +9,23 @@ import '../models/qr_code_model.dart';
 // ポイントサービスプロバイダー
 final pointServiceProvider = Provider<FirebaseFirestore>((ref) {
   return FirebaseFirestore.instance;
+});
+
+// users/{uid}.points を残高として取得
+final userPointsProvider = StreamProvider.family<int, String>((ref, userId) {
+  final firestore = ref.watch(pointServiceProvider);
+  return firestore
+      .collection('users')
+      .doc(userId)
+      .snapshots()
+      .map((snapshot) {
+    final data = snapshot.data() ?? {};
+    final value = data['points'];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  });
 });
 
 // ユーザーのポイント残高プロバイダー
@@ -307,18 +325,70 @@ final pointProcessorProvider = Provider<PointProcessor>((ref) {
 // ユーザーのポイント取引履歴プロバイダー
 final userPointTransactionsProvider = StreamProvider.family<List<PointTransactionModel>, String>((ref, userId) {
   final firestore = ref.watch(pointServiceProvider);
-  
-  return firestore
-      .collection('point_transactions')
-      .where('userId', isEqualTo: userId)
-      .orderBy('createdAt', descending: true)
-      .snapshots()
-      .map((snapshot) {
-    return snapshot.docs.map((doc) {
-      return PointTransactionModel.fromJson({
-        ...doc.data(),
-        'transactionId': doc.id,
+
+  final controller = StreamController<List<PointTransactionModel>>();
+  final Map<String, StreamSubscription<QuerySnapshot>> storeSubs = {};
+  StreamSubscription<QuerySnapshot>? storesRootSub;
+
+  void emitCombined() async {
+    // Combine all current snapshots into a single sorted list
+    final List<PointTransactionModel> all = [];
+    await Future.wait(storeSubs.entries.map((e) async {
+      // Read latest once from each subcollection (cache or server)
+      final snap = await firestore
+          .collection('point_transactions')
+          .doc(e.key)
+          .collection(userId)
+          .orderBy('createdAt', descending: true)
+          .get();
+      for (final d in snap.docs) {
+        final data = d.data() as Map<String, dynamic>;
+        all.add(PointTransactionModel.fromJson({
+          ...data,
+          'transactionId': d.id,
+        }));
+      }
+    }));
+    all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    if (!controller.isClosed) controller.add(all);
+  }
+
+  // Watch store ids under point_transactions and attach per-store listeners
+  // 親ドキュメント未作成でも列挙できるよう、stores から storeId を取得
+  storesRootSub = firestore.collection('stores').snapshots().listen((storesSnap) {
+    final incoming = storesSnap.docs.map((d) => d.id).toSet();
+    final current = storeSubs.keys.toSet();
+
+    // Add new store listeners
+    for (final storeId in incoming.difference(current)) {
+      final sub = firestore
+          .collection('point_transactions')
+          .doc(storeId)
+          .collection(userId)
+          .orderBy('createdAt', descending: true)
+          .snapshots()
+          .listen((_) {
+        emitCombined();
       });
-    }).toList();
+      storeSubs[storeId] = sub;
+    }
+
+    // Remove obsolete listeners
+    for (final storeId in current.difference(incoming)) {
+      storeSubs.remove(storeId)?.cancel();
+    }
+
+    // Emit after topology change
+    emitCombined();
   });
+
+  ref.onDispose(() {
+    storesRootSub?.cancel();
+    for (final s in storeSubs.values) {
+      s.cancel();
+    }
+    controller.close();
+  });
+
+  return controller.stream;
 });
