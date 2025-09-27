@@ -1,4 +1,17 @@
 {
+  "name": "Flutter (stable)",
+  "image": "ghcr.io/cirruslabs/flutter:stable",
+  "remoteUser": "vscode",
+  "forwardPorts": [8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "flutter-web",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "postCreateCommand": "flutter doctor -v"
+}
+{
   "name": "Flutter",
   "image": "cirrusci/flutter:stable",
   "forwardPorts": [8080],
