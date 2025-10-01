@@ -32,14 +32,53 @@ class BadgesView extends ConsumerStatefulWidget {
 
 class _BadgesViewState extends ConsumerState<BadgesView> {
   String _selectedCategory = 'すべて';
-  final List<String> _categories = [
-    'すべて',
-    '基礎バッジ',
-    'ジャンル別バッジ',
-  ];
+  List<String> _categories = ['すべて'];
   
   // バッジのロック状態を管理するMap
   final Map<String, bool> _badgeUnlockStates = {};
+
+  // Firestore からバッジを購読
+  Stream<List<BadgeModel>> _badgesStream() {
+    return FirebaseFirestore.instance
+        .collection('badges')
+        .orderBy('requiredValue', descending: false)
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return BadgeModel(
+          id: (data['badgeId'] ?? doc.id).toString(),
+          name: (data['name'] ?? '').toString(),
+          description: (data['description'] ?? '').toString(),
+          // iconUrl または iconPath を許容
+          iconPath: (data['imageUrl'] ?? data['iconUrl'] ?? data['iconPath'] ?? '').toString(),
+          isUnlocked: false,
+          unlockedAt: null,
+          category: (data['category'] ?? '未分類').toString(),
+        );
+      }).toList();
+    });
+  }
+
+  // Firestore: ユーザーの取得済みバッジを購読
+  Stream<Map<String, Map<String, dynamic>>> _userBadgesStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return Stream.value({});
+    }
+    return FirebaseFirestore.instance
+        .collection('user_badges')
+        .doc(user.uid)
+        .collection('badges')
+        .snapshots()
+        .map((snapshot) {
+      final Map<String, Map<String, dynamic>> result = {};
+      for (final doc in snapshot.docs) {
+        result[doc.id] = doc.data();
+      }
+      return result;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,30 +95,59 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // カテゴリフィルター
-          _buildCategoryFilter(),
-          
-          // バッジグリッド
-          Expanded(
-            child: _buildBadgeGrid(),
-          ),
-        ],
+      body: StreamBuilder<List<BadgeModel>>(
+        stream: _badgesStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('バッジ取得に失敗しました: ${snapshot.error}'));
+          }
+
+          final badges = snapshot.data ?? [];
+          // ユーザーバッジを購読して統合
+          return StreamBuilder<Map<String, Map<String, dynamic>>>(
+            stream: _userBadgesStream(),
+            builder: (context, userSnapshot) {
+              final userBadgesMap = userSnapshot.data ?? {};
+
+              // カテゴリをデータから動的生成
+              final categories = <String>{'すべて'}
+                ..addAll(badges.map((b) => b.category).where((c) => c.isNotEmpty));
+
+              if (!categories.contains(_selectedCategory)) {
+                _selectedCategory = 'すべて';
+              }
+              _categories = categories.toList();
+
+              final filteredBadges = _selectedCategory == 'すべて'
+                  ? badges
+                  : badges.where((b) => b.category == _selectedCategory).toList();
+
+              return Column(
+                children: [
+                  _buildCategoryFilter(_categories),
+                  Expanded(child: _buildBadgeGrid(filteredBadges, userBadgesMap)),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
 
-  Widget _buildCategoryFilter() {
+  Widget _buildCategoryFilter(List<String> categories) {
     return Container(
       height: 50,
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _categories.length,
+        itemCount: categories.length,
         itemBuilder: (context, index) {
-          final category = _categories[index];
+          final category = categories[index];
           final isSelected = category == _selectedCategory;
           
           return Padding(
@@ -105,12 +173,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     );
   }
 
-  Widget _buildBadgeGrid() {
-    final badges = _generateSampleBadges();
-    final filteredBadges = _selectedCategory == 'すべて'
-        ? badges
-        : badges.where((badge) => badge.category == _selectedCategory).toList();
-
+  Widget _buildBadgeGrid(List<BadgeModel> badges, Map<String, Map<String, dynamic>> userBadgesMap) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: GridView.builder(
@@ -120,18 +183,29 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
           mainAxisSpacing: 8,
           childAspectRatio: 0.8,
         ),
-        itemCount: filteredBadges.length,
+        itemCount: badges.length,
         itemBuilder: (context, index) {
-          final badge = filteredBadges[index];
-          return _buildBadgeCard(badge);
+          final badge = badges[index];
+          return _buildBadgeCard(badge, userBadgesMap: userBadgesMap);
         },
       ),
     );
   }
 
-  Widget _buildBadgeCard(BadgeModel badge) {
+  Widget _buildBadgeCard(BadgeModel badge, {required Map<String, Map<String, dynamic>> userBadgesMap}) {
     // 現在のロック状態を取得（デフォルトはbadge.isUnlocked）
-    final isCurrentlyUnlocked = _badgeUnlockStates[badge.id] ?? badge.isUnlocked;
+    final isUnlockedFromDB = userBadgesMap.containsKey(badge.id);
+    final isCurrentlyUnlocked = _badgeUnlockStates[badge.id] ?? isUnlockedFromDB;
+
+    // 表示用アイコン（アンロック済みは user_badges の iconUrl/iconPath を優先）
+    String displayIconPath = badge.iconPath;
+    if (isCurrentlyUnlocked) {
+      final data = userBadgesMap[badge.id];
+      final unlockedIcon = (data?['imageUrl'] ?? data?['iconUrl'] ?? data?['iconPath'])?.toString();
+      if (unlockedIcon != null && unlockedIcon.isNotEmpty) {
+        displayIconPath = unlockedIcon;
+      }
+    }
     
     return GestureDetector(
       onTap: () => _showBadgeDetail(context, badge),
@@ -168,7 +242,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
                       ),
               ),
               child: _getBadgeIcon(
-                badge.iconPath,
+                displayIconPath,
                 isUnlocked: isCurrentlyUnlocked,
                 size: 48,
               ),
@@ -220,22 +294,47 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
       );
     }
     
-    // 画像ファイルパスに基づいてアイコンを返す
-    return Image.asset(
-      'assets/images/badges/$iconPath',
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) {
-        // デバッグ用にエラーをコンソールに出力
-        print('画像読み込みエラー: assets/images/badges/$iconPath - $error');
-        return Icon(
-          Icons.star,
-          size: size,
-          color: isUnlocked ? const Color(0xFFFF6B35) : Colors.grey,
-        );
-      },
-    );
+    if (iconPath.isEmpty) {
+      return Icon(
+        Icons.emoji_events,
+        size: size,
+        color: const Color(0xFFFF6B35),
+      );
+    }
+
+    // URL or アセットの両方に対応
+    final isUrl = iconPath.startsWith('http');
+    if (isUrl) {
+      return Image.network(
+        iconPath,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          return Icon(
+            Icons.star,
+            size: size,
+            color: isUnlocked ? const Color(0xFFFF6B35) : Colors.grey,
+          );
+        },
+      );
+    } else {
+      return Image.asset(
+        'assets/images/badges/$iconPath',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) {
+          // デバッグ用にエラーをコンソールに出力
+          print('画像読み込みエラー: assets/images/badges/$iconPath - $error');
+          return Icon(
+            Icons.star,
+            size: size,
+            color: isUnlocked ? const Color(0xFFFF6B35) : Colors.grey,
+          );
+        },
+      );
+    }
   }
 
   void _showBadgeDetail(BuildContext context, BadgeModel badge) {
@@ -310,9 +409,10 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
                 children: [
                   ElevatedButton.icon(
                     onPressed: () async {
-                      await _unlockBadge(badge);
+                      // リクエスト: アンロック押下で user_badges から削除
+                      await _lockBadge(badge);
                       setState(() {
-                        _badgeUnlockStates[badge.id] = true;
+                        _badgeUnlockStates[badge.id] = false;
                       });
                       setDialogState(() {});
                     },
@@ -425,543 +525,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
   }
 
-  List<BadgeModel> _generateSampleBadges() {
-    final badges = <BadgeModel>[];
-    final now = DateTime.now();
-    
-    // 基礎バッジ（16個）
-    badges.addAll([
-      BadgeModel(
-        id: 'hajime_no_ippo',
-        name: 'はじめの一歩',
-        description: '初めてチェックイン',
-        iconPath: 'hajimenoippo_badge_icon.png',
-        isUnlocked: true,
-        unlockedAt: now.subtract(const Duration(days: 30)),
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'san_shoku_course',
-        name: '一日三食コース',
-        description: '同日に3回利用',
-        iconPath: 'san_shoku_course_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'jimoto_ouendan',
-        name: '地元応援団',
-        description: '同じ店舗に10回来店',
-        iconPath: 'jimoto_ouendan_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'hashigo_master',
-        name: 'はしごの達人',
-        description: '同じ日に2店舗以上で利用',
-        iconPath: 'hashigo_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'bouken_sha',
-        name: '冒険者',
-        description: '2市以上で利用',
-        iconPath: 'bouken_sha_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'hayaoki_san',
-        name: '早起きさん',
-        description: '朝7〜9時に来店',
-        iconPath: 'hayaoki_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'yorufukashi_gourmet',
-        name: '夜更かしグルメ',
-        description: '22時以降に来店',
-        iconPath: 'yorufukashi_gourmet_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'weekend_star',
-        name: '週末の主役',
-        description: '土日連続で来店',
-        iconPath: 'weekend_star_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'weekday_lunch_king',
-        name: '平日ランチ王',
-        description: '平日昼（11〜14時）5回利用',
-        iconPath: 'weekday_lunch_king_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'summer_gourmet_trip',
-        name: '夏のグルメ旅',
-        description: '夏に来店（7〜8月）',
-        iconPath: 'summer_gourmet_trip_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'shinshun_start_dash',
-        name: '新春スタートダッシュ',
-        description: '1月に来店',
-        iconPath: 'shinshun_start_dash_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'anniv_half',
-        name: 'ハーフアニバーサリー',
-        description: 'サービス開始半年で来店',
-        iconPath: 'anniv_half_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'anniv_1yr',
-        name: '1周年記念',
-        description: 'サービス開始1周年で来店',
-        iconPath: 'anniv_1yr_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'anniv_2yr',
-        name: '2周年記念',
-        description: 'サービス開始2周年で来店',
-        iconPath: 'anniv_2yr_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'event_participant',
-        name: 'イベント参加者',
-        description: '店舗イベントで来店',
-        iconPath: 'event_participant_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-      BadgeModel(
-        id: 'himitsu_joren',
-        name: '秘密の常連',
-        description: '15〜16時に利用',
-        iconPath: 'himitsu_joren_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: '基礎バッジ',
-      ),
-    ]);
-    
-    // ジャンル別バッジ（レストラン/カフェ/居酒屋/ファストフード/ラーメン/寿司/焼肉/スイーツ/パン/バー）
-    badges.addAll([
-      // レストラン系
-      BadgeModel(
-        id: 'restaurant_debut',
-        name: 'レストランデビュー',
-        description: 'レストランを初めて利用',
-        iconPath: 'restaurant_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'restaurant_hunter',
-        name: 'レストランハンター',
-        description: 'レストランを3店舗利用',
-        iconPath: 'restaurant_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'restaurant_master',
-        name: 'レストランマスター',
-        description: 'レストランを10店舗利用',
-        iconPath: 'restaurant_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'restaurant_complete',
-        name: 'レストランコンプリート',
-        description: 'レストランを30店舗利用',
-        iconPath: 'restaurant_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // カフェ系
-      BadgeModel(
-        id: 'cafe_debut',
-        name: 'カフェデビュー',
-        description: 'カフェを初めて利用',
-        iconPath: 'cafe_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'cafe_hunter',
-        name: 'カフェハンター',
-        description: 'カフェを3店舗利用',
-        iconPath: 'cafe_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'cafe_master',
-        name: 'カフェマスター',
-        description: 'カフェを10店舗利用',
-        iconPath: 'cafe_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'cafe_complete',
-        name: 'カフェコンプリート',
-        description: 'カフェを30店舗利用',
-        iconPath: 'cafe_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // 居酒屋系
-      BadgeModel(
-        id: 'izakaya_debut',
-        name: '居酒屋デビュー',
-        description: '居酒屋を初めて利用',
-        iconPath: 'izakaya_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'izakaya_hunter',
-        name: '居酒屋ハンター',
-        description: '居酒屋を3店舗利用',
-        iconPath: 'izakaya_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'izakaya_master',
-        name: '居酒屋マスター',
-        description: '居酒屋を10店舗利用',
-        iconPath: 'izakaya_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'izakaya_complete',
-        name: '居酒屋コンプリート',
-        description: '居酒屋を30店舗利用',
-        iconPath: 'izakaya_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // ファストフード系
-      BadgeModel(
-        id: 'fastfood_debut',
-        name: 'ファストフードデビュー',
-        description: 'ファストフードを初めて利用',
-        iconPath: 'fastfood_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'fastfood_hunter',
-        name: 'ファストフードハンター',
-        description: 'ファストフードを3店舗利用',
-        iconPath: 'fastfood_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'fastfood_master',
-        name: 'ファストフードマスター',
-        description: 'ファストフードを10店舗利用',
-        iconPath: 'fastfood_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'fastfood_complete',
-        name: 'ファストフードコンプリート',
-        description: 'ファストフードを30店舗利用',
-        iconPath: 'fastfood_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // ラーメン系
-      BadgeModel(
-        id: 'ramen_debut',
-        name: 'ラーメンデビュー',
-        description: 'ラーメン屋を初めて利用',
-        iconPath: 'ramen_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'ramen_hunter',
-        name: 'ラーメンハンター',
-        description: 'ラーメン屋を3店舗利用',
-        iconPath: 'restaurant_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'ramen_master',
-        name: 'ラーメンマスター',
-        description: 'ラーメン屋を10店舗利用',
-        iconPath: 'restaurant_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'ramen_complete',
-        name: 'ラーメンコンプリート',
-        description: 'ラーメン屋を30店舗利用',
-        iconPath: 'restaurant_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // 寿司系
-      BadgeModel(
-        id: 'sushi_debut',
-        name: '寿司デビュー',
-        description: '寿司屋を初めて利用',
-        iconPath: 'sushi_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'sushi_hunter',
-        name: '寿司ハンター',
-        description: '寿司屋を3店舗利用',
-        iconPath: 'sushi_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'sushi_master',
-        name: '寿司マスター',
-        description: '寿司屋を10店舗利用',
-        iconPath: 'sushi_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'sushi_complete',
-        name: '寿司コンプリート',
-        description: '寿司屋を30店舗利用',
-        iconPath: 'sushi_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // 焼肉系
-      BadgeModel(
-        id: 'yakiniku_debut',
-        name: '焼肉デビュー',
-        description: '焼肉店を初めて利用',
-        iconPath: 'yakiniku_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'yakiniku_hunter',
-        name: '焼肉ハンター',
-        description: '焼肉店を3店舗利用',
-        iconPath: 'yakiniku_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'yakiniku_master',
-        name: '焼肉マスター',
-        description: '焼肉店を10店舗利用',
-        iconPath: 'yakiniku_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'yakiniku_complete',
-        name: '焼肉コンプリート',
-        description: '焼肉店を30店舗利用',
-        iconPath: 'yakiniku_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // スイーツ系
-      BadgeModel(
-        id: 'sweets_debut',
-        name: 'スイーツデビュー',
-        description: 'スイーツ店を初めて利用',
-        iconPath: 'sweets_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'sweets_hunter',
-        name: 'スイーツハンター',
-        description: 'スイーツ店を3店舗利用',
-        iconPath: 'sweets_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'sweets_master',
-        name: 'スイーツマスター',
-        description: 'スイーツ店を10店舗利用',
-        iconPath: 'sweets_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'sweets_complete',
-        name: 'スイーツコンプリート',
-        description: 'スイーツ店を30店舗利用',
-        iconPath: 'sweets_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // パン系
-      BadgeModel(
-        id: 'bread_debut',
-        name: 'パンデビュー',
-        description: 'パン屋を初めて利用',
-        iconPath: 'bread_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'bread_hunter',
-        name: 'パンハンター',
-        description: 'パン屋を3店舗利用',
-        iconPath: 'bread_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'bread_master',
-        name: 'パンマスター',
-        description: 'パン屋を10店舗利用',
-        iconPath: 'bread_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'bread_complete',
-        name: 'パンコンプリート',
-        description: 'パン屋を30店舗利用',
-        iconPath: 'bread_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-
-      // バー系
-      BadgeModel(
-        id: 'bar_debut',
-        name: 'バーデビュー',
-        description: 'バーを初めて利用',
-        iconPath: 'bar_debut_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'bar_hunter',
-        name: 'バーハンター',
-        description: 'バーを3店舗利用',
-        iconPath: 'bar_hunter_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'bar_master',
-        name: 'バーマスター',
-        description: 'バーを10店舗利用',
-        iconPath: 'bar_master_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-      BadgeModel(
-        id: 'bar_complete',
-        name: 'バーコンプリート',
-        description: 'バーを30店舗利用',
-        iconPath: 'bar_complete_badge_icon.png',
-        isUnlocked: false,
-        unlockedAt: null,
-        category: 'ジャンル別バッジ',
-      ),
-    ]);
-    
-    return badges;
-  }
+  // 以降、バッジ一覧は Firestore から取得するためローカル生成は不要
 
   // Firestore: バッジを付与（user_badges/{userId}/badges/{badgeId}）
   Future<void> _unlockBadge(BadgeModel badge) async {

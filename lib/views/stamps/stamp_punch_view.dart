@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../main_navigation_view.dart';
+import 'badge_awarded_view.dart';
 
 class StampPunchView extends StatefulWidget {
   final String storeId;
@@ -29,6 +31,9 @@ class _StampPunchViewState extends State<StampPunchView>
   late final AnimationController _animController;
   late final Animation<double> _scaleAnim;
   int? _punchIndex; // 追加されたスタンプのインデックス
+
+  // Newly awarded badges in this session
+  final List<Map<String, dynamic>> _newlyAwardedBadges = [];
 
   @override
   void initState() {
@@ -141,6 +146,9 @@ class _StampPunchViewState extends State<StampPunchView>
           _punchIndex = null;
         });
       }
+
+      // スタンプ更新後にバッジ達成を確認
+      await _checkAndAwardBadges();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -166,21 +174,26 @@ class _StampPunchViewState extends State<StampPunchView>
           child: Row(
             children: [
               Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('閉じる'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _stamps < _maxStamps ? _punchOneStamp : null,
+                child: ElevatedButton(
+                  onPressed: () {
+                    if (_newlyAwardedBadges.isNotEmpty) {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => BadgeAwardedView(badges: List<Map<String, dynamic>>.from(_newlyAwardedBadges)),
+                        ),
+                      );
+                    } else {
+                      Navigator.of(context).pushAndRemoveUntil(
+                        MaterialPageRoute(builder: (_) => const MainNavigationView()),
+                        (route) => false,
+                      );
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF6B35),
                     foregroundColor: Colors.white,
                   ),
-                  icon: const Icon(Icons.check_circle),
-                  label: const Text('もう一つ押印'),
+                  child: Text(_newlyAwardedBadges.isNotEmpty ? '次へ' : '確認'),
                 ),
               ),
             ],
@@ -426,6 +439,83 @@ class _StampPunchViewState extends State<StampPunchView>
         return Icons.menu_book;
       default:
         return Icons.store;
+    }
+  }
+
+  // バッジ達成チェックと付与
+  Future<void> _checkAndAwardBadges() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final firestore = FirebaseFirestore.instance;
+
+      // 全バッジ取得しクライアントで条件フィルタ（データ量が少ない前提）
+      final badgesSnap = await firestore.collection('badges').get();
+
+      final List<Map<String, dynamic>> newlyAwarded = [];
+      for (final doc in badgesSnap.docs) {
+        final data = doc.data();
+        final String type = (data['type'] ?? '').toString();
+        final int requiredValue = (data['requiredValue'] is int)
+            ? data['requiredValue'] as int
+            : int.tryParse((data['requiredValue'] ?? '0').toString()) ?? 0;
+
+        // スタンプ関連のバッジのみ評価（type に 'stamp' を含む or category に 'スタンプ' を含む）
+        final String category = (data['category'] ?? '').toString();
+        final bool isStampRelated =
+            type.toLowerCase().contains('stamp') || category.contains('スタンプ');
+        if (!isStampRelated) continue;
+
+        // 条件達成（現在のスタンプ数 >= 必要値）
+        if (_stamps < requiredValue) continue;
+
+        final String badgeId = (data['badgeId'] ?? doc.id).toString();
+
+        // 既に獲得済みか確認
+        final userBadgeRef = firestore
+            .collection('user_badges')
+            .doc(user.uid)
+            .collection('badges')
+            .doc(badgeId);
+        final userBadgeSnap = await userBadgeRef.get();
+        if (userBadgeSnap.exists) continue;
+
+        // 付与
+        await userBadgeRef.set({
+          'userId': user.uid,
+          'badgeId': badgeId,
+          'unlockedAt': FieldValue.serverTimestamp(),
+          'progress': _stamps,
+          'requiredValue': requiredValue,
+          'isNew': true,
+          // 表示に必要な情報を保存（画像URLを優先）
+          'name': data['name'],
+          'description': data['description'],
+          'category': category,
+          'imageUrl': data['imageUrl'] ?? data['iconUrl'] ?? data['iconPath'],
+        });
+
+        newlyAwarded.add({
+          'id': badgeId,
+          'name': data['name'],
+          'description': data['description'],
+          'category': category,
+          'imageUrl': data['imageUrl'] ?? data['iconUrl'] ?? data['iconPath'],
+        });
+      }
+
+      if (mounted && newlyAwarded.isNotEmpty) {
+        setState(() {
+          _newlyAwardedBadges
+            ..clear()
+            ..addAll(newlyAwarded);
+        });
+      }
+    } catch (e) {
+      // エラーはユーザー表示せずログに留める
+      // ignore: avoid_print
+      print('Badge check failed: $e');
     }
   }
 }
