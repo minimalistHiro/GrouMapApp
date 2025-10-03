@@ -232,6 +232,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           SliverFillRemaining(
             child: TabBarView(
               controller: _tabController,
+              physics: const NeverScrollableScrollPhysics(),
               children: [
                 _buildPostsTab(),
                 _buildCouponsTab(),
