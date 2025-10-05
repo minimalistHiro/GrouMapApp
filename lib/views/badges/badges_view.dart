@@ -394,88 +394,90 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
               ),
             ],
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                badge.description,
-                style: const TextStyle(fontSize: 14),
-              ),
-              const SizedBox(height: 16),
-              // テストボタン
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      // リクエスト: アンロック押下で user_badges から削除
-                      await _lockBadge(badge);
-                      setState(() {
-                        _badgeUnlockStates[badge.id] = false;
-                      });
-                      setDialogState(() {});
-                    },
-                    icon: const Icon(Icons.lock_open, size: 16),
-                    label: const Text('アンロック'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      await _lockBadge(badge);
-                      setState(() {
-                        _badgeUnlockStates[badge.id] = false;
-                      });
-                      setDialogState(() {});
-                    },
-                    icon: const Icon(Icons.lock, size: 16),
-                    label: const Text('ロック'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // 現在の状態表示
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isCurrentlyUnlocked 
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.grey.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: isCurrentlyUnlocked 
-                        ? Colors.green
-                        : Colors.grey,
-                    width: 1,
-                  ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  badge.description,
+                  style: const TextStyle(fontSize: 14),
                 ),
-                child: Row(
+                const SizedBox(height: 16),
+                // テストボタン
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Icon(
-                      isCurrentlyUnlocked ? Icons.check_circle : Icons.lock,
-                      size: 20,
-                      color: isCurrentlyUnlocked ? Colors.green : Colors.grey,
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        // リクエスト: アンロック押下で user_badges から削除
+                        await _lockBadge(badge);
+                        setState(() {
+                          _badgeUnlockStates[badge.id] = false;
+                        });
+                        setDialogState(() {});
+                      },
+                      icon: const Icon(Icons.lock_open, size: 16),
+                      label: const Text('アンロック'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isCurrentlyUnlocked ? 'アンロック済み' : 'ロック中',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: isCurrentlyUnlocked ? Colors.green : Colors.grey,
+                    ElevatedButton.icon(
+                      onPressed: () async {
+                        await _lockBadge(badge);
+                        setState(() {
+                          _badgeUnlockStates[badge.id] = false;
+                        });
+                        setDialogState(() {});
+                      },
+                      icon: const Icon(Icons.lock, size: 16),
+                      label: const Text('ロック'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                // 現在の状態表示
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isCurrentlyUnlocked 
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isCurrentlyUnlocked 
+                          ? Colors.green
+                          : Colors.grey,
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isCurrentlyUnlocked ? Icons.check_circle : Icons.lock,
+                        size: 20,
+                        color: isCurrentlyUnlocked ? Colors.green : Colors.grey,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isCurrentlyUnlocked ? 'アンロック済み' : 'ロック中',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: isCurrentlyUnlocked ? Colors.green : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -493,23 +495,25 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('フィルター'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: _categories.map((category) {
-            return ListTile(
-              title: Text(category),
-              leading: Radio<String>(
-                value: category,
-                groupValue: _selectedCategory,
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCategory = value!;
-                  });
-                  Navigator.of(context).pop();
-                },
-              ),
-            );
-          }).toList(),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: _categories.map((category) {
+              return ListTile(
+                title: Text(category),
+                leading: Radio<String>(
+                  value: category,
+                  groupValue: _selectedCategory,
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedCategory = value!;
+                    });
+                    Navigator.of(context).pop();
+                  },
+                ),
+              );
+            }).toList(),
+          ),
         ),
         actions: [
           TextButton(

@@ -12,6 +12,8 @@ import '../stores/create_store_view.dart';
 import '../stores/store_list_for_edit_view.dart';
 import '../auth/welcome_view.dart';
 import './profile_edit_view.dart';
+import './push_notification_settings_view.dart';
+import './email_notification_settings_view.dart';
 
 class SettingsView extends ConsumerWidget {
   const SettingsView({Key? key}) : super(key: key);
@@ -67,12 +69,12 @@ class SettingsView extends ConsumerWidget {
             _buildMenuItem(
               icon: Icons.notifications,
               title: 'プッシュ通知',
-              onTap: () => _showNotificationSettings(context),
+              onTap: () => _openPushNotificationSettings(context),
             ),
             _buildMenuItem(
               icon: Icons.mail,
               title: 'メール通知',
-              onTap: () => _showEmailNotificationSettings(context),
+              onTap: () => _openEmailNotificationSettings(context),
             ),
           ]),
           
@@ -343,34 +345,18 @@ class SettingsView extends ConsumerWidget {
 
   
 
-  void _showNotificationSettings(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('プッシュ通知設定'),
-        content: const Text('プッシュ通知設定機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+  void _openPushNotificationSettings(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const PushNotificationSettingsView(),
       ),
     );
   }
 
-  void _showEmailNotificationSettings(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('メール通知設定'),
-        content: const Text('メール通知設定機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+  void _openEmailNotificationSettings(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const EmailNotificationSettingsView(),
       ),
     );
   }

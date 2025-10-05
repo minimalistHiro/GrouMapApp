@@ -259,8 +259,8 @@ class HomeView extends ConsumerWidget {
                   );
                 },
                 loading: () => const SizedBox(
-                  width: 70,
-                  height: 70,
+                  width: 60,
+                  height: 60,
                   child: CircularProgressIndicator(
                     color: Color(0xFFFF6B35),
                     strokeWidth: 2,

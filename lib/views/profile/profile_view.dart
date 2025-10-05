@@ -8,8 +8,8 @@ import 'package:http/http.dart' as http;
 import '../../providers/auth_provider.dart';
 import '../../providers/badge_provider.dart';
 import '../../providers/level_provider.dart';
-import 'badges_view.dart';
-import 'level_view.dart';
+import '../badges/badges_view.dart';
+import '../settings/profile_edit_view.dart';
 import '../settings/settings_view.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
@@ -599,20 +599,13 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             },
           ),
           _buildMenuItem(
-            icon: Icons.trending_up,
-            title: 'レベル',
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const LevelView()),
-              );
-            },
-          ),
-          _buildMenuItem(
             icon: Icons.person,
             title: 'プロフィール編集',
             onTap: () {
-              // TODO: プロフィール編集画面へ遷移
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfileEditView()),
+              );
             },
           ),
           _buildMenuItem(

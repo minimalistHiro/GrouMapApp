@@ -37,6 +37,10 @@ class _MapViewState extends ConsumerState<MapView> {
   bool _isShowStoreInfo = false;
   String _selectedStoreUid = '';
   
+  // フィルタ/表示モード
+  bool _showOpenNowOnly = false; // 「営業中のみ」表示
+  bool _categoryMode = false;    // 「ジャンル別」表示（カテゴリーごとにアイコン）
+  
   // デフォルトの座標（東京駅周辺）
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
   
@@ -454,29 +458,57 @@ class _MapViewState extends ConsumerState<MapView> {
   }
 
   // カスタムマーカーアイコンを作成
-  Widget _createCustomMarkerIcon(String flowerType, bool isExpanded) {
+  Widget _createCustomMarkerIcon(String flowerType, bool isExpanded, {String? category}) {
     final double size = isExpanded ? 50.0 : 30.0;
     
     // カスタムアイコンの色とスタイルを決定
     Color markerColor;
     IconData iconData;
-    
-    switch (flowerType) {
-      case 'unvisited': // 未開拓（スタンプ0個）
-        markerColor = Colors.grey[400]!;
-        iconData = Icons.radio_button_unchecked;
-        break;
-      case 'visited': // 開拓中（スタンプ1-9個）
-        markerColor = Colors.orange[600]!;
-        iconData = Icons.radio_button_checked;
-        break;
-      case 'regular': // 常連（スタンプ10個以上）
-        markerColor = Colors.amber[600]!;
-        iconData = Icons.star;
-        break;
-      default:
-        markerColor = Colors.grey[400]!;
-        iconData = Icons.help_outline;
+
+    if (_categoryMode) {
+      // ジャンル別（カテゴリー）モード
+      final String cat = (category ?? '').toString();
+      if (cat.contains('カフェ')) {
+        markerColor = Colors.brown[400]!;
+        iconData = Icons.local_cafe;
+      } else if (cat.contains('レストラン') || cat.contains('食') || cat.contains('グルメ')) {
+        markerColor = Colors.redAccent;
+        iconData = Icons.restaurant;
+      } else if (cat.contains('ショップ') || cat.contains('買') || cat.contains('物')) {
+        markerColor = Colors.purple;
+        iconData = Icons.shopping_bag;
+      } else if (cat.contains('バー') || cat.contains('酒')) {
+        markerColor = Colors.deepPurple;
+        iconData = Icons.wine_bar;
+      } else if (cat.contains('本') || cat.contains('書店') || cat.contains('ブック')) {
+        markerColor = Colors.indigo;
+        iconData = Icons.menu_book;
+      } else if (cat.contains('サービス')) {
+        markerColor = Colors.teal;
+        iconData = Icons.build_circle;
+      } else {
+        markerColor = Colors.blueGrey;
+        iconData = Icons.place;
+      }
+    } else {
+      // 通常（スタンプ状況）モード
+      switch (flowerType) {
+        case 'unvisited': // 未開拓（スタンプ0個）
+          markerColor = Colors.grey[400]!;
+          iconData = Icons.radio_button_unchecked;
+          break;
+        case 'visited': // 開拓中（スタンプ1-9個）
+          markerColor = Colors.orange[600]!;
+          iconData = Icons.radio_button_checked;
+          break;
+        case 'regular': // 常連（スタンプ10個以上）
+          markerColor = Colors.amber[600]!;
+          iconData = Icons.star;
+          break;
+        default:
+          markerColor = Colors.grey[400]!;
+          iconData = Icons.help_outline;
+      }
     }
     
     return Container(
@@ -529,9 +561,14 @@ class _MapViewState extends ConsumerState<MapView> {
 
     // 店舗マーカー
     for (final store in _stores) {
+      // 「営業中のみ」モード時のフィルタ
+      if (_showOpenNowOnly && !_isStoreOpenNow(store)) {
+        continue;
+      }
       final bool isExpanded = _expandedMarkerId == store['id'];
       final String storeId = store['id'];
       final String flowerType = store['flowerType'];
+      final String category = (store['category'] ?? 'その他').toString();
       
       markers.add(
         Marker(
@@ -552,7 +589,7 @@ class _MapViewState extends ConsumerState<MapView> {
               });
               _createMarkers(); // マーカーを再作成してサイズを更新
             },
-            child: _createCustomMarkerIcon(flowerType, isExpanded),
+            child: _createCustomMarkerIcon(flowerType, isExpanded, category: category),
           ),
         ),
       );
@@ -561,6 +598,61 @@ class _MapViewState extends ConsumerState<MapView> {
     setState(() {
       _markers = markers;
     });
+  }
+
+  // 「営業中」かどうかを判定
+  bool _isStoreOpenNow(Map<String, dynamic> store) {
+    try {
+      final businessHours = store['businessHours'];
+      if (businessHours == null || businessHours is! Map) return false;
+
+      // 曜日キーを取得（monday..sunday）
+      const days = [
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+        'sunday',
+      ];
+      final now = DateTime.now();
+      // Dartのweekdayは 1=Mon..7=Sun → 0=Mon..6=Sun に変換
+      final int mondayFirstIndex = now.weekday == 7 ? 6 : now.weekday - 1;
+      final String keyToday = days[mondayFirstIndex];
+      final Map<String, dynamic>? today = (businessHours[keyToday] as Map?)?.cast<String, dynamic>();
+      if (today == null) return false;
+
+      final bool isOpenFlag = today['isOpen'] == true;
+      if (!isOpenFlag) return false;
+
+      final String openStr = (today['open'] ?? '').toString();
+      final String closeStr = (today['close'] ?? '').toString();
+      if (openStr.isEmpty || closeStr.isEmpty) return false;
+
+      int toMinutes(String hhmm) {
+        final parts = hhmm.split(':');
+        if (parts.length != 2) return -1;
+        final h = int.tryParse(parts[0]) ?? 0;
+        final m = int.tryParse(parts[1]) ?? 0;
+        return h * 60 + m;
+      }
+
+      final int openM = toMinutes(openStr);
+      final int closeM = toMinutes(closeStr);
+      if (openM < 0 || closeM < 0) return false;
+
+      final int nowM = now.hour * 60 + now.minute;
+      if (openM <= closeM) {
+        // 同日内
+        return nowM >= openM && nowM < closeM;
+      } else {
+        // 深夜跨ぎ（例: 20:00〜02:00）
+        return nowM >= openM || nowM < closeM;
+      }
+    } catch (_) {
+      return false;
+    }
   }
 
   // 特定の店舗を地図上で選択状態にする
@@ -648,6 +740,8 @@ class _MapViewState extends ConsumerState<MapView> {
           
           // 検索バー
           _buildSearchBar(),
+          // フィルタチップ
+          _buildFilterChips(),
           
           // 拡大されたマーカーオーバーレイ
           if (_isShowStoreInfo) _buildStoreInfoCard(),
@@ -676,42 +770,56 @@ class _MapViewState extends ConsumerState<MapView> {
       bottom: 20,
       left: 20,
       right: 20,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // プロフィール画像
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.black,
-                  width: 2,
+      child: Stack(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
                 ),
-              ),
-              child: ClipOval(
-                child: selectedStore['iconImageUrl']?.isNotEmpty == true
-                    ? Image.network(
-                        selectedStore['iconImageUrl'],
-                        width: 50,
-                        height: 50,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Center(
+              ],
+            ),
+            child: Row(
+              children: [
+                // プロフィール画像
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.black,
+                      width: 2,
+                    ),
+                  ),
+                  child: ClipOval(
+                    child: selectedStore['iconImageUrl']?.isNotEmpty == true
+                        ? Image.network(
+                            selectedStore['iconImageUrl'],
+                            width: 50,
+                            height: 50,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Text(
+                                  selectedStore['name']?.substring(0, 1) ?? '?',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              );
+                            },
+                          )
+                        : Center(
                             child: Text(
                               selectedStore['name']?.substring(0, 1) ?? '?',
                               style: const TextStyle(
@@ -720,147 +828,142 @@ class _MapViewState extends ConsumerState<MapView> {
                                 color: Colors.black87,
                               ),
                             ),
-                          );
-                        },
-                      )
-                    : Center(
-                        child: Text(
-                          selectedStore['name']?.substring(0, 1) ?? '?',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
                           ),
-                        ),
-                      ),
-              ),
-            ),
-            const SizedBox(width: 15),
-            // 店舗情報
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    selectedStore['name'] ?? '店舗名なし',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${selectedStore['category'] ?? 'その他'}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  if (selectedStore['description']?.isNotEmpty == true) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      selectedStore['description'],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  // スタンプ状況表示と店舗詳細ボタンを同じ行に配置
-                  Row(
+                ),
+                const SizedBox(width: 15),
+                // 店舗情報
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // スタンプ状況表示
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _getStampStatusColor(stamps).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _getStampStatusColor(stamps).withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _getStampStatusIcon(stamps),
-                              color: _getStampStatusColor(stamps),
-                              size: 14,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'スタンプ: $stamps/10',
-                              style: TextStyle(
-                                color: _getStampStatusColor(stamps),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
+                      Text(
+                        selectedStore['name'] ?? '店舗名なし',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const Spacer(),
-                      // 店舗詳細ボタン
-                      GestureDetector(
-                        onTap: () {
-                          // 店舗詳細画面へ遷移
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => StoreDetailView(store: selectedStore),
-                            ),
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.blue,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.blue.withOpacity(0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Icons.info_outline,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 6),
-                              const Text(
-                                '店舗詳細',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${selectedStore['category'] ?? 'その他'}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
                         ),
+                      ),
+                      if (selectedStore['description']?.isNotEmpty == true) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          selectedStore['description'],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      // スタンプ状況表示と店舗詳細ボタンを同じ行に配置
+                      Row(
+                        children: [
+                          // スタンプ状況表示
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _getStampStatusColor(stamps).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: _getStampStatusColor(stamps).withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getStampStatusIcon(stamps),
+                                  color: _getStampStatusColor(stamps),
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'スタンプ: $stamps/10',
+                                  style: TextStyle(
+                                    color: _getStampStatusColor(stamps),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Spacer(),
+                          // 店舗詳細ボタン
+                          GestureDetector(
+                            onTap: () {
+                              // 店舗詳細画面へ遷移
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => StoreDetailView(store: selectedStore),
+                                ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.blue,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.blue.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  const Text(
+                                    '店舗詳細',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            // 閉じるボタン
-            GestureDetector(
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: GestureDetector(
               onTap: () {
                 setState(() {
                   _isShowStoreInfo = false;
+                  _expandedMarkerId = '';
                 });
+                _createMarkers();
               },
               child: const Icon(Icons.close),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -908,85 +1011,87 @@ class _MapViewState extends ConsumerState<MapView> {
     );
   }
   
+  // 検索バー下にフィルタ用のチップを表示
+  Widget _buildFilterChips() {
+    final double topY = MediaQuery.of(context).padding.top + 10 + 50 + 10;
+    return Positioned(
+      top: topY,
+      left: 20,
+      right: 90, // 右側は現在位置ボタンと重ならないよう余白
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            FilterChip(
+              label: const Text('営業中のみ'),
+              selected: _showOpenNowOnly,
+              onSelected: (val) {
+                setState(() {
+                  _showOpenNowOnly = val;
+                });
+                _createMarkers();
+              },
+            ),
+            const SizedBox(width: 8),
+            FilterChip(
+              label: const Text('ジャンル別'),
+              selected: _categoryMode,
+              onSelected: (val) {
+                setState(() {
+                  _categoryMode = val;
+                });
+                _createMarkers();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
   
   Widget _buildMapControls() {
+    // 検索バーの右下付近に現在位置ボタンを配置
     return Positioned(
-      bottom: 20,
+      top: MediaQuery.of(context).padding.top + 10 + 50 + 10, // フィルタ列と右で少し重ならない高さ
       right: 20,
-      child: Column(
-        children: [
-          // 現在位置ボタン
-          GestureDetector(
-            onTap: () async {
-              try {
-                await _getCurrentLocation();
-                setState(() {
-                  _expandedMarkerId = '';
-                  _isShowStoreInfo = false;
-                });
-                await _loadUserStamps();
-                _createMarkers();
-              } catch (e) {
-                print('現在位置ボタンタップ時のエラー: $e');
-                // エラーが発生してもマーカーは更新する
-                await _loadUserStamps();
-                _createMarkers();
-              }
-            },
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+      child: GestureDetector(
+        onTap: () async {
+          try {
+            await _getCurrentLocation();
+            setState(() {
+              _expandedMarkerId = '';
+              _isShowStoreInfo = false;
+            });
+            await _loadUserStamps();
+            _createMarkers();
+          } catch (e) {
+            print('現在位置ボタンタップ時のエラー: $e');
+            // エラーが発生してもマーカーは更新する
+            await _loadUserStamps();
+            _createMarkers();
+          }
+        },
+        child: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            color: Colors.black,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
-              child: const Icon(
-                Icons.my_location,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
+            ],
           ),
-          const SizedBox(height: 10),
-          // 閉じるボタン
-          GestureDetector(
-            onTap: () async {
-              setState(() {
-                _expandedMarkerId = '';
-                _isShowStoreInfo = false;
-              });
-              await _loadUserStamps();
-              _createMarkers();
-            },
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.close,
-                color: Colors.white,
-                size: 24,
-              ),
-            ),
+          child: const Icon(
+            Icons.my_location,
+            color: Colors.white,
+            size: 24,
           ),
-        ],
+        ),
       ),
     );
   }
