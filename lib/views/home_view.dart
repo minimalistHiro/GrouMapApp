@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/coupon_provider.dart';
 import '../providers/announcement_provider.dart';
@@ -225,14 +226,16 @@ class HomeView extends ConsumerWidget {
                                   ),
                                 ),
                               )
-                            : Container(
-                                width: 50,
-                                height: 50,
-                                color: Colors.grey[300],
-                                child: const Icon(
-                                  Icons.person,
-                                  size: 30,
-                                  color: Colors.grey,
+                            : ClipOval(
+                                child: Container(
+                                  width: 50,
+                                  height: 50,
+                                  color: Colors.grey[300],
+                                  child: const Icon(
+                                    Icons.person,
+                                    size: 30,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ),
                       ),
@@ -447,12 +450,15 @@ class HomeView extends ConsumerWidget {
           
           const SizedBox(height: 16),
           
-          // ポイントとバッジ数のカード
+          // ポイント、バッジ、総支払額のカード
           ref.watch(userDataProvider(userId)).when(
             data: (userData) {
               if (userData != null) {
                 final points = userData['points'] ?? 0;
                 final badgeCount = userData['badges']?.length ?? 0;
+                final dynamic paidRaw = userData['paid'];
+                final num paidNum = paidRaw is num ? paidRaw : num.tryParse('$paidRaw') ?? 0;
+                final String paidFormatted = NumberFormat.currency(locale: 'ja_JP', symbol: '¥', decimalDigits: 0).format(paidNum);
                 
                 return Container(
                   margin: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -471,7 +477,7 @@ class HomeView extends ConsumerWidget {
                   ),
                   child: Row(
                     children: [
-                      // 左側：ポイント
+                      // 左：ポイント
                       Expanded(
                         child: Row(
                           children: [
@@ -507,14 +513,10 @@ class HomeView extends ConsumerWidget {
                         ),
                       ),
                       
-                      // 中央の区切り線
-                      Container(
-                        width: 1,
-                        height: 40,
-                        color: Colors.grey[300],
-                      ),
+                      // 仕切り
+                      Container(width: 1, height: 40, color: Colors.grey[300]),
                       
-                      // 右側：バッジ数
+                      // 中：バッジ
                       Expanded(
                         child: Row(
                           children: [
@@ -533,6 +535,39 @@ class HomeView extends ConsumerWidget {
                                 ),
                                 const Text(
                                   'バッジ',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      // 仕切り
+                      Container(width: 1, height: 40, color: Colors.grey[300]),
+                      
+                      // 右：総支払額
+                      Expanded(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.receipt_long, color: Colors.green, size: 24),
+                            const SizedBox(width: 12),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  paidFormatted,
+                                  style: const TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const Text(
+                                  '総支払額',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey,

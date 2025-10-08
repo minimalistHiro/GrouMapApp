@@ -11,7 +11,8 @@ import 'profile/profile_view.dart';
 import 'coupons/coupons_view.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
-  const MainNavigationView({Key? key}) : super(key: key);
+  final int initialIndex;
+  const MainNavigationView({Key? key, this.initialIndex = 0}) : super(key: key);
 
   @override
   ConsumerState<MainNavigationView> createState() => _MainNavigationViewState();
@@ -31,6 +32,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     // 初期データ読み込みをフレーム後に実行
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();

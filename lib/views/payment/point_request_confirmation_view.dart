@@ -156,6 +156,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
 
     final String requestId = widget.requestId;
     final int points = (requestData['userPoints'] is int) ? requestData['userPoints'] as int : int.tryParse('${requestData['userPoints']}') ?? 0;
+    final num amountNum = (requestData['amount'] is num) ? requestData['amount'] as num : num.tryParse('${requestData['amount']}') ?? 0;
 
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -206,6 +207,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         if (accept) {
           txn.update(userRef, {
             'points': FieldValue.increment(points),
+            'paid': FieldValue.increment(amountNum), // 総支払額に今回の支払額を加算
           });
         }
       });

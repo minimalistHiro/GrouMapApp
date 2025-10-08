@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import '../models/badge_model.dart';
+import 'level_provider.dart';
 
 // バッジプロバイダー
 final badgeProvider = Provider<BadgeService>((ref) {
@@ -76,7 +77,14 @@ class BadgeService {
         'progress': badge.requiredValue,
         'requiredValue': badge.requiredValue,
         'isNew': true,
+        'rarity': badge.rarity.name, // 正規化済み
       });
+      // XP付与（バッジ獲得時）
+      try {
+        final levelService = LevelService();
+        final xp = levelService.experienceForBadgeByRarity(badge.rarity.name);
+        await levelService.addExperience(userId: userId, experience: xp);
+      } catch (_) {}
       return true;
     } catch (e) {
       debugPrint('Error awarding badge: $e');
@@ -191,7 +199,14 @@ class BadgeService {
             'progress': currentValue,
             'requiredValue': badge.requiredValue,
             'isNew': true,
+            'rarity': badge.rarity.name, // 正規化済み
           });
+          // XP付与（バッジ獲得時）
+          try {
+            final levelService = LevelService();
+            final xp = levelService.experienceForBadgeByRarity(badge.rarity.name);
+            await levelService.addExperience(userId: userId, experience: xp);
+          } catch (_) {}
         }
       }
     } catch (e) {

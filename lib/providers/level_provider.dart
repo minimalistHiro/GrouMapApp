@@ -1,9 +1,7 @@
-import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import '../models/level_model.dart';
-import '../providers/auth_provider.dart';
 
 // レベルプロバイダー
 final levelProvider = Provider<LevelService>((ref) {
@@ -69,6 +67,63 @@ class LevelUpNotifier extends StateNotifier<LevelUpState> {
 
 class LevelService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static const int maxLevel = 100;
+
+  // 1レベルあたりの必要経験値（シンプルに100固定）
+  // UIの進捗表示と整合が取れるよう、各レベル100XPで統一します。
+  int requiredExperienceForLevel(int level) {
+    if (level >= maxLevel) return 0; // 以降は上限
+    return 100;
+  }
+
+  // 指定レベル到達までに必要な累計経験値（レベル1 -> 0, レベル2 -> 100, ...）
+  int totalExperienceToReachLevel(int level) {
+    if (level <= 1) return 0;
+    final cappedLevel = level.clamp(1, maxLevel);
+    return 100 * (cappedLevel - 1);
+  }
+
+  // 累計経験値からレベルを計算（最大100）
+  int levelFromTotalExperience(int totalExperience) {
+    if (totalExperience <= 0) return 1;
+    final level = (totalExperience ~/ 100) + 1;
+    return level > maxLevel ? maxLevel : level;
+  }
+
+  // 現在の累計経験値から次レベルまでに必要な残り経験値
+  int remainingExperienceToNextLevel(int totalExperience) {
+    final currentLevel = levelFromTotalExperience(totalExperience);
+    if (currentLevel >= maxLevel) return 0;
+    final base = totalExperienceToReachLevel(currentLevel + 1);
+    return (base - totalExperience).clamp(0, requiredExperienceForLevel(currentLevel));
+  }
+
+  // 経験値報酬（支払い）: 10ポイント消費ごとに1XP（最低1）
+  int experienceForPayment(int amount) {
+    if (amount <= 0) return 0;
+    final xp = amount ~/ 10;
+    return xp > 0 ? xp : 1;
+  }
+
+  // 経験値報酬（スタンプ押印/コンプリート）
+  int experienceForStampPunch() => 10;
+  int experienceForStampCardComplete() => 100;
+
+  // 経験値報酬（バッジ獲得）
+  int experienceForBadgeByRarity(String? rarity) {
+    switch ((rarity ?? '').toLowerCase()) {
+      case 'legendary':
+        return 1000;
+      case 'epic':
+        return 400;
+      case 'rare':
+        return 150;
+      case 'common':
+        return 50;
+      default:
+        return 50;
+    }
+  }
 
   // ユーザーのレベル情報を取得
   Future<UserLevelModel?> getUserLevel(String userId) async {
@@ -119,6 +174,8 @@ class LevelService {
       
       return await _firestore.runTransaction((transaction) async {
         final snapshot = await transaction.get(userLevelRef);
+        final userDocRef = _firestore.collection('users').doc(userId);
+        final userSnapshot = await transaction.get(userDocRef);
         
         UserLevelModel currentLevel;
         if (snapshot.exists) {
@@ -134,21 +191,39 @@ class LevelService {
           );
         }
 
-        final newTotalPoints = currentLevel.totalPoints + points;
-        final newCurrentPoints = currentLevel.currentPoints + points;
-        
-        // レベルアップをチェック
-        final newLevel = _calculateLevel(newTotalPoints);
-        final levelUp = newLevel > currentLevel.currentLevel;
-        
+        final unclampedTotal = currentLevel.totalPoints + points;
+        final totalPoints = unclampedTotal.clamp(0, totalExperienceToReachLevel(maxLevel) + requiredExperienceForLevel(maxLevel));
+
+        // 新しいレベル（最大100）
+        final newLevel = levelFromTotalExperience(totalPoints);
+
+        // 現在レベル内の経験値（レベル到達に必要な累計を差し引く）
+        final levelBase = totalExperienceToReachLevel(newLevel);
+        final newCurrentPoints = totalPoints - levelBase;
+
         final updatedLevel = currentLevel.copyWith(
           currentLevel: newLevel,
           currentPoints: newCurrentPoints,
-          totalPoints: newTotalPoints,
+          totalPoints: totalPoints,
           lastUpdated: DateTime.now(),
         );
 
         transaction.set(userLevelRef, updatedLevel.toJson());
+
+        // users コレクションにも experience と level を同期
+        int currentUserExperience = 0;
+        if (userSnapshot.exists) {
+          final data = userSnapshot.data() as Map<String, dynamic>;
+          currentUserExperience = (data['experience'] is num) ? (data['experience'] as num).toInt() : 0;
+        }
+        final newUserExperience = (currentUserExperience + points).clamp(0, totalExperienceToReachLevel(maxLevel) + requiredExperienceForLevel(maxLevel));
+        final newUserLevel = levelFromTotalExperience(newUserExperience);
+
+        transaction.set(userDocRef, {
+          'experience': newUserExperience,
+          'level': newUserLevel,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
 
         return updatedLevel;
       });
@@ -160,8 +235,15 @@ class LevelService {
 
   // ポイントからレベルを計算
   int _calculateLevel(int totalPoints) {
-    // レベル計算式: sqrt(points / 100) + 1
-    return math.sqrt(totalPoints / 100).floor() + 1;
+    return levelFromTotalExperience(totalPoints);
+  }
+
+  // エイリアス（可読性のため）
+  Future<UserLevelModel> addExperience({
+    required String userId,
+    required int experience,
+  }) {
+    return addPoints(userId: userId, points: experience);
   }
 
   // レベルアップ報酬を取得

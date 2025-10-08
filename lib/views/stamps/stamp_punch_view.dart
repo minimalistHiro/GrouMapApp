@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
-import '../main_navigation_view.dart';
-import 'badge_awarded_view.dart';
+import 'experience_gained_view.dart';
+import '../../providers/level_provider.dart';
 
 class StampPunchView extends StatefulWidget {
   final String storeId;
@@ -161,6 +161,21 @@ class _StampPunchViewState extends State<StampPunchView>
         });
       }
 
+      // XP付与（スタンプ押印）
+      try {
+        final levelService = LevelService();
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final xp = levelService.experienceForStampPunch();
+          await levelService.addExperience(
+            userId: user.uid,
+            experience: xp,
+          );
+        }
+      } catch (e) {
+        // エラーは無視
+      }
+
       // 事前チェックでボタン文言を更新（保存はしない）
       await _checkAndAwardBadges(save: false);
     } catch (e) {
@@ -195,21 +210,30 @@ class _StampPunchViewState extends State<StampPunchView>
                     try {
                       // 次へ押下時に判定を実行（保存も行う）
                       final awarded = await _checkAndAwardBadges(save: true);
+                      // 確認ボタン押下時に経験値画面へ遷移
+                      int xpShown = 0;
+                      try {
+                        final levelService = LevelService();
+                        xpShown += levelService.experienceForStampPunch();
+                        if (_stamps >= _maxStamps) {
+                          final user = FirebaseAuth.instance.currentUser;
+                          if (user != null) {
+                            final extra = levelService.experienceForStampCardComplete();
+                            await levelService.addExperience(userId: user.uid, experience: extra);
+                            xpShown += extra;
+                          }
+                        }
+                      } catch (_) {}
                       if (!mounted) return;
-                      if (awarded.isNotEmpty) {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => BadgeAwardedView(
-                              badges: List<Map<String, dynamic>>.from(awarded),
-                            ),
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ExperienceGainedView(
+                            gainedExperience: xpShown,
+                            newLevel: null,
+                            badges: awarded.isNotEmpty ? List<Map<String, dynamic>>.from(awarded) : null,
                           ),
-                        );
-                      } else {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const MainNavigationView()),
-                          (route) => false,
-                        );
-                      }
+                        ),
+                      );
                     } finally {
                       if (mounted) setState(() => _submitting = false);
                     }

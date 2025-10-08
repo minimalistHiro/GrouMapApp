@@ -210,10 +210,10 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           _buildStampCard(),
           
           // タブバー
-          SliverToBoxAdapter(
-            child: Container(
-              color: Colors.white,
-              child: TabBar(
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _SliverTabBarDelegate(
+              TabBar(
                 controller: _tabController,
                 labelColor: const Color(0xFFFF6B35),
                 unselectedLabelColor: Colors.grey,
@@ -910,7 +910,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildStoreDetailsTab() {
-    return Container(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2074,5 +2074,30 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         ],
       ),
     );
+  }
+}
+
+class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar _tabBar;
+
+  _SliverTabBarDelegate(this._tabBar);
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Colors.white,
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) {
+    return false;
   }
 }
