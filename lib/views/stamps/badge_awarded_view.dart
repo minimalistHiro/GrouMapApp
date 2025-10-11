@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../main_navigation_view.dart';
 
 class BadgeAwardedView extends StatefulWidget {
@@ -20,7 +19,6 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
   late final Animation<double> _angle;
   int _index = 0;
   final List<Map<String, dynamic>> _displayBadges = <Map<String, dynamic>>[];
-  bool _loadingOwned = true;
 
   @override
   void initState() {
@@ -33,53 +31,30 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
     _angle = Tween<double>(begin: 0.0, end: 6 * math.pi).animate(_curve);
     _spinController.forward();
 
-    _loadOwnedAndFilter();
+    // 画面に渡されたバッジをそのまま表示（既に保存済みかどうかは問わない）
+    final List<Map<String, dynamic>> onlyNew = widget.badges
+        .where((b) => (b['alreadyOwned'] == true) ? false : true)
+        .toList(growable: false);
+    _displayBadges
+      ..clear()
+      ..addAll(_uniqueBadges(onlyNew));
   }
 
-  Future<void> _loadOwnedAndFilter() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        // 未ログインならそのまま全て表示
-        setState(() {
-          _displayBadges
-            ..clear()
-            ..addAll(widget.badges);
-          _loadingOwned = false;
-        });
-        return;
+  List<Map<String, dynamic>> _uniqueBadges(List<Map<String, dynamic>> source) {
+    final Set<String> seen = <String>{};
+    final List<Map<String, dynamic>> result = <Map<String, dynamic>>[];
+    for (final Map<String, dynamic> b in source) {
+      final dynamic rawId = b['badgeId'] ?? b['id'] ?? b['name'] ?? '';
+      final String key = rawId.toString();
+      if (key.isEmpty) {
+        result.add(b);
+        continue;
       }
-
-      final snap = await FirebaseFirestore.instance
-          .collection('user_badges')
-          .doc(user.uid)
-          .collection('badges')
-          .get();
-      final ownedIds = snap.docs.map((d) => d.id).toSet();
-
-      // badgeId または id を優先的に比較
-      final filtered = widget.badges.where((b) {
-        final dynamic rawId = b['badgeId'] ?? b['id'];
-        final badgeId = rawId == null ? '' : rawId.toString();
-        if (badgeId.isEmpty) return true; // id 不明なら除外しない
-        return !ownedIds.contains(badgeId);
-      }).toList(growable: false);
-
-      setState(() {
-        _displayBadges
-          ..clear()
-          ..addAll(filtered);
-        _loadingOwned = false;
-      });
-    } catch (_) {
-      // 失敗時はとりあえず全件表示（ログは省略）
-      setState(() {
-        _displayBadges
-          ..clear()
-          ..addAll(widget.badges);
-        _loadingOwned = false;
-      });
+      if (seen.add(key)) {
+        result.add(b);
+      }
     }
+    return result;
   }
 
   @override
@@ -95,8 +70,14 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
         ..reset()
         ..forward();
     } else {
+      // ProviderScope を再作成して Riverpod のキャッシュをクリアした状態でホームへ
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainNavigationView(initialIndex: 0)),
+        MaterialPageRoute(
+          builder: (_) => ProviderScope(
+            key: UniqueKey(),
+            child: const MainNavigationView(initialIndex: 0),
+          ),
+        ),
         (route) => false,
       );
     }
@@ -127,17 +108,6 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
 
   @override
   Widget build(BuildContext context) {
-    if (_loadingOwned) {
-      return Scaffold(
-        backgroundColor: Colors.black.withOpacity(0.85),
-        body: const SafeArea(
-          child: Center(
-            child: CircularProgressIndicator(color: Colors.white),
-          ),
-        ),
-      );
-    }
-
     if (_displayBadges.isEmpty) {
       return Scaffold(
         backgroundColor: Colors.black.withOpacity(0.85),

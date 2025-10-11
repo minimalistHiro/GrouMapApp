@@ -7,7 +7,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../providers/auth_provider.dart';
 import '../../providers/badge_provider.dart';
-import '../../providers/level_provider.dart';
 import '../badges/badges_view.dart';
 import '../settings/profile_edit_view.dart';
 import '../settings/settings_view.dart';
@@ -488,7 +487,9 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   }
 
   Widget _buildStatsRow(String userId, WidgetRef ref) {
-    final userLevelAsync = ref.watch(userLevelProvider(userId));
+    final userDocAsync = ref.watch(StreamProvider.family<DocumentSnapshot<Map<String, dynamic>>?, String>((ref, uid) {
+      return FirebaseFirestore.instance.collection('users').doc(uid).snapshots();
+    })(userId));
     final newBadgeCountAsync = ref.watch(FutureProvider.family<int, String>((ref, userId) async {
       final badgeService = ref.read(badgeProvider);
       return await badgeService.getNewBadgeCount(userId);
@@ -497,14 +498,18 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // レベル情報
-        userLevelAsync.when(
-          data: (userLevel) => _buildStatItem(
-            icon: Icons.trending_up,
-            label: 'レベル',
-            value: userLevel?.currentLevel.toString() ?? '1',
-            color: Colors.blue,
-          ),
+        // レベル情報（users.level を参照）
+        userDocAsync.when(
+          data: (snap) {
+            final data = snap?.data();
+            final lvl = (data != null && data['level'] is num) ? (data['level'] as num).toInt() : 1;
+            return _buildStatItem(
+              icon: Icons.trending_up,
+              label: 'レベル',
+              value: lvl.toString(),
+              color: Colors.blue,
+            );
+          },
           loading: () => _buildStatItem(
             icon: Icons.trending_up,
             label: 'レベル',

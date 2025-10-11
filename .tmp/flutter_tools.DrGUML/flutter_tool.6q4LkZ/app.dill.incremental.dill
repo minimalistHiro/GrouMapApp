@@ -1,0 +1,12 @@
+
+  (function() {
+    const dart_sdk = require('dart_sdk');
+    const dart_rti = dart_sdk.dart_rti;
+    const dart = dart_sdk.dart;
+    var T = {
+      VoidTobool: () => (T.VoidTobool = dart.constFn(dart_rti.findType("core|bool()")))()
+    };
+    return dart.fn(() => true, T.VoidTobool());
+  }(
+    
+  ))

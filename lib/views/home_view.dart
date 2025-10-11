@@ -175,90 +175,94 @@ class HomeView extends ConsumerWidget {
                       ? 1.0 
                       : (currentLevelExp - (level - 1) * 100) / 100.0;
                   
-                  return Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // 円形の経験値バー
-                      SizedBox(
-                        width: 60,
-                        height: 60,
-                        child: CircularProgressIndicator(
-                          value: progressValue.clamp(0.0, 1.0),
-                          strokeWidth: 4,
-                          backgroundColor: Colors.grey[300],
-                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
-                        ),
-                      ),
-                      // ユーザーアイコン
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFFFF6B35),
-                            width: 2,
+                  return Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        // 円形の経験値バー（周囲に余白を確保）
+                        SizedBox(
+                          width: 64,
+                          height: 64,
+                          child: CircularProgressIndicator(
+                            value: progressValue.clamp(0.0, 1.0),
+                            strokeWidth: 4,
+                            backgroundColor: Colors.grey[300],
+                            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
                           ),
                         ),
-                        child: profileImageUrl != null && profileImageUrl.isNotEmpty
-                            ? ClipOval(
-                                child: Container(
-                                  width: 50,
-                                  height: 50,
-                                  color: Colors.grey[200],
-                                  child: Image.network(
-                                    profileImageUrl,
+                        // ユーザーアイコン
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: const Color(0xFFFF6B35),
+                              width: 2,
+                            ),
+                          ),
+                          child: profileImageUrl != null && profileImageUrl.isNotEmpty
+                              ? ClipOval(
+                                  child: Container(
                                     width: 50,
                                     height: 50,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        width: 50,
-                                        height: 50,
-                                        color: Colors.grey[300],
-                                        child: const Icon(
-                                          Icons.person,
-                                          size: 30,
-                                          color: Colors.grey,
-                                        ),
-                                      );
-                                    },
+                                    color: Colors.grey[200],
+                                    child: Image.network(
+                                      profileImageUrl,
+                                      width: 50,
+                                      height: 50,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          width: 50,
+                                          height: 50,
+                                          color: Colors.grey[300],
+                                          child: const Icon(
+                                            Icons.person,
+                                            size: 30,
+                                            color: Colors.grey,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                )
+                              : ClipOval(
+                                  child: Container(
+                                    width: 50,
+                                    height: 50,
+                                    color: Colors.grey[300],
+                                    child: const Icon(
+                                      Icons.person,
+                                      size: 30,
+                                      color: Colors.grey,
+                                    ),
                                   ),
                                 ),
-                              )
-                            : ClipOval(
-                                child: Container(
-                                  width: 50,
-                                  height: 50,
-                                  color: Colors.grey[300],
-                                  child: const Icon(
-                                    Icons.person,
-                                    size: 30,
-                                    color: Colors.grey,
-                                  ),
-                                ),
+                        ),
+                        // レベル表示（はみ出しを許容してクリップしない）
+                        Positioned(
+                          bottom: -6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF6B35),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'Lv.$level',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
                               ),
-                      ),
-                      // レベル表示
-                      Positioned(
-                        bottom: -5,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF6B35),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            'Lv.$level',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   );
                 },
                 loading: () => const SizedBox(

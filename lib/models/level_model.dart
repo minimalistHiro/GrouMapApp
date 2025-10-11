@@ -18,19 +18,6 @@ class LevelModel with _$LevelModel {
   factory LevelModel.fromJson(Map<String, dynamic> json) => _$LevelModelFromJson(json);
 }
 
-@freezed
-class UserLevelModel with _$UserLevelModel {
-  const factory UserLevelModel({
-    required String userId,
-    required int currentLevel,
-    required int currentPoints,
-    required int totalPoints,
-    required DateTime lastUpdated,
-    @Default(0) int experienceMultiplier,
-  }) = _UserLevelModel;
-
-  factory UserLevelModel.fromJson(Map<String, dynamic> json) => _$UserLevelModelFromJson(json);
-}
 
 extension LevelModelExtension on LevelModel {
   double get progressPercentage {
@@ -47,28 +34,4 @@ extension LevelModelExtension on LevelModel {
   }
 }
 
-extension UserLevelModelExtension on UserLevelModel {
-  int get pointsToNextLevel {
-    // 次のレベルの必要ポイント数を計算
-    final nextLevel = currentLevel + 1;
-    final nextLevelRequired = _calculateRequiredPoints(nextLevel);
-    return nextLevelRequired - currentPoints;
-  }
-
-  double get progressToNextLevel {
-    final currentLevelRequired = _calculateRequiredPoints(currentLevel);
-    final nextLevelRequired = _calculateRequiredPoints(currentLevel + 1);
-    final progress = currentPoints - currentLevelRequired;
-    final total = nextLevelRequired - currentLevelRequired;
-    return (progress / total).clamp(0.0, 1.0);
-  }
-
-  double get currentLevelProgress {
-    return progressToNextLevel;
-  }
-
-  int _calculateRequiredPoints(int level) {
-    // レベルに応じた必要ポイント数を計算（例：レベル^2 * 100）
-    return (level * level * 100).clamp(0, 999999);
-  }
-}
+// UserLevelModel was removed along with user_levels collection usage.

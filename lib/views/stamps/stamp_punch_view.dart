@@ -7,8 +7,9 @@ import '../../providers/level_provider.dart';
 
 class StampPunchView extends StatefulWidget {
   final String storeId;
+  final int? paid; // 支払額（ExperienceGainedView へ受け渡し）
 
-  const StampPunchView({Key? key, required this.storeId}) : super(key: key);
+  const StampPunchView({Key? key, required this.storeId, this.paid}) : super(key: key);
 
   @override
   State<StampPunchView> createState() => _StampPunchViewState();
@@ -28,6 +29,10 @@ class _StampPunchViewState extends State<StampPunchView>
   // User stamp data
   int _stamps = 0;
   static const int _maxStamps = 10;
+
+  // This session flags
+  bool _stampIncrementedThisSession = false;
+  bool _cardCompletedThisSession = false;
 
   // Animation
   late final AnimationController _animController;
@@ -129,7 +134,11 @@ class _StampPunchViewState extends State<StampPunchView>
   }
 
   Future<void> _punchOneStamp() async {
-    if (_stamps >= _maxStamps) return; // 既に満了
+    if (_stamps >= _maxStamps) {
+      _stampIncrementedThisSession = false;
+      _cardCompletedThisSession = false;
+      return; // 既に満了
+    }
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
@@ -146,11 +155,18 @@ class _StampPunchViewState extends State<StampPunchView>
         'lastVisited': FieldValue.serverTimestamp(),
       });
 
+      final before = _stamps;
       final newIndex = _stamps; // 新規に増える場所
       setState(() {
         _stamps = _stamps + 1;
         _punchIndex = newIndex;
       });
+
+      // セッションフラグ更新
+      _stampIncrementedThisSession = true;
+      if (before < _maxStamps && _stamps >= _maxStamps) {
+        _cardCompletedThisSession = true;
+      }
 
       // アニメーション
       await _animController.forward(from: 0.0);
@@ -214,23 +230,39 @@ class _StampPunchViewState extends State<StampPunchView>
                       int xpShown = 0;
                       try {
                         final levelService = LevelService();
-                        xpShown += levelService.experienceForStampPunch();
-                        if (_stamps >= _maxStamps) {
-                          final user = FirebaseAuth.instance.currentUser;
-                          if (user != null) {
-                            final extra = levelService.experienceForStampCardComplete();
-                            await levelService.addExperience(userId: user.uid, experience: extra);
-                            xpShown += extra;
+                        if (_stampIncrementedThisSession) {
+                          xpShown += levelService.experienceForStampPunch();
+                          if (_cardCompletedThisSession) {
+                            final user = FirebaseAuth.instance.currentUser;
+                            if (user != null) {
+                              final extra = levelService.experienceForStampCardComplete();
+                              await levelService.addExperience(userId: user.uid, experience: extra);
+                              xpShown += extra;
+                            }
                           }
                         }
                       } catch (_) {}
                       if (!mounted) return;
+                      final List<Map<String, dynamic>> breakdown = [
+                        if (_stampIncrementedThisSession)
+                          {
+                            'label': 'スタンプ押印',
+                            'xp': LevelService().experienceForStampPunch(),
+                          },
+                        if (_cardCompletedThisSession)
+                          {
+                            'label': 'カードコンプリート',
+                            'xp': LevelService().experienceForStampCardComplete(),
+                          },
+                      ];
                       await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => ExperienceGainedView(
                             gainedExperience: xpShown,
                             newLevel: null,
                             badges: awarded.isNotEmpty ? List<Map<String, dynamic>>.from(awarded) : null,
+                            breakdown: breakdown,
+                            paid: widget.paid,
                           ),
                         ),
                       );
@@ -911,12 +943,12 @@ class _StampPunchViewState extends State<StampPunchView>
   Future<int> _getUserLevel(String userId) async {
     try {
       final doc = await FirebaseFirestore.instance
-          .collection('user_levels')
+          .collection('users')
           .doc(userId)
           .get();
       if (!doc.exists) return 1;
-      final data = doc.data()!;
-      final lvl = data['currentLevel'];
+      final data = doc.data()! as Map<String, dynamic>;
+      final lvl = data['level'];
       return _asInt(lvl);
     } catch (_) {
       return 1;

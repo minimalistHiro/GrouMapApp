@@ -8,11 +8,7 @@ final levelProvider = Provider<LevelService>((ref) {
   return LevelService();
 });
 
-// ユーザーのレベル情報
-final userLevelProvider = FutureProvider.family<UserLevelModel?, String>((ref, userId) async {
-  final levelService = ref.read(levelProvider);
-  return await levelService.getUserLevel(userId);
-});
+// user_levels は廃止方針。ただしモデル型は他所の型整合のため残し、Firestore操作は users のみを使用します。
 
 // レベル一覧
 final levelsProvider = FutureProvider<List<LevelModel>>((ref) async {
@@ -125,23 +121,7 @@ class LevelService {
     }
   }
 
-  // ユーザーのレベル情報を取得
-  Future<UserLevelModel?> getUserLevel(String userId) async {
-    try {
-      final doc = await _firestore
-          .collection('user_levels')
-          .doc(userId)
-          .get();
-
-      if (doc.exists) {
-        return UserLevelModel.fromJson(doc.data()!);
-      }
-      return null;
-    } catch (e) {
-      debugPrint('Error fetching user level: $e');
-      return null;
-    }
-  }
+  // user_levels は廃止。ユーザーレベルの取得は users の level/experience を直接参照してください。
 
   // レベル一覧を取得
   Future<List<LevelModel>> getLevels() async {
@@ -164,59 +144,23 @@ class LevelService {
     }
   }
 
-  // ポイントを追加してレベルアップをチェック
-  Future<UserLevelModel> addPoints({
+  // 経験値を追加（users のみを更新）
+  Future<void> addExperience({
     required String userId,
-    required int points,
+    required int experience,
   }) async {
+    if (experience == 0) return;
     try {
-      final userLevelRef = _firestore.collection('user_levels').doc(userId);
-      
-      return await _firestore.runTransaction((transaction) async {
-        final snapshot = await transaction.get(userLevelRef);
-        final userDocRef = _firestore.collection('users').doc(userId);
+      final userDocRef = _firestore.collection('users').doc(userId);
+      await _firestore.runTransaction((transaction) async {
         final userSnapshot = await transaction.get(userDocRef);
-        
-        UserLevelModel currentLevel;
-        if (snapshot.exists) {
-          currentLevel = UserLevelModel.fromJson(snapshot.data()!);
-        } else {
-          // 新規ユーザーの場合
-          currentLevel = UserLevelModel(
-            userId: userId,
-            currentLevel: 1,
-            currentPoints: 0,
-            totalPoints: 0,
-            lastUpdated: DateTime.now(),
-          );
-        }
-
-        final unclampedTotal = currentLevel.totalPoints + points;
-        final totalPoints = unclampedTotal.clamp(0, totalExperienceToReachLevel(maxLevel) + requiredExperienceForLevel(maxLevel));
-
-        // 新しいレベル（最大100）
-        final newLevel = levelFromTotalExperience(totalPoints);
-
-        // 現在レベル内の経験値（レベル到達に必要な累計を差し引く）
-        final levelBase = totalExperienceToReachLevel(newLevel);
-        final newCurrentPoints = totalPoints - levelBase;
-
-        final updatedLevel = currentLevel.copyWith(
-          currentLevel: newLevel,
-          currentPoints: newCurrentPoints,
-          totalPoints: totalPoints,
-          lastUpdated: DateTime.now(),
-        );
-
-        transaction.set(userLevelRef, updatedLevel.toJson());
-
-        // users コレクションにも experience と level を同期
         int currentUserExperience = 0;
         if (userSnapshot.exists) {
           final data = userSnapshot.data() as Map<String, dynamic>;
           currentUserExperience = (data['experience'] is num) ? (data['experience'] as num).toInt() : 0;
         }
-        final newUserExperience = (currentUserExperience + points).clamp(0, totalExperienceToReachLevel(maxLevel) + requiredExperienceForLevel(maxLevel));
+        final maxTotal = totalExperienceToReachLevel(maxLevel) + requiredExperienceForLevel(maxLevel);
+        final newUserExperience = (currentUserExperience + experience).clamp(0, maxTotal);
         final newUserLevel = levelFromTotalExperience(newUserExperience);
 
         transaction.set(userDocRef, {
@@ -224,12 +168,10 @@ class LevelService {
           'level': newUserLevel,
           'updatedAt': FieldValue.serverTimestamp(),
         }, SetOptions(merge: true));
-
-        return updatedLevel;
       });
     } catch (e) {
-      debugPrint('Error adding points: $e');
-      throw Exception('ポイントの追加に失敗しました');
+      debugPrint('Error adding experience to users: $e');
+      rethrow;
     }
   }
 
@@ -238,13 +180,7 @@ class LevelService {
     return levelFromTotalExperience(totalPoints);
   }
 
-  // エイリアス（可読性のため）
-  Future<UserLevelModel> addExperience({
-    required String userId,
-    required int experience,
-  }) {
-    return addPoints(userId: userId, points: experience);
-  }
+  // user_levels 廃止に伴い addPoints は削除。addExperience のみ使用します。
 
   // レベルアップ報酬を取得
   Future<List<String>> getLevelUpRewards(int newLevel) async {
@@ -265,26 +201,5 @@ class LevelService {
     }
   }
 
-  // ユーザーレベルを初期化
-  Future<UserLevelModel> initializeUserLevel(String userId) async {
-    try {
-      final userLevel = UserLevelModel(
-        userId: userId,
-        currentLevel: 1,
-        currentPoints: 0,
-        totalPoints: 0,
-        lastUpdated: DateTime.now(),
-      );
-
-      await _firestore
-          .collection('user_levels')
-          .doc(userId)
-          .set(userLevel.toJson());
-
-      return userLevel;
-    } catch (e) {
-      debugPrint('Error initializing user level: $e');
-      throw Exception('ユーザーレベルの初期化に失敗しました');
-    }
-  }
+  // initializeUserLevel は廃止。
 }

@@ -28,25 +28,3 @@ Map<String, dynamic> _$$LevelModelImplToJson(_$LevelModelImpl instance) =>
       'rewards': instance.rewards,
       'maxPoints': instance.maxPoints,
     };
-
-_$UserLevelModelImpl _$$UserLevelModelImplFromJson(Map<String, dynamic> json) =>
-    _$UserLevelModelImpl(
-      userId: json['userId'] as String,
-      currentLevel: (json['currentLevel'] as num).toInt(),
-      currentPoints: (json['currentPoints'] as num).toInt(),
-      totalPoints: (json['totalPoints'] as num).toInt(),
-      lastUpdated: DateTime.parse(json['lastUpdated'] as String),
-      experienceMultiplier:
-          (json['experienceMultiplier'] as num?)?.toInt() ?? 0,
-    );
-
-Map<String, dynamic> _$$UserLevelModelImplToJson(
-        _$UserLevelModelImpl instance) =>
-    <String, dynamic>{
-      'userId': instance.userId,
-      'currentLevel': instance.currentLevel,
-      'currentPoints': instance.currentPoints,
-      'totalPoints': instance.totalPoints,
-      'lastUpdated': instance.lastUpdated.toIso8601String(),
-      'experienceMultiplier': instance.experienceMultiplier,
-    };

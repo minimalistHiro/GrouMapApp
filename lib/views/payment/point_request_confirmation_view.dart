@@ -247,7 +247,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         }
       } catch (_) {}
 
-      if (mounted) {
+          if (mounted) {
         final message = accept ? 'ポイント付与を承認しました' : 'ポイント付与を拒否しました';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(message), backgroundColor: accept ? Colors.green : Colors.red),
@@ -255,7 +255,10 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         if (accept) {
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (_) => StampPunchView(storeId: storeId),
+                  builder: (_) => StampPunchView(
+                    storeId: storeId,
+                    paid: (amountNum is int) ? amountNum : amountNum.toInt(),
+                  ),
             ),
           );
         }

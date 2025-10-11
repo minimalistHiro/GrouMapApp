@@ -6,7 +6,7 @@ import '../../providers/qr_token_provider.dart';
 import '../../models/store_model.dart';
 import '../../models/point_transaction_model.dart';
 import 'payment_success_view.dart';
-import '../../providers/level_provider.dart';
+import '../stamps/experience_gained_view.dart';
 
 class PointPaymentView extends ConsumerStatefulWidget {
   final String storeId;
@@ -217,14 +217,17 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
 
       print('ポイント支払い履歴を作成しました: $transactionId');
 
-      // XP付与（支払い金額に応じて）
-      try {
-        final levelService = ref.read(levelProvider);
-        final xp = levelService.experienceForPayment(amount);
-        await levelService.addExperience(userId: user.uid, experience: xp);
-      } catch (e) {
-        // 失敗しても決済フローは続行
-        print('XP付与に失敗: $e');
+      // 経験値獲得画面を表示（支払いによるXPは ExperienceGainedView で付与）
+      if (mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ExperienceGainedView(
+              gainedExperience: 0,
+              breakdown: const [],
+              paid: amount,
+            ),
+          ),
+        );
       }
 
       // 支払い完了画面に遷移
