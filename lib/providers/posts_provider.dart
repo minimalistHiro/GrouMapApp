@@ -65,55 +65,49 @@ class PostModel {
 // 投稿プロバイダー
 final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
   return FirebaseFirestore.instance
-      .collection('posts')
-      .orderBy('createdAt', descending: true)
+      .collectionGroup('posts')
       .limit(50)
       .snapshots()
       .map((snapshot) {
-    return snapshot.docs
-        .where((doc) {
-          final data = doc.data();
-          return data['isActive'] == true;
-        })
-        .map((doc) {
-          return PostModel.fromMap(doc.data(), doc.id);
-        }).toList();
+    final posts = snapshot.docs
+        .map((doc) => PostModel.fromMap(doc.data(), doc.id))
+        .toList();
+
+    // クライアント側フィルタで公開中かつ有効のみを表示（複合インデックス不要化）
+    final filtered = posts.where((p) => p.isActive == true).toList();
+    filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return filtered;
   }).handleError((error) {
-    debugPrint('Error fetching posts: $error');
+    debugPrint('Error fetching posts (collectionGroup): $error');
     return <PostModel>[];
   });
 });
 
 // 特定の店舗の投稿プロバイダー
 final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
-  // インデックスエラーを回避するため、orderByを使わないクエリに変更
   try {
     return FirebaseFirestore.instance
-        .collection('posts')
+        .collectionGroup('posts')
         .where('storeId', isEqualTo: storeId)
-        .where('isActive', isEqualTo: true)
         .limit(20)
         .snapshots()
         .timeout(
           const Duration(seconds: 3),
           onTimeout: (eventSink) {
             debugPrint('Store posts query timed out, returning empty list');
-            // タイムアウト時は空のリストを返す
           },
         )
         .map((snapshot) {
-      final posts = snapshot.docs.map((doc) {
-        return PostModel.fromMap(doc.data(), doc.id);
-      }).toList();
-      
-      // クライアント側でソート（インデックスエラーを回避）
+      final posts = snapshot.docs
+          .map((doc) => PostModel.fromMap(doc.data(), doc.id))
+          .where((p) => p.isActive == true)
+          .toList();
+
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      
-      debugPrint('Store posts loaded successfully: ${posts.length} posts');
+      debugPrint('Store posts (collectionGroup) loaded: ${posts.length} posts');
       return posts;
     }).handleError((error) {
-      debugPrint('Error fetching store posts: $error');
-      // すべてのエラーに対して空のリストを返す
+      debugPrint('Error fetching store posts (collectionGroup): $error');
       return <PostModel>[];
     });
   } catch (e) {
@@ -163,12 +157,11 @@ class PostsService {
   static Future<List<PostModel>> getPosts({int limit = 50}) async {
     try {
       final snapshot = await _firestore
-          .collection('posts')
-          .orderBy('createdAt', descending: true)
+          .collectionGroup('posts')
           .limit(limit)
           .get();
 
-      return snapshot.docs
+      final items = snapshot.docs
           .where((doc) {
             final data = doc.data();
             return data['isActive'] == true;
@@ -176,6 +169,8 @@ class PostsService {
           .map((doc) {
             return PostModel.fromMap(doc.data(), doc.id);
           }).toList();
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return items;
     } catch (e) {
       debugPrint('Error getting posts: $e');
       return [];
@@ -186,13 +181,12 @@ class PostsService {
   static Future<List<PostModel>> getStorePosts(String storeId, {int limit = 20}) async {
     try {
       final snapshot = await _firestore
-          .collection('posts')
+          .collectionGroup('posts')
           .where('storeId', isEqualTo: storeId)
-          .orderBy('createdAt', descending: true)
           .limit(limit)
           .get();
 
-      return snapshot.docs
+      final items = snapshot.docs
           .where((doc) {
             final data = doc.data();
             return data['isActive'] == true;
@@ -200,6 +194,8 @@ class PostsService {
           .map((doc) {
             return PostModel.fromMap(doc.data(), doc.id);
           }).toList();
+      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      return items;
     } catch (e) {
       debugPrint('Error getting store posts: $e');
       return [];

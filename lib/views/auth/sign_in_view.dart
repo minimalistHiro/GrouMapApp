@@ -5,6 +5,7 @@ import '../../widgets/error_dialog.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'user_info_view.dart';
+import 'email_verification_pending_view.dart';
 import '../main_navigation_view.dart';
 
 class SignInView extends ConsumerStatefulWidget {
@@ -38,11 +39,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
         _showErrorDialog(signInNotifier);
       } else if (next == SignInState.success) {
         SuccessSnackBar.show(context, message: 'ログインしました');
-        // ホーム画面に遷移
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainNavigationView()),
-          (route) => false, // すべての前の画面を削除
-        );
+        _navigateAfterSignIn();
       }
     });
 
@@ -243,6 +240,30 @@ class _SignInViewState extends ConsumerState<SignInView> {
       ref.read(signInStateProvider.notifier).signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+      );
+    }
+  }
+
+  Future<void> _navigateAfterSignIn() async {
+    try {
+      final isVerified = await ref.read(authServiceProvider).isEmailVerified();
+      if (!mounted) return;
+      if (isVerified) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const MainNavigationView()),
+          (route) => false,
+        );
+      } else {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const EmailVerificationPendingView()),
+          (route) => false,
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const EmailVerificationPendingView()),
+        (route) => false,
       );
     }
   }

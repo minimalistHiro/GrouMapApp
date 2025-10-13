@@ -5,9 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
-import '../notifications/create_notification_view.dart';
-import '../posts/create_post_view.dart';
-import '../coupons/create_coupon_view.dart';
 import '../stores/create_store_view.dart';
 import '../stores/store_list_for_edit_view.dart';
 import '../auth/welcome_view.dart';
@@ -138,24 +135,7 @@ class SettingsView extends ConsumerWidget {
           
           const SizedBox(height: 24),
           
-          _buildSectionTitle('コンテンツ管理'),
-          _buildSettingsMenu(context, [
-            _buildMenuItem(
-              icon: Icons.announcement,
-              title: '新規お知らせ作成',
-              onTap: () => _showCreateNotification(context),
-            ),
-            _buildMenuItem(
-              icon: Icons.post_add,
-              title: '新規投稿作成',
-              onTap: () => _showCreatePost(context),
-            ),
-            _buildMenuItem(
-              icon: Icons.local_offer,
-              title: '新規クーポン作成',
-              onTap: () => _showCreateCoupon(context),
-            ),
-          ]),
+          // コンテンツ管理（ユーザーアプリでは非表示）
           
           const SizedBox(height: 24),
           
@@ -1101,29 +1081,7 @@ class SettingsView extends ConsumerWidget {
     );
   }
 
-  void _showCreateNotification(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const CreateNotificationView(),
-      ),
-    );
-  }
-
-  void _showCreatePost(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const CreatePostView(),
-      ),
-    );
-  }
-
-  void _showCreateCoupon(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const CreateCouponView(),
-      ),
-    );
-  }
+  // 作成系画面はユーザーアプリからはアクセス不可にするため削除
 
   // 不要なphotoUrlフィールドをクリーンアップする関数（開発用）
   Future<void> _cleanupUnusedPhotoUrl() async {

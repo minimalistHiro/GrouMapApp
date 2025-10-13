@@ -128,6 +128,8 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
         displayName: displayName,
         additionalUserInfo: additionalUserInfo,
       );
+      // 作成後にメール認証メールを送信
+      await _authService.sendEmailVerification();
       state = SignInState.success;
     } catch (e) {
       if (e is AuthException) {
@@ -221,6 +223,12 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
     }
   }
 }
+
+// メール認証関連のユーティリティプロバイダー
+final isEmailVerifiedProvider = FutureProvider<bool>((ref) async {
+  return await ref.read(authServiceProvider).isEmailVerified();
+});
+
 
 // サインイン状態プロバイダー
 final signInStateProvider = StateNotifierProvider<SignInStateNotifier, SignInState>((ref) {

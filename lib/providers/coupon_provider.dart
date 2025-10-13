@@ -15,9 +15,6 @@ final storeCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, s
       .timeout(const Duration(seconds: 5))
       .handleError((error) {
     debugPrint('Store coupons provider error: $error');
-    if (error.toString().contains('permission-denied')) {
-      return <Coupon>[];
-    }
     return <Coupon>[];
   });
 });
@@ -78,24 +75,23 @@ final usedCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, us
 class CouponService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 店舗のクーポン一覧を取得
+  // 店舗のクーポン一覧を取得（店舗側のネスト構造からのみ取得）
   Stream<List<Coupon>> getStoreCoupons(String storeId) {
     try {
       return _firestore
-          .collection('coupons')
+          .collectionGroup('coupons')
           .where('storeId', isEqualTo: storeId)
-          .orderBy('createdAt', descending: true)
           .snapshots()
-          .timeout(const Duration(seconds: 5))
+          .timeout(const Duration(seconds: 8))
           .map((snapshot) {
-        return snapshot.docs
-            .map((doc) {
-              return Coupon.fromFirestore(doc.data(), doc.id);
-            })
-            .where((coupon) => coupon.isActive)
+        final coupons = snapshot.docs
+            .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
+            .where((c) => c.isActive)
             .toList();
+        coupons.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return coupons;
       }).handleError((error) {
-        debugPrint('Error getting store coupons: $error');
+        debugPrint('Error getting store coupons (collectionGroup): $error');
         return <Coupon>[];
       });
     } catch (e) {
@@ -126,43 +122,23 @@ class CouponService {
     }
   }
 
-  // 利用可能なクーポン一覧を取得
+  // 利用可能なクーポン一覧を取得（店舗側のネスト構造からのみ取得）
   Stream<List<Coupon>> getAvailableCoupons(String userId) {
     try {
       return _firestore
-          .collection('coupons')
-          .orderBy('createdAt', descending: true)
+          .collectionGroup('coupons')
           .snapshots()
           .timeout(const Duration(seconds: 10))
           .map((snapshot) {
         final now = DateTime.now();
-        final coupons = <Coupon>[];
-        
-        for (final doc in snapshot.docs) {
-          try {
-            final data = doc.data();
-            debugPrint('Raw coupon data for ${doc.id}: $data');
-            final coupon = Coupon.fromFirestore(data, doc.id);
-            debugPrint('Parsed coupon: ${coupon.title}, isActive: ${coupon.isActive}, validUntil: ${coupon.validUntil}, usedCount: ${coupon.usedCount}, usageLimit: ${coupon.usageLimit}');
-            
-            // アクティブで期限切れでないクーポンのみをフィルタリング
-            if (coupon.isActive && 
-                coupon.validUntil.isAfter(now) && 
-                coupon.usedCount < coupon.usageLimit) {
-              coupons.add(coupon);
-              debugPrint('Added coupon to list: ${coupon.title}');
-            } else {
-              debugPrint('Filtered out coupon: ${coupon.title} - isActive: ${coupon.isActive}, validUntil: ${coupon.validUntil}, usedCount: ${coupon.usedCount}, usageLimit: ${coupon.usageLimit}');
-            }
-          } catch (e) {
-            debugPrint('Error parsing coupon ${doc.id}: $e');
-            // 個別のクーポンのパースエラーは無視して続行
-          }
-        }
-        
-        return coupons;
+        final items = snapshot.docs
+            .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
+            .where((coupon) => coupon.isActive && coupon.validUntil.isAfter(now) && coupon.usedCount < coupon.usageLimit)
+            .toList();
+        items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return items;
       }).handleError((error) {
-        debugPrint('Error getting available coupons: $error');
+        debugPrint('Error getting available coupons (collectionGroup): $error');
         return <Coupon>[];
       });
     } catch (e) {
@@ -192,36 +168,23 @@ class CouponService {
     }
   }
 
-  // 使用済みクーポン一覧を取得
+  // 使用済みクーポン一覧を取得（店舗側のネスト構造からのみ取得）
   Stream<List<Coupon>> getUsedCoupons(String userId) {
     try {
       return _firestore
-          .collection('coupons')
-          .orderBy('createdAt', descending: true)
+          .collectionGroup('coupons')
           .snapshots()
-          .timeout(const Duration(seconds: 5))
+          .timeout(const Duration(seconds: 8))
           .map((snapshot) {
-        final coupons = <Coupon>[];
-        
-        for (final doc in snapshot.docs) {
-          try {
-            final data = doc.data();
-            final usedBy = data['usedBy'] as List<dynamic>? ?? [];
-            
-            // usedByにuserIdが含まれているクーポンのみを取得
-            if (usedBy.contains(userId)) {
-              final coupon = Coupon.fromFirestore(data, doc.id);
-              coupons.add(coupon);
-            }
-          } catch (e) {
-            debugPrint('Error parsing used coupon ${doc.id}: $e');
-            // 個別のクーポンのパースエラーは無視して続行
-          }
-        }
-        
-        return coupons;
+        final items = snapshot.docs
+            .map((doc) => doc.data())
+            .where((data) => (data['usedBy'] as List<dynamic>? ?? []).contains(userId))
+            .map((data) => Coupon.fromFirestore(data, data['couponId'] ?? ''))
+            .toList();
+        items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return items;
       }).handleError((error) {
-        debugPrint('Error getting used coupons: $error');
+        debugPrint('Error getting used coupons (collectionGroup): $error');
         return <Coupon>[];
       });
     } catch (e) {

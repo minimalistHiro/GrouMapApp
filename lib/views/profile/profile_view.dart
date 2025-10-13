@@ -10,7 +10,6 @@ import '../../providers/badge_provider.dart';
 import '../badges/badges_view.dart';
 import '../settings/profile_edit_view.dart';
 import '../settings/settings_view.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({Key? key}) : super(key: key);
@@ -622,19 +621,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 context,
                 MaterialPageRoute(builder: (context) => const SettingsView()),
               );
-            },
-          ),
-          _buildMenuItem(
-            icon: Icons.logout,
-            title: 'ログアウト',
-            onTap: () async {
-              try {
-                await FirebaseAuth.instance.signOut();
-              } catch (_) {}
-              // 新規作成せず既存スタックに戻る（WelcomeView が下層にある想定）
-              if (context.mounted) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              }
             },
           ),
           _buildMenuItem(

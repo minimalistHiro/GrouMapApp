@@ -5,7 +5,7 @@ import '../../widgets/error_dialog.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'sign_in_view.dart';
-import '../main_navigation_view.dart';
+import 'email_verification_pending_view.dart';
 
 class SignUpView extends ConsumerStatefulWidget {
   final Map<String, dynamic>? userInfo;
@@ -42,11 +42,11 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
       if (next == SignInState.error) {
         _showErrorDialog(signInNotifier);
       } else if (next == SignInState.success) {
-        SuccessSnackBar.show(context, message: 'アカウントを作成しました');
-        // ホーム画面に遷移
+        SuccessSnackBar.show(context, message: 'アカウントを作成しました。メールを確認してください');
+        // 認証保留画面に遷移
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainNavigationView()),
-          (route) => false, // すべての前の画面を削除
+          MaterialPageRoute(builder: (context) => const EmailVerificationPendingView()),
+          (route) => false,
         );
       }
     });

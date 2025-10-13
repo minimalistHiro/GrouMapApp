@@ -196,6 +196,54 @@ class AuthService {
     });
   }
 
+  // メール認証メールを送信
+  Future<void> sendEmailVerification() async {
+    return await _retryOperation(() async {
+      try {
+        final user = _auth.currentUser;
+        if (user == null) {
+          throw Exception('ユーザーがログインしていません');
+        }
+        if (user.emailVerified) {
+          return; // 既に認証済み
+        }
+        await user.sendEmailVerification();
+      } catch (e) {
+        debugPrint('Send email verification error: $e');
+        throw _handleAuthError(e, 'メール認証メール送信');
+      }
+    });
+  }
+
+  // メール認証状態を確認
+  Future<bool> isEmailVerified() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return false;
+      await user.reload();
+      return _auth.currentUser?.emailVerified ?? false;
+    } catch (e) {
+      debugPrint('Check email verified error: $e');
+      return false;
+    }
+  }
+
+  // Firestore上のメール認証状態を更新
+  Future<void> updateEmailVerificationStatus(bool isVerified) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+      await _firestore.collection('users').doc(user.uid).set({
+        'emailVerified': isVerified,
+        'emailVerifiedAt': isVerified ? FieldValue.serverTimestamp() : null,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('Update email verification status error: $e');
+      // 非致命的
+    }
+  }
+
   // アカウント削除
   Future<void> deleteAccount() async {
     return await _retryOperation(() async {
@@ -250,6 +298,7 @@ class AuthService {
         'isOwner': false, // デフォルトで一般ユーザー
         'points': 0, // 初期ポイント
         'totalPoints': 0, // 総ポイント（ランキング用）
+        'pointReturnRate': 1.0, // ポイント還元率（初期値 1.0%）
         'paid': 0, // 初期支払額
         'rank': 'ブロンズ', // 初期ランク
         'currentLevel': 1, // 現在のレベル

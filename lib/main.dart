@@ -7,6 +7,7 @@ import 'firebase_options.dart';
 import 'views/home_view.dart';
 import 'views/auth/sign_in_view.dart';
 import 'views/auth/sign_up_view.dart';
+import 'views/auth/email_verification_pending_view.dart';
 import 'views/main_navigation_view.dart';
 import 'providers/auth_provider.dart';
 
@@ -120,8 +121,11 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
     return authState.when(
       data: (user) {
         if (user != null) {
-          debugPrint('AuthWrapper: User logged in, showing MainNavigationView');
-          // ログイン済みの場合はメインナビゲーション画面を表示
+          // メール認証が未完了の場合は保留画面へ
+          if (!(user.emailVerified)) {
+            return const EmailVerificationPendingView();
+          }
+          // ログイン済みかつ認証済みの場合はメインへ
           return const MainNavigationView();
         } else {
           debugPrint('AuthWrapper: User not logged in, showing HomeView');

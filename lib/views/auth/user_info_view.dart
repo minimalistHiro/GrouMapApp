@@ -7,6 +7,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'sign_up_view.dart';
+import '../../providers/auth_provider.dart';
+import '../main_navigation_view.dart';
 
 class UserInfoView extends ConsumerStatefulWidget {
   const UserInfoView({Key? key}) : super(key: key);
@@ -831,7 +833,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
     }
   }
 
-  void _handleNext() {
+  void _handleNext() async {
     // 生年月日のバリデーション
     if (_selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -855,6 +857,17 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
         'profileImageUrl': _profileImageUrl, // プロフィール画像URLを追加
       };
       
+      // すでにログイン済みかつメール認証済みの場合は、直接メイン画面へ遷移
+      try {
+        final isVerified = await ref.read(authServiceProvider).isEmailVerified();
+        if (isVerified && mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (context) => const MainNavigationView()),
+          );
+          return;
+        }
+      } catch (_) {}
+
       // 次の画面（サインアップ画面）に遷移
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
