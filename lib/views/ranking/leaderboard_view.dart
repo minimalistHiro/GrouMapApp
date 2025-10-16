@@ -34,7 +34,7 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
-              ref.read(rankingNotifierProvider.notifier).loadRanking(query);
+              ref.read(rankingNotifierProvider.notifier).refresh(query);
             },
           ),
         ],
@@ -72,7 +72,7 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
                     CustomButton(
                       text: '再試行',
                       onPressed: () {
-                        ref.read(rankingNotifierProvider.notifier).loadRanking(query);
+                        ref.read(rankingNotifierProvider.notifier).refresh(query);
                       },
                     ),
                   ],

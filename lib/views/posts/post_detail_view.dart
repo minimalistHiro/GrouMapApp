@@ -479,61 +479,64 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   Widget _buildPostInfo() {
     return Container(
       color: Colors.white,
-      child: Column(
-        children: [
-          // いいね・コメント・シェアボタン
-          _buildActionButtons(),
-          
-          // いいね数
-          if (_likeCount > 0)
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          children: [
+            // いいね・コメント・シェアボタン
+            _buildActionButtons(),
+            
+            // いいね数
+            if (_likeCount > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.favorite, color: Colors.red, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$_likeCount件のいいね',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            
+            const SizedBox(height: 8),
+            
+            // 投稿内容
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.favorite, color: Colors.red, size: 16),
-                  const SizedBox(width: 4),
+                  // タイトル
                   Text(
-                    '$_likeCount件のいいね',
+                    widget.post.title,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 16,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  
+                  // 本文
+                  Text(
+                    widget.post.content,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // コメントセクション
+                  _buildCommentsSection(),
                 ],
               ),
             ),
-          
-          const SizedBox(height: 8),
-          
-          // 投稿内容
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // タイトル
-                Text(
-                  widget.post.title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                
-                // 本文
-                Text(
-                  widget.post.content,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 16),
-                
-                // コメントセクション
-                _buildCommentsSection(),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

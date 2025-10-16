@@ -1,0 +1,16 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "usedBy",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+

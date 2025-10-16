@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:async';
 import '../../providers/coupon_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/posts_provider.dart';
@@ -187,23 +188,6 @@ class CouponsView extends ConsumerWidget {
   }
 
   Widget _buildPostCard(BuildContext context, WidgetRef ref, PostModel post) {
-    // 作成日の表示用フォーマット
-    String formatDate() {
-      try {
-        final date = post.createdAt;
-        final now = DateTime.now();
-        final difference = now.difference(date).inDays;
-        
-        if (difference == 0) return '今日';
-        if (difference == 1) return '昨日';
-        if (difference < 7) return '${difference}日前';
-        
-        return '${date.month}月${date.day}日';
-      } catch (e) {
-        return '日付不明';
-      }
-    }
-
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -345,7 +329,7 @@ class CouponsView extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          formatDate(),
+                          _formatPostDate(post.createdAt),
                           style: const TextStyle(
                             fontSize: 8,
                             color: Colors.grey,
@@ -454,6 +438,7 @@ class CouponsView extends ConsumerWidget {
 
   Widget _buildUsedCoupons(BuildContext context, WidgetRef ref, String userId) {
     final usedCoupons = ref.watch(usedCouponsProvider(userId));
+    final timedOut = ref.watch(_usedCouponsTimedOutProvider);
 
     return usedCoupons.when(
       data: (coupons) {
@@ -489,7 +474,29 @@ class CouponsView extends ConsumerWidget {
           ),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () {
+        if (!timedOut) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.schedule, size: 48, color: Colors.grey),
+              const SizedBox(height: 12),
+              const Text('読み込みがタイムアウトしました'),
+              const SizedBox(height: 8),
+              CustomButton(
+                text: '再試行',
+                onPressed: () {
+                  ref.invalidate(_usedCouponsTimedOutProvider);
+                  ref.invalidate(usedCouponsProvider(userId));
+                },
+              ),
+            ],
+          ),
+        );
+      },
       error: (error, _) => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -868,7 +875,7 @@ class CouponsView extends ConsumerWidget {
               width: double.infinity,
               child: CustomButton(
                 text: 'クーポンを取得',
-                onPressed: () => _obtainCoupon(context, ref, coupon.id, userId),
+                onPressed: () => _obtainCoupon(context, ref, coupon.id, coupon.storeId, userId),
               ),
             ),
           ],
@@ -1352,10 +1359,26 @@ class CouponsView extends ConsumerWidget {
   String _formatDate(DateTime date) {
     return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
   }
-
-  void _obtainCoupon(BuildContext context, WidgetRef ref, String couponId, String userId) async {
+  
+  String _formatPostDate(DateTime date) {
+    // Post用の日付フォーマット
     try {
-      await ref.read(couponProvider).obtainCoupon(userId, couponId);
+      final now = DateTime.now();
+      final difference = now.difference(date).inDays;
+      
+      if (difference == 0) return '今日';
+      if (difference == 1) return '昨日';
+      if (difference < 7) return '${difference}日前';
+      
+      return '${date.month}月${date.day}日';
+    } catch (e) {
+      return '日付不明';
+    }
+  }
+
+  void _obtainCoupon(BuildContext context, WidgetRef ref, String couponId, String storeId, String userId) async {
+    try {
+      await ref.read(couponProvider).obtainCoupon(userId, couponId, storeId);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('クーポンを取得しました！')),
       );
@@ -1466,3 +1489,21 @@ class CouponsView extends ConsumerWidget {
     );
   }
 }
+
+// Usedタブの無限ローディング対策: 一定時間でタイムアウト表示に切り替える
+final _usedCouponsTimedOutProvider = StateProvider.autoDispose<bool>((ref) {
+  final controller = StreamController<bool>();
+  Timer(const Duration(seconds: 10), () {
+    try {
+      controller.add(true);
+    } catch (_) {}
+  });
+  final sub = controller.stream.listen((value) {
+    ref.controller.state = value;
+  });
+  ref.onDispose(() {
+    sub.cancel();
+    controller.close();
+  });
+  return false;
+});

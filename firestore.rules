@@ -17,12 +17,30 @@ service cloud.firestore {
       allow write: if request.auth != null;
     }
     
-    // クーポンコレクションのルール
+    // クーポンコレクションのルール（ルートレベル - 後方互換性のため保持）
     match /coupons/{couponId} {
       // 認証されたユーザーは読み取り可能
       allow read: if request.auth != null;
       // 管理者のみ書き込み可能（必要に応じて調整）
       allow write: if request.auth != null;
+      
+      // ネストされたクーポン: coupons/{storeId}/coupons/{couponId}
+      match /coupons/{nestedCouponId} {
+        // 認証されたユーザーは読み取り可能
+        allow read: if request.auth != null;
+        // 認証されたユーザーは書き込み可能（クーポン使用のため）
+        allow write: if request.auth != null;
+        
+        // クーポン使用履歴: coupons/{storeId}/coupons/{couponId}/usedBy/{userId}
+        match /usedBy/{userId} {
+          // 認証されたユーザーは読み取り可能
+          allow read: if request.auth != null;
+          // 認証されたユーザーは自分の使用履歴を作成可能
+          allow create: if request.auth != null && request.auth.uid == userId;
+          // 更新・削除は禁止
+          allow update, delete: if false;
+        }
+      }
     }
     
     // 通知コレクションのルール

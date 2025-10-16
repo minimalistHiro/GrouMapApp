@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,29 +24,55 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   void initState() {
     super.initState();
     _checkIfUsed();
+    _incrementViewCount();
   }
 
   // クーポンを既に使用しているかチェック
   Future<void> _checkIfUsed() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        debugPrint('User not logged in');
+        return;
+      }
 
-      final couponDoc = await FirebaseFirestore.instance
+      debugPrint('Checking coupon usage: storeId=${widget.coupon.storeId}, couponId=${widget.coupon.id}');
+      
+      // usedByサブコレクションからユーザーのドキュメントを確認
+      final usedByDoc = await FirebaseFirestore.instance
+          .collection('coupons')
+          .doc(widget.coupon.storeId)
           .collection('coupons')
           .doc(widget.coupon.id)
+          .collection('usedBy')
+          .doc(user.uid)
           .get();
 
-      if (couponDoc.exists) {
-        final data = couponDoc.data() as Map<String, dynamic>;
-        final usedBy = data['usedBy'] as List<dynamic>? ?? [];
-        
-        setState(() {
-          _isUsed = usedBy.contains(user.uid);
-        });
-      }
+      debugPrint('Coupon used by current user: ${usedByDoc.exists}');
+      
+      setState(() {
+        _isUsed = usedByDoc.exists;
+      });
     } catch (e) {
-      print('クーポン使用状態確認エラー: $e');
+      debugPrint('クーポン使用状態確認エラー: $e');
+    }
+  }
+
+  // クーポン詳細を開いた際に閲覧数をインクリメント
+  Future<void> _incrementViewCount() async {
+    try {
+      final couponRef = FirebaseFirestore.instance
+          .collection('coupons')
+          .doc(widget.coupon.storeId)
+          .collection('coupons')
+          .doc(widget.coupon.id);
+
+      await couponRef.update({
+        'viewCount': FieldValue.increment(1),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('Failed to increment coupon viewCount: $e');
     }
   }
 
@@ -53,7 +80,10 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   Future<void> _useCoupon() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        debugPrint('User not logged in');
+        return;
+      }
 
       setState(() {
         _isUsing = true;
@@ -68,37 +98,62 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         return;
       }
 
-      // クーポンのusedByリストにユーザーIDを追加
-      await FirebaseFirestore.instance
+      debugPrint('Using coupon: storeId=${widget.coupon.storeId}, couponId=${widget.coupon.id}, userId=${user.uid}');
+
+      // usedByサブコレクションにユーザー情報を追加
+      final couponRef = FirebaseFirestore.instance
           .collection('coupons')
-          .doc(widget.coupon.id)
-          .update({
-        'usedBy': FieldValue.arrayUnion([user.uid]),
-        'usageCount': FieldValue.increment(1),
+          .doc(widget.coupon.storeId)
+          .collection('coupons')
+          .doc(widget.coupon.id);
+      
+      // サブコレクションにユーザーIDをドキュメントとして追加
+      await couponRef
+          .collection('usedBy')
+          .doc(user.uid)
+          .set({
+        'userId': user.uid,
+        'usedAt': FieldValue.serverTimestamp(),
+        'couponId': widget.coupon.id,
+        'storeId': widget.coupon.storeId,
       });
+      
+      // 使用回数をインクリメント
+      await couponRef.update({
+        'usedCount': FieldValue.increment(1),
+      });
+
+      debugPrint('Coupon used successfully');
 
       setState(() {
         _isUsed = true;
         _isUsing = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('クーポンを使用しました！'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('クーポンを使用しました！'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     } catch (e) {
+      debugPrint('クーポン使用エラー: $e');
+      
       setState(() {
         _isUsing = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('エラー: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('エラー: クーポンが見つかりませんでした。\n詳細: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     }
   }
 

@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+  import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
@@ -9,55 +9,82 @@ final rankingProvider = Provider<RankingService>((ref) {
   return RankingService();
 });
 
-// ランキング状態管理
-class RankingNotifier extends StateNotifier<AsyncValue<List<RankingModel>>> {
+// ランキング状態管理（クエリ別に状態を管理）
+class RankingNotifier extends StateNotifier<Map<String, AsyncValue<List<RankingModel>>>> {
   final RankingService _rankingService;
-  RankingQuery? _lastQuery;
   
-  RankingNotifier(this._rankingService) : super(const AsyncValue.loading());
+  RankingNotifier(this._rankingService) : super({});
   
   Future<void> loadRanking(RankingQuery query) async {
-    // 同じクエリの場合は再読み込みしない
-    if (_lastQuery != null && 
-        _lastQuery!.type == query.type && 
-        _lastQuery!.period == query.period &&
-        _lastQuery!.limit == query.limit) {
-      return;
-    }
+    final queryKey = _getQueryKey(query);
     
-    _lastQuery = query;
     debugPrint('RankingNotifier: Loading ranking for ${query.type}, ${query.period}');
     
-    state = const AsyncValue.loading();
+    // このクエリの状態をローディングに設定
+    state = {
+      ...state,
+      queryKey: const AsyncValue.loading(),
+    };
     
     try {
       final data = await _rankingService.getRankingDataOnce(query);
       debugPrint('RankingNotifier: Loaded ${data.length} ranking items');
-      state = AsyncValue.data(data);
+      
+      // データを更新
+      state = {
+        ...state,
+        queryKey: AsyncValue.data(data),
+      };
     } catch (error, stackTrace) {
       debugPrint('RankingNotifier: Error loading ranking: $error');
-      state = AsyncValue.error(error, stackTrace);
+      
+      // エラーを設定
+      state = {
+        ...state,
+        queryKey: AsyncValue.error(error, stackTrace),
+      };
     }
+  }
+  
+  AsyncValue<List<RankingModel>> getRankingForQuery(RankingQuery query) {
+    final queryKey = _getQueryKey(query);
+    return state[queryKey] ?? const AsyncValue.loading();
+  }
+  
+  // 強制的に再読み込み
+  Future<void> refresh(RankingQuery query) async {
+    debugPrint('RankingNotifier: Refreshing ranking for ${query.type}, ${query.period}');
+    await loadRanking(query);
+  }
+  
+  String _getQueryKey(RankingQuery query) {
+    return '${query.type}_${query.period}_${query.limit}';
   }
 }
 
 // ランキングプロバイダー
-final rankingNotifierProvider = StateNotifierProvider<RankingNotifier, AsyncValue<List<RankingModel>>>((ref) {
+final rankingNotifierProvider = StateNotifierProvider<RankingNotifier, Map<String, AsyncValue<List<RankingModel>>>>((ref) {
   final rankingService = ref.watch(rankingProvider);
   return RankingNotifier(rankingService);
 });
 
-// ランキングデータプロバイダー（StateNotifierProviderに変更）
+// ランキングデータプロバイダー（クエリごとにデータを取得）
 final rankingDataProvider = Provider.family<AsyncValue<List<RankingModel>>, RankingQuery>((ref, query) {
   final notifier = ref.watch(rankingNotifierProvider.notifier);
   final state = ref.watch(rankingNotifierProvider);
   
-  // 初回読み込み
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    notifier.loadRanking(query);
-  });
+  // クエリに対応する状態を取得
+  final queryKey = '${query.type}_${query.period}_${query.limit}';
+  final currentState = state[queryKey];
   
-  return state;
+  // データが存在しない場合、または強制的に再読み込みする場合
+  if (currentState == null) {
+    // 非同期でデータを読み込む
+    Future.microtask(() => notifier.loadRanking(query));
+    return const AsyncValue.loading();
+  }
+  
+  return currentState;
 });
 
 // ユーザーのランキング位置プロバイダー
@@ -112,8 +139,10 @@ class RankingService {
         return <RankingModel>[];
       }
       
-      // ユーザーデータをRankingModelに変換
-      final rankings = snapshot.docs.map((doc) {
+      // ユーザーデータをRankingModelに変換（非同期処理が必要）
+      final rankings = <RankingModel>[];
+      
+      for (final doc in snapshot.docs) {
         try {
           final data = doc.data();
           final userId = doc.id;
@@ -121,23 +150,58 @@ class RankingService {
           
           debugPrint('RankingService: User $userId - profileImageUrl: $profileImageUrl');
           
-          return RankingModel(
+          // スタンプ数を計算（users/{userId}/storesの全ドキュメントのstampsを合計）
+          int totalStamps = 0;
+          try {
+            final storesSnapshot = await _firestore
+                .collection('users')
+                .doc(userId)
+                .collection('stores')
+                .get();
+            
+            for (final storeDoc in storesSnapshot.docs) {
+              final storeData = storeDoc.data();
+              final stamps = storeData['stamps'] ?? 0;
+              totalStamps += stamps as int;
+            }
+            
+            debugPrint('RankingService: User $userId - Total stamps: $totalStamps');
+          } catch (e) {
+            debugPrint('RankingService: Error calculating stamps for $userId: $e');
+          }
+          
+          // バッジ数を計算（user_badges/{userId}/badgesのドキュメント数）
+          int badgeCount = 0;
+          try {
+            final badgesSnapshot = await _firestore
+                .collection('user_badges')
+                .doc(userId)
+                .collection('badges')
+                .get();
+            
+            badgeCount = badgesSnapshot.docs.length;
+            
+            debugPrint('RankingService: User $userId - Total badges: $badgeCount');
+          } catch (e) {
+            debugPrint('RankingService: Error calculating badges for $userId: $e');
+          }
+          
+          rankings.add(RankingModel(
             userId: userId,
             displayName: data['displayName'] ?? 'Unknown User',
             photoURL: data['profileImageUrl'], // profileImageUrlから取得
-            totalPoints: data['totalPoints'] ?? 0,
-            currentLevel: data['currentLevel'] ?? 1,
-            badgeCount: data['badgeCount'] ?? 0,
-            stampCount: data['stampCount'] ?? 0,
-            totalPayment: data['totalPayment'] ?? 0,
+            totalPoints: data['points'] ?? 0, // pointsフィールドから取得
+            currentLevel: data['level'] ?? 1, // levelフィールドから取得
+            badgeCount: badgeCount, // 計算したバッジ数
+            stampCount: totalStamps, // 計算した合計値
+            totalPayment: (data['paid'] ?? 0).toDouble(), // paidフィールドから取得
             rank: 0, // 後で設定
             lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          );
+          ));
         } catch (e) {
           debugPrint('RankingService: Error parsing user data for ${doc.id}: $e');
-          return null;
         }
-      }).where((ranking) => ranking != null).cast<RankingModel>().toList();
+      }
       
       debugPrint('RankingService: Successfully parsed ${rankings.length} user rankings');
       
@@ -196,32 +260,35 @@ class RankingService {
           return <RankingModel>[];
         }
         
-        // ユーザーデータをRankingModelに変換
-        final rankings = snapshot.docs.map((doc) {
-        try {
-          final data = doc.data();
-          final userId = doc.id;
-          final profileImageUrl = data['profileImageUrl'];
-          
-          debugPrint('RankingService: User $userId - profileImageUrl: $profileImageUrl');
-          
-          return RankingModel(
-            userId: userId,
-            displayName: data['displayName'] ?? 'Unknown User',
-            photoURL: profileImageUrl, // profileImageUrlから取得
-            totalPoints: data['totalPoints'] ?? 0,
-            currentLevel: data['currentLevel'] ?? 1,
-            badgeCount: data['badgeCount'] ?? 0,
-            stampCount: data['stampCount'] ?? 0,
-            totalPayment: data['totalPayment'] ?? 0,
-            rank: 0, // 後で設定
-            lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          );
+        // ユーザーデータをRankingModelに変換（同期的に処理）
+        final rankings = <RankingModel>[];
+        
+        for (final doc in snapshot.docs) {
+          try {
+            final data = doc.data();
+            final userId = doc.id;
+            final profileImageUrl = data['profileImageUrl'];
+            
+            debugPrint('RankingService: User $userId - profileImageUrl: $profileImageUrl');
+            
+            // スタンプ数とバッジ数は後で非同期で取得する必要があるため、ここでは0としておく
+            // Streamでは非同期処理が難しいため、基本的にはgetRankingDataOnceを使用することを推奨
+            rankings.add(RankingModel(
+              userId: userId,
+              displayName: data['displayName'] ?? 'Unknown User',
+              photoURL: profileImageUrl, // profileImageUrlから取得
+              totalPoints: data['points'] ?? 0, // pointsフィールドから取得
+              currentLevel: data['level'] ?? 1, // levelフィールドから取得
+              badgeCount: 0, // Streamでは簡易的に0を設定（サブコレクションから計算が必要）
+              stampCount: 0, // Streamでは簡易的に0を設定（サブコレクションから計算が必要）
+              totalPayment: (data['paid'] ?? 0).toDouble(), // paidフィールドから取得
+              rank: 0, // 後で設定
+              lastUpdated: (data['lastUpdated'] as Timestamp?)?.toDate() ?? DateTime.now(),
+            ));
           } catch (e) {
             debugPrint('Error parsing user data for ${doc.id}: $e');
-            return null;
           }
-        }).where((ranking) => ranking != null).cast<RankingModel>().toList();
+        }
         
         debugPrint('Successfully parsed ${rankings.length} user rankings');
         
@@ -335,30 +402,29 @@ class RankingService {
     }
   }
 
-  // ランキングを更新
+  // ランキングを更新（実際にはusersコレクションを更新）
+  // 注: badgeCountとstampCountはサブコレクションから計算されるため、ここでは更新しない
   Future<void> updateUserRanking({
     required String userId,
     required String displayName,
     required String? photoURL,
     required int totalPoints,
     required int currentLevel,
-    required int badgeCount,
+    required int badgeCount, // 互換性のために残すが使用しない
     String? periodId,
   }) async {
     try {
       final rankingData = {
-        'userId': userId,
         'displayName': displayName,
-        'photoURL': photoURL,
-        'totalPoints': totalPoints,
-        'currentLevel': currentLevel,
-        'badgeCount': badgeCount,
+        'profileImageUrl': photoURL,
+        'points': totalPoints,
+        'level': currentLevel,
+        // badgeCountは含めない（サブコレクションから計算）
         'lastUpdated': FieldValue.serverTimestamp(),
-        'periodId': periodId,
       };
 
       await _firestore
-          .collection('rankings')
+          .collection('users')
           .doc(userId)
           .set(rankingData, SetOptions(merge: true));
     } catch (e) {
@@ -460,15 +526,15 @@ class RankingService {
   String _getOrderByField(RankingType type) {
     switch (type) {
       case RankingType.totalPoints:
-        return 'totalPoints';
+        return 'points';
       case RankingType.badgeCount:
         return 'badgeCount';
       case RankingType.level:
-        return 'currentLevel';
+        return 'level';
       case RankingType.stampCount:
-        return 'stampCount';
+        return 'stamps'; // 実際にはサブコレクションから計算
       case RankingType.totalPayment:
-        return 'totalPayment';
+        return 'paid';
     }
   }
 }

@@ -85,6 +85,11 @@ class CouponService {
           .timeout(const Duration(seconds: 8))
           .map((snapshot) {
         final coupons = snapshot.docs
+            // パスが coupons/{storeId}/coupons/{couponId} のものだけに限定
+            .where((doc) {
+              final segments = doc.reference.path.split('/');
+              return segments.length == 4 && segments[0] == 'coupons' && segments[2] == 'coupons';
+            })
             .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
             .where((c) => c.isActive)
             .toList();
@@ -132,6 +137,11 @@ class CouponService {
           .map((snapshot) {
         final now = DateTime.now();
         final items = snapshot.docs
+            // パスが coupons/{storeId}/coupons/{couponId} のものだけに限定
+            .where((doc) {
+              final segments = doc.reference.path.split('/');
+              return segments.length == 4 && segments[0] == 'coupons' && segments[2] == 'coupons';
+            })
             .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
             .where((coupon) => coupon.isActive && coupon.validUntil.isAfter(now) && coupon.usedCount < coupon.usageLimit)
             .toList();
@@ -168,21 +178,44 @@ class CouponService {
     }
   }
 
-  // 使用済みクーポン一覧を取得（店舗側のネスト構造からのみ取得）
+  // 使用済みクーポン一覧を取得（usedByサブコレクションから取得）
   Stream<List<Coupon>> getUsedCoupons(String userId) {
     try {
       return _firestore
-          .collectionGroup('coupons')
+          .collectionGroup('usedBy')
+          .where('userId', isEqualTo: userId)
           .snapshots()
           .timeout(const Duration(seconds: 8))
-          .map((snapshot) {
-        final items = snapshot.docs
-            .map((doc) => doc.data())
-            .where((data) => (data['usedBy'] as List<dynamic>? ?? []).contains(userId))
-            .map((data) => Coupon.fromFirestore(data, data['couponId'] ?? ''))
-            .toList();
-        items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return items;
+          .asyncMap((snapshot) async {
+        final coupons = <Coupon>[];
+        
+        for (final usedByDoc in snapshot.docs) {
+          try {
+            final usedByData = usedByDoc.data();
+            final storeId = usedByData['storeId'] as String?;
+            final couponId = usedByData['couponId'] as String?;
+            
+            if (storeId != null && couponId != null) {
+              // クーポン情報を取得
+              final couponDoc = await _firestore
+                  .collection('coupons')
+                  .doc(storeId)
+                  .collection('coupons')
+                  .doc(couponId)
+                  .get();
+              
+              if (couponDoc.exists) {
+                final coupon = Coupon.fromFirestore(couponDoc.data()!, couponDoc.id);
+                coupons.add(coupon);
+              }
+            }
+          } catch (e) {
+            debugPrint('Error processing used coupon: $e');
+          }
+        }
+        
+        coupons.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return coupons;
       }).handleError((error) {
         debugPrint('Error getting used coupons (collectionGroup): $error');
         return <Coupon>[];
@@ -228,10 +261,15 @@ class CouponService {
         'imageUrl': imageUrl,
         'applicableItems': applicableItems ?? [],
         'conditions': conditions ?? {},
-        'usedBy': [],
+        // usedByは配列ではなくサブコレクションとして管理
       };
 
-      await _firestore.collection('coupons').add(couponData);
+      // ネストされた構造で保存: coupons/{storeId}/coupons/{couponId}
+      await _firestore
+          .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
+          .add(couponData);
     } catch (e) {
       debugPrint('Error creating coupon: $e');
       throw Exception('クーポンの作成に失敗しました: $e');
@@ -239,7 +277,7 @@ class CouponService {
   }
 
   // クーポンを取得
-  Future<void> obtainCoupon(String userId, String couponId) async {
+  Future<void> obtainCoupon(String userId, String couponId, String storeId) async {
     try {
       // ユーザーがクーポンを既に取得していないかチェック
       final existingCoupon = await _firestore
@@ -252,8 +290,14 @@ class CouponService {
         throw Exception('このクーポンは既に取得済みです');
       }
 
-      // クーポンの詳細を取得
-      final couponDoc = await _firestore.collection('coupons').doc(couponId).get();
+      // クーポンの詳細を取得（ネストされた構造から）
+      final couponDoc = await _firestore
+          .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
+          .doc(couponId)
+          .get();
+          
       if (!couponDoc.exists) {
         throw Exception('クーポンが見つかりません');
       }
@@ -297,15 +341,35 @@ class CouponService {
         'orderId': orderId,
       });
 
-      // クーポンの使用回数を更新
+      // クーポンの使用回数を更新（ネストされた構造から）
       final userCouponDoc = await _firestore.collection('user_coupons').doc(userCouponId).get();
       if (userCouponDoc.exists) {
         final userCoupon = UserCoupon.fromFirestore(userCouponDoc.data()!, userCouponDoc.id);
-
-        await _firestore.collection('coupons').doc(userCoupon.couponId).update({
-          'usedCount': FieldValue.increment(1),
-          'usedBy': FieldValue.arrayUnion([userCoupon.userId]),
-        });
+        
+        if (userCoupon.storeId != null) {
+          final couponRef = _firestore
+              .collection('coupons')
+              .doc(userCoupon.storeId)
+              .collection('coupons')
+              .doc(userCoupon.couponId);
+          
+          // usedByサブコレクションにユーザー情報を追加
+          await couponRef
+              .collection('usedBy')
+              .doc(userCoupon.userId)
+              .set({
+            'userId': userCoupon.userId,
+            'usedAt': FieldValue.serverTimestamp(),
+            'couponId': userCoupon.couponId,
+            'storeId': userCoupon.storeId,
+            'orderId': orderId,
+          });
+          
+          // 使用回数をインクリメント
+          await couponRef.update({
+            'usedCount': FieldValue.increment(1),
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error using coupon: $e');

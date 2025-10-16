@@ -765,6 +765,7 @@ class _MapViewState extends ConsumerState<MapView> {
     // ユーザーのスタンプ状況を取得
     final userStamp = _userStamps[_selectedStoreUid];
     final stamps = userStamp?['stamps'] ?? 0;
+    final bool isOpenNow = _isStoreOpenNow(selectedStore);
     
     return Positioned(
       bottom: 20,
@@ -868,6 +869,35 @@ class _MapViewState extends ConsumerState<MapView> {
                       // スタンプ状況表示と店舗詳細ボタンを同じ行に配置
                       Row(
                         children: [
+                          // 営業状況表示
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: (isOpenNow ? Colors.green[600]! : Colors.grey[600]!).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: (isOpenNow ? Colors.green[600]! : Colors.grey[600]!).withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isOpenNow ? Icons.schedule : Icons.schedule_outlined,
+                                  color: isOpenNow ? Colors.green[600] : Colors.grey[600],
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  isOpenNow ? '営業中' : '営業時間外',
+                                  style: TextStyle(
+                                    color: isOpenNow ? Colors.green[600] : Colors.grey[600],
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
                           // スタンプ状況表示
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

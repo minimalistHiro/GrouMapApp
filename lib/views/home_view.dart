@@ -373,83 +373,66 @@ class HomeView extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'あなたのステータス',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          // レベル情報（usersコレクションから直接取得）
+          // 獲得ポイント（画像のような表記に変更）
           ref.watch(userDataProvider(userId)).when(
             data: (userData) {
               if (userData != null) {
-                final level = userData['level'] ?? 1;
-                final experience = userData['experience'] ?? 0;
-                
-                // 現在のレベルの経験値計算
-                final currentLevelExp = experience;
-                final nextLevelExp = (level + 1) * 100; // 次のレベルまでの必要経験値
-                final currentLevelRequiredExp = level * 100; // 現在のレベルに必要な経験値
-                final progressValue = currentLevelExp > currentLevelRequiredExp 
-                    ? 1.0 
-                    : (currentLevelExp - (level - 1) * 100) / 100.0;
-                final remainingExp = nextLevelExp - currentLevelExp;
-                
+                final points = userData['points'] ?? 0;
+                final String pointsText = '$points';
                 return Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
+                    const Text(
+                      '獲得ポイント',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          'レベル $level',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                        RichText(
+                          text: TextSpan(
+                            text: pointsText,
+                            style: const TextStyle(
+                              fontSize: 44,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                              height: 1.0,
+                            ),
+                            children: const [
+                              TextSpan(
+                                text: '  pt',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        Text(
-                          '$experience pt',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue,
-                          ),
+                        const SizedBox(width: 16),
+                        IconButton(
+                          tooltip: '更新',
+                          onPressed: () {
+                            ref.invalidate(userDataProvider(userId));
+                          },
+                          icon: const Icon(Icons.refresh, color: Colors.black54),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: progressValue.clamp(0.0, 1.0),
-                      backgroundColor: Colors.grey[300],
-                      valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '次のレベルまで ${remainingExp} pt',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
                     ),
                   ],
                 );
               } else {
-                return const Text(
-                  'レベル情報を取得できませんでした',
-                  style: TextStyle(color: Colors.grey),
-                );
+                return const SizedBox.shrink();
               }
             },
-            loading: () => const CircularProgressIndicator(),
-            error: (_, __) => const Text(
-              'レベル情報の取得に失敗しました',
-              style: TextStyle(color: Colors.red),
-            ),
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
           ),
           
           const SizedBox(height: 16),
@@ -524,7 +507,13 @@ class HomeView extends ConsumerWidget {
                       Expanded(
                         child: Row(
                           children: [
-                            const Icon(Icons.military_tech, color: Colors.amber, size: 24),
+                            Image.asset(
+                              'assets/images/badge_icon.PNG',
+                              width: 24,
+                              height: 24,
+                              errorBuilder: (context, error, stackTrace) => 
+                                  const Icon(Icons.military_tech, color: Colors.amber, size: 24),
+                            ),
                             const SizedBox(width: 12),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -557,7 +546,13 @@ class HomeView extends ConsumerWidget {
                       Expanded(
                         child: Row(
                           children: [
-                            const Icon(Icons.receipt_long, color: Colors.green, size: 24),
+                            Image.asset(
+                              'assets/images/bills_icon.png',
+                              width: 24,
+                              height: 24,
+                              errorBuilder: (context, error, stackTrace) => 
+                                  const Icon(Icons.receipt_long, size: 24, color: Colors.green),
+                            ),
                             const SizedBox(width: 12),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -622,7 +617,7 @@ class HomeView extends ConsumerWidget {
     final menuItems = [
       {'icon': 'assets/images/point_icon.png', 'label': 'ポイント履歴', 'isImage': true},
       {'icon': 'assets/images/gold_coin_icon2.png', 'label': 'スタンプ', 'isImage': true},
-      {'icon': 'assets/images/medal_icon.png', 'label': 'バッジ', 'isImage': true},
+      {'icon': 'assets/images/badge_icon.PNG', 'label': 'バッジ', 'isImage': true},
       {'icon': 'assets/images/store_icon.png', 'label': '店舗一覧', 'isImage': true},
       {'icon': 'assets/images/trophy_icon.png', 'label': 'ランキング', 'isImage': true},
       {'icon': 'assets/images/friend_intro_icon.png', 'label': '友達紹介', 'isImage': true},
@@ -641,12 +636,11 @@ class HomeView extends ConsumerWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             // 画面幅に基づいてアイコンサイズとグリッドサイズを動的に調整
-            final screenWidth = constraints.maxWidth;
-            final iconSize = (screenWidth * 0.08).clamp(20.0, 32.0);
-            final fontSize = (screenWidth * 0.03).clamp(8.0, 12.0);
+            final iconSize = 24.0; // メニューアイコンをステータスカードと同じサイズに固定
+            final fontSize = 12.0; // メニューテキストは固定サイズ
             
             // より安定したアスペクト比の計算
-            final itemHeight = 100.0; // 固定の高さを使用
+            final itemHeight = 120.0; // 固定の高さを使用
             final aspectRatio = constraints.maxWidth / (itemHeight * 2);
             
             return GridView.count(
@@ -779,7 +773,7 @@ class HomeView extends ConsumerWidget {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 350,
+          height: 300,
           child: ref.watch(allPostsProvider).when(
             data: (posts) {
               if (posts.isEmpty) {
