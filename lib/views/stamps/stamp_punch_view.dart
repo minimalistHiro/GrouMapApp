@@ -84,11 +84,18 @@ class _StampPunchViewState extends State<StampPunchView>
         return;
       }
 
+      // ignore: avoid_print
+      print('[StampPunchDebug] _initialize: uid=${user.uid}, storeId=${widget.storeId}');
+
       // 店舗情報取得
+      // ignore: avoid_print
+      print('[StampPunchDebug] fetch store doc: stores/${widget.storeId}');
       final storeSnap = await FirebaseFirestore.instance
           .collection('stores')
           .doc(widget.storeId)
           .get();
+      // ignore: avoid_print
+      print('[StampPunchDebug] store exists=${storeSnap.exists}');
       if (storeSnap.exists) {
         final s = storeSnap.data() as Map<String, dynamic>;
         _storeName = (s['name'] as String?) ?? _storeName;
@@ -102,16 +109,28 @@ class _StampPunchViewState extends State<StampPunchView>
           .doc(user.uid)
           .collection('stores')
           .doc(widget.storeId);
+      // ignore: avoid_print
+      print('[StampPunchDebug] fetch user store doc: users/${user.uid}/stores/${widget.storeId}');
       final userStoreSnap = await userStoreRef.get();
       if (userStoreSnap.exists) {
         final d = userStoreSnap.data() as Map<String, dynamic>;
         _stamps = (d['stamps'] as int?) ?? 0;
+        // ignore: avoid_print
+        print('[StampPunchDebug] current stamps=$_stamps');
       } else {
         // 初期作成
-        await userStoreRef.set({
-          'stamps': 0,
-          'lastVisited': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        try {
+          await userStoreRef.set({
+            'stamps': 0,
+            'lastVisited': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          // ignore: avoid_print
+          print('[StampPunchDebug] initialized user store doc with stamps=0');
+        } on FirebaseException catch (fe) {
+          // ignore: avoid_print
+          print('[StampPunchDebug][ERROR] init user store set failed code=${fe.code} message=${fe.message}');
+          rethrow;
+        }
         _stamps = 0;
       }
 
@@ -150,10 +169,20 @@ class _StampPunchViewState extends State<StampPunchView>
           .doc(widget.storeId);
 
       // Firestoreを先に更新
-      await userStoreRef.update({
-        'stamps': FieldValue.increment(1),
-        'lastVisited': FieldValue.serverTimestamp(),
-      });
+      // ignore: avoid_print
+      print('[StampPunchDebug] increment stamps at users/${user.uid}/stores/${widget.storeId} by 1');
+      try {
+        await userStoreRef.update({
+          'stamps': FieldValue.increment(1),
+          'lastVisited': FieldValue.serverTimestamp(),
+        });
+        // ignore: avoid_print
+        print('[StampPunchDebug] update OK');
+      } on FirebaseException catch (fe) {
+        // ignore: avoid_print
+        print('[StampPunchDebug][ERROR] update failed code=${fe.code} message=${fe.message}');
+        rethrow;
+      }
 
       final before = _stamps;
       final newIndex = _stamps; // 新規に増える場所
@@ -161,6 +190,8 @@ class _StampPunchViewState extends State<StampPunchView>
         _stamps = _stamps + 1;
         _punchIndex = newIndex;
       });
+      // ignore: avoid_print
+      print('[StampPunchDebug] local stamps updated to $_stamps');
 
       // セッションフラグ更新
       _stampIncrementedThisSession = true;
@@ -183,10 +214,19 @@ class _StampPunchViewState extends State<StampPunchView>
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           final xp = levelService.experienceForStampPunch();
-          await levelService.addExperience(
+          // ignore: avoid_print
+          print('[StampPunchDebug] addExperience(stampPunch) XP=$xp user=${user.uid}');
+          try {
+            await levelService.addExperience(
             userId: user.uid,
             experience: xp,
-          );
+            );
+            // ignore: avoid_print
+            print('[StampPunchDebug] addExperience(stampPunch) OK');
+          } on FirebaseException catch (fe) {
+            // ignore: avoid_print
+            print('[StampPunchDebug][ERROR] addExperience(stampPunch) failed code=${fe.code} message=${fe.message}');
+          }
         }
       } catch (e) {
         // エラーは無視
@@ -195,6 +235,8 @@ class _StampPunchViewState extends State<StampPunchView>
       // 事前チェックでボタン文言を更新（保存はしない）
       await _checkAndAwardBadges(save: false);
     } catch (e) {
+      // ignore: avoid_print
+      print('[StampPunchDebug][ERROR] _punchOneStamp failed error=$e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('スタンプ押印に失敗しました: $e')),
@@ -236,7 +278,16 @@ class _StampPunchViewState extends State<StampPunchView>
                             final user = FirebaseAuth.instance.currentUser;
                             if (user != null) {
                               final extra = levelService.experienceForStampCardComplete();
-                              await levelService.addExperience(userId: user.uid, experience: extra);
+                              // ignore: avoid_print
+                              print('[StampPunchDebug] addExperience(cardComplete) XP=$extra user=${user.uid}');
+                              try {
+                                await levelService.addExperience(userId: user.uid, experience: extra);
+                                // ignore: avoid_print
+                                print('[StampPunchDebug] addExperience(cardComplete) OK');
+                              } on FirebaseException catch (fe) {
+                                // ignore: avoid_print
+                                print('[StampPunchDebug][ERROR] addExperience(cardComplete) failed code=${fe.code} message=${fe.message}');
+                              }
                               xpShown += extra;
                             }
                           }
@@ -591,6 +642,8 @@ class _StampPunchViewState extends State<StampPunchView>
   // バッジ達成チェックと付与（JSON条件ベース）
   Future<List<Map<String, dynamic>>> _checkAndAwardBadges({bool save = true}) async {
     try {
+      // ignore: avoid_print
+      print('[StampPunchDebug] _checkAndAwardBadges save=$save');
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return const <Map<String, dynamic>>[];
 
@@ -832,20 +885,29 @@ class _StampPunchViewState extends State<StampPunchView>
 
         // 未獲得なら保存（save=true のときのみ）
         if (!alreadyOwned && save) {
-          await userBadgeRef.set({
-            'userId': user.uid,
-            'badgeId': badgeId,
-            'unlockedAt': FieldValue.serverTimestamp(),
-            'isNew': true,
-            'name': data['name'],
-            'description': data['description'],
-            'category': data['category'],
-            'imageUrl': data['imageUrl'],
-            'iconUrl': data['iconUrl'],
-            'iconPath': data['iconPath'],
-            'rarity': data['rarity'],
-            'order': data['order'] ?? 0,
-          });
+          // ignore: avoid_print
+          print('[StampPunchDebug] create user_badge path=user_badges/${user.uid}/badges/$badgeId');
+          try {
+            await userBadgeRef.set({
+              'userId': user.uid,
+              'badgeId': badgeId,
+              'unlockedAt': FieldValue.serverTimestamp(),
+              'isNew': true,
+              'name': data['name'],
+              'description': data['description'],
+              'category': data['category'],
+              'imageUrl': data['imageUrl'],
+              'iconUrl': data['iconUrl'],
+              'iconPath': data['iconPath'],
+              'rarity': data['rarity'],
+              'order': data['order'] ?? 0,
+            });
+            // ignore: avoid_print
+            print('[StampPunchDebug] user_badge create OK');
+          } on FirebaseException catch (fe) {
+            // ignore: avoid_print
+            print('[StampPunchDebug][ERROR] user_badge create failed code=${fe.code} message=${fe.message}');
+          }
         }
 
         newlyAwarded.add({
