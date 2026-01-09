@@ -325,24 +325,23 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: Column(
-          children: [
+        child: CustomScrollView(
+          slivers: [
             // ヘッダー
-            _buildHeader(),
-            
+            SliverToBoxAdapter(child: _buildHeader()),
+
             // 画像スライダー
-            Expanded(
-              flex: 3,
-              child: _buildImageSlider(),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 320,
+                child: _buildImageSlider(),
+              ),
             ),
-            
+
             // 投稿情報
-            Expanded(
-              flex: 2,
-              child: _buildPostInfo(),
-            ),
+            SliverToBoxAdapter(child: _buildPostInfo()),
           ],
         ),
       ),
@@ -351,6 +350,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
 
   Widget _buildHeader() {
     return Container(
+      color: const Color(0xFFFF6B35),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
@@ -384,21 +384,8 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                     fontSize: 16,
                   ),
                 ),
-                Text(
-                  _formatDate(widget.post.createdAt),
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
-                  ),
-                ),
               ],
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () {
-              // メニュー表示
-            },
           ),
         ],
       ),
@@ -479,64 +466,61 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   Widget _buildPostInfo() {
     return Container(
       color: Colors.white,
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            // いいね・コメント・シェアボタン
-            _buildActionButtons(),
-            
-            // いいね数
-            if (_likeCount > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    const Icon(Icons.favorite, color: Colors.red, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      '$_likeCount件のいいね',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            
-            const SizedBox(height: 8),
-            
-            // 投稿内容
+      child: Column(
+        children: [
+          // いいね・コメント・シェアボタン
+          _buildActionButtons(),
+
+          // いいね数
+          if (_likeCount > 0)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  // タイトル
+                  const Icon(Icons.favorite, color: Colors.red, size: 16),
+                  const SizedBox(width: 4),
                   Text(
-                    widget.post.title,
+                    '$_likeCount件のいいね',
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  
-                  // 本文
-                  Text(
-                    widget.post.content,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // コメントセクション
-                  _buildCommentsSection(),
                 ],
               ),
             ),
-          ],
-        ),
+
+          const SizedBox(height: 8),
+
+          // 投稿内容
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // タイトル
+                Text(
+                  widget.post.title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // 本文
+                Text(
+                  widget.post.content,
+                  style: const TextStyle(fontSize: 14),
+                ),
+                const SizedBox(height: 16),
+
+                // コメントセクション
+                _buildCommentsSection(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -632,71 +616,70 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
             ),
           )
         else
-          SizedBox(
-            height: 200,
-            child: ListView.builder(
-              itemCount: _comments.length,
-              itemBuilder: (context, index) {
-                final comment = _comments[index];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      CircleAvatar(
-                        radius: 12,
-                        backgroundColor: const Color(0xFFFF6B35),
-                        child: Text(
-                          comment['userName'].substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+          ListView.builder(
+            itemCount: _comments.length,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemBuilder: (context, index) {
+              final comment = _comments[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 12,
+                      backgroundColor: const Color(0xFFFF6B35),
+                      child: Text(
+                        comment['userName'].substring(0, 1).toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          RichText(
+                            text: TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: '${comment['userName']} ',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text: comment['content'],
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            RichText(
-                              text: TextSpan(
-                                children: [
-                                  TextSpan(
-                                    text: '${comment['userName']} ',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                  TextSpan(
-                                    text: comment['content'],
-                                    style: const TextStyle(
-                                      color: Colors.black,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _formatDate((comment['createdAt'] as Timestamp).toDate()),
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 12,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _formatDate((comment['createdAt'] as Timestamp).toDate()),
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
       ],
     );

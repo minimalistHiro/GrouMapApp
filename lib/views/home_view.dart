@@ -144,7 +144,7 @@ class HomeView extends ConsumerWidget {
                   child: Text(
                     'GrouMap',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
@@ -583,7 +583,7 @@ class HomeView extends ConsumerWidget {
           builder: (context, constraints) {
             // 画面幅に基づいてアイコンサイズとグリッドサイズを動的に調整
             final iconSize = 24.0; // メニューアイコンをステータスカードと同じサイズに固定
-            final fontSize = 12.0; // メニューテキストは固定サイズ
+            final fontSize = 10.0; // メニューテキストは固定サイズ
             
             // より安定したアスペクト比の計算
             final itemHeight = 130.0; // 固定の高さを使用
