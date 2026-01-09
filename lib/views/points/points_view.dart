@@ -91,17 +91,10 @@ class _PointsViewState extends ConsumerState<PointsView>
   }
 
   Widget _buildPointsContent(BuildContext context, WidgetRef ref, String userId) {
-    final userPoints = ref.watch(userPointsProvider(userId));
     final transactions = ref.watch(userPointTransactionsProvider(userId));
 
     return Column(
       children: [
-        // ポイント残高カード
-        Container(
-          padding: const EdgeInsets.all(16.0),
-          child: _buildBalanceCard(context, userPoints),
-        ),
-        
         // タブコンテンツ
         Expanded(
           child: TabBarView(
@@ -117,60 +110,7 @@ class _PointsViewState extends ConsumerState<PointsView>
     );
   }
 
-  Widget _buildBalanceCard(BuildContext context, AsyncValue<int> userPoints) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            const Text(
-              'ポイント残高',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 16),
-            userPoints.when(
-              data: (points) => Text(
-                '$points',
-                style: const TextStyle(
-                  fontSize: 48,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
-              ),
-              loading: () => const CircularProgressIndicator(),
-              error: (error, _) => const Column(
-                children: [
-                  Text(
-                    '0',
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'ポイントの取得に失敗しました',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.red,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            const SizedBox.shrink(),
-          ],
-        ),
-      ),
-    );
-  }
+  // 残高カードは削除済み
 
 
   Widget _buildAllTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {

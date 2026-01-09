@@ -149,11 +149,14 @@ class CouponsView extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
-            CustomButton(
-              text: '再試行',
-              onPressed: () {
-                ref.invalidate(allPostsProvider);
-              },
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomButton(
+                text: '再試行',
+                onPressed: () {
+                  ref.invalidate(allPostsProvider);
+                },
+              ),
             ),
           ],
         ),
@@ -424,11 +427,14 @@ class CouponsView extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            CustomButton(
-              text: '再試行',
-              onPressed: () {
-                ref.invalidate(availableCouponsProvider(userId));
-              },
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomButton(
+                text: '再試行',
+                onPressed: () {
+                  ref.invalidate(availableCouponsProvider(userId));
+                },
+              ),
             ),
           ],
         ),
@@ -486,12 +492,15 @@ class CouponsView extends ConsumerWidget {
               const SizedBox(height: 12),
               const Text('読み込みがタイムアウトしました'),
               const SizedBox(height: 8),
-              CustomButton(
-                text: '再試行',
-                onPressed: () {
-                  ref.invalidate(_usedCouponsTimedOutProvider);
-                  ref.invalidate(usedCouponsProvider(userId));
-                },
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: CustomButton(
+                  text: '再試行',
+                  onPressed: () {
+                    ref.invalidate(_usedCouponsTimedOutProvider);
+                    ref.invalidate(usedCouponsProvider(userId));
+                  },
+                ),
               ),
             ],
           ),
@@ -519,11 +528,14 @@ class CouponsView extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            CustomButton(
-              text: '再試行',
-              onPressed: () {
-                ref.invalidate(usedCouponsProvider(userId));
-              },
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomButton(
+                text: '再試行',
+                onPressed: () {
+                  ref.invalidate(usedCouponsProvider(userId));
+                },
+              ),
             ),
           ],
         ),
@@ -583,11 +595,14 @@ class CouponsView extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            CustomButton(
-              text: '再試行',
-              onPressed: () {
-                ref.invalidate(promotionsProvider);
-              },
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: CustomButton(
+                text: '再試行',
+                onPressed: () {
+                  ref.invalidate(promotionsProvider);
+                },
+              ),
             ),
           ],
         ),

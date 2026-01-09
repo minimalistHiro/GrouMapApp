@@ -377,47 +377,47 @@ class HomeView extends ConsumerWidget {
           ref.watch(userDataProvider(userId)).when(
             data: (userData) {
               if (userData != null) {
-                final points = userData['points'] ?? 0;
-                final String pointsText = '$points';
+                final String pointsText = '${userData['points'] ?? 0}';
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     const Text(
                       '獲得ポイント',
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 15),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        RichText(
-                          text: TextSpan(
-                            text: pointsText,
-                            style: const TextStyle(
-                              fontSize: 44,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                              height: 1.0,
-                            ),
-                            children: const [
-                              TextSpan(
-                                text: '  pt',
-                                style: TextStyle(
-                                  fontSize: 18,
+                        Expanded(
+                          child: Center(
+                            child: RichText(
+                              text: TextSpan(
+                                text: pointsText,
+                                style: const TextStyle(
+                                  fontSize: 44,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.black87,
+                                  height: 1.0,
                                 ),
+                                children: const [
+                                  TextSpan(
+                                    text: '  pt',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 16),
                         IconButton(
-                          tooltip: '更新',
                           onPressed: () {
                             ref.invalidate(userDataProvider(userId));
                           },
@@ -441,144 +441,90 @@ class HomeView extends ConsumerWidget {
           ref.watch(userDataProvider(userId)).when(
             data: (userData) {
               if (userData != null) {
-                final points = userData['points'] ?? 0;
                 final badgeCount = userData['badges']?.length ?? 0;
                 final dynamic paidRaw = userData['paid'];
                 final num paidNum = paidRaw is num ? paidRaw : num.tryParse('$paidRaw') ?? 0;
                 final String paidFormatted = NumberFormat.currency(locale: 'ja_JP', symbol: '¥', decimalDigits: 0).format(paidNum);
                 
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16.0),
-                  padding: const EdgeInsets.all(20.0),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.1),
-                        spreadRadius: 1,
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
+                return Row(
+                  children: [
+                    // 中：バッジ（少し小さく）
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/images/badge_icon.PNG',
+                            width: 20,
+                            height: 20,
+                            errorBuilder: (context, error, stackTrace) => 
+                                const Icon(Icons.military_tech, color: Colors.amber, size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                '$badgeCount',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const Text(
+                                'バッジ',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      // 左：ポイント
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Image.asset(
-                              'assets/images/point_icon.png',
-                              width: 24,
-                              height: 24,
-                              errorBuilder: (context, error, stackTrace) => 
-                                  const Icon(Icons.monetization_on, size: 24, color: Colors.blue),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '$points',
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
+                    ),
+                    
+                    // 仕切り
+                    Container(width: 1, height: 40, color: Colors.grey[300]),
+                    
+                    // 右：総支払額（少し小さく）
+                    Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset(
+                            'assets/images/bills_icon.png',
+                            width: 20,
+                            height: 20,
+                            errorBuilder: (context, error, stackTrace) => 
+                                const Icon(Icons.receipt_long, size: 20, color: Colors.green),
+                          ),
+                          const SizedBox(width: 10),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                paidFormatted,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
                                 ),
-                                const Text(
-                                  'ポイント',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
+                              ),
+                              const Text(
+                                '総支払額',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey,
                                 ),
-                              ],
-                            ),
-                          ],
-                        ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                      
-                      // 仕切り
-                      Container(width: 1, height: 40, color: Colors.grey[300]),
-                      
-                      // 中：バッジ
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Image.asset(
-                              'assets/images/badge_icon.PNG',
-                              width: 24,
-                              height: 24,
-                              errorBuilder: (context, error, stackTrace) => 
-                                  const Icon(Icons.military_tech, color: Colors.amber, size: 24),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '$badgeCount',
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const Text(
-                                  'バッジ',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      
-                      // 仕切り
-                      Container(width: 1, height: 40, color: Colors.grey[300]),
-                      
-                      // 右：総支払額
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Image.asset(
-                              'assets/images/bills_icon.png',
-                              width: 24,
-                              height: 24,
-                              errorBuilder: (context, error, stackTrace) => 
-                                  const Icon(Icons.receipt_long, size: 24, color: Colors.green),
-                            ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  paidFormatted,
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const Text(
-                                  '総支払額',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 );
               }
               return const SizedBox.shrink();
@@ -640,7 +586,7 @@ class HomeView extends ConsumerWidget {
             final fontSize = 12.0; // メニューテキストは固定サイズ
             
             // より安定したアスペクト比の計算
-            final itemHeight = 120.0; // 固定の高さを使用
+            final itemHeight = 130.0; // 固定の高さを使用
             final aspectRatio = constraints.maxWidth / (itemHeight * 2);
             
             return GridView.count(

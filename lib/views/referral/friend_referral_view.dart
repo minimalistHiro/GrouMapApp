@@ -196,6 +196,7 @@ class _FriendReferralViewState extends State<FriendReferralView> {
 
   Widget _buildHeader() {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -207,31 +208,40 @@ class _FriendReferralViewState extends State<FriendReferralView> {
           ],
         ),
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFFF6B35).withOpacity(0.3),
+            spreadRadius: 2,
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: const [
+          Icon(
             Icons.people,
             color: Colors.white,
-            size: 32,
+            size: 48,
           ),
-          const SizedBox(height: 12),
-          const Text(
-            '友達を招待して\nポイントを獲得しよう！',
+          SizedBox(height: 12),
+          Text(
+            '友達を招待してポイント獲得',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.white,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
+          SizedBox(height: 8),
+          Text(
             '友達が紹介コードで登録すると、\nあなたも友達もポイントがもらえます',
             style: TextStyle(
               fontSize: 14,
               color: Colors.white70,
             ),
+            textAlign: TextAlign.center,
           ),
         ],
       ),

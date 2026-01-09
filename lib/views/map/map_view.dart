@@ -40,6 +40,8 @@ class _MapViewState extends ConsumerState<MapView> {
   // フィルタ/表示モード
   bool _showOpenNowOnly = false; // 「営業中のみ」表示
   bool _categoryMode = false;    // 「ジャンル別」表示（カテゴリーごとにアイコン）
+  bool _pioneerMode = false;     // 「開拓」表示（未開拓/開拓/常連 のスタンプ状況）
+  String _selectedMode = 'none'; // 'none' | 'category' | 'pioneer'
   
   // デフォルトの座標（東京駅周辺）
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
@@ -458,14 +460,57 @@ class _MapViewState extends ConsumerState<MapView> {
   }
 
   // カスタムマーカーアイコンを作成
-  Widget _createCustomMarkerIcon(String flowerType, bool isExpanded, {String? category}) {
+  Widget _createCustomMarkerIcon(String flowerType, bool isExpanded, {String? category, String? storeIconUrl}) {
     final double size = isExpanded ? 50.0 : 30.0;
     
     // カスタムアイコンの色とスタイルを決定
     Color markerColor;
     IconData iconData;
 
-    if (_categoryMode) {
+    if (_pioneerMode) {
+      // 開拓モード（スタンプ状況）
+      switch (flowerType) {
+        case 'unvisited': // 未開拓（スタンプ0個）
+          markerColor = Colors.grey[400]!;
+          iconData = Icons.radio_button_unchecked;
+          break;
+        case 'visited': // 開拓中（スタンプ1-9個）
+          markerColor = Colors.orange[600]!;
+          iconData = Icons.radio_button_checked;
+          break;
+        case 'regular': // 常連（スタンプ10個以上）
+          markerColor = Colors.amber[600]!;
+          iconData = Icons.star;
+          break;
+        default:
+          markerColor = Colors.grey[400]!;
+          iconData = Icons.help_outline;
+      }
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: markerColor,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white,
+            width: isExpanded ? 3 : 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: markerColor.withOpacity(0.4),
+              blurRadius: isExpanded ? 10 : 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          iconData,
+          color: Colors.white,
+          size: size * 0.6,
+        ),
+      );
+    } else if (_categoryMode) {
       // ジャンル別（カテゴリー）モード
       final String cat = (category ?? '').toString();
       if (cat.contains('カフェ')) {
@@ -490,51 +535,71 @@ class _MapViewState extends ConsumerState<MapView> {
         markerColor = Colors.blueGrey;
         iconData = Icons.place;
       }
-    } else {
-      // 通常（スタンプ状況）モード
-      switch (flowerType) {
-        case 'unvisited': // 未開拓（スタンプ0個）
-          markerColor = Colors.grey[400]!;
-          iconData = Icons.radio_button_unchecked;
-          break;
-        case 'visited': // 開拓中（スタンプ1-9個）
-          markerColor = Colors.orange[600]!;
-          iconData = Icons.radio_button_checked;
-          break;
-        case 'regular': // 常連（スタンプ10個以上）
-          markerColor = Colors.amber[600]!;
-          iconData = Icons.star;
-          break;
-        default:
-          markerColor = Colors.grey[400]!;
-          iconData = Icons.help_outline;
-      }
-    }
-    
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: markerColor,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: Colors.white,
-          width: isExpanded ? 3 : 2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: markerColor.withOpacity(0.4),
-            blurRadius: isExpanded ? 10 : 5,
-            offset: const Offset(0, 2),
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: markerColor,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.white,
+            width: isExpanded ? 3 : 2,
           ),
-        ],
-      ),
-      child: Icon(
-        iconData,
-        color: Colors.white,
-        size: size * 0.6,
-      ),
-    );
+          boxShadow: [
+            BoxShadow(
+              color: markerColor.withOpacity(0.4),
+              blurRadius: isExpanded ? 10 : 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Icon(
+          iconData,
+          color: Colors.white,
+          size: size * 0.6,
+        ),
+      );
+    } else {
+      // モード未選択（店舗アイコン表示）
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: Colors.black.withOpacity(0.2),
+            width: isExpanded ? 3 : 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: isExpanded ? 10 : 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipOval(
+          child: (storeIconUrl != null && storeIconUrl.isNotEmpty)
+              ? Image.network(
+                  storeIconUrl,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Icon(
+                    Icons.store,
+                    color: Colors.grey[700],
+                    size: size * 0.6,
+                  ),
+                )
+              : Icon(
+                  Icons.store,
+                  color: Colors.grey[700],
+                  size: size * 0.6,
+                ),
+        ),
+      );
+    }
   }
 
   // マーカーを作成
@@ -589,7 +654,12 @@ class _MapViewState extends ConsumerState<MapView> {
               });
               _createMarkers(); // マーカーを再作成してサイズを更新
             },
-            child: _createCustomMarkerIcon(flowerType, isExpanded, category: category),
+            child: _createCustomMarkerIcon(
+              flowerType,
+              isExpanded,
+              category: category,
+              storeIconUrl: (store['iconImageUrl'] as String?) ?? '',
+            ),
           ),
         ),
       );
@@ -684,27 +754,7 @@ class _MapViewState extends ConsumerState<MapView> {
         title: const Text('マップ'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.my_location),
-            onPressed: () async {
-              try {
-                await _getCurrentLocation();
-                setState(() {
-                  _expandedMarkerId = '';
-                  _isShowStoreInfo = false;
-                });
-                await _loadUserStamps();
-                _createMarkers();
-              } catch (e) {
-                print('位置情報ボタンタップ時のエラー: $e');
-                // エラーが発生してもマーカーは更新する
-                await _loadUserStamps();
-                _createMarkers();
-              }
-            },
-          ),
-        ],
+        actions: const [],
       ),
       body: Stack(
         children: [
@@ -1053,7 +1103,7 @@ class _MapViewState extends ConsumerState<MapView> {
         child: Row(
           children: [
             FilterChip(
-              label: const Text('営業中のみ'),
+              label: const Text('営業中'),
               selected: _showOpenNowOnly,
               onSelected: (val) {
                 setState(() {
@@ -1063,12 +1113,39 @@ class _MapViewState extends ConsumerState<MapView> {
               },
             ),
             const SizedBox(width: 8),
-            FilterChip(
+            ChoiceChip(
               label: const Text('ジャンル別'),
-              selected: _categoryMode,
+              selected: _selectedMode == 'category',
               onSelected: (val) {
                 setState(() {
-                  _categoryMode = val;
+                  if (val) {
+                    _selectedMode = 'category';
+                    _categoryMode = true;
+                    _pioneerMode = false;
+                  } else {
+                    _selectedMode = 'none';
+                    _categoryMode = false;
+                    _pioneerMode = false;
+                  }
+                });
+                _createMarkers();
+              },
+            ),
+            const SizedBox(width: 8),
+            ChoiceChip(
+              label: const Text('開拓'),
+              selected: _selectedMode == 'pioneer',
+              onSelected: (val) {
+                setState(() {
+                  if (val) {
+                    _selectedMode = 'pioneer';
+                    _pioneerMode = true;
+                    _categoryMode = false;
+                  } else {
+                    _selectedMode = 'none';
+                    _pioneerMode = false;
+                    _categoryMode = false;
+                  }
                 });
                 _createMarkers();
               },
@@ -1081,9 +1158,9 @@ class _MapViewState extends ConsumerState<MapView> {
   
   
   Widget _buildMapControls() {
-    // 検索バーの右下付近に現在位置ボタンを配置
+    // 右下に現在位置ボタンを配置
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 10 + 50 + 10, // フィルタ列と右で少し重ならない高さ
+      bottom: 20,
       right: 20,
       child: GestureDetector(
         onTap: () async {

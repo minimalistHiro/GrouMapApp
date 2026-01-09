@@ -37,6 +37,36 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
   // バッジのロック状態を管理するMap
   final Map<String, bool> _badgeUnlockStates = {};
 
+  // 英語カテゴリ → 日本語ラベルの対応
+  String _displayCategory(String raw) {
+    final key = (raw.isEmpty ? 'その他' : raw).toLowerCase();
+    switch (key) {
+      case 'basic':
+        return '基本';
+      case 'advanced':
+        return '上級';
+      case 'event':
+        return 'イベント';
+      case 'shop':
+      case 'store':
+        return '店舗';
+      case 'social':
+        return 'ソーシャル';
+      case 'seasonal':
+        return '季節';
+      case 'rare':
+        return 'レア';
+      case 'challenge':
+        return 'チャレンジ';
+      case 'other':
+      case 'others':
+        return 'その他';
+      default:
+        // 既に日本語の場合や未定義はそのまま
+        return raw.isEmpty ? '未分類' : raw;
+    }
+  }
+
   // Firestore からバッジを購読
   Stream<List<BadgeModel>> _badgesStream() {
     return FirebaseFirestore.instance
@@ -112,9 +142,9 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
             builder: (context, userSnapshot) {
               final userBadgesMap = userSnapshot.data ?? {};
 
-              // カテゴリをデータから動的生成
+              // カテゴリをデータから動的生成（日本語ラベルに変換）
               final categories = <String>{'すべて'}
-                ..addAll(badges.map((b) => b.category).where((c) => c.isNotEmpty));
+                ..addAll(badges.map((b) => _displayCategory(b.category)).where((c) => c.isNotEmpty));
 
               if (!categories.contains(_selectedCategory)) {
                 _selectedCategory = 'すべて';
@@ -123,7 +153,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
 
               final filteredBadges = _selectedCategory == 'すべて'
                   ? badges
-                  : badges.where((b) => b.category == _selectedCategory).toList();
+                  : badges.where((b) => _displayCategory(b.category) == _selectedCategory).toList();
 
               return Column(
                 children: [
