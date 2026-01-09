@@ -229,16 +229,22 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           ),
           
           // タブコンテンツ
-          SliverFillRemaining(
-            child: TabBarView(
-              controller: _tabController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _buildPostsTab(),
-                _buildCouponsTab(),
-                _buildMenuTab(),
-                _buildStoreDetailsTab(),
-              ],
+          SliverToBoxAdapter(
+            child: AnimatedBuilder(
+              animation: _tabController,
+              builder: (context, _) {
+                switch (_tabController.index) {
+                  case 0:
+                    return _buildPostsTab();
+                  case 1:
+                    return _buildCouponsTab();
+                  case 2:
+                    return _buildMenuTab();
+                  case 3:
+                  default:
+                    return _buildStoreDetailsTab();
+                }
+              },
             ),
           ),
         ],
@@ -637,6 +643,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         return Padding(
           padding: const EdgeInsets.all(2),
           child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               crossAxisSpacing: 2,
@@ -719,6 +727,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         return Padding(
           padding: const EdgeInsets.all(2),
           child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3,
               crossAxisSpacing: 2,
@@ -835,6 +845,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         return Padding(
           padding: const EdgeInsets.all(16),
           child: GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 2,
               crossAxisSpacing: 12,
@@ -910,7 +922,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildStoreDetailsTab() {
-    return SingleChildScrollView(
+    return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

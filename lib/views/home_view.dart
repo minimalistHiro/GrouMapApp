@@ -43,6 +43,25 @@ final userDataProvider = StreamProvider.family<Map<String, dynamic>?, String>((r
   }
 });
 
+// ユーザーが所持しているバッジ数
+final userBadgeCountProvider = StreamProvider.family<int, String>((ref, userId) {
+  try {
+    return FirebaseFirestore.instance
+        .collection('user_badges')
+        .doc(userId)
+        .collection('badges')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length)
+        .handleError((error) {
+      debugPrint('Error fetching user badge count: $error');
+      return 0;
+    });
+  } catch (e) {
+    debugPrint('Error creating user badge count stream: $e');
+    return Stream.value(0);
+  }
+});
+
 class HomeView extends ConsumerWidget {
   const HomeView({Key? key}) : super(key: key);
 
@@ -100,22 +119,32 @@ class HomeView extends ConsumerWidget {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
-              // ヘッダー部分
-              _buildHeader(context, ref, userId),
-              
-              const SizedBox(height: 24),
-              
-              // カード部分
-              _buildStatsCard(context, ref, userId),
-              
-              const SizedBox(height: 24),
-              
-              // その他のコンテンツ
-              _buildAdditionalContent(context, ref, userId),
-            ],
+        child: RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(userDataProvider(userId));
+            ref.invalidate(userBadgeCountProvider(userId));
+            ref.invalidate(announcementsProvider);
+            ref.invalidate(availableCouponsProvider(userId));
+            ref.invalidate(allPostsProvider);
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                // ヘッダー部分
+                _buildHeader(context, ref, userId),
+                
+                const SizedBox(height: 24),
+                
+                // カード部分
+                _buildStatsCard(context, ref, userId),
+                
+                const SizedBox(height: 24),
+                
+                // その他のコンテンツ
+                _buildAdditionalContent(context, ref, userId),
+              ],
+            ),
           ),
         ),
       ),
@@ -441,7 +470,6 @@ class HomeView extends ConsumerWidget {
           ref.watch(userDataProvider(userId)).when(
             data: (userData) {
               if (userData != null) {
-                final badgeCount = userData['badges']?.length ?? 0;
                 final dynamic paidRaw = userData['paid'];
                 final num paidNum = paidRaw is num ? paidRaw : num.tryParse('$paidRaw') ?? 0;
                 final String paidFormatted = NumberFormat.currency(locale: 'ja_JP', symbol: '¥', decimalDigits: 0).format(paidNum);
@@ -464,12 +492,30 @@ class HomeView extends ConsumerWidget {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Text(
-                                '$badgeCount',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
+                              ref.watch(userBadgeCountProvider(userId)).when(
+                                data: (badgeCount) => Text(
+                                  '$badgeCount',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                loading: () => const Text(
+                                  '-',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                                error: (_, __) => const Text(
+                                  '-',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black54,
+                                  ),
                                 ),
                               ),
                               const Text(
