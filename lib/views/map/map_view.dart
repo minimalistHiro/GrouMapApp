@@ -750,12 +750,6 @@ class _MapViewState extends ConsumerState<MapView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('マップ'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
-        actions: const [],
-      ),
       body: Stack(
         children: [
           // Flutter Map
@@ -891,7 +885,7 @@ class _MapViewState extends ConsumerState<MapView> {
                       Text(
                         selectedStore['name'] ?? '店舗名なし',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 14,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -899,22 +893,38 @@ class _MapViewState extends ConsumerState<MapView> {
                       Text(
                         '${selectedStore['category'] ?? 'その他'}',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 12,
                           color: Colors.grey[600],
                         ),
                       ),
-                      if (selectedStore['description']?.isNotEmpty == true) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          selectedStore['description'],
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _getStampStatusColor(stamps).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: _getStampStatusColor(stamps).withOpacity(0.3)),
                         ),
-                      ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _getStampStatusIcon(stamps),
+                              color: _getStampStatusColor(stamps),
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'スタンプ: $stamps/10',
+                              style: TextStyle(
+                                color: _getStampStatusColor(stamps),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       // スタンプ状況表示と店舗詳細ボタンを同じ行に配置
                       Row(
@@ -940,35 +950,6 @@ class _MapViewState extends ConsumerState<MapView> {
                                   isOpenNow ? '営業中' : '営業時間外',
                                   style: TextStyle(
                                     color: isOpenNow ? Colors.green[600] : Colors.grey[600],
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // スタンプ状況表示
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: _getStampStatusColor(stamps).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: _getStampStatusColor(stamps).withOpacity(0.3)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  _getStampStatusIcon(stamps),
-                                  color: _getStampStatusColor(stamps),
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'スタンプ: $stamps/10',
-                                  style: TextStyle(
-                                    color: _getStampStatusColor(stamps),
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -1003,12 +984,6 @@ class _MapViewState extends ConsumerState<MapView> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(
-                                    Icons.info_outline,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 6),
                                   const Text(
                                     '店舗詳細',
                                     style: TextStyle(
