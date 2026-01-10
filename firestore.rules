@@ -1,6 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isOwner() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isOwner == true;
+    }
     // ユーザーコレクションのルール
     match /users/{userId} {
       // 認証されたユーザーは自分のドキュメントを読み書き可能
@@ -160,9 +164,10 @@ service cloud.firestore {
     match /stores/{storeId} {
       // 認証されたユーザーは読み取り可能
       allow read: if request.auth != null;
-      // ストアロールのユーザーのみ書き込み可能
-      allow write: if request.auth != null && 
-        request.auth.token.role in ['store', 'company', 'admin'];
+      // 新規作成は未ログインユーザーも許可
+      allow create: if true;
+      // 更新・削除はオーナーのみ可能
+      allow update, delete: if isOwner();
     }
     
     // お知らせコレクションのルール
