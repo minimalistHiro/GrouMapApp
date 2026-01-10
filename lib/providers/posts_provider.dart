@@ -91,12 +91,6 @@ final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, 
         .where('storeId', isEqualTo: storeId)
         .limit(20)
         .snapshots()
-        .timeout(
-          const Duration(seconds: 3),
-          onTimeout: (eventSink) {
-            debugPrint('Store posts query timed out, returning empty list');
-          },
-        )
         .map((snapshot) {
       final posts = snapshot.docs
           .map((doc) => PostModel.fromMap(doc.data(), doc.id))
@@ -106,7 +100,16 @@ final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, 
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       debugPrint('Store posts (collectionGroup) loaded: ${posts.length} posts');
       return posts;
-    }).handleError((error) {
+    })
+        .timeout(
+          const Duration(seconds: 3),
+          onTimeout: (eventSink) {
+            debugPrint('Store posts query timed out, returning empty list');
+            eventSink.add(<PostModel>[]);
+            eventSink.close();
+          },
+        )
+        .handleError((error) {
       debugPrint('Error fetching store posts (collectionGroup): $error');
       return <PostModel>[];
     });

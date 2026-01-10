@@ -79,7 +79,8 @@ class _StampCardsViewState extends State<StampCardsView> {
         // ユーザーのスタンプデータを取得
         final stamps = userStoreData['stamps'] as int? ?? 0;
         final lastVisited = userStoreData['lastVisited'];
-        final totalSpending = userStoreData['totalSpending'] as double? ?? 0.0;
+        final totalSpendingRaw = userStoreData['totalSpending'];
+        final totalSpending = (totalSpendingRaw is num) ? totalSpendingRaw.toDouble() : 0.0;
         
         stampCards.add({
           'storeId': storeId,
@@ -398,7 +399,7 @@ class _StampCardsViewState extends State<StampCardsView> {
                     _buildStatItem(
                       icon: Icons.monetization_on,
                       label: '総支出',
-                      value: '¥${(stampCard['totalSpending'] as double).toStringAsFixed(0)}',
+                      value: '¥${(stampCard['totalSpending'] as double?)?.toStringAsFixed(0) ?? '0'}',
                     ),
                     _buildStatItem(
                       icon: Icons.schedule,
