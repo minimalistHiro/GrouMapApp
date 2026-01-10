@@ -359,19 +359,6 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
             onPressed: () => Navigator.of(context).pop(),
           ),
           const SizedBox(width: 8),
-          CircleAvatar(
-            radius: 16,
-            backgroundColor: const Color(0xFFFF6B35),
-            child: Text(
-              widget.post.storeName?.substring(0, 1).toUpperCase() ?? 'S',
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

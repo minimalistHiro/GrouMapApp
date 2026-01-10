@@ -92,21 +92,20 @@ class CouponsView extends ConsumerWidget {
           );
         }
 
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: GridView.builder(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              childAspectRatio: 0.8, // アスペクト比を調整してレイアウトエラーを防止
-            ),
-            itemCount: posts.length,
-            itemBuilder: (context, index) {
-              final post = posts[index];
-              return _buildPostCard(context, ref, post);
-            },
+        final itemCount = posts.length > 60 ? 60 : posts.length;
+
+        return GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 0,
+            mainAxisSpacing: 0,
+            childAspectRatio: 1,
           ),
+          itemCount: itemCount,
+          itemBuilder: (context, index) {
+            final post = posts[index];
+            return _buildPostCard(context, ref, post);
+          },
         );
       },
       loading: () => const Center(
@@ -200,152 +199,71 @@ class CouponsView extends ConsumerWidget {
         );
       },
       child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 3,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 画像（縦長）
-            AspectRatio(
-              aspectRatio: 0.8, // 縦長にする
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(10),
-                    topRight: Radius.circular(10),
-                  ),
-                ),
-                child: post.imageUrls.isNotEmpty
-                    ? ClipRRect(
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(10),
-                          topRight: Radius.circular(10),
-                        ),
-                        child: Image.network(
-                          post.imageUrls[0],
-                          width: double.infinity,
-                          height: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Center(
-                              child: Icon(
-                                Icons.image,
-                                size: 40,
-                                color: Colors.grey,
-                              ),
-                            );
-                          },
-                        ),
-                      )
-                    : const Center(
-                        child: Icon(
-                          Icons.image,
-                          size: 40,
-                          color: Colors.grey,
-                        ),
-                      ),
-              ),
-            ),
-            
-            // コンテンツ部分
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // カテゴリバッジ
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B35).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: const Color(0xFFFF6B35).withOpacity(0.3),
-                        ),
-                      ),
-                      child: Text(
-                        post.category ?? 'お知らせ',
-                        style: const TextStyle(
-                          fontSize: 8,
-                          color: Color(0xFFFF6B35),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 6),
-                    
-                    // タイトル
-                    Text(
-                      post.title,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    
-                    const SizedBox(height: 4),
-                    
-                    // 内容
-                    Expanded(
-                      child: Text(
-                        post.content,
-                        style: const TextStyle(
-                          fontSize: 9,
-                          color: Colors.grey,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 6),
-                    
-                    // 店舗名と投稿日
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            post.storeName ?? '店舗名なし',
-                            style: const TextStyle(
-                              fontSize: 8,
+        color: Colors.grey[200],
+        child: post.imageUrls.isNotEmpty
+            ? Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.network(
+                      post.imageUrls[0],
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[300],
+                          child: const Center(
+                            child: Icon(
+                              Icons.image,
+                              size: 30,
                               color: Colors.grey,
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        Text(
-                          _formatPostDate(post.createdAt),
-                          style: const TextStyle(
-                            fontSize: 8,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
-                  ],
+                  ),
+                  if (post.imageUrls.length > 1)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.grid_on,
+                              size: 12,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${post.imageUrls.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              )
+            : Container(
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(
+                    Icons.image,
+                    size: 30,
+                    color: Colors.grey,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1375,22 +1293,6 @@ class CouponsView extends ConsumerWidget {
     return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
   }
   
-  String _formatPostDate(DateTime date) {
-    // Post用の日付フォーマット
-    try {
-      final now = DateTime.now();
-      final difference = now.difference(date).inDays;
-      
-      if (difference == 0) return '今日';
-      if (difference == 1) return '昨日';
-      if (difference < 7) return '${difference}日前';
-      
-      return '${date.month}月${date.day}日';
-    } catch (e) {
-      return '日付不明';
-    }
-  }
-
   void _obtainCoupon(BuildContext context, WidgetRef ref, String couponId, String storeId, String userId) async {
     try {
       await ref.read(couponProvider).obtainCoupon(userId, couponId, storeId);

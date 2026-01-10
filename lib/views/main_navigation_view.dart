@@ -180,6 +180,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         onTap: _onTabChanged,
         selectedItemColor: const Color(0xFFFF6B35),
         unselectedItemColor: Colors.grey,
+        selectedLabelStyle: const TextStyle(fontSize: 10),
+        unselectedLabelStyle: const TextStyle(fontSize: 10),
         backgroundColor: Colors.white,
         elevation: 8,
         items: const [
