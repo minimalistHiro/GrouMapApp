@@ -1049,8 +1049,10 @@ class _MapViewState extends ConsumerState<MapView> {
   }
   
   Widget _buildSearchBar() {
+    final double topPadding = MediaQuery.of(context).padding.top;
+    const double searchTopOffset = 4;
     return Positioned(
-      top: MediaQuery.of(context).padding.top + 10,
+      top: topPadding + searchTopOffset,
       left: 20,
       right: 20,
       child: Container(
@@ -1093,7 +1095,11 @@ class _MapViewState extends ConsumerState<MapView> {
   
   // 検索バー下にフィルタ用のチップを表示
   Widget _buildFilterChips() {
-    final double topY = MediaQuery.of(context).padding.top + 10 + 50 + 10;
+    final double topPadding = MediaQuery.of(context).padding.top;
+    const double searchTopOffset = 4;
+    const double searchHeight = 50;
+    const double chipsTopGap = 6;
+    final double topY = topPadding + searchTopOffset + searchHeight + chipsTopGap;
     return Positioned(
       top: topY,
       left: 20,
@@ -1158,47 +1164,91 @@ class _MapViewState extends ConsumerState<MapView> {
   
   
   Widget _buildMapControls() {
-    // 右下に現在位置ボタンを配置
+    final double topPadding = MediaQuery.of(context).padding.top;
+    const double searchTopOffset = 4;
+    const double searchHeight = 50;
+    const double chipsTopGap = 6;
+    const double chipsHeight = 36;
+    const double controlsTopGap = 8;
+    final double topY = topPadding +
+        searchTopOffset +
+        searchHeight +
+        chipsTopGap +
+        chipsHeight +
+        controlsTopGap;
+
     return Positioned(
-      bottom: 20,
+      top: topY,
       right: 20,
-      child: GestureDetector(
-        onTap: () async {
-          try {
-            await _getCurrentLocation();
-            setState(() {
-              _expandedMarkerId = '';
-              _isShowStoreInfo = false;
-            });
-            await _loadUserStamps();
-            _createMarkers();
-          } catch (e) {
-            print('現在位置ボタンタップ時のエラー: $e');
-            // エラーが発生してもマーカーは更新する
-            await _loadUserStamps();
-            _createMarkers();
-          }
-        },
-        child: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            color: Colors.black,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+      child: Column(
+        children: [
+          // 現在位置ボタン
+          GestureDetector(
+            onTap: () async {
+              try {
+                await _getCurrentLocation();
+                setState(() {
+                  _expandedMarkerId = '';
+                  _isShowStoreInfo = false;
+                });
+                await _loadUserStamps();
+                _createMarkers();
+              } catch (e) {
+                print('現在位置ボタンタップ時のエラー: $e');
+                // エラーが発生してもマーカーは更新する
+                await _loadUserStamps();
+                _createMarkers();
+              }
+            },
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-            ],
+              child: const Icon(
+                Icons.my_location,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
           ),
-          child: const Icon(
-            Icons.my_location,
-            color: Colors.white,
-            size: 24,
+          const SizedBox(height: 10),
+          // 北向きに揃えるボタン
+          GestureDetector(
+            onTap: () {
+              _mapController.rotate(0);
+            },
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.black,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.explore,
+                color: Colors.white,
+                size: 24,
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
