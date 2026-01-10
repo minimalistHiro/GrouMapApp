@@ -593,9 +593,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               ),
             
             const SizedBox(height: 16),
-            
-            // スタンプ増減テスター
-            _buildStampTester(),
           ],
         ),
       ),
@@ -1966,127 +1963,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     );
   }
 
-  // スタンプ増減テスターを構築
-  Widget _buildStampTester() {
-    final currentStamps = _userStamps?['stamps'] ?? 0;
-    
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'スタンプテスター',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            '開発用：スタンプ数をテストできます',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 12),
-          
-          // スタンプ増減ボタン
-          Row(
-            children: [
-              // スタンプ減算ボタン
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: currentStamps > 0 ? () => _updateStamps(currentStamps - 1) : null,
-                  icon: const Icon(Icons.remove, size: 16),
-                  label: const Text('スタンプ-1'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red[100],
-                    foregroundColor: Colors.red[700],
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-              
-              const SizedBox(width: 8),
-              
-              // スタンプ加算ボタン
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: currentStamps < 10 ? () => _updateStamps(currentStamps + 1) : null,
-                  icon: const Icon(Icons.add, size: 16),
-                  label: const Text('スタンプ+1'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green[100],
-                    foregroundColor: Colors.green[700],
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          
-          const SizedBox(height: 8),
-          
-          // クイック設定ボタン
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _updateStamps(0),
-                  child: const Text('リセット'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey[600],
-                    side: BorderSide(color: Colors.grey[400]!),
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _updateStamps(5),
-                  child: const Text('5個'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.blue[600],
-                    side: BorderSide(color: Colors.blue[400]!),
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _updateStamps(10),
-                  child: const Text('完成'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.orange[600],
-                    side: BorderSide(color: Colors.orange[400]!),
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+  
 }
 
 class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {

@@ -167,7 +167,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       child: GridView.builder(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4, // 4列
-          childAspectRatio: 0.8, // 縦長の比率
+          childAspectRatio: 0.75, // 縦長の比率
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
         ),
@@ -228,7 +228,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
               child: Text(
                 _getStringValue(store['name'], '店舗名なし'),
                 style: const TextStyle(
-                  fontSize: 12,
+                  fontSize: 9,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
                 ),
