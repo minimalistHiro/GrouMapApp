@@ -210,33 +210,39 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                 
                 const SizedBox(height: 32),
                 
-                // Googleサインアップ
-                CustomButton(
-                  text: 'Googleで登録',
-                  onPressed: signInState == SignInState.loading ? null : _handleGoogleSignUp,
-                  backgroundColor: const Color(0xFFE75B41),
-                  textColor: Colors.black,
-                  borderColor: Colors.grey,
-                  icon: Image.asset(
-                    'assets/images/groumap_icon.png',
-                    width: 20,
-                    height: 20,
-                    errorBuilder: (context, error, stackTrace) => 
-                        const Icon(Icons.login, size: 20),
-                  ),
-                ),
-                
-                const SizedBox(height: 16),
-                
                 // Appleサインアップ（iOSのみ）
-                if (Theme.of(context).platform == TargetPlatform.iOS)
+                if (Theme.of(context).platform == TargetPlatform.iOS) ...[
                   CustomButton(
-                    text: 'Appleで登録',
+                    text: 'Appleで続ける',
                     onPressed: signInState == SignInState.loading ? null : _handleAppleSignUp,
                     backgroundColor: Colors.black,
                     textColor: Colors.white,
+                    height: 52,
+                    borderRadius: 999,
                     icon: const Icon(Icons.apple, color: Colors.white, size: 20),
                   ),
+                  const SizedBox(height: 16),
+                ],
+                
+                // Googleサインアップ
+                CustomButton(
+                  text: 'Googleで続ける',
+                  onPressed: signInState == SignInState.loading ? null : _handleGoogleSignUp,
+                  height: 52,
+                  backgroundColor: Colors.white,
+                  textColor: Colors.black87,
+                  borderColor: const Color(0xFFBDBDBD),
+                  borderRadius: 999,
+                  icon: Image.asset(
+                    'assets/images/google_logo.png',
+                    width: 24,
+                    height: 24,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 
                 const SizedBox(height: 32),
                 

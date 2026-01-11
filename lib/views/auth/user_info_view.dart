@@ -364,6 +364,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                 CustomButton(
                   text: '次へ',
                   onPressed: _handleNext,
+                  borderRadius: 999,
                 ),
                 
                 const SizedBox(height: 16),

@@ -236,7 +236,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                     elevation: 8,
                     shadowColor: Colors.black.withOpacity(0.3),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
                   child: const Text(
@@ -267,7 +267,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                     foregroundColor: Colors.white,
                     side: const BorderSide(color: Colors.white, width: 2),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
                   child: const Text(

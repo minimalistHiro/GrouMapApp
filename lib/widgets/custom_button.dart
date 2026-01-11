@@ -10,6 +10,8 @@ class CustomButton extends StatelessWidget {
   final Widget? icon;
   final double? width;
   final double? height;
+  final double? borderRadius;
+  final TextStyle? textStyle;
 
   const CustomButton({
     Key? key,
@@ -22,6 +24,8 @@ class CustomButton extends StatelessWidget {
     this.icon,
     this.width,
     this.height,
+    this.borderRadius,
+    this.textStyle,
   }) : super(key: key);
 
   @override
@@ -36,7 +40,7 @@ class CustomButton extends StatelessWidget {
           foregroundColor: textColor ?? Colors.white,
           side: borderColor != null ? BorderSide(color: borderColor!) : null,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(borderRadius ?? 8),
           ),
           elevation: 0,
         ),
@@ -58,11 +62,12 @@ class CustomButton extends StatelessWidget {
                   ],
                   Text(
                     text,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: textColor ?? Colors.white,
-                    ),
+                    style: (textStyle ??
+                            TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ))
+                        .copyWith(color: textColor ?? textStyle?.color ?? Colors.white),
                   ),
                 ],
               ),
