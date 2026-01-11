@@ -6,11 +6,11 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'sign_in_view.dart';
 import 'email_verification_pending_view.dart';
+import 'user_info_view.dart';
+import '../main_navigation_view.dart';
 
 class SignUpView extends ConsumerStatefulWidget {
-  final Map<String, dynamic>? userInfo;
-  
-  const SignUpView({Key? key, this.userInfo}) : super(key: key);
+  const SignUpView({Key? key}) : super(key: key);
 
   @override
   ConsumerState<SignUpView> createState() => _SignUpViewState();
@@ -42,12 +42,33 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
       if (next == SignInState.error) {
         _showErrorDialog(signInNotifier);
       } else if (next == SignInState.success) {
-        SuccessSnackBar.show(context, message: 'アカウントを作成しました。メールを確認してください');
-        // 認証保留画面に遷移
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const EmailVerificationPendingView()),
-          (route) => false,
-        );
+        if (signInNotifier.lastOperation == 'アカウント作成') {
+          SuccessSnackBar.show(context, message: 'アカウントを作成しました。メールを確認してください');
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(
+              builder: (context) => const EmailVerificationPendingView(
+                goToUserInfoAfterVerify: true,
+              ),
+            ),
+            (route) => false,
+          );
+          return;
+        }
+
+        if (signInNotifier.lastOperation == 'Googleサインイン' ||
+            signInNotifier.lastOperation == 'Appleサインイン') {
+          if (signInNotifier.lastIsNewUser == true) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const UserInfoView()),
+              (route) => false,
+            );
+          } else {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const MainNavigationView()),
+              (route) => false,
+            );
+          }
+        }
       }
     });
 
@@ -71,33 +92,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 40),
-                
-                // ロゴ
-                Center(
-                  child: Image.asset(
-                    'assets/images/groumap_icon.png',
-                    width: 120,
-                    height: 120,
-                    errorBuilder: (context, error, stackTrace) => 
-                        const Icon(Icons.location_on, size: 120, color: Colors.blue),
-                  ),
-                ),
-                
-                const SizedBox(height: 32),
-                
-                // タイトル
-                const Text(
-                  'GrouMap',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                const SizedBox(height: 8),
+                const SizedBox(height: 24),
                 
                 const Text(
                   '新規登録',
@@ -271,29 +266,17 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
 
   void _handleSignUp() {
     if (_formKey.currentState!.validate()) {
-      // ユーザー情報がある場合は、displayNameとして使用
-      final displayName = widget.userInfo?['name'] ?? '';
-      
       // 追加のユーザー情報を準備
       final additionalUserInfo = <String, dynamic>{
         'level': 1, // 初期レベルを1に設定
         'experience': 0, // 初期経験値を0に設定
         'createdAt': DateTime.now(), // アカウント作成日時
       };
-      if (widget.userInfo != null) {
-        additionalUserInfo.addAll({
-          'birthDate': widget.userInfo!['birthDate'],
-          'gender': widget.userInfo!['gender'],
-          'prefecture': widget.userInfo!['prefecture'],
-          'city': widget.userInfo!['city'],
-          'profileImageUrl': widget.userInfo!['profileImageUrl'],
-        });
-      }
       
       ref.read(signInStateProvider.notifier).createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
-        displayName: displayName,
+        displayName: '',
         additionalUserInfo: additionalUserInfo,
       );
     }

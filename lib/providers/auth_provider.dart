@@ -26,12 +26,14 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
   String? _errorMessage;
   String? _errorDetails;
   String? _lastOperation;
+  bool? _lastIsNewUser;
 
   SignInStateNotifier(this._authService) : super(SignInState.initial);
 
   String? get errorMessage => _errorMessage;
   String? get errorDetails => _errorDetails;
   String? get lastOperation => _lastOperation;
+  bool? get lastIsNewUser => _lastIsNewUser;
 
   // エラー設定
   void _setError(String message, String? details, String operation) {
@@ -46,6 +48,7 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
     _errorMessage = null;
     _errorDetails = null;
     _lastOperation = null;
+    _lastIsNewUser = null;
   }
 
   // Googleサインイン
@@ -55,7 +58,8 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
     _lastOperation = 'Googleサインイン';
 
     try {
-      await _authService.signInWithGoogle();
+      final userCredential = await _authService.signInWithGoogle();
+      _lastIsNewUser = userCredential?.additionalUserInfo?.isNewUser ?? false;
       state = SignInState.success;
     } catch (e) {
       if (e is AuthException) {
@@ -73,7 +77,8 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
     _lastOperation = 'Appleサインイン';
 
     try {
-      await _authService.signInWithApple();
+      final userCredential = await _authService.signInWithApple();
+      _lastIsNewUser = userCredential?.additionalUserInfo?.isNewUser ?? false;
       state = SignInState.success;
     } catch (e) {
       if (e is AuthException) {
@@ -92,6 +97,7 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
     _clearError();
     state = SignInState.loading;
     _lastOperation = 'メールアドレス・パスワードサインイン';
+    _lastIsNewUser = false;
 
     try {
       await _authService.signInWithEmailAndPassword(
@@ -120,6 +126,7 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
     _clearError();
     state = SignInState.loading;
     _lastOperation = 'アカウント作成';
+    _lastIsNewUser = true;
 
     try {
       await _authService.createUserWithEmailAndPassword(

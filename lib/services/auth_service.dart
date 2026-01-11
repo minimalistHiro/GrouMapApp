@@ -363,6 +363,26 @@ class AuthService {
     }
   }
 
+  Future<void> updateAuthProfile({
+    String? displayName,
+    String? photoUrl,
+  }) async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return;
+      if (displayName != null) {
+        await user.updateDisplayName(displayName);
+      }
+      if (photoUrl != null) {
+        await user.updatePhotoURL(photoUrl);
+      }
+      await user.reload();
+    } catch (e) {
+      debugPrint('Error updating auth profile: $e');
+      throw _handleAuthError(e, 'プロフィール更新');
+    }
+  }
+
   // ユーザー情報を取得
   Future<DocumentSnapshot?> getUserInfo() async {
     try {

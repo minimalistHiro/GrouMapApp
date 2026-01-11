@@ -2,9 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../main_navigation_view.dart';
+import 'user_info_view.dart';
 
 class EmailVerificationPendingView extends ConsumerStatefulWidget {
-  const EmailVerificationPendingView({Key? key}) : super(key: key);
+  final bool goToUserInfoAfterVerify;
+
+  const EmailVerificationPendingView({
+    Key? key,
+    this.goToUserInfoAfterVerify = false,
+  }) : super(key: key);
 
   @override
   ConsumerState<EmailVerificationPendingView> createState() => _EmailVerificationPendingViewState();
@@ -122,8 +128,11 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
       final isVerified = await ref.read(authServiceProvider).isEmailVerified();
       if (isVerified && mounted) {
         await ref.read(authServiceProvider).updateEmailVerificationStatus(true);
+        final nextView = widget.goToUserInfoAfterVerify
+            ? const UserInfoView()
+            : const MainNavigationView();
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainNavigationView()),
+          MaterialPageRoute(builder: (context) => nextView),
           (route) => false,
         );
       } else if (mounted) {
@@ -177,5 +186,4 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
     }
   }
 }
-
 

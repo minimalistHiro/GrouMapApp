@@ -4,7 +4,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/error_dialog.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import 'user_info_view.dart';
+import 'sign_up_view.dart';
 import 'email_verification_pending_view.dart';
 import '../main_navigation_view.dart';
 
@@ -48,6 +48,14 @@ class _SignInViewState extends ConsumerState<SignInView> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        title: const Text(
+          'ログイン',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
@@ -63,45 +71,61 @@ class _SignInViewState extends ConsumerState<SignInView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 40),
-                
-                // ロゴ
-                Center(
-                  child: Image.asset(
-                    'assets/images/groumap_icon.png',
-                    width: 120,
-                    height: 120,
-                    errorBuilder: (context, error, stackTrace) => 
-                        const Icon(Icons.location_on, size: 120, color: Colors.blue),
+                const SizedBox(height: 24),
+
+                // Appleサインイン（iOSのみ）
+                if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+                  CustomButton(
+                    text: 'Appleでサインイン',
+                    onPressed: signInState == SignInState.loading ? null : _handleAppleSignIn,
+                    backgroundColor: Colors.black,
+                    textColor: Colors.white,
+                    height: 52,
+                    borderRadius: 999,
+                    icon: const Icon(Icons.apple, color: Colors.white, size: 20),
                   ),
-                ),
-                
-                const SizedBox(height: 32),
-                
-                // タイトル
-                const Text(
-                  'GrouMap',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                  const SizedBox(height: 16),
+                ],
+
+                // Googleサインイン
+                CustomButton(
+                  text: 'Googleでサインイン',
+                  onPressed: signInState == SignInState.loading ? null : _handleGoogleSignIn,
+                  height: 52,
+                  backgroundColor: Colors.white,
+                  textColor: Colors.black87,
+                  borderColor: const Color(0xFFBDBDBD),
+                  borderRadius: 999,
+                  icon: Image.asset(
+                    'assets/images/google_logo.png',
+                    width: 24,
+                    height: 24,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                const SizedBox(height: 8),
-                
-                const Text(
-                  'ログイン',
-                  style: TextStyle(
+                  textStyle: const TextStyle(
                     fontSize: 18,
-                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                
-                const SizedBox(height: 40),
-                
+
+                const SizedBox(height: 32),
+
+                // 区切り線
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'または',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
                 // メールアドレス入力
                 CustomTextField(
                   controller: _emailController,
@@ -117,9 +141,9 @@ class _SignInViewState extends ConsumerState<SignInView> {
                     return null;
                   },
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // パスワード入力
                 CustomTextField(
                   controller: _passwordController,
@@ -145,9 +169,9 @@ class _SignInViewState extends ConsumerState<SignInView> {
                     return null;
                   },
                 ),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // ログインボタン
                 CustomButton(
                   text: 'ログイン',
@@ -155,68 +179,15 @@ class _SignInViewState extends ConsumerState<SignInView> {
                   isLoading: signInState == SignInState.loading,
                   borderRadius: 999,
                 ),
-                
+
                 const SizedBox(height: 16),
-                
+
                 // パスワードリセット
                 TextButton(
                   onPressed: _handlePasswordReset,
                   child: const Text('パスワードを忘れた場合'),
                 ),
-                
-                const SizedBox(height: 32),
-                
-                // 区切り線
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'または',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-                
-                const SizedBox(height: 32),
-                
-                // Appleサインイン（iOSのみ）
-                if (Theme.of(context).platform == TargetPlatform.iOS) ...[
-                  CustomButton(
-                    text: 'Appleでサインイン',
-                    onPressed: signInState == SignInState.loading ? null : _handleAppleSignIn,
-                    backgroundColor: Colors.black,
-                    textColor: Colors.white,
-                    height: 52,
-                    borderRadius: 999,
-                    icon: const Icon(Icons.apple, color: Colors.white, size: 20),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                
-                // Googleサインイン
-                CustomButton(
-                  text: 'Googleでサインイン',
-                  onPressed: signInState == SignInState.loading ? null : _handleGoogleSignIn,
-                  height: 52,
-                  backgroundColor: Colors.white,
-                  textColor: Colors.black87,
-                  borderColor: const Color(0xFFBDBDBD),
-                  borderRadius: 999,
-                  icon: Image.asset(
-                    'assets/images/google_logo.png',
-                    width: 24,
-                    height: 24,
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                
+
                 const SizedBox(height: 32),
                 
                 // サインアップリンク
@@ -227,7 +198,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (context) => const UserInfoView()),
+                          MaterialPageRoute(builder: (context) => const SignUpView()),
                         );
                       },
                       child: const Text('新規登録'),

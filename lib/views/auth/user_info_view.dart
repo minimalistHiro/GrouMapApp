@@ -6,7 +6,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import 'sign_up_view.dart';
 import '../../providers/auth_provider.dart';
 import '../main_navigation_view.dart';
 
@@ -83,19 +82,6 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 20),
-                
-                // ロゴ
-                Center(
-                  child: Image.asset(
-                    'assets/images/groumap_icon.png',
-                    width: 100,
-                    height: 100,
-                    errorBuilder: (context, error, stackTrace) => 
-                        const Icon(Icons.location_on, size: 100, color: Colors.blue),
-                  ),
-                ),
-                
                 const SizedBox(height: 24),
                 
                 // タイトル
@@ -372,12 +358,22 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                 // スキップボタン
                 TextButton(
                   onPressed: () {
+                    final currentUser = ref.read(authServiceProvider).currentUser;
+                    if (currentUser == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('先にログインしてください'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                      return;
+                    }
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (context) => const SignUpView()),
+                      MaterialPageRoute(builder: (context) => const MainNavigationView()),
                     );
                   },
                   child: const Text(
-                    'スキップしてアカウント作成',
+                    'スキップ',
                     style: TextStyle(
                       color: Colors.white,
                       decoration: TextDecoration.underline,
@@ -847,34 +843,53 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
     }
     
     if (_formKey.currentState!.validate()) {
-      // ユーザー情報を保存（実際のアプリでは、プロバイダーやローカルストレージに保存）
-      final userInfo = {
-        'name': _nameController.text.trim(),
-        'birthDate': _selectedDate,
-        'gender': _selectedGender,
-        'prefecture': _selectedPrefecture,
-        'city': _selectedCity,
-        'friendCode': _friendCodeController.text.trim(),
-        'profileImageUrl': _profileImageUrl, // プロフィール画像URLを追加
-      };
-      
-      // すでにログイン済みかつメール認証済みの場合は、直接メイン画面へ遷移
       try {
-        final isVerified = await ref.read(authServiceProvider).isEmailVerified();
-        if (isVerified && mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const MainNavigationView()),
+        final authService = ref.read(authServiceProvider);
+        final currentUser = authService.currentUser;
+        if (currentUser == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('先にログインしてください'),
+              backgroundColor: Colors.red,
+            ),
           );
           return;
         }
-      } catch (_) {}
 
-      // 次の画面（サインアップ画面）に遷移
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => SignUpView(userInfo: userInfo),
-        ),
-      );
+        final userInfo = <String, dynamic>{
+          'displayName': _nameController.text.trim(),
+          'birthDate': _selectedDate,
+          'gender': _selectedGender,
+          'prefecture': _selectedPrefecture,
+          'city': _selectedCity,
+        };
+        final friendCode = _friendCodeController.text.trim();
+        if (friendCode.isNotEmpty) {
+          userInfo['friendCode'] = friendCode;
+        }
+        if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+          userInfo['profileImageUrl'] = _profileImageUrl;
+        }
+
+        await authService.updateUserInfo(userInfo);
+        await authService.updateAuthProfile(
+          displayName: _nameController.text.trim(),
+          photoUrl: _profileImageUrl,
+        );
+
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainNavigationView()),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ユーザー情報の保存に失敗しました: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 }

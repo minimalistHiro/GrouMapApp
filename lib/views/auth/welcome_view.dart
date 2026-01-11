@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'sign_in_view.dart';
 import 'sign_up_view.dart';
-import 'user_info_view.dart';
 
 class WelcomeView extends StatefulWidget {
   const WelcomeView({super.key});
@@ -226,7 +225,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => const UserInfoView(),
+                        builder: (context) => const SignUpView(),
                       ),
                     );
                   },
