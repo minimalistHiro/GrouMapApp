@@ -10,6 +10,7 @@ import 'views/auth/sign_up_view.dart';
 import 'views/auth/email_verification_pending_view.dart';
 import 'views/main_navigation_view.dart';
 import 'providers/auth_provider.dart';
+import 'services/push_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,30 +95,29 @@ class AuthWrapper extends ConsumerStatefulWidget {
 }
 
 class _AuthWrapperState extends ConsumerState<AuthWrapper> {
+  late final PushNotificationService _pushNotificationService;
+
+  @override
+  void initState() {
+    super.initState();
+    _pushNotificationService = PushNotificationService();
+    _pushNotificationService.initialize();
+
+    ref.listen(authStateProvider, (previous, next) {
+      next.whenData((user) {
+        if (user != null) {
+          _pushNotificationService.registerForUser(user.uid);
+        } else {
+          _pushNotificationService.clearCurrentUser();
+        }
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     
-    // 認証状態の変化を監視
-    ref.listen(authStateProvider, (previous, next) {
-      next.when(
-        data: (user) {
-          debugPrint('AuthWrapper: User state changed - ${user?.uid ?? 'null'}');
-          if (user != null) {
-            debugPrint('AuthWrapper: User logged in, should show MainNavigationView');
-          } else {
-            debugPrint('AuthWrapper: User not logged in, should show HomeView');
-          }
-        },
-        loading: () {
-          debugPrint('AuthWrapper: Loading state');
-        },
-        error: (error, _) {
-          debugPrint('AuthWrapper: Error state - $error');
-        },
-      );
-    });
-
     return authState.when(
       data: (user) {
         if (user != null) {

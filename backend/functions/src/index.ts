@@ -1,20 +1,202 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-// import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
+import { getMessaging } from 'firebase-admin/messaging';
 import { issueQRToken, verifyQRToken } from './utils/jwt';
 
 // Firebase Admin SDK初期化
 initializeApp();
 const db = getFirestore();
 const auth = getAuth();
+const messaging = getMessaging();
 
 // タイムゾーン設定
 process.env.TZ = 'Asia/Tokyo';
 
 // デバッグ用のログ
 console.log('Cloud Functions initialized with updated permissions');
+
+const NOTIFICATIONS_COLLECTION = 'notifications';
+const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
+const USERS_COLLECTION = 'users';
+const ANNOUNCEMENT_TOPIC = 'announcements';
+
+type NotificationData = {
+  userId?: string;
+  title?: string;
+  body?: string;
+  content?: string;
+  type?: string;
+  actionUrl?: string;
+  category?: string;
+  isPublished?: boolean;
+  isActive?: boolean;
+  isDelivered?: boolean;
+};
+
+async function getUserFcmTokens(userId: string): Promise<string[]> {
+  const tokens = new Set<string>();
+
+  const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+  if (userDoc.exists) {
+    const data = userDoc.data() as { fcmToken?: string; fcmTokens?: string[] } | undefined;
+    if (data?.fcmToken) {
+      tokens.add(data.fcmToken);
+    }
+    if (Array.isArray(data?.fcmTokens)) {
+      data?.fcmTokens?.forEach((token) => {
+        if (token) tokens.add(token);
+      });
+    }
+  }
+
+  const tokenDocs = await db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection('fcmTokens')
+    .get();
+  tokenDocs.forEach((doc) => {
+    const token = (doc.data() as { token?: string } | undefined)?.token ?? doc.id;
+    if (token) tokens.add(token);
+  });
+
+  return Array.from(tokens);
+}
+
+async function isPushEnabled(userId: string): Promise<boolean> {
+  const settingsDoc = await db.collection(NOTIFICATION_SETTINGS_COLLECTION).doc(userId).get();
+  if (!settingsDoc.exists) {
+    return true;
+  }
+  const data = settingsDoc.data() as { pushEnabled?: boolean } | undefined;
+  return data?.pushEnabled !== false;
+}
+
+function buildNotificationPayload(notificationId: string, data: NotificationData) {
+  const title = data.title ?? 'お知らせ';
+  const body = data.body ?? data.content ?? '';
+
+  const payloadData: Record<string, string> = {
+    notificationId,
+  };
+  if (data.type) payloadData.type = data.type;
+  if (data.actionUrl) payloadData.actionUrl = data.actionUrl;
+  if (data.category) payloadData.category = data.category;
+
+  return {
+    title,
+    body,
+    data: payloadData,
+  };
+}
+
+export const sendNotificationOnPublish = onDocumentWritten(
+  {
+    document: `${NOTIFICATIONS_COLLECTION}/{notificationId}`,
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    if (!event.data?.after.exists) return;
+
+    const notificationId = event.data.after.id;
+    const afterData = event.data.after.data() as NotificationData | undefined;
+    if (!afterData) return;
+
+    const beforeData = event.data.before.exists
+      ? (event.data.before.data() as NotificationData | undefined)
+      : undefined;
+
+    const wasPublished = beforeData?.isPublished === true;
+    const isPublished = afterData.isPublished === true;
+    const isActive = afterData.isActive !== false;
+    const alreadyDelivered = afterData.isDelivered === true;
+    const userId = afterData.userId;
+
+    if (alreadyDelivered) {
+      return;
+    }
+
+    const isCreate = !event.data.before.exists;
+    const shouldSendToTopic = !userId && isPublished && isActive && !wasPublished;
+    const shouldSendToUser = Boolean(userId) && isCreate;
+    if (!shouldSendToTopic && !shouldSendToUser) {
+      return;
+    }
+
+    const payload = buildNotificationPayload(notificationId, afterData);
+
+    if (shouldSendToUser && userId) {
+      const pushEnabled = await isPushEnabled(userId);
+      if (!pushEnabled) {
+        console.log(`Push disabled for user ${userId}, skipping notification ${notificationId}`);
+        return;
+      }
+
+      const tokens = await getUserFcmTokens(userId);
+      if (tokens.length === 0) {
+        console.log(`No FCM tokens found for user ${userId}, skipping notification ${notificationId}`);
+        return;
+      }
+
+      const response = await messaging.sendEachForMulticast({
+        tokens,
+        notification: {
+          title: payload.title,
+          body: payload.body,
+        },
+        data: payload.data,
+        android: {
+          notification: {
+            sound: 'default',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+            },
+          },
+        },
+      });
+
+      console.log(
+        `Sent notification ${notificationId} to user ${userId}: ` +
+          `${response.successCount} success, ${response.failureCount} failure`
+      );
+    }
+
+    if (shouldSendToTopic) {
+      await messaging.send({
+        topic: ANNOUNCEMENT_TOPIC,
+        notification: {
+          title: payload.title,
+          body: payload.body,
+        },
+        data: payload.data,
+        android: {
+          notification: {
+            sound: 'default',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+            },
+          },
+        },
+      });
+      console.log(`Sent announcement notification ${notificationId} to topic ${ANNOUNCEMENT_TOPIC}`);
+    }
+
+    await event.data.after.ref.update({
+      isDelivered: true,
+      deliveredAt: new Date(),
+    });
+  }
+);
 
 // シンプルなテスト関数（認証なし）
 export const testFunction = onCall(
