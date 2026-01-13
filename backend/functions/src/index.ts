@@ -109,7 +109,7 @@ export const sendNotificationOnPublish = onDocumentWritten(
       : undefined;
 
     const wasPublished = beforeData?.isPublished === true;
-    const isPublished = afterData.isPublished === true;
+    const isPublished = afterData.isPublished !== false;
     const isActive = afterData.isActive !== false;
     const alreadyDelivered = afterData.isDelivered === true;
     const userId = afterData.userId;
@@ -119,7 +119,10 @@ export const sendNotificationOnPublish = onDocumentWritten(
     }
 
     const isCreate = !event.data.before.exists;
-    const shouldSendToTopic = !userId && isPublished && isActive && !wasPublished;
+    const shouldSendToTopic =
+      !userId &&
+      isActive &&
+      ((isCreate && isPublished) || (!isCreate && !wasPublished && isPublished));
     const shouldSendToUser = Boolean(userId) && isCreate;
     if (!shouldSendToTopic && !shouldSendToUser) {
       return;

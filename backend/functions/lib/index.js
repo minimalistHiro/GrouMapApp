@@ -92,7 +92,7 @@ exports.sendNotificationOnPublish = (0, firestore_1.onDocumentWritten)({
         ? event.data.before.data()
         : undefined;
     const wasPublished = (beforeData === null || beforeData === void 0 ? void 0 : beforeData.isPublished) === true;
-    const isPublished = afterData.isPublished === true;
+    const isPublished = afterData.isPublished !== false;
     const isActive = afterData.isActive !== false;
     const alreadyDelivered = afterData.isDelivered === true;
     const userId = afterData.userId;
@@ -100,7 +100,9 @@ exports.sendNotificationOnPublish = (0, firestore_1.onDocumentWritten)({
         return;
     }
     const isCreate = !event.data.before.exists;
-    const shouldSendToTopic = !userId && isPublished && isActive && !wasPublished;
+    const shouldSendToTopic = !userId &&
+        isActive &&
+        ((isCreate && isPublished) || (!isCreate && !wasPublished && isPublished));
     const shouldSendToUser = Boolean(userId) && isCreate;
     if (!shouldSendToTopic && !shouldSendToUser) {
         return;
