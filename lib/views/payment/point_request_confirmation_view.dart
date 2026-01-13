@@ -4,8 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../providers/store_provider.dart';
-import '../../providers/notification_provider.dart';
-import '../../models/notification_model.dart' as model;
 import '../../services/point_transaction_service.dart';
 import '../stamps/stamp_punch_view.dart';
 
@@ -226,27 +224,6 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         } catch (_) {}
       }
 
-      // 店舗側へ通知
-      try {
-        final storeDoc = await FirebaseFirestore.instance.collection('stores').doc(storeId).get();
-        final ownerId = (storeDoc.data() ?? const {})['createdBy']?.toString();
-        if (ownerId != null && ownerId.isNotEmpty) {
-          final notifier = ref.read(notificationProvider);
-          await notifier.createNotification(
-            userId: ownerId,
-            title: accept ? 'ポイント付与が承認されました' : 'ポイント付与が拒否されました',
-            body: accept ? '${points}ポイントの付与がユーザーにより承認されました' : 'ユーザーがポイント付与を拒否しました',
-            type: model.NotificationType.system,
-            data: {
-              'requestId': requestId,
-              'storeId': storeId,
-              'userId': user.uid,
-              'status': accept ? 'accepted' : 'rejected',
-            },
-          );
-        }
-      } catch (_) {}
-
           if (mounted) {
         final message = accept ? 'ポイント付与を承認しました' : 'ポイント付与を拒否しました';
         ScaffoldMessenger.of(context).showSnackBar(
@@ -278,5 +255,4 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
     }
   }
 }
-
 
