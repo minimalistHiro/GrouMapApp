@@ -96,14 +96,15 @@ class AuthWrapper extends ConsumerStatefulWidget {
 
 class _AuthWrapperState extends ConsumerState<AuthWrapper> {
   late final PushNotificationService _pushNotificationService;
+  ProviderSubscription? _authStateSubscription;
 
   @override
   void initState() {
     super.initState();
-    _pushNotificationService = PushNotificationService();
+    _pushNotificationService = ref.read(pushNotificationServiceProvider);
     _pushNotificationService.initialize();
 
-    ref.listen(authStateProvider, (previous, next) {
+    _authStateSubscription = ref.listenManual(authStateProvider, (previous, next) {
       next.whenData((user) {
         if (user != null) {
           _pushNotificationService.registerForUser(user.uid);
@@ -112,6 +113,12 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
         }
       });
     });
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription?.close();
+    super.dispose();
   }
 
   @override

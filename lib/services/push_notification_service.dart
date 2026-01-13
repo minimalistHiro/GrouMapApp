@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class PushNotificationService {
   PushNotificationService({
@@ -20,6 +21,8 @@ class PushNotificationService {
 
   String? _currentUserId;
   StreamSubscription<String>? _tokenRefreshSubscription;
+  String? _lastSavedToken;
+  String? _lastSavedUserId;
 
   Future<void> initialize() async {
     if (kIsWeb) {
@@ -50,9 +53,30 @@ class PushNotificationService {
   }
 
   Future<void> registerForUser(String userId) async {
+    await syncForUser(userId, force: true);
+  }
+
+  Future<void> syncForUser(String userId, {bool force = false}) async {
     _currentUserId = userId;
+    await initialize();
     await _ensureTokenListener();
-    await _saveCurrentToken();
+    await _logApnsToken();
+
+    final token = await _getFcmTokenWithRetry();
+    if (token == null || token.isEmpty) {
+      debugPrint('FCM token is null/empty for user $userId');
+      return;
+    }
+
+    if (!force && _lastSavedUserId == userId && _lastSavedToken == token) {
+      debugPrint('FCM token unchanged for user $userId, skip save.');
+      await _subscribeToDefaultTopics();
+      return;
+    }
+
+    await _saveToken(userId, token);
+    _lastSavedUserId = userId;
+    _lastSavedToken = token;
     await _subscribeToDefaultTopics();
   }
 
@@ -65,24 +89,25 @@ class PushNotificationService {
     });
   }
 
-  Future<void> _saveCurrentToken() async {
+  Future<String?> _getFcmTokenWithRetry() async {
     if (kIsWeb) {
-      return;
+      return null;
     }
-    final userId = _currentUserId ?? _auth.currentUser?.uid;
-    if (userId == null) {
-      return;
-    }
-
     try {
       final token = await _messaging.getToken();
-      if (token == null || token.isEmpty) {
-        debugPrint('FCM token is empty for user $userId');
-        return;
+      if (token != null) {
+        debugPrint('Fetched FCM token: ${_previewToken(token)}');
+        return token;
       }
-      await _saveToken(userId, token);
+      await Future<void>.delayed(const Duration(seconds: 2));
+      final retryToken = await _messaging.getToken();
+      if (retryToken != null) {
+        debugPrint('Fetched FCM token (retry): ${_previewToken(retryToken)}');
+      }
+      return retryToken;
     } catch (e) {
       debugPrint('Failed to get/save FCM token: $e');
+      return null;
     }
   }
 
@@ -101,6 +126,27 @@ class PushNotificationService {
     }
   }
 
+  Future<void> _logApnsToken() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.iOS) {
+      return;
+    }
+    try {
+      final apnsToken = await _messaging.getAPNSToken();
+      if (apnsToken == null) {
+        debugPrint('APNs token is null');
+        return;
+      }
+      debugPrint('APNs token: ${_previewToken(apnsToken)}');
+    } catch (e) {
+      debugPrint('Failed to fetch APNs token: $e');
+    }
+  }
+
+  String _previewToken(String token) {
+    if (token.length <= 12) return token;
+    return '${token.substring(0, 12)}...';
+  }
+
   Future<void> _subscribeToDefaultTopics() async {
     try {
       await _messaging.subscribeToTopic('announcements');
@@ -110,3 +156,7 @@ class PushNotificationService {
     }
   }
 }
+
+final pushNotificationServiceProvider = Provider<PushNotificationService>((ref) {
+  return PushNotificationService();
+});

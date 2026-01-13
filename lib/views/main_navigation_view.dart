@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/coupon_provider.dart';
 import '../providers/badge_provider.dart';
+import '../services/push_notification_service.dart';
 import 'home_view.dart';
 import 'map/map_view.dart';
 import 'qr/qr_generator_view.dart';
@@ -36,6 +37,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     // 初期データ読み込みをフレーム後に実行
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
+      _loadTabSpecificData(_currentIndex);
     });
   }
 
@@ -134,6 +136,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     // ホーム画面のデータは既にuserDataProviderで管理されているため、
     // 必要に応じてプロバイダーを無効化
     ref.invalidate(authStateProvider);
+    final pushService = ref.read(pushNotificationServiceProvider);
+    await pushService.syncForUser(userId);
   }
 
   Future<void> _loadMapData(String userId) async {
