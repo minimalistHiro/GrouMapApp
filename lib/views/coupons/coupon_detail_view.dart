@@ -117,6 +117,19 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         'couponId': widget.coupon.id,
         'storeId': widget.coupon.storeId,
       });
+
+      // ユーザー側にも使用済みクーポンを保存
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('used_coupons')
+          .doc(widget.coupon.id)
+          .set({
+        'userId': user.uid,
+        'usedAt': FieldValue.serverTimestamp(),
+        'couponId': widget.coupon.id,
+        'storeId': widget.coupon.storeId,
+      });
       
       // 使用回数をインクリメント
       await couponRef.update({

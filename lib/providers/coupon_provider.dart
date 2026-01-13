@@ -178,46 +178,44 @@ class CouponService {
     }
   }
 
-  // 使用済みクーポン一覧を取得（usedByサブコレクションから取得）
+  // 使用済みクーポン一覧を取得（users/{userId}/used_coupons と全クーポンを突合）
   Stream<List<Coupon>> getUsedCoupons(String userId) {
     try {
       return _firestore
-          .collectionGroup('usedBy')
-          .where('userId', isEqualTo: userId)
+          .collection('users')
+          .doc(userId)
+          .collection('used_coupons')
           .snapshots()
           .timeout(const Duration(seconds: 8))
           .asyncMap((snapshot) async {
-        final coupons = <Coupon>[];
-        
-        for (final usedByDoc in snapshot.docs) {
-          try {
-            final usedByData = usedByDoc.data();
-            final storeId = usedByData['storeId'] as String?;
-            final couponId = usedByData['couponId'] as String?;
-            
-            if (storeId != null && couponId != null) {
-              // クーポン情報を取得
-              final couponDoc = await _firestore
-                  .collection('coupons')
-                  .doc(storeId)
-                  .collection('coupons')
-                  .doc(couponId)
-                  .get();
-              
-              if (couponDoc.exists) {
-                final coupon = Coupon.fromFirestore(couponDoc.data()!, couponDoc.id);
-                coupons.add(coupon);
-              }
-            }
-          } catch (e) {
-            debugPrint('Error processing used coupon: $e');
+        final usedKeys = <String>{};
+
+        for (final usedDoc in snapshot.docs) {
+          final usedData = usedDoc.data();
+          final storeId = usedData['storeId'] as String?;
+          final couponId = (usedData['couponId'] as String?) ?? usedDoc.id;
+          if (storeId == null || couponId.isEmpty) {
+            continue;
           }
+          usedKeys.add('$storeId::$couponId');
         }
-        
+
+        if (usedKeys.isEmpty) {
+          return <Coupon>[];
+        }
+
+        final couponsSnapshot = await _firestore.collectionGroup('coupons').get();
+        final coupons = couponsSnapshot.docs.map((doc) {
+          return Coupon.fromFirestore(doc.data(), doc.id);
+        }).where((coupon) {
+          final key = '${coupon.storeId}::${coupon.id}';
+          return usedKeys.contains(key);
+        }).toList();
+
         coupons.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return coupons;
       }).handleError((error) {
-        debugPrint('Error getting used coupons (collectionGroup): $error');
+        debugPrint('Error getting used coupons (users/used_coupons): $error');
         return <Coupon>[];
       });
     } catch (e) {
