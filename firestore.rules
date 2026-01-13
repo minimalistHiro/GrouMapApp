@@ -20,6 +20,13 @@ service cloud.firestore {
       match /stores/{storeId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // ユーザーの使用済みクーポン（users/{userId}/used_coupons/{couponId}）
+      match /used_coupons/{couponId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId;
+        allow delete: if false;
+      }
     }
     
     // 投稿コレクションのルール
