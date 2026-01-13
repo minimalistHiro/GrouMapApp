@@ -1,27 +1,188 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyQrToken = exports.issueQrToken = exports.testFunction = void 0;
+exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
-// import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
-const firestore_1 = require("firebase-admin/firestore");
+const firestore_2 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
+const messaging_1 = require("firebase-admin/messaging");
 const jwt_1 = require("./utils/jwt");
 // Firebase Admin SDK初期化
 (0, app_1.initializeApp)();
-const db = (0, firestore_1.getFirestore)();
+const db = (0, firestore_2.getFirestore)();
 const auth = (0, auth_1.getAuth)();
+const messaging = (0, messaging_1.getMessaging)();
 // タイムゾーン設定
 process.env.TZ = 'Asia/Tokyo';
 // デバッグ用のログ
 console.log('Cloud Functions initialized with updated permissions');
-// シンプルなテスト関数
+const NOTIFICATIONS_COLLECTION = 'notifications';
+const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
+const USERS_COLLECTION = 'users';
+const ANNOUNCEMENT_TOPIC = 'announcements';
+async function getUserFcmTokens(userId) {
+    var _a;
+    const tokens = new Set();
+    const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+    if (userDoc.exists) {
+        const data = userDoc.data();
+        if (data === null || data === void 0 ? void 0 : data.fcmToken) {
+            tokens.add(data.fcmToken);
+        }
+        if (Array.isArray(data === null || data === void 0 ? void 0 : data.fcmTokens)) {
+            (_a = data === null || data === void 0 ? void 0 : data.fcmTokens) === null || _a === void 0 ? void 0 : _a.forEach((token) => {
+                if (token)
+                    tokens.add(token);
+            });
+        }
+    }
+    const tokenDocs = await db
+        .collection(USERS_COLLECTION)
+        .doc(userId)
+        .collection('fcmTokens')
+        .get();
+    tokenDocs.forEach((doc) => {
+        var _a, _b;
+        const token = (_b = (_a = doc.data()) === null || _a === void 0 ? void 0 : _a.token) !== null && _b !== void 0 ? _b : doc.id;
+        if (token)
+            tokens.add(token);
+    });
+    return Array.from(tokens);
+}
+async function isPushEnabled(userId) {
+    const settingsDoc = await db.collection(NOTIFICATION_SETTINGS_COLLECTION).doc(userId).get();
+    if (!settingsDoc.exists) {
+        return true;
+    }
+    const data = settingsDoc.data();
+    return (data === null || data === void 0 ? void 0 : data.pushEnabled) !== false;
+}
+function buildNotificationPayload(notificationId, data) {
+    var _a, _b, _c;
+    const title = (_a = data.title) !== null && _a !== void 0 ? _a : 'お知らせ';
+    const body = (_c = (_b = data.body) !== null && _b !== void 0 ? _b : data.content) !== null && _c !== void 0 ? _c : '';
+    const payloadData = {
+        notificationId,
+    };
+    if (data.type)
+        payloadData.type = data.type;
+    if (data.actionUrl)
+        payloadData.actionUrl = data.actionUrl;
+    if (data.category)
+        payloadData.category = data.category;
+    return {
+        title,
+        body,
+        data: payloadData,
+    };
+}
+exports.sendNotificationOnPublish = (0, firestore_1.onDocumentWritten)({
+    document: `${NOTIFICATIONS_COLLECTION}/{notificationId}`,
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a;
+    if (!((_a = event.data) === null || _a === void 0 ? void 0 : _a.after.exists))
+        return;
+    const notificationId = event.data.after.id;
+    const afterData = event.data.after.data();
+    if (!afterData)
+        return;
+    const beforeData = event.data.before.exists
+        ? event.data.before.data()
+        : undefined;
+    const wasPublished = (beforeData === null || beforeData === void 0 ? void 0 : beforeData.isPublished) === true;
+    const isPublished = afterData.isPublished === true;
+    const isActive = afterData.isActive !== false;
+    const alreadyDelivered = afterData.isDelivered === true;
+    const userId = afterData.userId;
+    if (alreadyDelivered) {
+        return;
+    }
+    const isCreate = !event.data.before.exists;
+    const shouldSendToTopic = !userId && isPublished && isActive && !wasPublished;
+    const shouldSendToUser = Boolean(userId) && isCreate;
+    if (!shouldSendToTopic && !shouldSendToUser) {
+        return;
+    }
+    const payload = buildNotificationPayload(notificationId, afterData);
+    if (shouldSendToUser && userId) {
+        const pushEnabled = await isPushEnabled(userId);
+        if (!pushEnabled) {
+            console.log(`Push disabled for user ${userId}, skipping notification ${notificationId}`);
+            return;
+        }
+        const tokens = await getUserFcmTokens(userId);
+        if (tokens.length === 0) {
+            console.log(`No FCM tokens found for user ${userId}, skipping notification ${notificationId}`);
+            return;
+        }
+        const response = await messaging.sendEachForMulticast({
+            tokens,
+            notification: {
+                title: payload.title,
+                body: payload.body,
+            },
+            data: payload.data,
+            android: {
+                notification: {
+                    sound: 'default',
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                    },
+                },
+            },
+        });
+        console.log(`Sent notification ${notificationId} to user ${userId}: ` +
+            `${response.successCount} success, ${response.failureCount} failure`);
+    }
+    if (shouldSendToTopic) {
+        await messaging.send({
+            topic: ANNOUNCEMENT_TOPIC,
+            notification: {
+                title: payload.title,
+                body: payload.body,
+            },
+            data: payload.data,
+            android: {
+                notification: {
+                    sound: 'default',
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: 'default',
+                    },
+                },
+            },
+        });
+        console.log(`Sent announcement notification ${notificationId} to topic ${ANNOUNCEMENT_TOPIC}`);
+    }
+    await event.data.after.ref.update({
+        isDelivered: true,
+        deliveredAt: new Date(),
+    });
+});
+// シンプルなテスト関数（認証なし）
 exports.testFunction = (0, https_1.onCall)({
     region: 'asia-northeast1',
     enforceAppCheck: false,
 }, async (request) => {
     console.log('Test function called');
     return { message: 'Hello from test function!' };
+});
+// HTTP関数としてのテスト関数
+const https_2 = require("firebase-functions/v2/https");
+exports.testHttpFunction = (0, https_2.onRequest)({
+    region: 'asia-northeast1',
+}, async (req, res) => {
+    console.log('HTTP test function called');
+    res.json({ message: 'Hello from HTTP test function!' });
 });
 // QRトークン発行関数
 exports.issueQrToken = (0, https_1.onCall)({
