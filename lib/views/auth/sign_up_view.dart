@@ -77,6 +77,14 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        title: const Text(
+          '新規アカウント作成',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
@@ -94,17 +102,61 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
               children: [
                 const SizedBox(height: 24),
                 
-                const Text(
-                  '新規登録',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.white,
+                const SizedBox(height: 40),
+
+                // Appleサインアップ（iOSのみ）
+                if (Theme.of(context).platform == TargetPlatform.iOS) ...[
+                  CustomButton(
+                    text: 'Appleで続ける',
+                    onPressed: signInState == SignInState.loading ? null : _handleAppleSignUp,
+                    backgroundColor: Colors.black,
+                    textColor: Colors.white,
+                    height: 52,
+                    borderRadius: 999,
+                    icon: const Icon(Icons.apple, color: Colors.white, size: 20),
                   ),
-                  textAlign: TextAlign.center,
+                  const SizedBox(height: 16),
+                ],
+                
+                // Googleサインアップ
+                CustomButton(
+                  text: 'Googleで続ける',
+                  onPressed: signInState == SignInState.loading ? null : _handleGoogleSignUp,
+                  height: 52,
+                  backgroundColor: Colors.white,
+                  textColor: Colors.black87,
+                  borderColor: const Color(0xFFBDBDBD),
+                  borderRadius: 999,
+                  icon: Image.asset(
+                    'assets/images/google_logo.png',
+                    width: 24,
+                    height: 24,
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 
-                const SizedBox(height: 40),
+                const SizedBox(height: 32),
+
+                // 区切り線
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'または',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
                 
+                const SizedBox(height: 32),
+
                 // メールアドレス入力
                 CustomTextField(
                   controller: _emailController,
@@ -184,59 +236,6 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                   text: 'アカウント作成',
                   onPressed: signInState == SignInState.loading ? null : _handleSignUp,
                   isLoading: signInState == SignInState.loading,
-                ),
-                
-                const SizedBox(height: 32),
-                
-                // 区切り線
-                Row(
-                  children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'または',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                    const Expanded(child: Divider()),
-                  ],
-                ),
-                
-                const SizedBox(height: 32),
-                
-                // Appleサインアップ（iOSのみ）
-                if (Theme.of(context).platform == TargetPlatform.iOS) ...[
-                  CustomButton(
-                    text: 'Appleで続ける',
-                    onPressed: signInState == SignInState.loading ? null : _handleAppleSignUp,
-                    backgroundColor: Colors.black,
-                    textColor: Colors.white,
-                    height: 52,
-                    borderRadius: 999,
-                    icon: const Icon(Icons.apple, color: Colors.white, size: 20),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                
-                // Googleサインアップ
-                CustomButton(
-                  text: 'Googleで続ける',
-                  onPressed: signInState == SignInState.loading ? null : _handleGoogleSignUp,
-                  height: 52,
-                  backgroundColor: Colors.white,
-                  textColor: Colors.black87,
-                  borderColor: const Color(0xFFBDBDBD),
-                  borderRadius: 999,
-                  icon: Image.asset(
-                    'assets/images/google_logo.png',
-                    width: 24,
-                    height: 24,
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
                 ),
                 
                 const SizedBox(height: 32),
