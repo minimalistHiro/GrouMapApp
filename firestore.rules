@@ -5,6 +5,10 @@ service cloud.firestore {
       return request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isOwner == true;
     }
+    function isStoreOwner(storeId) {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isStoreOwner == true;
+    }
     // ユーザーコレクションのルール
     match /users/{userId} {
       // 認証されたユーザーは自分のドキュメントを読み書き可能
@@ -113,13 +117,13 @@ service cloud.firestore {
 
       allow create: if request.auth != null
         && request.auth.uid == userId
-        && request.resource.data.keys().hasAll(['userId','badgeId','unlockedAt','progress','requiredValue','isNew'])
+        && request.resource.data.keys().hasAll(['userId','badgeId','unlockedAt','isNew'])
         && request.resource.data.userId == userId
         && request.resource.data.badgeId == badgeId
         && request.resource.data.unlockedAt is timestamp
-        && request.resource.data.progress is int
-        && request.resource.data.requiredValue is int
-        && request.resource.data.isNew is bool;
+        && request.resource.data.isNew is bool
+        && (!('progress' in request.resource.data) || request.resource.data.progress is int)
+        && (!('requiredValue' in request.resource.data) || request.resource.data.requiredValue is int);
 
       // isNew のみ更新可
       allow update: if request.auth != null
@@ -158,6 +162,39 @@ service cloud.firestore {
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
       // 書き込みはサーバーサイドのみ
       allow write: if false;
+    }
+
+    // ポイント取引（ネスト構造）
+    match /point_transactions/{storeId}/{userId}/{transactionId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == userId || isStoreOwner(storeId));
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update, delete: if false;
+    }
+
+    // ポイント付与リクエスト
+    match /point_requests/{storeId} {
+      allow read: if request.auth != null;
+
+      match /{userId}/{requestId} {
+        allow read: if request.auth != null
+          && (request.auth.uid == userId || isStoreOwner(storeId));
+        allow create: if isStoreOwner(storeId);
+        allow update: if request.auth != null
+          && (request.auth.uid == userId || isStoreOwner(storeId));
+        allow delete: if false;
+      }
+    }
+
+    // QRコード（ポイント付与用）
+    match /qr_codes/{qrCodeId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.userId || isStoreOwner(resource.data.storeId));
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null
+        && (request.auth.uid == resource.data.userId || isStoreOwner(resource.data.storeId));
+      allow delete: if false;
     }
     
     // 店舗コレクションのルール

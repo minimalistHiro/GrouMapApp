@@ -253,6 +253,7 @@ class _StampPunchViewState extends State<StampPunchView>
         title: const Text('スタンプ押印'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
+        automaticallyImplyLeading: false,
       ),
       body: _buildBody(),
       bottomNavigationBar: SafeArea(
@@ -1031,5 +1032,4 @@ class _StampPunchViewState extends State<StampPunchView>
     }
   }
 }
-
 
