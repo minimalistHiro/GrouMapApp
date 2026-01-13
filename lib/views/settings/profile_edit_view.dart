@@ -88,25 +88,30 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
     setState(() => _isSaving = true);
 
     try {
+      final isGoogleUser = _isGoogleUser();
       final newDisplayName = _displayNameController.text.trim();
       final friendCode = _friendCodeController.text.trim();
 
       final updateData = <String, dynamic>{
-        'displayName': newDisplayName,
         'birthDate': _selectedDate,
         'gender': _selectedGender,
         'prefecture': _selectedPrefecture,
         'city': _selectedCity,
-        'profileImageUrl': _profileImageUrl,
         'friendCode': friendCode,
         'friendcode': FieldValue.delete(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
+      if (!isGoogleUser) {
+        updateData['displayName'] = newDisplayName;
+        updateData['profileImageUrl'] = _profileImageUrl;
+      }
 
       await ref.read(authServiceProvider).updateUserInfo(updateData);
 
       final user = ref.read(authServiceProvider).currentUser;
-      await user?.updateDisplayName(newDisplayName);
+      if (!isGoogleUser) {
+        await user?.updateDisplayName(newDisplayName);
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -233,6 +238,12 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
         SnackBar(content: Text('画像のアップロードに失敗しました: $e'), backgroundColor: Colors.red),
       );
     }
+  }
+
+  bool _isGoogleUser() {
+    final user = ref.read(authServiceProvider).currentUser;
+    if (user == null) return false;
+    return user.providerData.any((provider) => provider.providerId == 'google.com');
   }
 
   // 生年月日選択
@@ -434,6 +445,7 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
 
   @override
   Widget build(BuildContext context) {
+    final isGoogleUser = _isGoogleUser();
     return Scaffold(
       appBar: AppBar(
         title: const Text('プロフィール編集'),
@@ -449,48 +461,50 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
               child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '表示名',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                TextFormField(
-                  controller: _displayNameController,
-                  maxLength: 30,
-                  decoration: InputDecoration(
-                    hintText: '表示名を入力',
-                    counterText: '',
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 14,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFFF6B35), width: 2),
+                if (!isGoogleUser) ...[
+                  const Text(
+                    '表示名',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  validator: (v) {
-                    final value = v?.trim() ?? '';
-                    if (value.isEmpty) return '表示名を入力してください';
-                    if (value.length < 2) return '2文字以上で入力してください';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 6),
+                  TextFormField(
+                    controller: _displayNameController,
+                    maxLength: 30,
+                    decoration: InputDecoration(
+                      hintText: '表示名を入力',
+                      counterText: '',
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 14,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Color(0xFFFF6B35), width: 2),
+                      ),
+                    ),
+                    validator: (v) {
+                      final value = v?.trim() ?? '';
+                      if (value.isEmpty) return '表示名を入力してください';
+                      if (value.length < 2) return '2文字以上で入力してください';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
 
                 // 生年月日
                 const Text('生年月日', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
@@ -592,27 +606,28 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                 ),
                 const SizedBox(height: 16),
 
-                // プロフィール画像
-                const Text('プロフィール画像（任意）', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                Center(
-                  child: GestureDetector(
-                    onTap: _isUploadingImage ? null : _selectProfileImage,
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey.shade300, width: 2),
+                if (!isGoogleUser) ...[
+                  const Text('プロフィール画像（任意）', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: GestureDetector(
+                      onTap: _isUploadingImage ? null : _selectProfileImage,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(color: Colors.grey.shade300, width: 2),
+                        ),
+                        child: _isUploadingImage
+                            ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B35)))
+                            : ClipOval(child: _buildProfileImageWidget()),
                       ),
-                      child: _isUploadingImage
-                          ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B35)))
-                          : ClipOval(child: _buildProfileImageWidget()),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -655,5 +670,3 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
 }
 
 // 画像/日付/住所補助メソッド（削除済み拡張）
-
-

@@ -65,7 +65,7 @@ class DefaultFirebaseOptions {
     projectId: 'groumap-ea452',
     storageBucket: 'groumap-ea452.firebasestorage.app',
     iosClientId: '1215704250-235272e01951aec61f6683.apps.googleusercontent.com',
-    iosBundleId: 'com.groumap.groumap',
+    iosBundleId: 'com.groumap.groumapapp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -75,7 +75,7 @@ class DefaultFirebaseOptions {
     projectId: 'groumap-ea452',
     storageBucket: 'groumap-ea452.firebasestorage.app',
     iosClientId: '1215704250-235272e01951aec61f6683.apps.googleusercontent.com',
-    iosBundleId: 'com.groumap.groumap',
+    iosBundleId: 'com.groumap.groumapapp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

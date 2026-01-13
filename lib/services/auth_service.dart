@@ -25,18 +25,24 @@ class AuthService {
   Future<UserCredential?> signInWithGoogle() async {
     return await _retryOperation(() async {
       try {
-        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-        if (googleUser == null) {
-          throw Exception('Googleサインインがキャンセルされました');
+        UserCredential userCredential;
+        if (kIsWeb) {
+          final provider = GoogleAuthProvider();
+          userCredential = await _auth.signInWithPopup(provider);
+        } else {
+          final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+          if (googleUser == null) {
+            throw Exception('Googleサインインがキャンセルされました');
+          }
+
+          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+          final credential = GoogleAuthProvider.credential(
+            accessToken: googleAuth.accessToken,
+            idToken: googleAuth.idToken,
+          );
+
+          userCredential = await _auth.signInWithCredential(credential);
         }
-
-        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-
-        final userCredential = await _auth.signInWithCredential(credential);
         
         // 新規ユーザーの場合、基本情報を保存
         if (userCredential.additionalUserInfo?.isNewUser == true) {

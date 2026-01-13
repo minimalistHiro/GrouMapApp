@@ -1,7 +1,19 @@
 buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
     dependencies {
         classpath 'com.google.gms:google-services:4.4.2'
     }
+}
+
+ext {
+    flutter = [
+        compileSdkVersion: 35,
+        minSdkVersion: 21,
+        targetSdkVersion: 35,
+    ]
 }
 
 allprojects {

@@ -67,12 +67,6 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
-        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -109,21 +103,23 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                 const SizedBox(height: 32),
                 
                 // ユーザー名入力
-                CustomTextField(
-                  controller: _nameController,
-                  labelText: 'ユーザー名',
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'ユーザー名を入力してください';
-                    }
-                    if (value.length < 2) {
-                      return 'ユーザー名は2文字以上で入力してください';
-                    }
-                    return null;
-                  },
-                ),
+                if (!_isGoogleUser())
+                  CustomTextField(
+                    controller: _nameController,
+                    labelText: 'ユーザー名',
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'ユーザー名を入力してください';
+                      }
+                      if (value.length < 2) {
+                        return 'ユーザー名は2文字以上で入力してください';
+                      }
+                      return null;
+                    },
+                  ),
                 
-                const SizedBox(height: 16),
+                if (!_isGoogleUser())
+                  const SizedBox(height: 16),
                 
                 // 生年月日選択
                 GestureDetector(
@@ -286,65 +282,67 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                 const SizedBox(height: 24),
                 
                 // プロフィール画像選択
-                const Text(
-                  'プロフィール画像（任意）',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
-                ),
-                
-                const SizedBox(height: 12),
-                
-                // プロフィール画像表示・選択エリア
-                Center(
-                  child: GestureDetector(
-                    onTap: _isUploadingImage ? null : _selectProfileImage,
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white,
-                        border: Border.all(
-                          color: Colors.grey.shade300,
-                          width: 2,
-                        ),
-                      ),
-                      child: _isUploadingImage
-                          ? const Center(
-                              child: CircularProgressIndicator(
-                                color: Color(0xFFE75B41),
-                              ),
-                            )
-                          : (_selectedImage != null || _profileImageUrl != null)
-                              ? ClipOval(
-                                  child: _buildProfileImage(),
-                                )
-                              : Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.camera_alt,
-                                      size: 40,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '画像を選択',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
+                if (!_isGoogleUser()) ...[
+                  const Text(
+                    'プロフィール画像（任意）',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
                     ),
                   ),
-                ),
-                
-                const SizedBox(height: 32),
+                  
+                  const SizedBox(height: 12),
+                  
+                  // プロフィール画像表示・選択エリア
+                  Center(
+                    child: GestureDetector(
+                      onTap: _isUploadingImage ? null : _selectProfileImage,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(
+                            color: Colors.grey.shade300,
+                            width: 2,
+                          ),
+                        ),
+                        child: _isUploadingImage
+                            ? const Center(
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFFE75B41),
+                                ),
+                              )
+                            : (_selectedImage != null || _profileImageUrl != null)
+                                ? ClipOval(
+                                    child: _buildProfileImage(),
+                                  )
+                                : Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.camera_alt,
+                                        size: 40,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        '画像を選択',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 32),
+                ],
                 
                 // 次へボタン
                 CustomButton(
@@ -846,6 +844,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
       try {
         final authService = ref.read(authServiceProvider);
         final currentUser = authService.currentUser;
+        final isGoogleUser = _isGoogleUser();
         if (currentUser == null) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -856,8 +855,15 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
           return;
         }
 
+        final displayName = isGoogleUser
+            ? (currentUser.displayName ?? '')
+            : _nameController.text.trim();
+        final profileImageUrl = isGoogleUser
+            ? (currentUser.photoURL ?? _profileImageUrl)
+            : _profileImageUrl;
+
         final userInfo = <String, dynamic>{
-          'displayName': _nameController.text.trim(),
+          'displayName': displayName,
           'birthDate': _selectedDate,
           'gender': _selectedGender,
           'prefecture': _selectedPrefecture,
@@ -867,14 +873,14 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
         if (friendCode.isNotEmpty) {
           userInfo['friendCode'] = friendCode;
         }
-        if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
-          userInfo['profileImageUrl'] = _profileImageUrl;
+        if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
+          userInfo['profileImageUrl'] = profileImageUrl;
         }
 
         await authService.updateUserInfo(userInfo);
         await authService.updateAuthProfile(
-          displayName: _nameController.text.trim(),
-          photoUrl: _profileImageUrl,
+          displayName: displayName.isEmpty ? null : displayName,
+          photoUrl: profileImageUrl,
         );
 
         if (!mounted) return;
@@ -891,5 +897,11 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
         );
       }
     }
+  }
+
+  bool _isGoogleUser() {
+    final currentUser = ref.read(authServiceProvider).currentUser;
+    if (currentUser == null) return false;
+    return currentUser.providerData.any((provider) => provider.providerId == 'google.com');
   }
 }
