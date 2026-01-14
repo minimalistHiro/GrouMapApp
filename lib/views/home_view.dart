@@ -17,7 +17,6 @@ import 'stores/store_list_view.dart';
 import 'stamps/stamp_cards_view.dart';
 import 'referral/friend_referral_view.dart';
 import 'referral/store_referral_view.dart';
-import 'feedback/feedback_view.dart';
 import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
 import 'badges/badges_view.dart';
@@ -621,7 +620,6 @@ class HomeView extends ConsumerWidget {
       {'icon': 'assets/images/trophy_icon.png', 'label': 'ランキング', 'isImage': true},
       {'icon': 'assets/images/friend_intro_icon.png', 'label': '友達紹介', 'isImage': true},
       {'icon': 'assets/images/store_icon.png', 'label': '店舗紹介', 'isImage': true},
-      {'icon': 'assets/images/chats_icon.png', 'label': 'フィードバック', 'isImage': true},
     ];
 
     return Container(
@@ -1274,13 +1272,6 @@ class HomeView extends ConsumerWidget {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => const StoreReferralView(),
-            ),
-          );
-        } else if (title == 'フィードバック') {
-          // フィードバック画面に遷移
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const FeedbackView(),
             ),
           );
         }

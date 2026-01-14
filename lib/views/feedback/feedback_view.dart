@@ -257,6 +257,7 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
               child: CustomButton(
                 text: _isSubmitting ? '送信中...' : 'フィードバックを送信',
                 onPressed: _isSubmitting ? null : () => _submitFeedback(context, ref, userId, userName),
+                borderRadius: 999,
               ),
             ),
 
@@ -355,5 +356,4 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
     }
   }
 }
-
 

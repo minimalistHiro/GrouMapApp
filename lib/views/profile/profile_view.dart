@@ -13,6 +13,11 @@ import '../settings/password_change_view.dart';
 import '../settings/push_notification_settings_view.dart';
 import '../settings/email_notification_settings_view.dart';
 import '../auth/welcome_view.dart';
+import '../legal/privacy_policy_view.dart';
+import '../legal/terms_view.dart';
+import '../support/help_view.dart';
+import '../support/contact_view.dart';
+import '../feedback/feedback_view.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({Key? key}) : super(key: key);
@@ -279,6 +284,11 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     icon: Icons.help,
                     title: 'ヘルプ',
                     onTap: () => _showHelp(context),
+                  ),
+                  _buildMenuItem(
+                    icon: Icons.chat_bubble_outline,
+                    title: 'フィードバック',
+                    onTap: () => _openFeedback(context),
                   ),
                   _buildMenuItem(
                     icon: Icons.contact_support,
@@ -789,65 +799,41 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   // （削除）_showCacheClear / _showDataCleanup は不要になりました
 
   void _showHelp(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('ヘルプ'),
-        content: const Text('ヘルプ機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const HelpView(),
       ),
     );
   }
 
   void _showContact(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('お問い合わせ'),
-        content: const Text('お問い合わせ機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const ContactView(),
+      ),
+    );
+  }
+
+  void _openFeedback(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const FeedbackView(),
       ),
     );
   }
 
   void _showTerms(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('利用規約'),
-        content: const Text('利用規約は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const TermsView(),
       ),
     );
   }
 
   void _showPrivacyPolicy(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('プライバシーポリシー'),
-        content: const Text('プライバシーポリシーは今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const PrivacyPolicyView(),
       ),
     );
   }
