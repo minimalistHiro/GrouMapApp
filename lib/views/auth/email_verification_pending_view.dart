@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
+import '../home_view.dart';
 import '../main_navigation_view.dart';
 import 'user_info_view.dart';
 
@@ -19,6 +20,7 @@ class EmailVerificationPendingView extends ConsumerStatefulWidget {
 class _EmailVerificationPendingViewState extends ConsumerState<EmailVerificationPendingView> {
   bool _isResending = false;
   bool _isChecking = false;
+  bool _isDeleting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -113,6 +115,34 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
                         ),
                       ),
               ),
+              const SizedBox(height: 32),
+              OutlinedButton(
+                onPressed: _isDeleting ? null : _deleteAccountAndGoHome,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+                  side: const BorderSide(color: Colors.redAccent),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: _isDeleting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.redAccent),
+                        ),
+                      )
+                    : const Text(
+                        'トップに戻る',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+              ),
             ],
           ),
         ),
@@ -185,5 +215,34 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
       }
     }
   }
-}
 
+  Future<void> _deleteAccountAndGoHome() async {
+    setState(() {
+      _isDeleting = true;
+    });
+    try {
+      await ref.read(authServiceProvider).deleteAccount();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const HomeView()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('アカウント削除に失敗しました: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDeleting = false;
+        });
+      }
+    }
+  }
+}
