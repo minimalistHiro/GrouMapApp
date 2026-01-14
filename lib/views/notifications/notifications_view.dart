@@ -30,11 +30,24 @@ final userDataProvider = StreamProvider.family<Map<String, dynamic>?, String>((r
   }
 });
 
-class NotificationsView extends ConsumerWidget {
+class NotificationsView extends ConsumerStatefulWidget {
   const NotificationsView({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<NotificationsView> createState() => _NotificationsViewState();
+}
+
+class _NotificationsViewState extends ConsumerState<NotificationsView> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(announcementsProvider);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     
     return Scaffold(

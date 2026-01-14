@@ -23,12 +23,6 @@ class AnnouncementDetailView extends ConsumerWidget {
         title: const Text('お知らせ詳細'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () => _shareAnnouncement(context),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -102,21 +96,6 @@ class AnnouncementDetailView extends ConsumerWidget {
                     color: Colors.grey[600],
                   ),
                 ),
-                const Spacer(),
-                // 閲覧数
-                Icon(
-                  Icons.visibility,
-                  size: 16,
-                  color: Colors.grey[600],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${announcement['totalViews']} 回閲覧',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
               ],
             ),
             
@@ -143,67 +122,9 @@ class AnnouncementDetailView extends ConsumerWidget {
             
             const SizedBox(height: 24),
             
-            // 統計情報
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '統計情報',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildStatRow('閲覧数', '${announcement['totalViews']} 回'),
-                  _buildStatRow('既読数', '${announcement['readCount']} 人'),
-                  if (announcement['tags'] != null && (announcement['tags'] as List).isNotEmpty)
-                    _buildStatRow('タグ', (announcement['tags'] as List).join(', ')),
-                ],
-              ),
-            ),
-            
             const SizedBox(height: 32),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildStatRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -296,7 +217,9 @@ class AnnouncementDetailView extends ConsumerWidget {
     if (timestamp == null) return '日時不明';
     
     DateTime date;
-    if (timestamp is DateTime) {
+    if (timestamp is Timestamp) {
+      date = timestamp.toDate();
+    } else if (timestamp is DateTime) {
       date = timestamp;
     } else {
       return '日時不明';
