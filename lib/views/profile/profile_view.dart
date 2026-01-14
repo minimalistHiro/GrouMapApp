@@ -9,6 +9,7 @@ import 'package:http/http.dart' as http;
 import '../../providers/auth_provider.dart';
 import '../../providers/badge_provider.dart';
 import '../settings/profile_edit_view.dart';
+import '../settings/password_change_view.dart';
 import '../settings/push_notification_settings_view.dart';
 import '../settings/email_notification_settings_view.dart';
 import '../auth/welcome_view.dart';
@@ -161,6 +162,10 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             );
           }
 
+          final canChangePassword = user.providerData.any(
+            (provider) => provider.providerId == 'password',
+          );
+
           if (_isLoadingUserData) {
             return const Center(
               child: CircularProgressIndicator(
@@ -219,11 +224,17 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                       );
                     },
                   ),
-                  _buildMenuItem(
-                    icon: Icons.lock,
-                    title: 'パスワード変更',
-                    onTap: () => _showPasswordChange(context),
-                  ),
+                  if (canChangePassword)
+                    _buildMenuItem(
+                      icon: Icons.lock,
+                      title: 'パスワード変更',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const PasswordChangeView()),
+                        );
+                      },
+                    ),
                 ]),
 
                 const SizedBox(height: 24),
@@ -255,22 +266,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     icon: Icons.storage,
                     title: 'データ管理',
                     onTap: () => _showDataManagement(context),
-                  ),
-                ]),
-
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('アプリ'),
-                _buildSettingsMenuContainer(context, [
-                  _buildMenuItem(
-                    icon: Icons.language,
-                    title: '言語設定',
-                    onTap: () => _showLanguageSettings(context),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.palette,
-                    title: 'テーマ設定',
-                    onTap: () => _showThemeSettings(context),
                   ),
                 ]),
 
@@ -759,22 +754,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     );
   }
 
-  void _showPasswordChange(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('パスワード変更'),
-        content: const Text('パスワード変更機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showPrivacySettings(BuildContext context) {
     showDialog(
       context: context,
@@ -797,38 +776,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       builder: (context) => AlertDialog(
         title: const Text('データ管理'),
         content: const Text('データ管理機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showLanguageSettings(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('言語設定'),
-        content: const Text('言語設定機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showThemeSettings(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('テーマ設定'),
-        content: const Text('テーマ設定機能は今後実装予定です。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
