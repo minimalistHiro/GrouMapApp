@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -63,11 +65,45 @@ final userBadgeCountProvider = StreamProvider.family<int, String>((ref, userId) 
   }
 });
 
-class HomeView extends ConsumerWidget {
+class HomeView extends ConsumerStatefulWidget {
   const HomeView({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeView> createState() => _HomeViewState();
+}
+
+class _HomeViewState extends ConsumerState<HomeView> {
+  late final PageController _referralPageController;
+  Timer? _referralTimer;
+  int _referralPageIndex = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _referralPageController = PageController(initialPage: 1);
+    _referralTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!_referralPageController.hasClients) {
+        return;
+      }
+      final nextPage = (_referralPageIndex + 1) % 2;
+      _referralPageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _referralTimer?.cancel();
+    _referralPageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final authState = ref.watch(authStateProvider);
 
     return authState.when(
@@ -140,6 +176,10 @@ class HomeView extends ConsumerWidget {
                 
                 // カード部分
                 _buildStatsCard(context, ref, userId),
+                
+                const SizedBox(height: 12),
+
+                _buildReferralCarousel(context),
                 
                 const SizedBox(height: 24),
                 
@@ -454,12 +494,6 @@ class HomeView extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        IconButton(
-                          onPressed: () {
-                            ref.invalidate(userDataProvider(userId));
-                          },
-                          icon: const Icon(Icons.refresh, color: Colors.black54),
-                        ),
                       ],
                     ),
                   ],
@@ -591,6 +625,97 @@ class HomeView extends ConsumerWidget {
     );
   }
 
+  Widget _buildReferralCarousel(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      height: 96,
+      width: double.infinity,
+      child: PageView(
+        controller: _referralPageController,
+        onPageChanged: (index) {
+          setState(() {
+            _referralPageIndex = index;
+          });
+        },
+        children: [
+          _buildReferralImageButton(
+            context: context,
+            label: '店舗紹介',
+            imagePath: 'assets/images/store_icon.png',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const StoreReferralView(),
+                ),
+              );
+            },
+          ),
+          _buildReferralImageButton(
+            context: context,
+            label: '友達紹介',
+            imagePath: 'assets/images/friend_intro_icon.png',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const FriendReferralView(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReferralImageButton({
+    required BuildContext context,
+    required String label,
+    required String imagePath,
+    required VoidCallback onPressed,
+  }) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFFFF6B35),
+        foregroundColor: Colors.white,
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        elevation: 0,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.asset(
+              imagePath,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: const Color(0xFFFF6B35),
+                );
+              },
+            ),
+            Container(
+              color: Colors.black.withOpacity(0.25),
+            ),
+            Center(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAdditionalContent(BuildContext context, WidgetRef ref, String userId) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -620,8 +745,6 @@ class HomeView extends ConsumerWidget {
       {'icon': 'assets/images/badge_icon.PNG', 'label': 'バッジ', 'isImage': true},
       {'icon': 'assets/images/store_icon.png', 'label': '店舗一覧', 'isImage': true},
       {'icon': 'assets/images/trophy_icon.png', 'label': 'ランキング', 'isImage': true},
-      {'icon': 'assets/images/friend_intro_icon.png', 'label': '友達紹介', 'isImage': true},
-      {'icon': 'assets/images/store_icon.png', 'label': '店舗紹介', 'isImage': true},
     ];
 
     return Container(
