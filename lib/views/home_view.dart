@@ -65,6 +65,24 @@ final userBadgeCountProvider = StreamProvider.family<int, String>((ref, userId) 
   }
 });
 
+// オーナー設定（current）を取得
+final ownerSettingsProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+  try {
+    return FirebaseFirestore.instance
+        .collection('owner_settings')
+        .doc('current')
+        .snapshots()
+        .map((snapshot) => snapshot.data())
+        .handleError((error) {
+      debugPrint('Error fetching owner settings: $error');
+      return null;
+    });
+  } catch (e) {
+    debugPrint('Error creating owner settings stream: $e');
+    return Stream.value(null);
+  }
+});
+
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({Key? key}) : super(key: key);
 
@@ -75,17 +93,21 @@ class HomeView extends ConsumerStatefulWidget {
 class _HomeViewState extends ConsumerState<HomeView> {
   late final PageController _referralPageController;
   Timer? _referralTimer;
-  int _referralPageIndex = 1;
+  int _referralPageIndex = 0;
+  int _referralPageCount = 0;
 
   @override
   void initState() {
     super.initState();
-    _referralPageController = PageController(initialPage: 1);
+    _referralPageController = PageController(initialPage: 0);
     _referralTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!_referralPageController.hasClients) {
         return;
       }
-      final nextPage = (_referralPageIndex + 1) % 2;
+      if (_referralPageCount <= 1) {
+        return;
+      }
+      final nextPage = (_referralPageIndex + 1) % _referralPageCount;
       _referralPageController.animateToPage(
         nextPage,
         duration: const Duration(milliseconds: 350),
@@ -164,6 +186,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
             ref.invalidate(announcementsProvider);
             ref.invalidate(availableCouponsProvider(userId));
             ref.invalidate(allPostsProvider);
+            ref.invalidate(ownerSettingsProvider);
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -177,11 +200,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 // カード部分
                 _buildStatsCard(context, ref, userId),
                 
-                const SizedBox(height: 12),
-
-                _buildReferralCarousel(context),
-                
-                const SizedBox(height: 24),
+                _buildReferralSection(context, ref),
                 
                 // その他のコンテンツ
                 _buildAdditionalContent(context, ref, userId),
@@ -625,7 +644,136 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _buildReferralCarousel(BuildContext context) {
+  Widget _buildReferralSection(BuildContext context, WidgetRef ref) {
+    return ref.watch(ownerSettingsProvider).when(
+      data: (ownerSettings) {
+        final currentSettings = _resolveCurrentSettings(ownerSettings);
+        final isFriendActive = _isCampaignActive(
+          currentSettings,
+          'friendCampaignStartDate',
+          'friendCampaignEndDate',
+        );
+        final isStoreActive = _isCampaignActive(
+          currentSettings,
+          'storeCampaignStartDate',
+          'storeCampaignEndDate',
+        );
+
+        if (!isFriendActive && !isStoreActive) {
+          _scheduleReferralPageCountUpdate(0);
+          return const SizedBox(height: 12);
+        }
+
+        final referralItems = <Widget>[
+          if (isStoreActive)
+            _buildReferralImageButton(
+              context: context,
+              label: '店舗紹介',
+              imagePath: 'assets/images/store_icon.png',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const StoreReferralView(),
+                  ),
+                );
+              },
+            ),
+          if (isFriendActive)
+            _buildReferralImageButton(
+              context: context,
+              label: '友達紹介',
+              imagePath: 'assets/images/friend_intro_icon.png',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const FriendReferralView(),
+                  ),
+                );
+              },
+            ),
+        ];
+
+        _scheduleReferralPageCountUpdate(referralItems.length);
+
+        return Column(
+          children: [
+            const SizedBox(height: 12),
+            _buildReferralCarousel(context, referralItems),
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Map<String, dynamic> _resolveCurrentSettings(Map<String, dynamic>? ownerSettings) {
+    final rawCurrent = ownerSettings?['current'];
+    if (rawCurrent is Map<String, dynamic>) {
+      return rawCurrent;
+    }
+    return ownerSettings ?? <String, dynamic>{};
+  }
+
+  bool _isCampaignActive(
+    Map<String, dynamic> settings,
+    String startKey,
+    String endKey,
+  ) {
+    final start = _parseDate(settings[startKey]);
+    final end = _parseDate(settings[endKey]);
+    if (start == null || end == null) {
+      return false;
+    }
+    final now = DateTime.now();
+    return !now.isBefore(start) && !now.isAfter(end);
+  }
+
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  void _scheduleReferralPageCountUpdate(int count) {
+    if (_referralPageCount == count) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _referralPageCount = count;
+        if (_referralPageCount == 0) {
+          _referralPageIndex = 0;
+          return;
+        }
+        if (_referralPageIndex >= _referralPageCount) {
+          _referralPageIndex = _referralPageCount - 1;
+        }
+        if (_referralPageController.hasClients) {
+          _referralPageController.jumpToPage(_referralPageIndex);
+        }
+      });
+    });
+  }
+
+  Widget _buildReferralCarousel(BuildContext context, List<Widget> referralItems) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       height: 96,
@@ -633,36 +781,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
       child: PageView(
         controller: _referralPageController,
         onPageChanged: (index) {
+          if (!mounted) {
+            return;
+          }
           setState(() {
             _referralPageIndex = index;
           });
         },
-        children: [
-          _buildReferralImageButton(
-            context: context,
-            label: '店舗紹介',
-            imagePath: 'assets/images/store_icon.png',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const StoreReferralView(),
-                ),
-              );
-            },
-          ),
-          _buildReferralImageButton(
-            context: context,
-            label: '友達紹介',
-            imagePath: 'assets/images/friend_intro_icon.png',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const FriendReferralView(),
-                ),
-              );
-            },
-          ),
-        ],
+        children: referralItems,
       ),
     );
   }
