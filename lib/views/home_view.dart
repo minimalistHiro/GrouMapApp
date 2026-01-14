@@ -1557,7 +1557,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       size: iconSize ?? 24,
                       color: isLogin ? Colors.white : Colors.grey,
                     ),
-              SizedBox(height: (iconSize ?? 24) * 0.35),
+            SizedBox(height: (iconSize ?? 24) * 0.2),
             Text(
               title,
               style: TextStyle(
