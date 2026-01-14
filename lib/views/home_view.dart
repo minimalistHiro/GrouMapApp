@@ -865,49 +865,57 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
   Widget _buildMenuGrid(BuildContext context, WidgetRef ref, String userId) {
     final menuItems = [
-      {'icon': 'assets/images/point_icon.png', 'label': 'ポイント履歴', 'isImage': true},
-      {'icon': 'assets/images/badge_icon.PNG', 'label': 'バッジ', 'isImage': true},
-      {'icon': 'assets/images/store_icon.png', 'label': '店舗一覧', 'isImage': true},
-      {'icon': 'assets/images/trophy_icon.png', 'label': 'ランキング', 'isImage': true},
+      {'icon': Icons.monetization_on, 'label': 'ポイント履歴'},
+      {'icon': Icons.military_tech, 'label': 'バッジ'},
+      {'icon': Icons.store, 'label': '店舗一覧'},
+      {'icon': Icons.emoji_events, 'label': 'ランキング'},
     ];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // 画面幅に基づいてアイコンサイズとグリッドサイズを動的に調整
-            final iconSize = 24.0; // メニューアイコンをステータスカードと同じサイズに固定
-            final fontSize = 9.0; // メニューテキストは固定サイズ
-            
-            // より安定したアスペクト比の計算
-            final itemHeight = 130.0; // 固定の高さを使用
-            final aspectRatio = constraints.maxWidth / (itemHeight * 2);
-            
-            return GridView.count(
-              crossAxisCount: 4,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: aspectRatio,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              children: menuItems.map((item) => _buildMenuButton(
-                context,
-                item['label'] as String,
-                item['icon'] as String,
-                true, // isLogin
-                isImage: item['isImage'] as bool,
-                iconSize: iconSize,
-                fontSize: fontSize,
-              )).toList(),
-            );
-          },
-        ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            height: 90,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF6B35),
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // 画面幅に基づいてアイコンサイズとグリッドサイズを動的に調整
+                final iconSize = 32.0; // メニューアイコンを少し大きめに
+                final fontSize = 11.0; // メニューテキストは固定サイズ
+
+                // より安定したアスペクト比の計算
+                final itemHeight = 125.0; // 背景より低くしつつテキストが切れない高さ
+                final aspectRatio = constraints.maxWidth / (itemHeight * 2);
+
+                return GridView.count(
+                  crossAxisCount: 4,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: aspectRatio,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  children: menuItems.map((item) => _buildMenuButton(
+                    context,
+                    item['label'] as String,
+                    item['icon'] as IconData,
+                    true, // isLogin
+                    iconSize: iconSize,
+                    fontSize: fontSize,
+                  )).toList(),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1465,7 +1473,15 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _buildMenuButton(BuildContext context, String title, dynamic icon, bool isLogin, {bool isImage = false, double? iconSize, double? fontSize}) {
+  Widget _buildMenuButton(
+    BuildContext context,
+    String title,
+    dynamic icon,
+    bool isLogin, {
+    bool isImage = false,
+    double? iconSize,
+    double? fontSize,
+  }) {
     return GestureDetector(
       onTap: () {
         if (!isLogin) {
@@ -1520,14 +1536,15 @@ class _HomeViewState extends ConsumerState<HomeView> {
       },
       child: Container(
         padding: const EdgeInsets.all(4),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Flexible(
-              child: isImage
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              isImage
                   ? Image.asset(
-                      icon,
+                      icon as String,
                       width: iconSize ?? 24,
                       height: iconSize ?? 24,
                       fit: BoxFit.contain,
@@ -1535,7 +1552,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                         return Icon(
                           Icons.monetization_on,
                           size: iconSize ?? 24,
-                          color: isLogin ? const Color(0xFFFF6B35) : Colors.grey,
+                          color: isLogin ? Colors.white : Colors.grey,
                         );
                       },
                       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
@@ -1551,24 +1568,22 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   : Icon(
                       icon,
                       size: iconSize ?? 24,
-                      color: isLogin ? const Color(0xFFFF6B35) : Colors.grey,
+                      color: isLogin ? Colors.white : Colors.grey,
                     ),
-            ),
-            SizedBox(height: (iconSize ?? 24) * 0.15),
-            Flexible(
-              child: Text(
+              SizedBox(height: (iconSize ?? 24) * 0.35),
+              Text(
                 title,
                 style: TextStyle(
                   fontSize: fontSize ?? 10,
                   fontWeight: FontWeight.bold,
-                  color: isLogin ? Colors.black : Colors.grey,
+                  color: isLogin ? Colors.white : Colors.grey,
                 ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

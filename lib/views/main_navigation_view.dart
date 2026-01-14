@@ -207,7 +207,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
-            label: 'プロフィール',
+            label: 'アカウント',
           ),
         ],
       ),

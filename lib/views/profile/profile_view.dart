@@ -184,32 +184,33 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             child: Column(
               children: [
                 // ユーザー情報カード
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        _buildUserAvatar(user, _userData),
-                        const SizedBox(height: 16),
-                        Text(
-                          user.displayName ?? 'ユーザー',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                SizedBox(
+                  width: double.infinity,
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        children: [
+                          _buildUserAvatar(user, _userData),
+                          const SizedBox(height: 16),
+                          Text(
+                            user.displayName ?? 'ユーザー',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          user.email ?? '',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+                          const SizedBox(height: 8),
+                          Text(
+                            user.email ?? '',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        // レベルとバッジ情報
-                        _buildStatsRow(user.uid, ref),
-                      ],
+                          const SizedBox(height: 16),
+                        ],
+                      ),
                     ),
                   ),
                 ),

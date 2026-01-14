@@ -100,7 +100,7 @@ class NavigationExample extends StatelessWidget {
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.person),
-          label: 'プロフィール',
+          label: 'アカウント',
         ),
       ],
       onTap: (index) {
@@ -120,7 +120,7 @@ class NavigationExample extends StatelessWidget {
             );
             break;
           case 3:
-            // プロフィール画面
+            // アカウント画面
             break;
         }
       },
