@@ -103,10 +103,16 @@ class Coupon with _$Coupon {
   
   static String _parseDiscountType(String? type) {
     switch (type) {
+      case 'percentage':
       case '割引率':
         return 'percentage';
+      case 'fixed_amount':
       case '割引額':
+      case '割引金額':
+      case 'fixed':
+      case 'amount':
         return 'fixed_amount';
+      case 'fixed_price':
       case '固定価格':
         return 'fixed_price';
       default:
