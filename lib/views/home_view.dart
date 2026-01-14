@@ -885,34 +885,21 @@ class _HomeViewState extends ConsumerState<HomeView> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // 画面幅に基づいてアイコンサイズとグリッドサイズを動的に調整
-                final iconSize = 32.0; // メニューアイコンを少し大きめに
-                final fontSize = 11.0; // メニューテキストは固定サイズ
-
-                // より安定したアスペクト比の計算
-                final itemHeight = 125.0; // 背景より低くしつつテキストが切れない高さ
-                final aspectRatio = constraints.maxWidth / (itemHeight * 2);
-
-                return GridView.count(
-                  crossAxisCount: 4,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  childAspectRatio: aspectRatio,
-                  mainAxisSpacing: 8,
-                  crossAxisSpacing: 8,
-                  children: menuItems.map((item) => _buildMenuButton(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: menuItems.map((item) {
+                return Expanded(
+                  child: _buildMenuButton(
                     context,
                     item['label'] as String,
                     item['icon'] as IconData,
                     true, // isLogin
-                    iconSize: iconSize,
-                    fontSize: fontSize,
-                  )).toList(),
+                    iconSize: 32.0,
+                    fontSize: 12.0,
+                  ),
                 );
-              },
+              }).toList(),
             ),
           ),
         ],
@@ -1571,20 +1558,20 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       color: isLogin ? Colors.white : Colors.grey,
                     ),
               SizedBox(height: (iconSize ?? 24) * 0.35),
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: fontSize ?? 10,
-                  fontWeight: FontWeight.bold,
-                  color: isLogin ? Colors.white : Colors.grey,
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: fontSize ?? 10,
+                fontWeight: FontWeight.bold,
+                color: isLogin ? Colors.white : Colors.grey,
               ),
-            ],
-          ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
+      ),
       ),
     );
   }
