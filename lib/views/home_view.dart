@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/coupon_provider.dart';
@@ -73,7 +74,7 @@ class HomeView extends ConsumerWidget {
       data: (user) {
         if (user != null) {
           // ログイン済みの場合は新しいホーム画面を表示
-          return _buildHomeContent(context, ref, user.uid);
+          return _buildHomeContent(context, ref, user);
         } else {
           // 未ログインの場合はウェルカム画面を表示
           return const WelcomeView();
@@ -115,7 +116,8 @@ class HomeView extends ConsumerWidget {
     );
   }
 
-  Widget _buildHomeContent(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildHomeContent(BuildContext context, WidgetRef ref, User user) {
+    final userId = user.uid;
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: SafeArea(
@@ -132,7 +134,7 @@ class HomeView extends ConsumerWidget {
             child: Column(
               children: [
                 // ヘッダー部分
-                _buildHeader(context, ref, userId),
+                _buildHeader(context, ref, user),
                 
                 const SizedBox(height: 24),
                 
@@ -151,7 +153,8 @@ class HomeView extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildHeader(BuildContext context, WidgetRef ref, User user) {
+    final userId = user.uid;
     return Container(
       padding: const EdgeInsets.all(16.0),
       child: Row(
@@ -196,6 +199,10 @@ class HomeView extends ConsumerWidget {
                   final level = userData['level'] ?? 1;
                   final experience = userData['experience'] ?? 0;
                   final profileImageUrl = userData['profileImageUrl'] as String?;
+                  final authPhotoUrl = user.photoURL;
+                  final resolvedImageUrl = (profileImageUrl != null && profileImageUrl.isNotEmpty)
+                      ? profileImageUrl
+                      : (authPhotoUrl != null && authPhotoUrl.isNotEmpty ? authPhotoUrl : null);
                   
                   // 現在のレベルの経験値計算
                   final currentLevelExp = experience;
@@ -232,14 +239,14 @@ class HomeView extends ConsumerWidget {
                               width: 2,
                             ),
                           ),
-                          child: profileImageUrl != null && profileImageUrl.isNotEmpty
+                          child: resolvedImageUrl != null
                               ? ClipOval(
                                   child: Container(
                                     width: 50,
                                     height: 50,
                                     color: Colors.grey[200],
                                     child: Image.network(
-                                      profileImageUrl,
+                                      resolvedImageUrl,
                                       width: 50,
                                       height: 50,
                                       fit: BoxFit.cover,
