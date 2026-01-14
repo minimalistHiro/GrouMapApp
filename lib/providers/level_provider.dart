@@ -64,34 +64,48 @@ class LevelUpNotifier extends StateNotifier<LevelUpState> {
 class LevelService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const int maxLevel = 100;
+  static const int _baseRequiredExperience = 20;
+  static const int _requiredExperienceIncrement = 10;
 
-  // 1レベルあたりの必要経験値（シンプルに100固定）
-  // UIの進捗表示と整合が取れるよう、各レベル100XPで統一します。
+  // 1レベルあたりの必要経験値（Lv1は20、以降は段階的に増加）
   int requiredExperienceForLevel(int level) {
     if (level >= maxLevel) return 0; // 以降は上限
-    return 100;
+    final safeLevel = level.clamp(1, maxLevel);
+    return _baseRequiredExperience + (safeLevel - 1) * _requiredExperienceIncrement;
   }
 
-  // 指定レベル到達までに必要な累計経験値（レベル1 -> 0, レベル2 -> 100, ...）
+  // 指定レベル到達までに必要な累計経験値（レベル1 -> 0）
   int totalExperienceToReachLevel(int level) {
     if (level <= 1) return 0;
     final cappedLevel = level.clamp(1, maxLevel);
-    return 100 * (cappedLevel - 1);
+    int total = 0;
+    for (var i = 1; i < cappedLevel; i++) {
+      total += requiredExperienceForLevel(i);
+    }
+    return total;
   }
 
   // 累計経験値からレベルを計算（最大100）
   int levelFromTotalExperience(int totalExperience) {
     if (totalExperience <= 0) return 1;
-    final level = (totalExperience ~/ 100) + 1;
-    return level > maxLevel ? maxLevel : level;
+    var remaining = totalExperience;
+    var level = 1;
+    while (level < maxLevel) {
+      final required = requiredExperienceForLevel(level);
+      if (remaining < required) break;
+      remaining -= required;
+      level += 1;
+    }
+    return level;
   }
 
   // 現在の累計経験値から次レベルまでに必要な残り経験値
   int remainingExperienceToNextLevel(int totalExperience) {
     final currentLevel = levelFromTotalExperience(totalExperience);
     if (currentLevel >= maxLevel) return 0;
-    final base = totalExperienceToReachLevel(currentLevel + 1);
-    return (base - totalExperience).clamp(0, requiredExperienceForLevel(currentLevel));
+    final base = totalExperienceToReachLevel(currentLevel);
+    final required = requiredExperienceForLevel(currentLevel);
+    return (required - (totalExperience - base)).clamp(0, required);
   }
 
   // 経験値報酬（支払い）: 10ポイント消費ごとに1XP（最低1）

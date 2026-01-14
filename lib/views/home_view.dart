@@ -8,6 +8,7 @@ import '../providers/coupon_provider.dart';
 import '../providers/announcement_provider.dart';
 import '../providers/posts_provider.dart';
 import '../providers/store_provider.dart';
+import '../providers/level_provider.dart';
 import '../widgets/custom_button.dart';
 import 'auth/welcome_view.dart';
 import 'notifications/notifications_view.dart';
@@ -195,8 +196,9 @@ class HomeView extends ConsumerWidget {
                     return const SizedBox.shrink();
                   }
                   
-                  final level = userData['level'] ?? 1;
-                  final experience = userData['experience'] ?? 0;
+                  final levelService = LevelService();
+                  final level = (userData['level'] is num) ? (userData['level'] as num).toInt() : 1;
+                  final experience = (userData['experience'] is num) ? (userData['experience'] as num).toInt() : 0;
                   final profileImageUrl = userData['profileImageUrl'] as String?;
                   final authPhotoUrl = user.photoURL;
                   final resolvedImageUrl = (profileImageUrl != null && profileImageUrl.isNotEmpty)
@@ -204,11 +206,11 @@ class HomeView extends ConsumerWidget {
                       : (authPhotoUrl != null && authPhotoUrl.isNotEmpty ? authPhotoUrl : null);
                   
                   // 現在のレベルの経験値計算
-                  final currentLevelExp = experience;
-                  final currentLevelRequiredExp = level * 100; // 現在のレベルに必要な経験値
-                  final progressValue = currentLevelExp > currentLevelRequiredExp 
-                      ? 1.0 
-                      : (currentLevelExp - (level - 1) * 100) / 100.0;
+                  final levelBaseExp = levelService.totalExperienceToReachLevel(level);
+                  final currentLevelRequiredExp = levelService.requiredExperienceForLevel(level);
+                  final progressValue = currentLevelRequiredExp == 0
+                      ? 1.0
+                      : ((experience - levelBaseExp) / currentLevelRequiredExp).clamp(0.0, 1.0);
                   
                   return Padding(
                     padding: const EdgeInsets.all(8.0),

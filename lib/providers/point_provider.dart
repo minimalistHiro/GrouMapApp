@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../models/point_transaction_model.dart';
 import '../models/user_point_balance_model.dart';
 import '../models/qr_code_model.dart';
+import 'level_provider.dart';
 
 // ポイントサービスプロバイダー
 final pointServiceProvider = Provider<FirebaseFirestore>((ref) {
@@ -96,6 +97,11 @@ class PointProcessor {
 
       // ユーザーのポイント残高を更新
       await _updateUserPointBalance(userId, points, 0);
+
+      // 1ポイント=1XPで経験値を付与
+      try {
+        await LevelService().addExperience(userId: userId, experience: points);
+      } catch (_) {}
 
       // バッジとレベルシステムを更新
       await _updateGamificationSystems(userId, points, storeId);

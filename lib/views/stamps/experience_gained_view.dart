@@ -10,7 +10,7 @@ class ExperienceGainedView extends StatefulWidget {
   final int? newLevel; // 利用しないが互換のため保持
   final List<Map<String, dynamic>>? badges; // 渡された場合は確認で直接遷移
   final List<Map<String, dynamic>>? breakdown; // [{label: String, xp: int}]
-  final int? paid; // 支払い額（計算のみで表示）
+  final int? paid; // 支払い額（将来用に保持、XP付与は行わない）
 
   const ExperienceGainedView({
     Key? key,
@@ -28,6 +28,7 @@ class ExperienceGainedView extends StatefulWidget {
 class _ExperienceGainedViewState extends State<ExperienceGainedView>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  final LevelService _levelService = LevelService();
   Map<String, dynamic>? _userData; // usersドキュメント
   int _startExp = 0;
   int _endExp = 0;
@@ -46,58 +47,13 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-      // 支払い額のXPもここで実際に付与する（users のみ: experience/level を更新）
-      final int paidAmount = widget.paid ?? 0;
-      final int paidXp = paidAmount > 0 ? LevelService().experienceForPayment(paidAmount) : 0;
-      if (paidXp > 0) {
-        final usersRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-        // no-op flag removed; we proceed regardless
-        // 1) トランザクションで加算 + レベル更新
-        try {
-          await FirebaseFirestore.instance.runTransaction((tx) async {
-            final snap = await tx.get(usersRef);
-            int currentExp = 0;
-            if (snap.exists) {
-              final d = snap.data() as Map<String, dynamic>;
-              currentExp = (d['experience'] is num) ? (d['experience'] as num).toInt() : 0;
-            }
-            final newExp = (currentExp + paidXp).clamp(0, 1 << 31);
-            final newLevel = (newExp ~/ 100) + 1;
-            tx.set(usersRef, {
-              'experience': newExp,
-              'level': newLevel,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-          });
-          // ok
-        } catch (e) {
-          // 2) フォールバック: experience をインクリメント → 取得して level を同期
-          try {
-            await usersRef.set({
-              'experience': FieldValue.increment(paidXp),
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-            final snap2 = await usersRef.get();
-            if (snap2.exists) {
-              final d2 = snap2.data() as Map<String, dynamic>;
-              final exp2 = (d2['experience'] is num) ? (d2['experience'] as num).toInt() : 0;
-              final lvl2 = (exp2 ~/ 100) + 1;
-              await usersRef.set({'level': lvl2}, SetOptions(merge: true));
-              // ok
-            }
-          } catch (e2) {
-            // 失敗は最後に無視（表示は続行）
-          }
-        }
-      }
       final snap = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       if (!mounted) return;
       if (snap.exists) {
         final data = snap.data() as Map<String, dynamic>;
         final currentExp = (data['experience'] is num) ? (data['experience'] as num).toInt() : 0;
         // アニメーションでは押印等の獲得分 + 支払い分（この画面で付与）を合算して可視化
-        final appliedPaidXp = (paidXp > 0) ? paidXp : 0;
-        int startExp = math.max(0, currentExp - (widget.gainedExperience + appliedPaidXp));
+        int startExp = math.max(0, currentExp - widget.gainedExperience);
         int endExp = currentExp;
 
         // フォールバック: 読み込みタイミングにより差分が0以下なら、ローカルで差分を可視化
@@ -109,9 +65,9 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
           _userData = data;
           _startExp = startExp;
           _endExp = endExp;
-          _isLevelUp = (_startExp ~/ 100) < (_endExp ~/ 100);
-          _startLevel = (_startExp ~/ 100) + 1;
-          _endLevel = (_endExp ~/ 100) + 1;
+          _startLevel = _levelService.levelFromTotalExperience(_startExp);
+          _endLevel = _levelService.levelFromTotalExperience(_endExp);
+          _isLevelUp = _startLevel < _endLevel;
         });
         _controller
           ..reset()
@@ -119,14 +75,13 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
       } else {
         // users ドキュメント未作成でもアニメが動くようにフォールバック
         if (!mounted) return;
-        final appliedPaidXp = (paidXp > 0) ? paidXp : 0;
         setState(() {
           _userData = {};
           _startExp = 0;
-          _endExp = widget.gainedExperience + appliedPaidXp;
-          _isLevelUp = (_startExp ~/ 100) < (_endExp ~/ 100);
-          _startLevel = (_startExp ~/ 100) + 1;
-          _endLevel = (_endExp ~/ 100) + 1;
+          _endExp = widget.gainedExperience;
+          _startLevel = _levelService.levelFromTotalExperience(_startExp);
+          _endLevel = _levelService.levelFromTotalExperience(_endExp);
+          _isLevelUp = _startLevel < _endLevel;
         });
         _controller
           ..reset()
@@ -144,9 +99,12 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
   // 現在のアニメーション進捗から擬似的なexp/level/progressを算出
   Map<String, dynamic> _animatedExpState(double t) {
     final expNow = (_startExp + ((_endExp - _startExp) * t)).clamp(0, 1 << 31).toDouble();
-    final levelNow = (expNow ~/ 100) + 1;
-    final levelBase = (levelNow - 1) * 100;
-    final progress = ((expNow - levelBase) / 100.0).clamp(0.0, 1.0);
+    final levelNow = _levelService.levelFromTotalExperience(expNow.toInt());
+    final levelBase = _levelService.totalExperienceToReachLevel(levelNow);
+    final required = _levelService.requiredExperienceForLevel(levelNow);
+    final progress = required == 0
+        ? 1.0
+        : ((expNow - levelBase) / required).clamp(0.0, 1.0);
     return {
       'level': levelNow,
       'progress': progress,
@@ -158,10 +116,11 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
   @override
   Widget build(BuildContext context) {
     final profileImageUrl = (_userData?['profileImageUrl'] as String?);
+    final user = FirebaseAuth.instance.currentUser;
+    final isGoogleUser =
+        (_userData?['authProvider'] == 'google') ||
+        (user?.providerData.any((p) => p.providerId == 'google.com') ?? false);
     final breakdown = widget.breakdown ?? const [];
-    final int paidAmount = widget.paid ?? 0;
-    final int paidXp = paidAmount > 0 ? LevelService().experienceForPayment(paidAmount) : 0;
-
     return Scaffold(
       backgroundColor: Colors.black.withOpacity(0.85),
       body: SafeArea(
@@ -224,25 +183,34 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
                                     shape: BoxShape.circle,
                                     border: Border.all(color: const Color(0xFFFF6B35), width: 2),
                                   ),
-                                  child: profileImageUrl != null && profileImageUrl.isNotEmpty
-                                      ? ClipOval(
-                                          child: Image.network(
-                                            profileImageUrl,
-                                            width: 84,
-                                            height: 84,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return Container(
-                                                color: Colors.grey[300],
-                                                child: const Icon(Icons.person, size: 40, color: Colors.grey),
-                                              );
-                                            },
+                                  child: isGoogleUser
+                                      ? Container(
+                                          color: Colors.white,
+                                          padding: const EdgeInsets.all(12),
+                                          child: Image.asset(
+                                            'assets/images/google_logo.png',
+                                            fit: BoxFit.contain,
                                           ),
                                         )
-                                      : Container(
-                                          color: Colors.grey[300],
-                                          child: const Icon(Icons.person, size: 40, color: Colors.grey),
-                                        ),
+                                      : (profileImageUrl != null && profileImageUrl.isNotEmpty
+                                          ? ClipOval(
+                                              child: Image.network(
+                                                profileImageUrl,
+                                                width: 84,
+                                                height: 84,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) {
+                                                  return Container(
+                                                    color: Colors.grey[300],
+                                                    child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                                  );
+                                                },
+                                              ),
+                                            )
+                                          : Container(
+                                              color: Colors.grey[300],
+                                              child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                            )),
                                 ),
                                 Positioned(
                                   bottom: -6,
@@ -266,7 +234,7 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
                       ),
                     ),
                     // アイコン直下に内訳
-                    if (breakdown.isNotEmpty || paidXp > 0) ...[
+                    if (breakdown.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       Container(
                         width: double.infinity,
@@ -308,25 +276,6 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
                                 ),
                               );
                             }),
-                            if (paidXp > 0) ...[
-                              const SizedBox(height: 8),
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Expanded(
-                                    child: Text(
-                                      '支払い',
-                                      style: TextStyle(fontSize: 13, color: Colors.black54),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  Text(
-                                    '+$paidXp',
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54),
-                                  ),
-                                ],
-                              ),
-                            ],
                           ],
                         ),
                       ),
@@ -362,19 +311,14 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 6),
-                    Builder(builder: (context) {
-                      final paidAmount = widget.paid ?? 0;
-                      final paidXp = paidAmount > 0 ? LevelService().experienceForPayment(paidAmount) : 0;
-                      final totalShown = widget.gainedExperience + (paidXp > 0 ? paidXp : 0);
-                      return Text(
-                        '+$totalShown XP',
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: Color(0xFFFF6B35),
-                        ),
-                      );
-                    }),
+                    Text(
+                      '+${widget.gainedExperience} XP',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900,
+                        color: Color(0xFFFF6B35),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -412,5 +356,3 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
     );
   }
 }
-
-

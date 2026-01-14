@@ -8,8 +8,9 @@ import '../../providers/level_provider.dart';
 class StampPunchView extends StatefulWidget {
   final String storeId;
   final int? paid; // 支払額（ExperienceGainedView へ受け渡し）
+  final int? pointsAwarded; // ポイント付与によるXP表示用（付与済み）
 
-  const StampPunchView({Key? key, required this.storeId, this.paid}) : super(key: key);
+  const StampPunchView({Key? key, required this.storeId, this.paid, this.pointsAwarded}) : super(key: key);
 
   @override
   State<StampPunchView> createState() => _StampPunchViewState();
@@ -271,6 +272,7 @@ class _StampPunchViewState extends State<StampPunchView>
                       final awarded = await _checkAndAwardBadges(save: true);
                       // 確認ボタン押下時に経験値画面へ遷移
                       int xpShown = 0;
+                      final int pointsXp = (widget.pointsAwarded ?? 0).clamp(0, 1 << 31);
                       try {
                         final levelService = LevelService();
                         if (_stampIncrementedThisSession) {
@@ -294,8 +296,14 @@ class _StampPunchViewState extends State<StampPunchView>
                           }
                         }
                       } catch (_) {}
+                      xpShown += pointsXp;
                       if (!mounted) return;
                       final List<Map<String, dynamic>> breakdown = [
+                        if (pointsXp > 0)
+                          {
+                            'label': 'ポイント付与',
+                            'xp': pointsXp,
+                          },
                         if (_stampIncrementedThisSession)
                           {
                             'label': 'スタンプ押印',
@@ -1032,4 +1040,3 @@ class _StampPunchViewState extends State<StampPunchView>
     }
   }
 }
-

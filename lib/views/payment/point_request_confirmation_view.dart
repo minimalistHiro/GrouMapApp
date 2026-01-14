@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../providers/store_provider.dart';
+import '../../providers/level_provider.dart';
 import '../../services/point_transaction_service.dart';
 import '../stamps/stamp_punch_view.dart';
 
@@ -210,6 +211,12 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         }
       });
 
+      if (accept) {
+        try {
+          await LevelService().addExperience(userId: user.uid, experience: points);
+        } catch (_) {}
+      }
+
       // 承認時はポイント付与履歴を保存: point_transactions/{storeId}/{userId}/{transactionId}
       if (accept) {
         try {
@@ -235,6 +242,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                   builder: (_) => StampPunchView(
                     storeId: storeId,
                     paid: (amountNum is int) ? amountNum : amountNum.toInt(),
+                    pointsAwarded: points,
                   ),
             ),
           );
@@ -255,4 +263,3 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
     }
   }
 }
-
