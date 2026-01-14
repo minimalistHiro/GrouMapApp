@@ -115,11 +115,14 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
 
   @override
   Widget build(BuildContext context) {
-    final profileImageUrl = (_userData?['profileImageUrl'] as String?);
     final user = FirebaseAuth.instance.currentUser;
-    final isGoogleUser =
-        (_userData?['authProvider'] == 'google') ||
-        (user?.providerData.any((p) => p.providerId == 'google.com') ?? false);
+    String? resolvedImageUrl;
+    final profileImageUrl = (_userData?['profileImageUrl'] as String?);
+    if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
+      resolvedImageUrl = profileImageUrl;
+    } else if (user?.photoURL != null && user!.photoURL!.isNotEmpty) {
+      resolvedImageUrl = user.photoURL;
+    }
     final breakdown = widget.breakdown ?? const [];
     return Scaffold(
       backgroundColor: Colors.black.withOpacity(0.85),
@@ -183,34 +186,25 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
                                     shape: BoxShape.circle,
                                     border: Border.all(color: const Color(0xFFFF6B35), width: 2),
                                   ),
-                                  child: isGoogleUser
-                                      ? Container(
-                                          color: Colors.white,
-                                          padding: const EdgeInsets.all(12),
-                                          child: Image.asset(
-                                            'assets/images/google_logo.png',
-                                            fit: BoxFit.contain,
+                                  child: resolvedImageUrl != null
+                                      ? ClipOval(
+                                          child: Image.network(
+                                            resolvedImageUrl,
+                                            width: 84,
+                                            height: 84,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return Container(
+                                                color: Colors.grey[300],
+                                                child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                              );
+                                            },
                                           ),
                                         )
-                                      : (profileImageUrl != null && profileImageUrl.isNotEmpty
-                                          ? ClipOval(
-                                              child: Image.network(
-                                                profileImageUrl,
-                                                width: 84,
-                                                height: 84,
-                                                fit: BoxFit.cover,
-                                                errorBuilder: (context, error, stackTrace) {
-                                                  return Container(
-                                                    color: Colors.grey[300],
-                                                    child: const Icon(Icons.person, size: 40, color: Colors.grey),
-                                                  );
-                                                },
-                                              ),
-                                            )
-                                          : Container(
-                                              color: Colors.grey[300],
-                                              child: const Icon(Icons.person, size: 40, color: Colors.grey),
-                                            )),
+                                      : Container(
+                                          color: Colors.grey[300],
+                                          child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                        ),
                                 ),
                                 Positioned(
                                   bottom: -6,
