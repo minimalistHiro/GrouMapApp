@@ -3,7 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class StampCardsView extends StatefulWidget {
-  const StampCardsView({Key? key}) : super(key: key);
+  const StampCardsView({Key? key, this.showAppBar = true}) : super(key: key);
+
+  final bool showAppBar;
 
   @override
   State<StampCardsView> createState() => _StampCardsViewState();
@@ -119,6 +121,15 @@ class _StampCardsViewState extends State<StampCardsView> {
 
   @override
   Widget build(BuildContext context) {
+    final body = _buildBody();
+
+    if (!widget.showAppBar) {
+      return Container(
+        color: Colors.grey[50],
+        child: body,
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -132,7 +143,7 @@ class _StampCardsViewState extends State<StampCardsView> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: body,
     );
   }
 

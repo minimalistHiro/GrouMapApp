@@ -17,7 +17,6 @@ import 'notifications/notifications_view.dart';
 import 'points/points_view.dart';
 import 'ranking/leaderboard_view.dart';
 import 'stores/store_list_view.dart';
-import 'stamps/stamp_cards_view.dart';
 import 'referral/friend_referral_view.dart';
 import 'referral/store_referral_view.dart';
 import 'posts/post_detail_view.dart';
@@ -867,7 +866,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Widget _buildMenuGrid(BuildContext context, WidgetRef ref, String userId) {
     final menuItems = [
       {'icon': 'assets/images/point_icon.png', 'label': 'ポイント履歴', 'isImage': true},
-      {'icon': 'assets/images/gold_coin_icon2.png', 'label': 'スタンプ', 'isImage': true},
       {'icon': 'assets/images/badge_icon.PNG', 'label': 'バッジ', 'isImage': true},
       {'icon': 'assets/images/store_icon.png', 'label': '店舗一覧', 'isImage': true},
       {'icon': 'assets/images/trophy_icon.png', 'label': 'ランキング', 'isImage': true},
@@ -1481,13 +1479,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => const PointsView(),
-            ),
-          );
-        } else if (title == 'スタンプ') {
-          // スタンプカード一覧画面に遷移
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const StampCardsView(),
             ),
           );
         } else if (title == 'バッジ') {

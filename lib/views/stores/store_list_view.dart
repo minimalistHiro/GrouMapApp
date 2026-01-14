@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../widgets/custom_button.dart';
+import '../stamps/stamp_cards_view.dart';
 import 'store_detail_view.dart';
 
 class StoreListView extends ConsumerStatefulWidget {
@@ -82,20 +83,47 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('店舗一覧'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadStores,
-          ),
-        ],
+    return DefaultTabController(
+      length: 2,
+      child: Builder(
+        builder: (context) {
+          final tabController = DefaultTabController.of(context)!;
+          return Scaffold(
+            backgroundColor: Colors.grey[50],
+            appBar: AppBar(
+              title: const Text('店舗一覧'),
+              backgroundColor: const Color(0xFFFF6B35),
+              foregroundColor: Colors.white,
+              actions: [
+                AnimatedBuilder(
+                  animation: tabController,
+                  builder: (context, child) {
+                    if (tabController.index != 0) {
+                      return const SizedBox.shrink();
+                    }
+                    return IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _loadStores,
+                    );
+                  },
+                ),
+              ],
+              bottom: const TabBar(
+                tabs: [
+                  Tab(text: '店舗一覧'),
+                  Tab(text: 'スタンプ'),
+                ],
+              ),
+            ),
+            body: TabBarView(
+              children: [
+                _buildBody(),
+                const StampCardsView(showAppBar: false),
+              ],
+            ),
+          );
+        },
       ),
-      body: _buildBody(),
     );
   }
 
