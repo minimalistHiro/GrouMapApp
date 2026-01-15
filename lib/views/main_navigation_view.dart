@@ -192,7 +192,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         _MainTab.home,
         _MainTab.map,
         _MainTab.coupons,
-        _MainTab.profile,
       ];
     }
 

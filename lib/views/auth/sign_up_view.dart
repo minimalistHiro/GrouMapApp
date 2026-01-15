@@ -73,20 +73,20 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
     });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE75B41),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text(
           '新規アカウント作成',
           style: TextStyle(
-            color: Colors.white,
+            color: Colors.black,
             fontWeight: FontWeight.bold,
           ),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () {
             Navigator.of(context).pop();
           },
@@ -148,7 +148,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
                         'または',
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.black),
                       ),
                     ),
                     const Expanded(child: Divider()),
@@ -236,6 +236,9 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                   text: 'アカウント作成',
                   onPressed: signInState == SignInState.loading ? null : _handleSignUp,
                   isLoading: signInState == SignInState.loading,
+                  backgroundColor: const Color(0xFFFF6B35),
+                  textColor: Colors.white,
+                  borderRadius: 999,
                 ),
                 
                 const SizedBox(height: 32),
@@ -251,6 +254,7 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
                           MaterialPageRoute(builder: (context) => const SignInView()),
                         );
                       },
+                      style: TextButton.styleFrom(foregroundColor: Colors.blue),
                       child: const Text('ログイン'),
                     ),
                   ],

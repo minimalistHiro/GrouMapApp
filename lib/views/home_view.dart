@@ -285,36 +285,38 @@ class _HomeViewState extends ConsumerState<HomeView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'ポイントを確認するにはログイン',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+          const Center(
+            child: Text(
+              'ポイントを確認するにはログイン',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
           const SizedBox(height: 12),
-          Row(
+          Column(
             children: [
-              Expanded(
-                child: CustomButton(
-                  text: 'ログイン',
-                  onPressed: () {
-                    Navigator.of(context).pushNamed('/signin');
-                  },
-                ),
+              CustomButton(
+                text: 'ログイン',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signin');
+                },
+                backgroundColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: CustomButton(
-                  text: '新規アカウント作成',
-                  onPressed: () {
-                    Navigator.of(context).pushNamed('/signup');
-                  },
-                  backgroundColor: Colors.white,
-                  textColor: const Color(0xFFFF6B35),
-                  borderColor: const Color(0xFFFF6B35),
-                ),
+              const SizedBox(height: 12),
+              CustomButton(
+                text: '新規アカウント作成',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signup');
+                },
+                backgroundColor: Colors.white,
+                textColor: const Color(0xFFFF6B35),
+                borderColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
               ),
             ],
           ),

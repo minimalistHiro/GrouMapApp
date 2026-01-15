@@ -44,20 +44,20 @@ class _SignInViewState extends ConsumerState<SignInView> {
     });
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE75B41),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text(
           'ログイン',
           style: TextStyle(
-            color: Colors.white,
+            color: Colors.black,
             fontWeight: FontWeight.bold,
           ),
         ),
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () {
             Navigator.of(context).pop();
           },
@@ -117,7 +117,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Text(
                         'または',
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.black),
                       ),
                     ),
                     const Expanded(child: Divider()),
@@ -177,6 +177,8 @@ class _SignInViewState extends ConsumerState<SignInView> {
                   text: 'ログイン',
                   onPressed: signInState == SignInState.loading ? null : _handleSignIn,
                   isLoading: signInState == SignInState.loading,
+                  backgroundColor: const Color(0xFFFF6B35),
+                  textColor: Colors.white,
                   borderRadius: 999,
                 ),
 
@@ -185,6 +187,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
                 // パスワードリセット
                 TextButton(
                   onPressed: _handlePasswordReset,
+                  style: TextButton.styleFrom(foregroundColor: Colors.blue),
                   child: const Text('パスワードを忘れた場合'),
                 ),
 
@@ -201,6 +204,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
                           MaterialPageRoute(builder: (context) => const SignUpView()),
                         );
                       },
+                      style: TextButton.styleFrom(foregroundColor: Colors.blue),
                       child: const Text('新規登録'),
                     ),
                   ],
