@@ -41,8 +41,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       // usedByサブコレクションからユーザーのドキュメントを確認
       final usedByDoc = await FirebaseFirestore.instance
           .collection('coupons')
-          .doc(widget.coupon.storeId)
-          .collection('coupons')
           .doc(widget.coupon.id)
           .collection('usedBy')
           .doc(user.uid)
@@ -62,8 +60,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   Future<void> _incrementViewCount() async {
     try {
       final couponRef = FirebaseFirestore.instance
-          .collection('coupons')
-          .doc(widget.coupon.storeId)
           .collection('coupons')
           .doc(widget.coupon.id);
 
@@ -102,8 +98,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
 
       // usedByサブコレクションにユーザー情報を追加
       final couponRef = FirebaseFirestore.instance
-          .collection('coupons')
-          .doc(widget.coupon.storeId)
           .collection('coupons')
           .doc(widget.coupon.id);
       
@@ -633,6 +627,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   }
 
   Widget _buildUseButton() {
+    final user = FirebaseAuth.instance.currentUser;
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.only(top: 8, bottom: 20),
@@ -640,7 +635,34 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            if (_isUsed) ...[
+            if (user == null) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: CustomButton(
+                      text: 'ログイン',
+                      onPressed: () {
+                        Navigator.of(context).pushNamed('/signin');
+                      },
+                      backgroundColor: const Color(0xFFFF6B35),
+                      textColor: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: CustomButton(
+                      text: '新規アカウント作成',
+                      onPressed: () {
+                        Navigator.of(context).pushNamed('/signup');
+                      },
+                      backgroundColor: Colors.white,
+                      textColor: const Color(0xFFFF6B35),
+                      borderColor: const Color(0xFFFF6B35),
+                    ),
+                  ),
+                ],
+              ),
+            ] else if (_isUsed) ...[
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16),

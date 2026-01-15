@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/auth_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/coupon_provider.dart';
@@ -19,16 +20,16 @@ class MainNavigationView extends ConsumerStatefulWidget {
   ConsumerState<MainNavigationView> createState() => _MainNavigationViewState();
 }
 
+enum _MainTab {
+  home,
+  map,
+  qr,
+  coupons,
+  profile,
+}
+
 class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   int _currentIndex = 0;
-
-  final List<Widget> _pages = [
-    const HomeView(),
-    const MapView(),
-    const QRGeneratorView(),
-    const CouponsView(),
-    const ProfileView(),
-  ];
 
   @override
   void initState() {
@@ -36,29 +37,32 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     _currentIndex = widget.initialIndex;
     // 初期データ読み込みをフレーム後に実行
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadInitialData();
-      _loadTabSpecificData(_currentIndex);
+      final authState = ref.read(authStateProvider);
+      authState.when(
+        data: (user) async {
+          await _loadInitialData(user);
+          final tabs = _tabsForUser(user);
+          final safeIndex = _coerceIndex(tabs.length);
+          await _loadTabSpecificData(tabs[safeIndex]);
+        },
+        loading: () {},
+        error: (_, __) {},
+      );
     });
   }
 
   // 初期データ読み込み
-  Future<void> _loadInitialData() async {
-    // 認証状態を確認
-    final authState = ref.read(authStateProvider);
-    await authState.when(
-      data: (user) async {
-        if (user != null) {
-          // ログイン済みの場合、必要なデータを並列で読み込み
-          await Future.wait([
-            _loadUserData(user.uid),
-            _loadLocationData(),
-            _loadStoreData(),
-          ]);
-        }
-      },
-      loading: () async {},
-      error: (error, _) async {},
-    );
+  Future<void> _loadInitialData(User? user) async {
+    final tasks = <Future<void>>[
+      _loadLocationData(),
+      _loadStoreData(),
+    ];
+
+    if (user != null) {
+      tasks.add(_loadUserData(user.uid));
+    }
+
+    await Future.wait(tasks);
   }
 
   // ユーザーデータ読み込み
@@ -92,37 +96,42 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   }
 
   // タブ切り替え時のデータ読み込み
-  Future<void> _onTabChanged(int index) async {
+  Future<void> _onTabChanged(int index, List<_MainTab> tabs) async {
     setState(() {
       _currentIndex = index;
     });
 
     // タブに応じて必要なデータを読み込み
-    await _loadTabSpecificData(index);
+    final tab = tabs[index];
+    await _loadTabSpecificData(tab);
   }
 
   // タブ固有のデータ読み込み
-  Future<void> _loadTabSpecificData(int tabIndex) async {
+  Future<void> _loadTabSpecificData(_MainTab tab) async {
     final authState = ref.read(authStateProvider);
     await authState.when(
       data: (user) async {
-        if (user == null) return;
-
-        switch (tabIndex) {
-          case 0: // ホーム
-            await _loadHomeData(user.uid);
+        switch (tab) {
+          case _MainTab.home:
+            if (user != null) {
+              await _loadHomeData(user.uid);
+            }
             break;
-          case 1: // マップ
-            await _loadMapData(user.uid);
+          case _MainTab.map:
+            await _loadMapData(user?.uid ?? '');
             break;
-          case 2: // QRコード
-            await _loadQRData(user.uid);
+          case _MainTab.qr:
+            if (user != null) {
+              await _loadQRData(user.uid);
+            }
             break;
-          case 3: // クーポン
-            await _loadCouponData(user.uid);
+          case _MainTab.coupons:
+            await _loadCouponData(user?.uid);
             break;
-          case 4: // プロフィール
-            await _loadProfileData(user.uid);
+          case _MainTab.profile:
+            if (user != null) {
+              await _loadProfileData(user.uid);
+            }
             break;
         }
       },
@@ -152,11 +161,15 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   }
 
 
-  Future<void> _loadCouponData(String userId) async {
+  Future<void> _loadCouponData(String? userId) async {
     // クーポン画面のデータ読み込み
     try {
-      ref.invalidate(availableCouponsProvider(userId));
-      ref.invalidate(userCouponsProvider(userId));
+      if (userId != null) {
+        ref.invalidate(availableCouponsProvider(userId));
+        ref.invalidate(userCouponsProvider(userId));
+      } else {
+        ref.invalidate(availableCouponsProvider('guest'));
+      }
       ref.invalidate(promotionsProvider);
     } catch (e) {
       debugPrint('クーポンデータ読み込みエラー: $e');
@@ -173,43 +186,125 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
   }
 
+  List<_MainTab> _tabsForUser(User? user) {
+    if (user == null) {
+      return const [
+        _MainTab.home,
+        _MainTab.map,
+        _MainTab.coupons,
+        _MainTab.profile,
+      ];
+    }
+
+    return const [
+      _MainTab.home,
+      _MainTab.map,
+      _MainTab.qr,
+      _MainTab.coupons,
+      _MainTab.profile,
+    ];
+  }
+
+  List<Widget> _pagesForTabs(List<_MainTab> tabs) {
+    return tabs.map((tab) {
+      switch (tab) {
+        case _MainTab.home:
+          return const HomeView();
+        case _MainTab.map:
+          return const MapView();
+        case _MainTab.qr:
+          return const QRGeneratorView();
+        case _MainTab.coupons:
+          return const CouponsView();
+        case _MainTab.profile:
+          return const ProfileView();
+      }
+    }).toList();
+  }
+
+  List<BottomNavigationBarItem> _navItemsForTabs(List<_MainTab> tabs) {
+    return tabs.map((tab) {
+      switch (tab) {
+        case _MainTab.home:
+          return const BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'ホーム',
+          );
+        case _MainTab.map:
+          return const BottomNavigationBarItem(
+            icon: Icon(Icons.map),
+            label: 'マップ',
+          );
+        case _MainTab.qr:
+          return const BottomNavigationBarItem(
+            icon: Icon(Icons.qr_code),
+            label: 'QRコード',
+          );
+        case _MainTab.coupons:
+          return const BottomNavigationBarItem(
+            icon: Icon(Icons.article),
+            label: 'クーポン',
+          );
+        case _MainTab.profile:
+          return const BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'アカウント',
+          );
+      }
+    }).toList();
+  }
+
+  int _coerceIndex(int length) {
+    if (length <= 0) {
+      return 0;
+    }
+    if (_currentIndex >= length) {
+      return length - 1;
+    }
+    return _currentIndex;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _pages[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _currentIndex,
-        onTap: _onTabChanged,
-        selectedItemColor: const Color(0xFFFF6B35),
-        unselectedItemColor: Colors.grey,
-        selectedLabelStyle: const TextStyle(fontSize: 10),
-        unselectedLabelStyle: const TextStyle(fontSize: 10),
-        backgroundColor: Colors.white,
-        elevation: 8,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'ホーム',
+    final authState = ref.watch(authStateProvider);
+
+    return authState.when(
+      data: (user) {
+        final tabs = _tabsForUser(user);
+        final pages = _pagesForTabs(tabs);
+        final items = _navItemsForTabs(tabs);
+        final safeIndex = _coerceIndex(pages.length);
+
+        if (safeIndex != _currentIndex) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _currentIndex = safeIndex;
+            });
+          });
+        }
+
+        return Scaffold(
+          body: pages[safeIndex],
+          bottomNavigationBar: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: safeIndex,
+            onTap: (index) => _onTabChanged(index, tabs),
+            selectedItemColor: const Color(0xFFFF6B35),
+            unselectedItemColor: Colors.grey,
+            selectedLabelStyle: const TextStyle(fontSize: 10),
+            unselectedLabelStyle: const TextStyle(fontSize: 10),
+            backgroundColor: Colors.white,
+            elevation: 8,
+            items: items,
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.map),
-            label: 'マップ',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code),
-            label: 'QRコード',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.article),
-            label: 'クーポン',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'アカウント',
-          ),
-        ],
+        );
+      },
+      loading: () => const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => Scaffold(
+        body: Center(child: Text('エラー: $error')),
       ),
     );
   }

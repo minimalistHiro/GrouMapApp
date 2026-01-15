@@ -135,9 +135,8 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
           // ログイン済みかつ認証済みの場合はメインへ
           return const MainNavigationView();
         } else {
-          debugPrint('AuthWrapper: User not logged in, showing HomeView');
-          // 未ログインの場合はホーム画面（ログイン画面）を表示
-          return const HomeView();
+          debugPrint('AuthWrapper: User not logged in, showing MainNavigationView');
+          return const MainNavigationView();
         }
       },
       loading: () => const Scaffold(

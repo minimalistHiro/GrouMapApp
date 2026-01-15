@@ -31,12 +31,7 @@ class CouponsView extends ConsumerWidget {
       ),
       body: authState.when(
         data: (user) {
-          if (user == null) {
-            return const Center(
-              child: Text('ログインが必要です'),
-            );
-          }
-          return _buildCouponsContent(context, ref, user.uid);
+          return _buildCouponsContent(context, ref, user?.uid);
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('エラー: $error')),
@@ -44,7 +39,7 @@ class CouponsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildCouponsContent(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildCouponsContent(BuildContext context, WidgetRef ref, String? userId) {
     return DefaultTabController(
       length: 2,
       child: Column(
@@ -159,25 +154,27 @@ class CouponsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildCoupons(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildCoupons(BuildContext context, WidgetRef ref, String? userId) {
+    final isLoggedIn = userId != null;
+    final tabs = <Tab>[
+      const Tab(text: '利用可能', icon: Icon(Icons.card_giftcard)),
+      if (isLoggedIn) const Tab(text: '使用済み', icon: Icon(Icons.check_circle)),
+      const Tab(text: 'プロモーション', icon: Icon(Icons.campaign)),
+    ];
+    final views = <Widget>[
+      _buildAvailableCoupons(context, ref, userId ?? 'guest'),
+      if (isLoggedIn) _buildUsedCoupons(context, ref, userId!),
+      _buildPromotions(context, ref),
+    ];
+
     return DefaultTabController(
-      length: 3,
+      length: tabs.length,
       child: Column(
         children: [
-          const TabBar(
-            tabs: [
-              Tab(text: '利用可能', icon: Icon(Icons.card_giftcard)),
-              Tab(text: '使用済み', icon: Icon(Icons.check_circle)),
-              Tab(text: 'プロモーション', icon: Icon(Icons.campaign)),
-            ],
-          ),
+          TabBar(tabs: tabs),
           Expanded(
             child: TabBarView(
-              children: [
-                _buildAvailableCoupons(context, ref, userId),
-                _buildUsedCoupons(context, ref, userId),
-                _buildPromotions(context, ref),
-              ],
+              children: views,
             ),
           ),
         ],

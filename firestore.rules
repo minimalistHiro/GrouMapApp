@@ -31,45 +31,39 @@ service cloud.firestore {
     
     // 投稿コレクションのルール
     match /posts/{postId} {
-      // 認証されたユーザーは読み取り可能
-      allow read: if request.auth != null;
+      // 公開閲覧可
+      allow read: if true;
       // 管理者のみ書き込み可能（必要に応じて調整）
       allow write: if request.auth != null;
 
       // コメント（posts/{postId}/comments/{commentId}）
       match /comments/{commentId} {
-        allow read, write: if request.auth != null;
+        allow read: if true;
+        allow write: if request.auth != null;
       }
 
       // いいね（posts/{postId}/likes/{likeId}）
       match /likes/{likeId} {
-        allow read, write: if request.auth != null;
+        allow read: if true;
+        allow write: if request.auth != null;
       }
     }
     
-    // クーポンコレクションのルール（ルートレベル - 後方互換性のため保持）
+    // クーポンコレクションのルール（トップレベル）
     match /coupons/{couponId} {
-      // 認証されたユーザーは読み取り可能
-      allow read: if request.auth != null;
+      // 公開閲覧可
+      allow read: if true;
       // 管理者のみ書き込み可能（必要に応じて調整）
       allow write: if request.auth != null;
-      
-      // ネストされたクーポン: coupons/{storeId}/coupons/{couponId}
-      match /coupons/{nestedCouponId} {
+
+      // クーポン使用履歴: coupons/{couponId}/usedBy/{userId}
+      match /usedBy/{userId} {
         // 認証されたユーザーは読み取り可能
         allow read: if request.auth != null;
-        // 認証されたユーザーは書き込み可能（クーポン使用のため）
-        allow write: if request.auth != null;
-        
-        // クーポン使用履歴: coupons/{storeId}/coupons/{couponId}/usedBy/{userId}
-        match /usedBy/{userId} {
-          // 認証されたユーザーは読み取り可能
-          allow read: if request.auth != null;
-          // 認証されたユーザーは自分の使用履歴を作成可能
-          allow create: if request.auth != null && request.auth.uid == userId;
-          // 更新・削除は禁止
-          allow update, delete: if false;
-        }
+        // 認証されたユーザーは自分の使用履歴を作成可能
+        allow create: if request.auth != null && request.auth.uid == userId;
+        // 更新・削除は禁止
+        allow update, delete: if false;
       }
     }
     
@@ -206,8 +200,8 @@ service cloud.firestore {
     
     // 店舗コレクションのルール
     match /stores/{storeId} {
-      // 認証されたユーザーは読み取り可能
-      allow read: if request.auth != null;
+      // 公開閲覧可
+      allow read: if true;
       // 新規作成は未ログインユーザーも許可
       allow create: if true;
       // 更新・削除はオーナーのみ可能
@@ -216,16 +210,22 @@ service cloud.firestore {
     
     // お知らせコレクションのルール
     match /announcements/{announcementId} {
-      // 認証されたユーザーは読み取り可能
-      allow read: if request.auth != null;
+      // 公開閲覧可
+      allow read: if true;
       // オーナーのみ作成・更新・削除可能
       allow create, update, delete: if isOwner();
     }
 
     // オーナー設定コレクション
     match /owner_settings/{storeId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow create, update, delete: if isOwner();
+    }
+
+    // プロモーション（クーポン画面表示用）
+    match /promotions/{promotionId} {
+      allow read: if true;
+      allow write: if isOwner();
     }
     
     // その他のコレクションは認証されたユーザーのみ読み取り可能

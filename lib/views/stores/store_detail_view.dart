@@ -796,15 +796,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
   Widget _buildCouponsTab() {
     final storeId = widget.store['id'];
-    final user = FirebaseAuth.instance.currentUser;
-    
-    if (user == null) {
-      return const Center(
-        child: Text('ログインが必要です'),
-      );
-    }
-
-    final coupons = ref.watch(availableCouponsProvider(user.uid));
+    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+    final coupons = ref.watch(availableCouponsProvider(userId));
 
     return coupons.when(
       data: (coupons) {

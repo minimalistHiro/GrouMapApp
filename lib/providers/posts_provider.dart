@@ -65,7 +65,7 @@ class PostModel {
 // 投稿プロバイダー
 final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
   return FirebaseFirestore.instance
-      .collectionGroup('posts')
+      .collection('posts')
       .limit(50)
       .snapshots()
       .map((snapshot) {
@@ -87,7 +87,7 @@ final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
 final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
   try {
     return FirebaseFirestore.instance
-        .collectionGroup('posts')
+        .collection('posts')
         .where('storeId', isEqualTo: storeId)
         .limit(20)
         .snapshots()
@@ -160,7 +160,7 @@ class PostsService {
   static Future<List<PostModel>> getPosts({int limit = 50}) async {
     try {
       final snapshot = await _firestore
-          .collectionGroup('posts')
+          .collection('posts')
           .limit(limit)
           .get();
 
@@ -184,7 +184,7 @@ class PostsService {
   static Future<List<PostModel>> getStorePosts(String storeId, {int limit = 20}) async {
     try {
       final snapshot = await _firestore
-          .collectionGroup('posts')
+          .collection('posts')
           .where('storeId', isEqualTo: storeId)
           .limit(limit)
           .get();

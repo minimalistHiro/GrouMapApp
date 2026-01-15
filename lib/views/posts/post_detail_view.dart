@@ -451,12 +451,13 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   }
 
   Widget _buildPostInfo() {
+    final isLoggedIn = FirebaseAuth.instance.currentUser != null;
     return Container(
       color: Colors.white,
       child: Column(
         children: [
           // いいね・コメント・シェアボタン
-          _buildActionButtons(),
+          if (isLoggedIn) _buildActionButtons(),
 
           // いいね数
           if (_likeCount > 0)
@@ -503,7 +504,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                 const SizedBox(height: 16),
 
                 // コメントセクション
-                _buildCommentsSection(),
+                _buildCommentsSection(isLoggedIn),
               ],
             ),
           ),
@@ -548,38 +549,39 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
     );
   }
 
-  Widget _buildCommentsSection() {
+  Widget _buildCommentsSection(bool isLoggedIn) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // コメント入力
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _commentController,
-                decoration: const InputDecoration(
-                  hintText: 'コメントを追加...',
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 8),
-                ),
-                maxLines: null,
-              ),
-            ),
-            TextButton(
-              onPressed: _addComment,
-              child: const Text(
-                '投稿',
-                style: TextStyle(
-                  color: Color(0xFFFF6B35),
-                  fontWeight: FontWeight.bold,
+        if (isLoggedIn) ...[
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _commentController,
+                  decoration: const InputDecoration(
+                    hintText: 'コメントを追加...',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  maxLines: null,
                 ),
               ),
-            ),
-          ],
-        ),
-        
-        const Divider(height: 1),
+              TextButton(
+                onPressed: _addComment,
+                child: const Text(
+                  '投稿',
+                  style: TextStyle(
+                    color: Color(0xFFFF6B35),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 1),
+        ],
         
         // コメント一覧
         if (_isLoadingComments)

@@ -12,12 +12,12 @@ import '../settings/profile_edit_view.dart';
 import '../settings/password_change_view.dart';
 import '../settings/push_notification_settings_view.dart';
 import '../settings/email_notification_settings_view.dart';
-import '../auth/welcome_view.dart';
 import '../legal/privacy_policy_view.dart';
 import '../legal/terms_view.dart';
 import '../support/help_view.dart';
 import '../support/contact_view.dart';
 import '../feedback/feedback_view.dart';
+import '../main_navigation_view.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({Key? key}) : super(key: key);
@@ -162,8 +162,71 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       body: authState.when(
         data: (user) {
           if (user == null) {
-            return const Center(
-              child: Text('ユーザー情報が取得できません'),
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          children: [
+                            const CircleAvatar(
+                              radius: 40,
+                              backgroundColor: Colors.grey,
+                              child: Icon(
+                                Icons.person,
+                                size: 40,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'ゲスト',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pushNamed('/signin');
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFFF6B35),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('ログイン'),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pushNamed('/signup');
+                                    },
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: const Color(0xFFFF6B35),
+                                      side: const BorderSide(color: Color(0xFFFF6B35)),
+                                    ),
+                                    child: const Text('新規アカウント作成'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             );
           }
 
@@ -873,7 +936,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       if (context.mounted) {
         Navigator.of(context).pop();
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const WelcomeView()),
+          MaterialPageRoute(builder: (context) => const MainNavigationView()),
           (route) => false,
         );
       }

@@ -12,7 +12,6 @@ import '../providers/posts_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/level_provider.dart';
 import '../widgets/custom_button.dart';
-import 'auth/welcome_view.dart';
 import 'notifications/notifications_view.dart';
 import 'points/points_view.dart';
 import 'ranking/leaderboard_view.dart';
@@ -129,13 +128,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
     return authState.when(
       data: (user) {
-        if (user != null) {
-          // ログイン済みの場合は新しいホーム画面を表示
-          return _buildHomeContent(context, ref, user);
-        } else {
-          // 未ログインの場合はウェルカム画面を表示
-          return const WelcomeView();
-        }
+        return _buildHomeContent(context, ref, user);
       },
       loading: () => const Center(
         child: CircularProgressIndicator(),
@@ -173,36 +166,43 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _buildHomeContent(BuildContext context, WidgetRef ref, User user) {
-    final userId = user.uid;
+  Widget _buildHomeContent(BuildContext context, WidgetRef ref, User? user) {
+    final isLoggedIn = user != null;
+    final userId = user?.uid ?? 'guest';
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(userDataProvider(userId));
-            ref.invalidate(userBadgeCountProvider(userId));
             ref.invalidate(announcementsProvider);
-            ref.invalidate(availableCouponsProvider(userId));
             ref.invalidate(allPostsProvider);
             ref.invalidate(ownerSettingsProvider);
+            ref.invalidate(availableCouponsProvider(userId));
+            if (isLoggedIn) {
+              ref.invalidate(userDataProvider(userId));
+              ref.invalidate(userBadgeCountProvider(userId));
+            }
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             child: Column(
               children: [
                 // ヘッダー部分
-                _buildHeader(context, ref, user),
+                isLoggedIn
+                    ? _buildHeader(context, ref, user!)
+                    : _buildGuestHeader(context),
                 
                 const SizedBox(height: 24),
                 
                 // カード部分
-                _buildStatsCard(context, ref, userId),
+                isLoggedIn
+                    ? _buildStatsCard(context, ref, userId)
+                    : _buildGuestStatsCard(context),
                 
                 _buildReferralSection(context, ref),
                 
                 // その他のコンテンツ
-                _buildAdditionalContent(context, ref, userId),
+                _buildAdditionalContent(context, ref, isLoggedIn, userId),
               ],
             ),
           ),
@@ -211,6 +211,117 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
+  Widget _buildGuestHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 140,
+            child: Row(
+              children: [
+                Image.asset(
+                  'assets/images/groumap_icon.png',
+                  width: 30,
+                  height: 30,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.location_on, size: 30, color: Colors.blue),
+                ),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'GrouMap',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.grey[300],
+                child: const Icon(Icons.person, size: 18, color: Colors.grey),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'ゲスト',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGuestStatsCard(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.all(20.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'ポイントを確認するにはログイン',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: CustomButton(
+                  text: 'ログイン',
+                  onPressed: () {
+                    Navigator.of(context).pushNamed('/signin');
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: CustomButton(
+                  text: '新規アカウント作成',
+                  onPressed: () {
+                    Navigator.of(context).pushNamed('/signup');
+                  },
+                  backgroundColor: Colors.white,
+                  textColor: const Color(0xFFFF6B35),
+                  borderColor: const Color(0xFFFF6B35),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
   Widget _buildHeader(BuildContext context, WidgetRef ref, User user) {
     final userId = user.uid;
     return Container(
@@ -841,13 +952,18 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _buildAdditionalContent(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildAdditionalContent(
+    BuildContext context,
+    WidgetRef ref,
+    bool isLoggedIn,
+    String userId,
+  ) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Column(
         children: [
           // メニューグリッド
-          _buildMenuGrid(context, ref, userId),
+          _buildMenuGrid(context, ref, isLoggedIn),
           
           const SizedBox(height: 20),
           
@@ -863,7 +979,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _buildMenuGrid(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildMenuGrid(BuildContext context, WidgetRef ref, bool isLoggedIn) {
     final menuItems = [
       {'icon': Icons.monetization_on, 'label': 'ポイント履歴'},
       {'icon': Icons.military_tech, 'label': 'バッジ'},
@@ -894,7 +1010,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     context,
                     item['label'] as String,
                     item['icon'] as IconData,
-                    true, // isLogin
+                    true,
                     iconSize: 32.0,
                     fontSize: 12.0,
                   ),
