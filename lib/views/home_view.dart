@@ -1143,23 +1143,26 @@ class _HomeViewState extends ConsumerState<HomeView> {
           ),
         );
       },
-      child: Container(
-        width: 170,
-        margin: const EdgeInsets.symmetric(horizontal: 5),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 3,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Container(
+          height: 270,
+          width: 170,
+          margin: const EdgeInsets.symmetric(horizontal: 5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                spreadRadius: 1,
+                blurRadius: 3,
+                offset: const Offset(0, 1),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
             // 画像
             Container(
               width: 150,
@@ -1194,14 +1197,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
             ),
             
             // 期限
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              margin: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.red[100],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
-              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Text(
                 formatEndDate(),
                 style: const TextStyle(
@@ -1254,6 +1251,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ),
             ),
             
+            const SizedBox(height: 4),
             const Divider(height: 1),
             
             // 店舗名
@@ -1282,8 +1280,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ),
             ),
             
-            const SizedBox(height: 3),
-          ],
+              const SizedBox(height: 3),
+            ],
+          ),
         ),
       ),
     );

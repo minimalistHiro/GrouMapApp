@@ -27,10 +27,6 @@ class CouponsView extends ConsumerWidget {
             icon: const Icon(Icons.search),
             onPressed: () => _showSearchDialog(context),
           ),
-          IconButton(
-            icon: const Icon(Icons.filter_list),
-            onPressed: () => _showFilterDialog(context),
-          ),
         ],
       ),
       body: authState.when(
