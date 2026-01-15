@@ -1108,7 +1108,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
           child: Row(
             children: [
               const Text(
-                '店舗からのお知らせ',
+                '投稿',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,

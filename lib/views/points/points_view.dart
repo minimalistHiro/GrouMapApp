@@ -4,6 +4,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
 import '../../models/point_transaction_model.dart';
 import '../../providers/store_provider.dart';
+import '../../widgets/custom_button.dart';
 
 class PointsView extends ConsumerStatefulWidget {
   const PointsView({Key? key}) : super(key: key);
@@ -52,9 +53,7 @@ class _PointsViewState extends ConsumerState<PointsView>
       body: authState.when(
         data: (user) {
           if (user == null) {
-            return const Center(
-              child: Text('ログインが必要です'),
-            );
+            return _buildAuthRequired(context);
           }
 
           return _buildPointsContent(context, ref, user.uid);
@@ -111,6 +110,52 @@ class _PointsViewState extends ConsumerState<PointsView>
   }
 
   // 残高カードは削除済み
+
+  Widget _buildAuthRequired(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'ログインが必要です',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: 'ログイン',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signin');
+                },
+                backgroundColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: '新規アカウント作成',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signup');
+                },
+                backgroundColor: Colors.white,
+                textColor: const Color(0xFFFF6B35),
+                borderColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
 
   Widget _buildAllTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {

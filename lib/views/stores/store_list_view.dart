@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../stamps/stamp_cards_view.dart';
 import 'store_detail_view.dart';
@@ -83,6 +84,50 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+
+    return authState.when(
+      data: (user) {
+        if (user == null) {
+          return Scaffold(
+            backgroundColor: Colors.grey[50],
+            appBar: AppBar(
+              title: const Text('店舗一覧'),
+              backgroundColor: const Color(0xFFFF6B35),
+              foregroundColor: Colors.white,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _loadStores,
+                ),
+              ],
+            ),
+            body: _buildBody(),
+          );
+        }
+        return _buildTabbedScaffold();
+      },
+      loading: () => const Scaffold(
+        backgroundColor: Colors.grey,
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (error, _) => Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          title: const Text('店舗一覧'),
+          backgroundColor: const Color(0xFFFF6B35),
+          foregroundColor: Colors.white,
+        ),
+        body: Center(
+          child: Text('エラー: $error'),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabbedScaffold() {
     return DefaultTabController(
       length: 2,
       child: Builder(

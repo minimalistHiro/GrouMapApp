@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/custom_button.dart';
 
 class BadgeModel {
   final String id;
@@ -91,14 +93,10 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
   }
 
   // Firestore: ユーザーの取得済みバッジを購読
-  Stream<Map<String, Map<String, dynamic>>> _userBadgesStream() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      return Stream.value({});
-    }
+  Stream<Map<String, Map<String, dynamic>>> _userBadgesStream(String userId) {
     return FirebaseFirestore.instance
         .collection('user_badges')
-        .doc(user.uid)
+        .doc(userId)
         .collection('badges')
         .snapshots()
         .map((snapshot) {
@@ -112,6 +110,8 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -125,45 +125,108 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
           ),
         ],
       ),
-      body: StreamBuilder<List<BadgeModel>>(
-        stream: _badgesStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+      body: authState.when(
+        data: (user) {
+          if (user == null) {
+            return _buildAuthRequired(context);
           }
-          if (snapshot.hasError) {
-            return Center(child: Text('バッジ取得に失敗しました: ${snapshot.error}'));
-          }
-
-          final badges = snapshot.data ?? [];
-          // ユーザーバッジを購読して統合
-          return StreamBuilder<Map<String, Map<String, dynamic>>>(
-            stream: _userBadgesStream(),
-            builder: (context, userSnapshot) {
-              final userBadgesMap = userSnapshot.data ?? {};
-
-              // カテゴリをデータから動的生成（日本語ラベルに変換）
-              final categories = <String>{'すべて'}
-                ..addAll(badges.map((b) => _displayCategory(b.category)).where((c) => c.isNotEmpty));
-
-              if (!categories.contains(_selectedCategory)) {
-                _selectedCategory = 'すべて';
-              }
-              _categories = categories.toList();
-
-              final filteredBadges = _selectedCategory == 'すべて'
-                  ? badges
-                  : badges.where((b) => _displayCategory(b.category) == _selectedCategory).toList();
-
-              return Column(
-                children: [
-                  _buildCategoryFilter(_categories),
-                  Expanded(child: _buildBadgeGrid(filteredBadges, userBadgesMap)),
-                ],
-              );
-            },
-          );
+          return _buildBadgesContent(context, user.uid);
         },
+        loading: () => const Center(
+          child: CircularProgressIndicator(),
+        ),
+        error: (error, _) => Center(
+          child: Text('エラー: $error'),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBadgesContent(BuildContext context, String userId) {
+    return StreamBuilder<List<BadgeModel>>(
+      stream: _badgesStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('バッジ取得に失敗しました: ${snapshot.error}'));
+        }
+
+        final badges = snapshot.data ?? [];
+        // ユーザーバッジを購読して統合
+        return StreamBuilder<Map<String, Map<String, dynamic>>>(
+          stream: _userBadgesStream(userId),
+          builder: (context, userSnapshot) {
+            final userBadgesMap = userSnapshot.data ?? {};
+
+            // カテゴリをデータから動的生成（日本語ラベルに変換）
+            final categories = <String>{'すべて'}
+              ..addAll(badges.map((b) => _displayCategory(b.category)).where((c) => c.isNotEmpty));
+
+            if (!categories.contains(_selectedCategory)) {
+              _selectedCategory = 'すべて';
+            }
+            _categories = categories.toList();
+
+            final filteredBadges = _selectedCategory == 'すべて'
+                ? badges
+                : badges.where((b) => _displayCategory(b.category) == _selectedCategory).toList();
+
+            return Column(
+              children: [
+                _buildCategoryFilter(_categories),
+                Expanded(child: _buildBadgeGrid(filteredBadges, userBadgesMap)),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildAuthRequired(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'ログインが必要です',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: 'ログイン',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signin');
+                },
+                backgroundColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: '新規アカウント作成',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signup');
+                },
+                backgroundColor: Colors.white,
+                textColor: const Color(0xFFFF6B35),
+                borderColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
