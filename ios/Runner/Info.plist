@@ -27,11 +27,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Allow camera access to take photos for map locations.</string>
+	<string>地図上の場所の写真を撮影するために、カメラへのアクセスを許可してください。</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Allow location access to show nearby places and improve map accuracy.</string>
+	<string>近くの場所を表示し地図の精度を向上させるために、位置情報へのアクセスを許可してください。</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Allow location access to show nearby places and improve map accuracy.</string>
+	<string>近くの場所を表示し地図の精度を向上させるために、位置情報へのアクセスを許可してください。</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>
