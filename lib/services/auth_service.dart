@@ -256,6 +256,7 @@ class AuthService {
       try {
         final user = _auth.currentUser;
         if (user != null) {
+          await _firestore.collection('users').doc(user.uid).delete();
           await user.delete();
         }
       } catch (e) {

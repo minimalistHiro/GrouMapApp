@@ -67,7 +67,7 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
                 child: _isChecking
@@ -95,7 +95,7 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
                   side: const BorderSide(color: Color(0xFFFF6B35)),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
                 child: _isResending
@@ -123,7 +123,7 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
                   side: const BorderSide(color: Colors.redAccent),
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                 ),
                 child: _isDeleting

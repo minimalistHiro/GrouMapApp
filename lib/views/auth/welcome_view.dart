@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'sign_in_view.dart';
-import 'sign_up_view.dart';
+import 'terms_privacy_consent_view.dart';
 
 class WelcomeView extends StatefulWidget {
   const WelcomeView({super.key});
@@ -225,7 +225,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                   onPressed: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => const SignUpView(),
+                        builder: (context) => const TermsPrivacyConsentView(),
                       ),
                     );
                   },

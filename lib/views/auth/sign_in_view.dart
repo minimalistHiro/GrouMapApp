@@ -4,7 +4,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/error_dialog.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
-import 'sign_up_view.dart';
+import 'terms_privacy_consent_view.dart';
 import 'email_verification_pending_view.dart';
 import '../main_navigation_view.dart';
 
@@ -201,7 +201,9 @@ class _SignInViewState extends ConsumerState<SignInView> {
                     TextButton(
                       onPressed: () {
                         Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (context) => const SignUpView()),
+                          MaterialPageRoute(
+                            builder: (context) => const TermsPrivacyConsentView(),
+                          ),
                         );
                       },
                       style: TextButton.styleFrom(foregroundColor: Colors.blue),

@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'views/home_view.dart';
 import 'views/auth/sign_in_view.dart';
-import 'views/auth/sign_up_view.dart';
+import 'views/auth/terms_privacy_consent_view.dart';
 import 'views/auth/email_verification_pending_view.dart';
 import 'views/main_navigation_view.dart';
 import 'providers/auth_provider.dart';
@@ -80,7 +80,7 @@ class MyApp extends ConsumerWidget {
       home: const AuthWrapper(),
       routes: {
         '/signin': (context) => const SignInView(),
-        '/signup': (context) => const SignUpView(),
+        '/signup': (context) => const TermsPrivacyConsentView(),
       },
       debugShowCheckedModeBanner: false,
     );
