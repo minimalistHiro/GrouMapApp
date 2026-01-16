@@ -224,7 +224,7 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
       await ref.read(authServiceProvider).deleteAccount();
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const HomeView()),
+          MaterialPageRoute(builder: (context) => const MainNavigationView()),
           (route) => false,
         );
       }
