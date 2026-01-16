@@ -30,14 +30,6 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
         title: const Text('リーダーボード'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              ref.read(rankingNotifierProvider.notifier).refresh(query);
-            },
-          ),
-        ],
       ),
       body: Column(
         children: [

@@ -95,12 +95,6 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
               title: const Text('店舗一覧'),
               backgroundColor: const Color(0xFFFF6B35),
               foregroundColor: Colors.white,
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _loadStores,
-                ),
-              ],
             ),
             body: _buildBody(),
           );
@@ -139,20 +133,6 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
               title: const Text('店舗一覧'),
               backgroundColor: const Color(0xFFFF6B35),
               foregroundColor: Colors.white,
-              actions: [
-                AnimatedBuilder(
-                  animation: tabController,
-                  builder: (context, child) {
-                    if (tabController.index != 0) {
-                      return const SizedBox.shrink();
-                    }
-                    return IconButton(
-                      icon: const Icon(Icons.refresh),
-                      onPressed: _loadStores,
-                    );
-                  },
-                ),
-              ],
               bottom: const TabBar(
                 tabs: [
                   Tab(text: '店舗一覧'),
