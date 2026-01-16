@@ -59,7 +59,7 @@ dependencies:
   # QR Code
   qr_code_scanner: ^1.0.1
   qr_flutter: ^4.1.0
-  mobile_scanner: 5.2.3
+  mobile_scanner: ^6.0.0
   
   # JWT
   dart_jsonwebtoken: ^2.12.2
