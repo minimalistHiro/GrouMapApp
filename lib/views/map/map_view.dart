@@ -1,11 +1,27 @@
+import 'dart:async';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../stores/store_detail_view.dart';
+
+class _MarkerVisual {
+  final Color color;
+  final IconData iconData;
+  final bool useImage;
+
+  const _MarkerVisual({
+    required this.color,
+    required this.iconData,
+    required this.useImage,
+  });
+}
 
 class MapView extends ConsumerStatefulWidget {
   final String? selectedStoreId;
@@ -20,9 +36,15 @@ class MapView extends ConsumerStatefulWidget {
 }
 
 class _MapViewState extends ConsumerState<MapView> {
-  final MapController _mapController = MapController();
-  List<Marker> _markers = [];
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
   LatLng? _currentLocation;
+  LatLng _currentCenter = _defaultLocation;
+  double _currentZoom = 15.0;
+  double _currentBearing = 0.0;
+  int _markerBuildToken = 0;
+  final Map<String, Future<BitmapDescriptor>> _markerIconFutureCache = {};
+  final Map<String, ui.Image> _markerImageCache = {};
   
   // データベースから取得した店舗データ
   List<Map<String, dynamic>> _stores = [];
@@ -53,6 +75,7 @@ class _MapViewState extends ConsumerState<MapView> {
   @override
   void initState() {
     super.initState();
+    _currentCenter = _defaultLocation;
     _initializeMapData();
   }
   
@@ -70,7 +93,7 @@ class _MapViewState extends ConsumerState<MapView> {
     
     // 特定の店舗が選択されている場合、その店舗を選択状態にする
     if (widget.selectedStoreId != null) {
-      _selectStoreOnMap(widget.selectedStoreId!);
+      await _selectStoreOnMap(widget.selectedStoreId!);
     }
   }
   
@@ -249,7 +272,7 @@ class _MapViewState extends ConsumerState<MapView> {
       
       // 店舗データ読み込み後にユーザーのスタンプ状況を読み込む
       await _loadUserStamps();
-      _createMarkers();
+      await _createMarkers();
     } catch (e) {
       print('店舗データの読み込みに失敗しました: $e');
     }
@@ -384,9 +407,19 @@ class _MapViewState extends ConsumerState<MapView> {
           _currentLocation = LatLng(position.latitude, position.longitude);
           _locationRetryCount = 0; // 成功したらリトライカウントをリセット
         });
-        
+
         // 地図を現在地に移動
-        _mapController.move(_currentLocation!, 15.0);
+        _currentCenter = _currentLocation!;
+        _currentZoom = 15.0;
+        _mapController?.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: _currentCenter,
+              zoom: _currentZoom,
+              bearing: _currentBearing,
+            ),
+          ),
+        );
         print('地図を現在地に移動しました');
       }
     } catch (e) {
@@ -459,167 +492,245 @@ class _MapViewState extends ConsumerState<MapView> {
     }
   }
 
-  // カスタムマーカーアイコンを作成
-  Widget _createCustomMarkerIcon(String flowerType, bool isExpanded, {String? category, String? storeIconUrl}) {
-    final double size = isExpanded ? 50.0 : 30.0;
-    
-    // カスタムアイコンの色とスタイルを決定
-    Color markerColor;
-    IconData iconData;
-
+  _MarkerVisual _resolveMarkerVisual({
+    required String flowerType,
+    required String category,
+    required String storeIconUrl,
+  }) {
     if (_pioneerMode) {
-      // 開拓モード（スタンプ状況）
       switch (flowerType) {
-        case 'unvisited': // 未開拓（スタンプ0個）
-          markerColor = Colors.grey[400]!;
-          iconData = Icons.radio_button_unchecked;
-          break;
-        case 'visited': // 開拓中（スタンプ1-9個）
-          markerColor = Colors.orange[600]!;
-          iconData = Icons.radio_button_checked;
-          break;
-        case 'regular': // 常連（スタンプ10個以上）
-          markerColor = Colors.amber[600]!;
-          iconData = Icons.star;
-          break;
+        case 'unvisited':
+          return const _MarkerVisual(
+            color: Color(0xFFBDBDBD),
+            iconData: Icons.radio_button_unchecked,
+            useImage: false,
+          );
+        case 'visited':
+          return const _MarkerVisual(
+            color: Color(0xFFFB8C00),
+            iconData: Icons.radio_button_checked,
+            useImage: false,
+          );
+        case 'regular':
+          return const _MarkerVisual(
+            color: Color(0xFFFFB300),
+            iconData: Icons.star,
+            useImage: false,
+          );
         default:
-          markerColor = Colors.grey[400]!;
-          iconData = Icons.help_outline;
+          return const _MarkerVisual(
+            color: Color(0xFFBDBDBD),
+            iconData: Icons.help_outline,
+            useImage: false,
+          );
       }
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: markerColor,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.white,
-            width: isExpanded ? 3 : 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: markerColor.withOpacity(0.4),
-              blurRadius: isExpanded ? 10 : 5,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Icon(
-          iconData,
-          color: Colors.white,
-          size: size * 0.6,
-        ),
-      );
-    } else if (_categoryMode) {
-      // ジャンル別（カテゴリー）モード
-      final String cat = (category ?? '').toString();
+    }
+
+    if (_categoryMode) {
+      final String cat = category;
       if (cat.contains('カフェ')) {
-        markerColor = Colors.brown[400]!;
-        iconData = Icons.local_cafe;
-      } else if (cat.contains('レストラン') || cat.contains('食') || cat.contains('グルメ')) {
-        markerColor = Colors.redAccent;
-        iconData = Icons.restaurant;
-      } else if (cat.contains('ショップ') || cat.contains('買') || cat.contains('物')) {
-        markerColor = Colors.purple;
-        iconData = Icons.shopping_bag;
-      } else if (cat.contains('バー') || cat.contains('酒')) {
-        markerColor = Colors.deepPurple;
-        iconData = Icons.wine_bar;
-      } else if (cat.contains('本') || cat.contains('書店') || cat.contains('ブック')) {
-        markerColor = Colors.indigo;
-        iconData = Icons.menu_book;
-      } else if (cat.contains('サービス')) {
-        markerColor = Colors.teal;
-        iconData = Icons.build_circle;
-      } else {
-        markerColor = Colors.blueGrey;
-        iconData = Icons.place;
+        return const _MarkerVisual(
+          color: Color(0xFF8D6E63),
+          iconData: Icons.local_cafe,
+          useImage: false,
+        );
       }
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: markerColor,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.white,
-            width: isExpanded ? 3 : 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: markerColor.withOpacity(0.4),
-              blurRadius: isExpanded ? 10 : 5,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Icon(
-          iconData,
-          color: Colors.white,
-          size: size * 0.6,
-        ),
+      if (cat.contains('レストラン') || cat.contains('食') || cat.contains('グルメ')) {
+        return const _MarkerVisual(
+          color: Color(0xFFFF5252),
+          iconData: Icons.restaurant,
+          useImage: false,
+        );
+      }
+      if (cat.contains('ショップ') || cat.contains('買') || cat.contains('物')) {
+        return const _MarkerVisual(
+          color: Color(0xFF7E57C2),
+          iconData: Icons.shopping_bag,
+          useImage: false,
+        );
+      }
+      if (cat.contains('バー') || cat.contains('酒')) {
+        return const _MarkerVisual(
+          color: Color(0xFF5E35B1),
+          iconData: Icons.wine_bar,
+          useImage: false,
+        );
+      }
+      if (cat.contains('本') || cat.contains('書店') || cat.contains('ブック')) {
+        return const _MarkerVisual(
+          color: Color(0xFF3F51B5),
+          iconData: Icons.menu_book,
+          useImage: false,
+        );
+      }
+      if (cat.contains('サービス')) {
+        return const _MarkerVisual(
+          color: Color(0xFF26A69A),
+          iconData: Icons.build_circle,
+          useImage: false,
+        );
+      }
+      return const _MarkerVisual(
+        color: Color(0xFF607D8B),
+        iconData: Icons.place,
+        useImage: false,
       );
-    } else {
-      // モード未選択（店舗アイコン表示）
-      return Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          border: Border.all(
-            color: Colors.black.withOpacity(0.2),
-            width: isExpanded ? 3 : 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: isExpanded ? 10 : 5,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ClipOval(
-          child: (storeIconUrl != null && storeIconUrl.isNotEmpty)
-              ? Image.network(
-                  storeIconUrl,
-                  width: size,
-                  height: size,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Icon(
-                    Icons.store,
-                    color: Colors.grey[700],
-                    size: size * 0.6,
-                  ),
-                )
-              : Icon(
-                  Icons.store,
-                  color: Colors.grey[700],
-                  size: size * 0.6,
-                ),
-        ),
-      );
+    }
+
+    final bool canUseImage = storeIconUrl.isNotEmpty;
+    return _MarkerVisual(
+      color: Colors.white,
+      iconData: Icons.store,
+      useImage: canUseImage,
+    );
+  }
+
+  Future<BitmapDescriptor> _getMarkerIcon({
+    required String cacheKey,
+    required double size,
+    required Color fillColor,
+    required Color borderColor,
+    required double borderWidth,
+    required IconData? iconData,
+    required Color? iconColor,
+    required String storeIconUrl,
+  }) {
+    final cachedFuture = _markerIconFutureCache[cacheKey];
+    if (cachedFuture != null) {
+      return cachedFuture;
+    }
+
+    final completer = Completer<BitmapDescriptor>();
+    _markerIconFutureCache[cacheKey] = completer.future;
+
+    () async {
+      try {
+        final ui.Image? image = storeIconUrl.isNotEmpty ? await _loadMarkerImage(storeIconUrl) : null;
+        final BitmapDescriptor icon = await _buildMarkerBitmap(
+          size: size,
+          fillColor: fillColor,
+          borderColor: borderColor,
+          borderWidth: borderWidth,
+          iconData: image == null ? iconData : null,
+          iconColor: iconColor,
+          image: image,
+          devicePixelRatio: MediaQuery.of(context).devicePixelRatio,
+        );
+        completer.complete(icon);
+      } catch (_) {
+        _markerIconFutureCache.remove(cacheKey);
+        completer.complete(BitmapDescriptor.defaultMarker);
+      }
+    }();
+
+    return completer.future;
+  }
+
+  Future<ui.Image?> _loadMarkerImage(String url) async {
+    final cached = _markerImageCache[url];
+    if (cached != null) {
+      return cached;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return null;
+    }
+
+    try {
+      final response = await http.get(uri);
+      if (response.statusCode != 200) {
+        return null;
+      }
+      final Uint8List bytes = response.bodyBytes;
+      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+      final ui.FrameInfo frameInfo = await codec.getNextFrame();
+      _markerImageCache[url] = frameInfo.image;
+      return frameInfo.image;
+    } catch (_) {
+      return null;
     }
   }
 
+  Future<BitmapDescriptor> _buildMarkerBitmap({
+    required double size,
+    required Color fillColor,
+    required Color borderColor,
+    required double borderWidth,
+    required IconData? iconData,
+    required Color? iconColor,
+    required ui.Image? image,
+    required double devicePixelRatio,
+  }) async {
+    final double scaledSize = size * devicePixelRatio;
+    final ui.PictureRecorder recorder = ui.PictureRecorder();
+    final Canvas canvas = Canvas(recorder);
+    final Offset center = Offset(scaledSize / 2, scaledSize / 2);
+    final double radius = scaledSize / 2;
+
+    final Path circlePath = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius));
+    canvas.drawShadow(circlePath, Colors.black.withOpacity(0.25), 4 * devicePixelRatio, true);
+
+    final Paint fillPaint = Paint()..color = fillColor;
+    canvas.drawCircle(center, radius, fillPaint);
+
+    if (image != null) {
+      canvas.save();
+      canvas.clipPath(circlePath);
+      final Rect dstRect = Rect.fromLTWH(0, 0, scaledSize, scaledSize);
+      final Rect srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+      canvas.drawImageRect(image, srcRect, dstRect, Paint());
+      canvas.restore();
+    }
+
+    if (borderWidth > 0) {
+      final Paint borderPaint = Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = borderWidth * devicePixelRatio;
+      canvas.drawCircle(center, radius - (borderWidth * devicePixelRatio / 2), borderPaint);
+    }
+
+    if (iconData != null) {
+      final TextPainter painter = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(iconData.codePoint),
+          style: TextStyle(
+            fontSize: scaledSize * 0.6,
+            fontFamily: iconData.fontFamily,
+            package: iconData.fontPackage,
+            color: iconColor ?? Colors.white,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+      painter.layout();
+      painter.paint(
+        canvas,
+        center - Offset(painter.width / 2, painter.height / 2),
+      );
+    }
+
+    final ui.Image renderedImage =
+        await recorder.endRecording().toImage(scaledSize.toInt(), scaledSize.toInt());
+    final ByteData? byteData =
+        await renderedImage.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+  }
+
   // マーカーを作成
-  void _createMarkers() {
-    final List<Marker> markers = [];
+  Future<void> _createMarkers() async {
+    final int buildToken = ++_markerBuildToken;
+    final Set<Marker> markers = {};
     
     // 現在地マーカー（青い円）
     if (_currentLocation != null) {
       markers.add(
         Marker(
-          point: _currentLocation!,
-          width: 20,
-          height: 20,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.blue,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-          ),
+          markerId: const MarkerId('current_location'),
+          position: _currentLocation!,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
         ),
       );
     }
@@ -634,37 +745,55 @@ class _MapViewState extends ConsumerState<MapView> {
       final String storeId = store['id'];
       final String flowerType = store['flowerType'];
       final String category = (store['category'] ?? 'その他').toString();
+      final String storeIconUrl = (store['iconImageUrl'] as String?) ?? '';
+      final _MarkerVisual visual = _resolveMarkerVisual(
+        flowerType: flowerType,
+        category: category,
+        storeIconUrl: storeIconUrl,
+      );
+      final double size = isExpanded ? 30.0 : 15.0;
+      final double borderWidth = isExpanded ? 0.6 : 0.3;
+      final Color borderColor = visual.useImage ? Colors.black : Colors.white70;
+      final Color iconColor = visual.useImage ? Colors.grey[700]! : Colors.white;
+      final String cacheKey =
+          '${_selectedMode}|$flowerType|$category|$isExpanded|$storeIconUrl';
+      final BitmapDescriptor markerIcon = await _getMarkerIcon(
+        cacheKey: cacheKey,
+        size: size,
+        fillColor: visual.color,
+        borderColor: borderColor,
+        borderWidth: borderWidth,
+        iconData: visual.iconData,
+        iconColor: iconColor,
+        storeIconUrl: visual.useImage ? storeIconUrl : '',
+      );
       
       markers.add(
         Marker(
-          point: store['position'],
-          width: isExpanded ? 50 : 30,
-          height: isExpanded ? 50 : 30,
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                if (_expandedMarkerId == storeId) {
-                  _expandedMarkerId = '';
-                  _isShowStoreInfo = false;
-                } else {
-                  _expandedMarkerId = storeId;
-                  _isShowStoreInfo = true;
-                  _selectedStoreUid = storeId;
-                }
-              });
-              _createMarkers(); // マーカーを再作成してサイズを更新
-            },
-            child: _createCustomMarkerIcon(
-              flowerType,
-              isExpanded,
-              category: category,
-              storeIconUrl: (store['iconImageUrl'] as String?) ?? '',
-            ),
-          ),
+          markerId: MarkerId(storeId),
+          position: store['position'],
+          icon: markerIcon,
+          onTap: () async {
+            setState(() {
+              if (_expandedMarkerId == storeId) {
+                _expandedMarkerId = '';
+                _isShowStoreInfo = false;
+              } else {
+                _expandedMarkerId = storeId;
+                _isShowStoreInfo = true;
+                _selectedStoreUid = storeId;
+              }
+            });
+            await _createMarkers();
+          },
         ),
       );
     }
-    
+
+    if (!mounted || buildToken != _markerBuildToken) {
+      return;
+    }
+
     setState(() {
       _markers = markers;
     });
@@ -726,7 +855,7 @@ class _MapViewState extends ConsumerState<MapView> {
   }
 
   // 特定の店舗を地図上で選択状態にする
-  void _selectStoreOnMap(String storeId) {
+  Future<void> _selectStoreOnMap(String storeId) async {
     final store = _stores.firstWhere(
       (store) => store['id'] == storeId,
       orElse: () => {},
@@ -740,10 +869,20 @@ class _MapViewState extends ConsumerState<MapView> {
       });
       
       // 地図をその店舗の位置に移動
-      _mapController.move(store['position'], 16.0);
+      _currentCenter = store['position'];
+      _currentZoom = 16.0;
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentCenter,
+            zoom: _currentZoom,
+            bearing: _currentBearing,
+          ),
+        ),
+      );
       
       // マーカーを再作成してサイズを更新
-      _createMarkers();
+      await _createMarkers();
     }
   }
 
@@ -752,34 +891,32 @@ class _MapViewState extends ConsumerState<MapView> {
     return Scaffold(
       body: Stack(
         children: [
-          // Flutter Map
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _currentLocation ?? _defaultLocation,
-              initialZoom: 15.0,
-              onTap: (tapPosition, point) async {
-                setState(() {
-                  _isShowStoreInfo = false;
-                  _expandedMarkerId = '';
-                });
-                await _loadUserStamps();
-                _createMarkers();
-              },
+          // Google Map
+          GoogleMap(
+            initialCameraPosition: CameraPosition(
+              target: _currentLocation ?? _defaultLocation,
+              zoom: _currentZoom,
+              bearing: _currentBearing,
             ),
-            children: [
-              // OpenStreetMapタイルレイヤー（OpenStreetMap.de）
-              TileLayer(
-                urlTemplate: 'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
-                subdomains: const ['a', 'b', 'c'],
-                userAgentPackageName: 'com.example.groumapapp',
-                additionalOptions: const {
-                  'attribution': '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                },
-              ),
-              // マーカーレイヤー
-              MarkerLayer(markers: _markers),
-            ],
+            onMapCreated: (controller) {
+              _mapController = controller;
+            },
+            markers: _markers,
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: false,
+            onTap: (point) async {
+              setState(() {
+                _isShowStoreInfo = false;
+                _expandedMarkerId = '';
+              });
+              await _loadUserStamps();
+              await _createMarkers();
+            },
+            onCameraMove: (position) {
+              _currentCenter = position.target;
+              _currentZoom = position.zoom;
+              _currentBearing = position.bearing;
+            },
           ),
           
           // 検索バー
@@ -1008,12 +1145,12 @@ class _MapViewState extends ConsumerState<MapView> {
             top: 8,
             right: 8,
             child: GestureDetector(
-              onTap: () {
+              onTap: () async {
                 setState(() {
                   _isShowStoreInfo = false;
                   _expandedMarkerId = '';
                 });
-                _createMarkers();
+                await _createMarkers();
               },
               child: const Icon(Icons.close),
             ),
@@ -1086,18 +1223,18 @@ class _MapViewState extends ConsumerState<MapView> {
             FilterChip(
               label: const Text('営業中'),
               selected: _showOpenNowOnly,
-              onSelected: (val) {
+              onSelected: (val) async {
                 setState(() {
                   _showOpenNowOnly = val;
                 });
-                _createMarkers();
+                await _createMarkers();
               },
             ),
             const SizedBox(width: 8),
             ChoiceChip(
               label: const Text('ジャンル別'),
               selected: _selectedMode == 'category',
-              onSelected: (val) {
+              onSelected: (val) async {
                 setState(() {
                   if (val) {
                     _selectedMode = 'category';
@@ -1109,14 +1246,14 @@ class _MapViewState extends ConsumerState<MapView> {
                     _pioneerMode = false;
                   }
                 });
-                _createMarkers();
+                await _createMarkers();
               },
             ),
             const SizedBox(width: 8),
             ChoiceChip(
               label: const Text('開拓'),
               selected: _selectedMode == 'pioneer',
-              onSelected: (val) {
+              onSelected: (val) async {
                 setState(() {
                   if (val) {
                     _selectedMode = 'pioneer';
@@ -1128,7 +1265,7 @@ class _MapViewState extends ConsumerState<MapView> {
                     _categoryMode = false;
                   }
                 });
-                _createMarkers();
+                await _createMarkers();
               },
             ),
           ],
@@ -1167,12 +1304,12 @@ class _MapViewState extends ConsumerState<MapView> {
                   _isShowStoreInfo = false;
                 });
                 await _loadUserStamps();
-                _createMarkers();
+                await _createMarkers();
               } catch (e) {
                 print('現在位置ボタンタップ時のエラー: $e');
                 // エラーが発生してもマーカーは更新する
                 await _loadUserStamps();
-                _createMarkers();
+                await _createMarkers();
               }
             },
             child: Container(
@@ -1200,7 +1337,16 @@ class _MapViewState extends ConsumerState<MapView> {
           // 北向きに揃えるボタン
           GestureDetector(
             onTap: () {
-              _mapController.rotate(0);
+              _currentBearing = 0.0;
+              _mapController?.animateCamera(
+                CameraUpdate.newCameraPosition(
+                  CameraPosition(
+                    target: _currentCenter,
+                    zoom: _currentZoom,
+                    bearing: _currentBearing,
+                  ),
+                ),
+              );
             },
             child: Container(
               width: 50,
