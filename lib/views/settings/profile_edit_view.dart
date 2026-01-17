@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:typed_data';
 import '../../providers/auth_provider.dart';
+import '../../widgets/custom_button.dart';
 
 class ProfileEditView extends ConsumerStatefulWidget {
   const ProfileEditView({Key? key}) : super(key: key);
@@ -630,32 +631,13 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                 ],
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
+                  child: CustomButton(
+                    text: '保存',
                     onPressed: _isSaving ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF6B35),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.4,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text(
-                            '保存',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                    isLoading: _isSaving,
+                    backgroundColor: const Color(0xFFFF6B35),
+                    textColor: Colors.white,
+                    borderRadius: 999,
                   ),
                 ),
               ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../widgets/custom_button.dart';
 
 class PushNotificationSettingsView extends ConsumerStatefulWidget {
   const PushNotificationSettingsView({Key? key}) : super(key: key);
@@ -55,20 +56,17 @@ class _PushNotificationSettingsViewState extends ConsumerState<PushNotificationS
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton(
+            child: CustomButton(
+              text: '保存',
               onPressed: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('通知設定を保存しました')),
                 );
                 Navigator.of(context).pop();
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B35),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text('保存'),
+              backgroundColor: const Color(0xFFFF6B35),
+              textColor: Colors.white,
+              borderRadius: 999,
             ),
           ),
         ],
@@ -94,5 +92,4 @@ class _PushNotificationSettingsViewState extends ConsumerState<PushNotificationS
     );
   }
 }
-
 

@@ -79,11 +79,6 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     final authState = ref.watch(authProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('QRコード'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
-      ),
       body: authState.when(
         data: (user) {
           if (user == null) {
@@ -95,7 +90,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
           return TabBarView(
             controller: _tabController,
             children: [
-              _buildQRCodeList(context),
+              _buildQRCodeList(context, user),
               _buildQRScanner(context),
             ],
           );
@@ -129,7 +124,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     );
   }
 
-  Widget _buildQRCodeList(BuildContext context) {
+  Widget _buildQRCodeList(BuildContext context, User user) {
     final qrTokenState = ref.watch(qrTokenProvider);
     
     // デバッグログ
@@ -141,13 +136,13 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // QRコード表示
-          _buildQRCodeDisplay(context, qrTokenState),
+          _buildQRCodeDisplay(context, qrTokenState, user),
         ],
       ),
     );
   }
 
-  Widget _buildQRCodeDisplay(BuildContext context, QRTokenState qrTokenState) {
+  Widget _buildQRCodeDisplay(BuildContext context, QRTokenState qrTokenState, User user) {
     return Card(
       elevation: 4,
       child: Padding(
@@ -201,7 +196,14 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade300),
               ),
-              child: _buildQRCodeContent(qrTokenState),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildUserHeader(user),
+                  const SizedBox(height: 12),
+                  _buildQRCodeContent(qrTokenState),
+                ],
+              ),
             ),
             const SizedBox(height: 16),
             
@@ -371,6 +373,38 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     );
   }
 
+  Widget _buildUserHeader(User user) {
+    final displayName = user.displayName?.trim();
+    final photoUrl = user.photoURL;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: Colors.grey.shade200,
+          backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+              ? NetworkImage(photoUrl)
+              : null,
+          child: photoUrl == null || photoUrl.isEmpty
+              ? Icon(Icons.person, color: Colors.grey.shade600)
+              : null,
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Text(
+            displayName != null && displayName.isNotEmpty ? displayName : 'ユーザー',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
 
   Widget _buildQRScanner(BuildContext context) {
     if (!_isScanning) {
@@ -467,18 +501,6 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
                 ),
               ),
             ),
-          ),
-        ),
-        // 停止ボタン
-        Positioned(
-          top: 50,
-          right: 20,
-          child: FloatingActionButton(
-            onPressed: () {
-              _stopScanning();
-            },
-            backgroundColor: Colors.red,
-            child: const Icon(Icons.stop, color: Colors.white),
           ),
         ),
       ],

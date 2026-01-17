@@ -213,6 +213,7 @@ class _PasswordChangeViewState extends ConsumerState<PasswordChangeView> {
                     isLoading: _isSaving,
                     borderRadius: 999,
                     backgroundColor: const Color(0xFFFF6B35),
+                    textColor: Colors.white,
                   ),
                 ],
               ),

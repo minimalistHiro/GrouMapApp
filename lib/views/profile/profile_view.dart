@@ -154,11 +154,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('プロフィール'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
-      ),
       body: authState.when(
         data: (user) {
           if (user == null) {
@@ -319,22 +314,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     icon: Icons.mail,
                     title: 'メール通知',
                     onTap: () => _openEmailNotificationSettings(context),
-                  ),
-                ]),
-
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('プライバシー'),
-                _buildSettingsMenuContainer(context, [
-                  _buildMenuItem(
-                    icon: Icons.privacy_tip,
-                    title: 'プライバシー設定',
-                    onTap: () => _showPrivacySettings(context),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.storage,
-                    title: 'データ管理',
-                    onTap: () => _showDataManagement(context),
                   ),
                 ]),
 
@@ -824,38 +803,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => const EmailNotificationSettingsView(),
-      ),
-    );
-  }
-
-  void _showPrivacySettings(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('プライバシー設定'),
-        content: const Text('プライバシー設定機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDataManagement(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('データ管理'),
-        content: const Text('データ管理機能は今後実装予定です。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
       ),
     );
   }
