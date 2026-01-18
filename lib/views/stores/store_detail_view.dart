@@ -139,7 +139,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   Future<int> _getLikeCount(String postId) async {
     try {
       final snapshot = await FirebaseFirestore.instance
-          .collection('posts')
+          .collection('public_posts')
           .doc(postId)
           .collection('likes')
           .get();

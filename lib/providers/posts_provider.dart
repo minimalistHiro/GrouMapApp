@@ -65,7 +65,7 @@ class PostModel {
 // 投稿プロバイダー
 final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
   return FirebaseFirestore.instance
-      .collection('posts')
+      .collection('public_posts')
       .limit(50)
       .snapshots()
       .map((snapshot) {
@@ -87,7 +87,7 @@ final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
 final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
   try {
     return FirebaseFirestore.instance
-        .collection('posts')
+        .collection('public_posts')
         .where('storeId', isEqualTo: storeId)
         .limit(20)
         .snapshots()
@@ -126,7 +126,7 @@ final storePostsFallbackProvider = FutureProvider.family<List<PostModel>, String
     
     // より単純なクエリで投稿を取得
     final snapshot = await FirebaseFirestore.instance
-        .collection('posts')
+        .collection('public_posts')
         .where('storeId', isEqualTo: storeId)
         .get()
         .timeout(const Duration(seconds: 2));
@@ -160,7 +160,7 @@ class PostsService {
   static Future<List<PostModel>> getPosts({int limit = 50}) async {
     try {
       final snapshot = await _firestore
-          .collection('posts')
+          .collection('public_posts')
           .limit(limit)
           .get();
 
@@ -184,7 +184,7 @@ class PostsService {
   static Future<List<PostModel>> getStorePosts(String storeId, {int limit = 20}) async {
     try {
       final snapshot = await _firestore
-          .collection('posts')
+          .collection('public_posts')
           .where('storeId', isEqualTo: storeId)
           .limit(limit)
           .get();
@@ -208,7 +208,7 @@ class PostsService {
   // 投稿の閲覧数を増加
   static Future<void> incrementViewCount(String postId) async {
     try {
-      await _firestore.collection('posts').doc(postId).update({
+      await _firestore.collection('public_posts').doc(postId).update({
         'viewCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -220,7 +220,7 @@ class PostsService {
   // 投稿のいいね数を増加
   static Future<void> incrementLikeCount(String postId) async {
     try {
-      await _firestore.collection('posts').doc(postId).update({
+      await _firestore.collection('public_posts').doc(postId).update({
         'likeCount': FieldValue.increment(1),
         'updatedAt': FieldValue.serverTimestamp(),
       });

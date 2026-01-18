@@ -56,7 +56,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       if (user == null) return;
 
       final likeDoc = await FirebaseFirestore.instance
-          .collection('posts')
+          .collection('public_posts')
           .doc(widget.post.id)
           .collection('likes')
           .doc(user.uid)
@@ -73,7 +73,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   Future<void> _loadLikeCount() async {
     try {
       final snapshot = await FirebaseFirestore.instance
-          .collection('posts')
+          .collection('public_posts')
           .doc(widget.post.id)
           .collection('likes')
           .get();
@@ -89,7 +89,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   Future<void> _loadComments() async {
     try {
       final snapshot = await FirebaseFirestore.instance
-          .collection('posts')
+          .collection('public_posts')
           .doc(widget.post.id)
           .collection('comments')
           .orderBy('createdAt', descending: true)
@@ -134,7 +134,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
 
       // 閲覧履歴を記録（重複を避けるため、既存の閲覧記録をチェック）
       final viewRef = FirebaseFirestore.instance
-          .collection('posts')
+          .collection('public_posts')
           .doc(widget.post.id)
           .collection('views')
           .doc(user.uid);
@@ -212,7 +212,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
         
         // タイムアウトを設定して書き込みを実行
         await FirebaseFirestore.instance
-            .collection('posts')
+            .collection('public_posts')
             .doc(postId)
             .update({
           'viewCount': FieldValue.increment(1),
@@ -242,7 +242,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       if (user == null) return;
 
       final likeRef = FirebaseFirestore.instance
-          .collection('posts')
+          .collection('public_posts')
           .doc(widget.post.id)
           .collection('likes')
           .doc(user.uid);
@@ -284,7 +284,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       if (user == null) return;
 
       await FirebaseFirestore.instance
-          .collection('posts')
+          .collection('public_posts')
           .doc(widget.post.id)
           .collection('comments')
           .add({
