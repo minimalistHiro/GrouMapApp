@@ -137,16 +137,7 @@ final storePostsNestedProvider = StreamProvider.family<List<PostModel>, String>(
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       debugPrint('Store posts (nested) loaded: ${posts.length} posts');
       return posts;
-    })
-        .timeout(
-          const Duration(seconds: 3),
-          onTimeout: (eventSink) {
-            debugPrint('Store posts nested query timed out, returning empty list');
-            eventSink.add(<PostModel>[]);
-            eventSink.close();
-          },
-        )
-        .handleError((error) {
+    }).handleError((error) {
       debugPrint('Error fetching store posts (nested): $error');
       return <PostModel>[];
     });
