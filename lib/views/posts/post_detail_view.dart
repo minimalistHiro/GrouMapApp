@@ -481,14 +481,16 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
           const SizedBox(height: 8),
 
           // 投稿内容
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // タイトル
                 Text(
                   widget.post.title,
+                  textAlign: TextAlign.left,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
@@ -499,6 +501,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                 // 本文
                 Text(
                   widget.post.content,
+                  textAlign: TextAlign.left,
                   style: const TextStyle(fontSize: 14),
                 ),
                 const SizedBox(height: 16),
@@ -538,12 +541,6 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
             },
           ),
           const Spacer(),
-          IconButton(
-            icon: const Icon(Icons.bookmark_border),
-            onPressed: () {
-              // ブックマーク機能
-            },
-          ),
         ],
       ),
     );
