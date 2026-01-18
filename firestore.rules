@@ -53,8 +53,9 @@ service cloud.firestore {
     match /coupons/{couponId} {
       // 公開閲覧可
       allow read: if true;
-      // 管理者のみ書き込み可能（必要に応じて調整）
-      allow write: if request.auth != null;
+      // オーナー/店舗オーナーのみ作成・更新・削除可能
+      allow create: if isOwner() || isStoreOwner(request.resource.data.storeId);
+      allow update, delete: if isOwner() || isStoreOwner(resource.data.storeId);
 
       // クーポン使用履歴: coupons/{couponId}/usedBy/{userId}
       match /usedBy/{userId} {
@@ -65,6 +66,35 @@ service cloud.firestore {
         // 更新・削除は禁止
         allow update, delete: if false;
       }
+    }
+
+    // 店舗配下のクーポン（coupons/{storeId}/coupons/{couponId}）
+    match /coupons/{storeId}/coupons/{couponId} {
+      // 公開閲覧可
+      allow read: if true;
+      // オーナー/店舗オーナーのみ作成・更新・削除可能
+      allow create: if isOwner() || isStoreOwner(storeId);
+      allow update, delete: if isOwner() || isStoreOwner(storeId);
+
+      // クーポン使用履歴: coupons/{storeId}/coupons/{couponId}/usedBy/{userId}
+      match /usedBy/{userId} {
+        // 認証されたユーザーは読み取り可能
+        allow read: if request.auth != null;
+        // 認証されたユーザーは自分の使用履歴を作成可能
+        allow create: if request.auth != null && request.auth.uid == userId;
+        // 更新・削除は禁止
+        allow update, delete: if false;
+      }
+    }
+
+    // ユーザークーポン（トップレベル）
+    match /user_coupons/{userCouponId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      // 未ログインの取得を許可（guest）
+      allow create: if (request.auth != null && request.resource.data.userId == request.auth.uid)
+        || (request.auth == null && request.resource.data.userId == 'guest');
+      allow update: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow delete: if false;
     }
     
     // 通知コレクションのルール
@@ -226,6 +256,13 @@ service cloud.firestore {
     match /promotions/{promotionId} {
       allow read: if true;
       allow write: if isOwner();
+    }
+
+    // 公開クーポン（ユーザー表示用）
+    match /public_coupons/{couponId} {
+      allow read: if true;
+      allow create: if isOwner() || isStoreOwner(request.resource.data.storeId);
+      allow update, delete: if isOwner() || isStoreOwner(resource.data.storeId);
     }
     
     // その他のコレクションは認証されたユーザーのみ読み取り可能

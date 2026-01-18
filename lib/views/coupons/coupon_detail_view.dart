@@ -38,8 +38,15 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
 
       debugPrint('Checking coupon usage: storeId=${widget.coupon.storeId}, couponId=${widget.coupon.id}');
       
+      final storeId = widget.coupon.storeId;
+      if (storeId.isEmpty) {
+        return;
+      }
+
       // usedByサブコレクションからユーザーのドキュメントを確認
       final usedByDoc = await FirebaseFirestore.instance
+          .collection('coupons')
+          .doc(storeId)
           .collection('coupons')
           .doc(widget.coupon.id)
           .collection('usedBy')
@@ -59,7 +66,14 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   // クーポン詳細を開いた際に閲覧数をインクリメント
   Future<void> _incrementViewCount() async {
     try {
+      final storeId = widget.coupon.storeId;
+      if (storeId.isEmpty) {
+        return;
+      }
+
       final couponRef = FirebaseFirestore.instance
+          .collection('coupons')
+          .doc(storeId)
           .collection('coupons')
           .doc(widget.coupon.id);
 
@@ -96,8 +110,15 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
 
       debugPrint('Using coupon: storeId=${widget.coupon.storeId}, couponId=${widget.coupon.id}, userId=${user.uid}');
 
+      final storeId = widget.coupon.storeId;
+      if (storeId.isEmpty) {
+        throw Exception('クーポンの店舗情報が見つかりません');
+      }
+
       // usedByサブコレクションにユーザー情報を追加
       final couponRef = FirebaseFirestore.instance
+          .collection('coupons')
+          .doc(storeId)
           .collection('coupons')
           .doc(widget.coupon.id);
       

@@ -75,11 +75,11 @@ final usedCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, us
 class CouponService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // 店舗のクーポン一覧を取得（店舗側のネスト構造からのみ取得）
+  // 店舗のクーポン一覧を取得（公開クーポン）
   Stream<List<Coupon>> getStoreCoupons(String storeId) {
     try {
       return _firestore
-          .collection('coupons')
+          .collection('public_coupons')
           .where('storeId', isEqualTo: storeId)
           .snapshots()
           .timeout(const Duration(seconds: 8))
@@ -122,15 +122,17 @@ class CouponService {
     }
   }
 
-  // 利用可能なクーポン一覧を取得（店舗側のネスト構造からのみ取得）
+  // 利用可能なクーポン一覧を取得（公開クーポン）
   Stream<List<Coupon>> getAvailableCoupons(String userId) {
     try {
+      final now = DateTime.now();
       return _firestore
-          .collection('coupons')
+          .collection('public_coupons')
+          .where('isActive', isEqualTo: true)
+          .where('validUntil', isGreaterThan: Timestamp.fromDate(now))
           .snapshots()
           .timeout(const Duration(seconds: 10))
           .map((snapshot) {
-        final now = DateTime.now();
         final items = snapshot.docs
             .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
             .where((coupon) => coupon.isActive && coupon.validUntil.isAfter(now) && coupon.usedCount < coupon.usageLimit)
@@ -194,13 +196,27 @@ class CouponService {
           return <Coupon>[];
         }
 
-        final couponsSnapshot = await _firestore.collection('coupons').get();
-        final coupons = couponsSnapshot.docs.map((doc) {
-          return Coupon.fromFirestore(doc.data(), doc.id);
-        }).where((coupon) {
+        final usedKeyList = usedKeys.toList();
+        final coupons = <Coupon>[];
+
+        for (var i = 0; i < usedKeyList.length; i += 10) {
+          final end = (i + 10 < usedKeyList.length) ? i + 10 : usedKeyList.length;
+          final chunk = usedKeyList.sublist(i, end);
+
+          final couponsSnapshot = await _firestore
+              .collection('public_coupons')
+              .where('key', whereIn: chunk)
+              .get();
+
+          coupons.addAll(couponsSnapshot.docs.map((doc) {
+            return Coupon.fromFirestore(doc.data(), doc.id);
+          }));
+        }
+
+        coupons.retainWhere((coupon) {
           final key = '${coupon.storeId}::${coupon.id}';
           return usedKeys.contains(key);
-        }).toList();
+        });
 
         coupons.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return coupons;
@@ -254,6 +270,8 @@ class CouponService {
 
       await _firestore
           .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
           .add(couponData);
     } catch (e) {
       debugPrint('Error creating coupon: $e');
@@ -277,6 +295,8 @@ class CouponService {
 
       // クーポンの詳細を取得（トップレベル）
       final couponDoc = await _firestore
+          .collection('coupons')
+          .doc(storeId)
           .collection('coupons')
           .doc(couponId)
           .get();
@@ -329,7 +349,14 @@ class CouponService {
       if (userCouponDoc.exists) {
         final userCoupon = UserCoupon.fromFirestore(userCouponDoc.data()!, userCouponDoc.id);
         
+        final storeId = userCoupon.storeId;
+        if (storeId == null || storeId.isEmpty) {
+          throw Exception('クーポンの店舗情報が見つかりません');
+        }
+
         final couponRef = _firestore
+            .collection('coupons')
+            .doc(storeId)
             .collection('coupons')
             .doc(userCoupon.couponId);
         
