@@ -119,6 +119,43 @@ final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, 
   }
 });
 
+// 店舗配下の投稿プロバイダー（posts/{storeId}/posts）
+final storePostsNestedProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
+  try {
+    return FirebaseFirestore.instance
+        .collection('posts')
+        .doc(storeId)
+        .collection('posts')
+        .limit(20)
+        .snapshots()
+        .map((snapshot) {
+      final posts = snapshot.docs
+          .map((doc) => PostModel.fromMap(doc.data(), doc.id))
+          .where((p) => p.isActive == true)
+          .toList();
+
+      posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      debugPrint('Store posts (nested) loaded: ${posts.length} posts');
+      return posts;
+    })
+        .timeout(
+          const Duration(seconds: 3),
+          onTimeout: (eventSink) {
+            debugPrint('Store posts nested query timed out, returning empty list');
+            eventSink.add(<PostModel>[]);
+            eventSink.close();
+          },
+        )
+        .handleError((error) {
+      debugPrint('Error fetching store posts (nested): $error');
+      return <PostModel>[];
+    });
+  } catch (e) {
+    debugPrint('Exception in storePostsNestedProvider: $e');
+    return Stream.value(<PostModel>[]);
+  }
+});
+
 // フォールバック用の投稿プロバイダー（インデックスエラーを完全に回避）
 final storePostsFallbackProvider = FutureProvider.family<List<PostModel>, String>((ref, storeId) async {
   try {

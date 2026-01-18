@@ -19,6 +19,17 @@ final storeCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, s
   });
 });
 
+// 店舗配下のクーポン一覧プロバイダー（coupons/{storeId}/coupons）
+final storeCouponsNestedProvider = StreamProvider.family<List<Coupon>, String>((ref, storeId) {
+  final couponService = ref.watch(couponProvider);
+  return couponService.getStoreCouponsNested(storeId)
+      .timeout(const Duration(seconds: 5))
+      .handleError((error) {
+    debugPrint('Store coupons nested provider error: $error');
+    return <Coupon>[];
+  });
+});
+
 // ユーザーのクーポン一覧プロバイダー
 final userCouponsProvider = StreamProvider.family<List<UserCoupon>, String>((ref, userId) {
   final couponService = ref.watch(couponProvider);
@@ -96,6 +107,32 @@ class CouponService {
       });
     } catch (e) {
       debugPrint('Error getting store coupons: $e');
+      return Stream.value([]);
+    }
+  }
+
+  // 店舗配下のクーポン一覧を取得（coupons/{storeId}/coupons）
+  Stream<List<Coupon>> getStoreCouponsNested(String storeId) {
+    try {
+      return _firestore
+          .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
+          .snapshots()
+          .timeout(const Duration(seconds: 8))
+          .map((snapshot) {
+        final coupons = snapshot.docs
+            .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
+            .where((c) => c.isActive)
+            .toList();
+        coupons.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return coupons;
+      }).handleError((error) {
+        debugPrint('Error getting store coupons (nested): $error');
+        return <Coupon>[];
+      });
+    } catch (e) {
+      debugPrint('Error getting store coupons nested: $e');
       return Stream.value([]);
     }
   }

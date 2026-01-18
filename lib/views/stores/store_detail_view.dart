@@ -603,7 +603,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     final storeId = widget.store['id'];
     
     // まずメインプロバイダーを試す
-    final posts = ref.watch(storePostsProvider(storeId));
+    final posts = ref.watch(storePostsNestedProvider(storeId));
     
     return posts.when(
       data: (posts) {
@@ -796,15 +796,11 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
   Widget _buildCouponsTab() {
     final storeId = widget.store['id'];
-    final userId = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-    final coupons = ref.watch(availableCouponsProvider(userId));
+    final coupons = ref.watch(storeCouponsNestedProvider(storeId));
 
     return coupons.when(
       data: (coupons) {
-        // この店舗のクーポンのみをフィルタリング
-        final storeCoupons = coupons.where((coupon) => coupon.storeId == storeId).toList();
-        
-        if (storeCoupons.isEmpty) {
+        if (coupons.isEmpty) {
           return const Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -843,9 +839,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               mainAxisSpacing: 12,
               childAspectRatio: 0.8,
             ),
-            itemCount: storeCoupons.length,
+            itemCount: coupons.length,
             itemBuilder: (context, index) {
-              final coupon = storeCoupons[index];
+              final coupon = coupons[index];
               return _buildCouponCard(context, coupon);
             },
           ),
