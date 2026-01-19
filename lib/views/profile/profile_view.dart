@@ -15,7 +15,6 @@ import '../settings/email_notification_settings_view.dart';
 import '../legal/privacy_policy_view.dart';
 import '../legal/terms_view.dart';
 import '../support/help_view.dart';
-import '../support/contact_view.dart';
 import '../feedback/feedback_view.dart';
 import '../main_navigation_view.dart';
 
@@ -325,18 +324,13 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 _buildSettingsMenuContainer(context, [
                   _buildMenuItem(
                     icon: Icons.help,
-                    title: 'ヘルプ',
+                    title: 'ヘルプ・サポート',
                     onTap: () => _showHelp(context),
                   ),
                   _buildMenuItem(
                     icon: Icons.chat_bubble_outline,
                     title: 'フィードバック',
                     onTap: () => _openFeedback(context),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.contact_support,
-                    title: 'お問い合わせ',
-                    onTap: () => _showContact(context),
                   ),
                   _buildMenuItem(
                     icon: Icons.description,
@@ -813,14 +807,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => const HelpView(),
-      ),
-    );
-  }
-
-  void _showContact(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const ContactView(),
       ),
     );
   }
