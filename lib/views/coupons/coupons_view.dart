@@ -12,7 +12,21 @@ import '../posts/post_detail_view.dart';
 import 'coupon_detail_view.dart';
 
 class CouponsView extends ConsumerWidget {
-  const CouponsView({Key? key}) : super(key: key);
+  final int initialTopTabIndex;
+  final int initialCouponTabIndex;
+
+  const CouponsView({
+    Key? key,
+    this.initialTopTabIndex = 0,
+    this.initialCouponTabIndex = 0,
+  }) : super(key: key);
+
+  int _coerceIndex(int index, int length) {
+    if (index < 0 || index >= length) {
+      return 0;
+    }
+    return index;
+  }
 
   Future<void> _openCouponDetail(BuildContext context, model.Coupon coupon) async {
     final storeId = coupon.storeId;
@@ -76,6 +90,7 @@ class CouponsView extends ConsumerWidget {
   Widget _buildCouponsContent(BuildContext context, WidgetRef ref, String? userId) {
     return DefaultTabController(
       length: 2,
+      initialIndex: _coerceIndex(initialTopTabIndex, 2),
       child: Column(
         children: [
           const TabBar(
@@ -203,6 +218,7 @@ class CouponsView extends ConsumerWidget {
 
     return DefaultTabController(
       length: tabs.length,
+      initialIndex: _coerceIndex(initialCouponTabIndex, tabs.length),
       child: Column(
         children: [
           TabBar(tabs: tabs),

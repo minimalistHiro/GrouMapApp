@@ -21,6 +21,7 @@ import 'referral/friend_referral_view.dart';
 import 'referral/store_referral_view.dart';
 import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
+import 'coupons/coupons_view.dart';
 import 'badges/badges_view.dart';
 
 // ユーザーデータプロバイダー（usersコレクションから直接取得）
@@ -1078,6 +1079,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
               GestureDetector(
                 onTap: () {
                   // クーポン一覧画面に遷移
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CouponsView(
+                        initialTopTabIndex: 1,
+                        initialCouponTabIndex: 0,
+                      ),
+                    ),
+                  );
                 },
                 child: const Text(
                   '全て見る＞',
@@ -1153,6 +1162,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
               GestureDetector(
                 onTap: () {
                   // 投稿一覧画面に遷移
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CouponsView(
+                        initialTopTabIndex: 0,
+                        initialCouponTabIndex: 0,
+                      ),
+                    ),
+                  );
                 },
                 child: const Text(
                   '全て見る＞',
