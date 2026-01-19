@@ -26,6 +26,18 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   bool _isLoadingComments = true;
   bool _hasRecordedView = false; // 閲覧記録の重複を防ぐフラグ
 
+  DocumentReference<Map<String, dynamic>> _postDocRef() {
+    final storeId = widget.post.storeId;
+    if (storeId == null || storeId.isEmpty) {
+      throw Exception('storeIdが取得できません');
+    }
+    return FirebaseFirestore.instance
+        .collection('posts')
+        .doc(storeId)
+        .collection('posts')
+        .doc(widget.post.id);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -55,9 +67,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final likeDoc = await FirebaseFirestore.instance
-          .collection('public_posts')
-          .doc(widget.post.id)
+      final likeDoc = await _postDocRef()
           .collection('likes')
           .doc(user.uid)
           .get();
@@ -72,11 +82,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
 
   Future<void> _loadLikeCount() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('public_posts')
-          .doc(widget.post.id)
-          .collection('likes')
-          .get();
+      final snapshot = await _postDocRef().collection('likes').get();
 
       setState(() {
         _likeCount = snapshot.docs.length;
@@ -88,9 +94,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
 
   Future<void> _loadComments() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('public_posts')
-          .doc(widget.post.id)
+      final snapshot = await _postDocRef()
           .collection('comments')
           .orderBy('createdAt', descending: true)
           .get();
@@ -133,11 +137,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       print('📊 投稿閲覧を記録開始: ${widget.post.id} by ${user.uid}');
 
       // 閲覧履歴を記録（重複を避けるため、既存の閲覧記録をチェック）
-      final viewRef = FirebaseFirestore.instance
-          .collection('public_posts')
-          .doc(widget.post.id)
-          .collection('views')
-          .doc(user.uid);
+      final viewRef = _postDocRef().collection('views').doc(user.uid);
 
       print('🔍 既存の閲覧記録をチェック中...');
       final viewDoc = await viewRef.get();
@@ -211,10 +211,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
         print('📈 投稿の閲覧数を更新中... (試行 ${retryCount + 1}/$maxRetries)');
         
         // タイムアウトを設定して書き込みを実行
-        await FirebaseFirestore.instance
-            .collection('public_posts')
-            .doc(postId)
-            .update({
+        await _postDocRef().update({
           'viewCount': FieldValue.increment(1),
           'lastViewedAt': FieldValue.serverTimestamp(),
         }).timeout(const Duration(seconds: 10));
@@ -240,26 +237,55 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-
-      final likeRef = FirebaseFirestore.instance
-          .collection('public_posts')
-          .doc(widget.post.id)
-          .collection('likes')
-          .doc(user.uid);
+      final postsRef = _postDocRef();
+      final likeRef = postsRef.collection('likes').doc(user.uid);
 
       if (_isLiked) {
         // いいねを削除
-        await likeRef.delete();
+        final batch = FirebaseFirestore.instance.batch();
+        batch.delete(likeRef);
+        batch.delete(
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('liked_posts')
+              .doc(widget.post.id),
+        );
+        batch.update(postsRef, {
+          'likeCount': FieldValue.increment(-1),
+          'likedBy': FieldValue.arrayRemove([user.uid]),
+        });
+        await batch.commit();
         setState(() {
           _isLiked = false;
           _likeCount--;
         });
       } else {
         // いいねを追加
-        await likeRef.set({
+        final batch = FirebaseFirestore.instance.batch();
+        batch.set(likeRef, {
           'userId': user.uid,
           'createdAt': FieldValue.serverTimestamp(),
         });
+        batch.set(
+          FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('liked_posts')
+              .doc(widget.post.id),
+          {
+            'postId': widget.post.id,
+            'postTitle': widget.post.title,
+            'storeId': widget.post.storeId,
+            'storeName': widget.post.storeName,
+            'likedAt': FieldValue.serverTimestamp(),
+          },
+        );
+        batch.update(postsRef, {
+          'likeCount': FieldValue.increment(1),
+          'likedBy': FieldValue.arrayUnion([user.uid]),
+        });
+        await batch.commit();
         setState(() {
           _isLiked = true;
           _likeCount++;
@@ -283,11 +309,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      await FirebaseFirestore.instance
-          .collection('public_posts')
-          .doc(widget.post.id)
-          .collection('comments')
-          .add({
+      await _postDocRef().collection('comments').add({
         'userId': user.uid,
         'userName': user.displayName ?? '匿名ユーザー',
         'content': _commentController.text.trim(),

@@ -27,6 +27,11 @@ service cloud.firestore {
         allow create, update: if request.auth != null && request.auth.uid == userId;
         allow delete: if false;
       }
+
+      // ユーザーのいいね履歴（users/{userId}/liked_posts/{postId}）
+      match /liked_posts/{postId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     // 投稿コレクションのルール
@@ -53,7 +58,42 @@ service cloud.firestore {
     match /posts/{storeId}/posts/{postId} {
       allow read: if true;
       allow create: if isOwner() || isStoreOwner(storeId);
+      // 店舗オーナー/管理者は全更新可
       allow update, delete: if isOwner() || isStoreOwner(storeId);
+      // 一般ユーザーは特定フィールドのみ更新可（いいね/閲覧数など）
+      allow update: if request.auth != null
+        && request.resource.data.storeId == resource.data.storeId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'likeCount',
+          'likedBy',
+          'viewCount',
+          'lastViewedAt',
+          'commentCount'
+        ])
+        && (!('likeCount' in request.resource.data) || request.resource.data.likeCount is int)
+        && (!('viewCount' in request.resource.data) || request.resource.data.viewCount is int)
+        && (!('commentCount' in request.resource.data) || request.resource.data.commentCount is int)
+        && (!('likedBy' in request.resource.data) || request.resource.data.likedBy is list)
+        && (!('lastViewedAt' in request.resource.data) || request.resource.data.lastViewedAt is timestamp);
+
+      // いいね（posts/{storeId}/posts/{postId}/likes/{likeId}）
+      match /likes/{likeId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+
+      // コメント（posts/{storeId}/posts/{postId}/comments/{commentId}）
+      match /comments/{commentId} {
+        allow read: if true;
+        allow write: if request.auth != null;
+      }
+
+      // 閲覧履歴（posts/{storeId}/posts/{postId}/views/{userId}）
+      match /views/{userId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.auth.uid == userId;
+        allow update, delete: if false;
+      }
     }
 
     // 公開投稿コレクション（ユーザー表示用）

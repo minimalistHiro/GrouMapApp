@@ -11,6 +11,7 @@ import '../providers/announcement_provider.dart';
 import '../providers/posts_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/level_provider.dart';
+import '../models/coupon_model.dart' as model;
 import '../widgets/custom_button.dart';
 import 'notifications/notifications_view.dart';
 import 'points/points_view.dart';
@@ -93,6 +94,40 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Timer? _referralTimer;
   int _referralPageIndex = 0;
   int _referralPageCount = 0;
+
+  Future<void> _openCouponDetail(BuildContext context, dynamic coupon) async {
+    final storeId = coupon.storeId as String?;
+    final couponId = coupon.id as String?;
+    if (storeId != null && storeId.isNotEmpty && couponId != null && couponId.isNotEmpty) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('coupons')
+            .doc(storeId)
+            .collection('coupons')
+            .doc(couponId)
+            .get();
+        if (doc.exists && doc.data() != null) {
+          final storeCoupon = model.Coupon.fromFirestore(doc.data()!, doc.id);
+          if (!context.mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => CouponDetailView(coupon: storeCoupon),
+            ),
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('Error loading store coupon: $e');
+      }
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => CouponDetailView(coupon: coupon),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -1254,13 +1289,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     }
 
     return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => CouponDetailView(coupon: coupon),
-          ),
-        );
-      },
+      onTap: () => _openCouponDetail(context, coupon),
       child: Align(
         alignment: Alignment.topCenter,
         child: Container(
@@ -1425,7 +1454,32 @@ class _HomeViewState extends ConsumerState<HomeView> {
     }
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        final storeId = post.storeId;
+        if (storeId != null && storeId.isNotEmpty) {
+          try {
+            final doc = await FirebaseFirestore.instance
+                .collection('posts')
+                .doc(storeId)
+                .collection('posts')
+                .doc(post.id)
+                .get();
+            if (doc.exists && doc.data() != null) {
+              final storePost = PostModel.fromMap(doc.data()!, doc.id);
+              if (!context.mounted) return;
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => PostDetailView(post: storePost),
+                ),
+              );
+              return;
+            }
+          } catch (e) {
+            debugPrint('Error loading store post: $e');
+          }
+        }
+
+        if (!context.mounted) return;
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => PostDetailView(post: post),

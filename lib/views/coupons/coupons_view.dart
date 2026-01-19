@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import '../../providers/coupon_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -12,6 +13,39 @@ import 'coupon_detail_view.dart';
 
 class CouponsView extends ConsumerWidget {
   const CouponsView({Key? key}) : super(key: key);
+
+  Future<void> _openCouponDetail(BuildContext context, model.Coupon coupon) async {
+    final storeId = coupon.storeId;
+    if (storeId.isNotEmpty) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('coupons')
+            .doc(storeId)
+            .collection('coupons')
+            .doc(coupon.id)
+            .get();
+        if (doc.exists && doc.data() != null) {
+          final storeCoupon = model.Coupon.fromFirestore(doc.data()!, doc.id);
+          if (!context.mounted) return;
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => CouponDetailView(coupon: storeCoupon),
+            ),
+          );
+          return;
+        }
+      } catch (e) {
+        debugPrint('Error loading store coupon: $e');
+      }
+    }
+
+    if (!context.mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => CouponDetailView(coupon: coupon),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -567,13 +601,7 @@ class CouponsView extends ConsumerWidget {
     }
 
     return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => CouponDetailView(coupon: coupon),
-          ),
-        );
-      },
+      onTap: () => _openCouponDetail(context, coupon),
       child: Align(
         alignment: Alignment.topCenter,
         child: Container(
@@ -816,13 +844,7 @@ class CouponsView extends ConsumerWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => CouponDetailView(coupon: coupon),
-            ),
-          );
-        },
+        onTap: () => _openCouponDetail(context, coupon),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
