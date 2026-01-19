@@ -185,6 +185,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     }
   }
 
+
   // クーポン使用確認ダイアログを表示
   Future<bool> _showUseConfirmationDialog() async {
     return await showDialog<bool>(

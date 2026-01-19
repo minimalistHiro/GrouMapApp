@@ -159,8 +159,21 @@ class CouponService {
     }
   }
 
-  // 利用可能なクーポン一覧を取得（公開クーポン）
+  // 利用可能なクーポン一覧を取得（公開クーポンから使用済みを除外）
   Stream<List<Coupon>> getAvailableCoupons(String userId) {
+    try {
+      if (userId.isEmpty || userId == 'guest') {
+        return _getPublicAvailableCoupons();
+      }
+
+      return _getPublicAvailableCouponsExcludingUsed(userId);
+    } catch (e) {
+      debugPrint('Error getting available coupons: $e');
+      return Stream.value([]);
+    }
+  }
+
+  Stream<List<Coupon>> _getPublicAvailableCoupons() {
     try {
       final now = DateTime.now();
       return _firestore
@@ -181,7 +194,56 @@ class CouponService {
         return <Coupon>[];
       });
     } catch (e) {
-      debugPrint('Error getting available coupons: $e');
+      debugPrint('Error getting public available coupons: $e');
+      return Stream.value([]);
+    }
+  }
+
+  Stream<List<Coupon>> _getPublicAvailableCouponsExcludingUsed(String userId) {
+    try {
+      final now = DateTime.now();
+      return _firestore
+          .collection('public_coupons')
+          .where('isActive', isEqualTo: true)
+          .where('validUntil', isGreaterThan: Timestamp.fromDate(now))
+          .snapshots()
+          .timeout(const Duration(seconds: 10))
+          .asyncMap((snapshot) async {
+        final usedSnapshot = await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('used_coupons')
+            .get();
+
+        final usedKeys = <String>{};
+        for (final usedDoc in usedSnapshot.docs) {
+          final usedData = usedDoc.data();
+          final storeId = usedData['storeId'] as String?;
+          final couponId = (usedData['couponId'] as String?) ?? usedDoc.id;
+          if (storeId == null || couponId.isEmpty) {
+            continue;
+          }
+          usedKeys.add('$storeId::$couponId');
+        }
+
+        final items = snapshot.docs
+            .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
+            .where((coupon) {
+              final key = '${coupon.storeId}::${coupon.id}';
+              return coupon.isActive &&
+                  coupon.validUntil.isAfter(now) &&
+                  coupon.usedCount < coupon.usageLimit &&
+                  !usedKeys.contains(key);
+            })
+            .toList();
+        items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return items;
+      }).handleError((error) {
+        debugPrint('Error getting public available coupons excluding used: $error');
+        return <Coupon>[];
+      });
+    } catch (e) {
+      debugPrint('Error getting public available coupons excluding used: $e');
       return Stream.value([]);
     }
   }

@@ -87,6 +87,18 @@ service cloud.firestore {
       // オーナー/店舗オーナーのみ作成・更新・削除可能
       allow create: if isOwner() || isStoreOwner(request.resource.data.storeId);
       allow update, delete: if isOwner() || isStoreOwner(resource.data.storeId);
+      // 一般ユーザーは閲覧数/使用回数のみ更新可
+      allow update: if request.auth != null
+        && request.resource.data.storeId == resource.data.storeId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'usedCount',
+          'viewCount',
+          'updatedAt'
+        ])
+        && request.resource.data.usedCount is int
+        && request.resource.data.viewCount is int
+        && request.resource.data.usedCount >= resource.data.usedCount
+        && request.resource.data.viewCount >= resource.data.viewCount;
 
       // クーポン使用履歴: coupons/{couponId}/usedBy/{userId}
       match /usedBy/{userId} {
@@ -106,6 +118,18 @@ service cloud.firestore {
       // オーナー/店舗オーナーのみ作成・更新・削除可能
       allow create: if isOwner() || isStoreOwner(storeId);
       allow update, delete: if isOwner() || isStoreOwner(storeId);
+      // 一般ユーザーは閲覧数/使用回数のみ更新可
+      allow update: if request.auth != null
+        && request.resource.data.storeId == resource.data.storeId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'usedCount',
+          'viewCount',
+          'updatedAt'
+        ])
+        && request.resource.data.usedCount is int
+        && request.resource.data.viewCount is int
+        && request.resource.data.usedCount >= resource.data.usedCount
+        && request.resource.data.viewCount >= resource.data.viewCount;
 
       // クーポン使用履歴: coupons/{storeId}/coupons/{couponId}/usedBy/{userId}
       match /usedBy/{userId} {
