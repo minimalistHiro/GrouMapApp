@@ -309,9 +309,22 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      await _postDocRef().collection('comments').add({
+      final commentRef = await _postDocRef().collection('comments').add({
         'userId': user.uid,
         'userName': user.displayName ?? '匿名ユーザー',
+        'content': _commentController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('comments')
+          .doc(commentRef.id)
+          .set({
+        'commentId': commentRef.id,
+        'postId': widget.post.id,
+        'storeId': widget.post.storeId,
+        'postTitle': widget.post.title,
         'content': _commentController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
       });
