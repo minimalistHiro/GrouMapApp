@@ -12,6 +12,7 @@ class PointTransactionModel with _$PointTransactionModel {
     required String storeId,
     required String storeName,
     required int amount,
+    int? paymentAmount,
     @Default('completed') String status,
     @Default('points') String paymentMethod,
     required DateTime createdAt,

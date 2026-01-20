@@ -226,6 +226,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
             storeId: storeId,
             storeName: storeName,
             amount: points,
+            paymentAmount: amountNum.toInt(),
             description: 'ポイント付与',
           );
         } catch (_) {}

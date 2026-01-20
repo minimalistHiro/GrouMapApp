@@ -11,6 +11,7 @@ class PointTransactionService {
     required String storeId,
     required String storeName,
     required int amount,
+    int? paymentAmount,
     String? description,
     String? qrCode,
   }) async {
@@ -29,6 +30,7 @@ class PointTransactionService {
         storeId: storeId,
         storeName: storeName,
         amount: amount,
+        paymentAmount: paymentAmount,
         status: 'completed',
         paymentMethod: 'points',
         createdAt: now,

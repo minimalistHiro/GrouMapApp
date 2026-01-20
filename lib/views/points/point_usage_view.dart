@@ -244,6 +244,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
         'userId': userId,
         'storeId': storeId,
         'amount': -points, // 使用はマイナス
+        'paymentAmount': null,
         'description': _descriptionController.text.isEmpty ? 'ポイント使用' : _descriptionController.text,
         'status': 'completed',
         'paymentMethod': 'points',

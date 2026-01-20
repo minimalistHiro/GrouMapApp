@@ -74,6 +74,7 @@ class PointProcessor {
         storeId: storeId,
         storeName: '', // 店舗名は別途取得
         amount: points,
+        paymentAmount: null,
         status: 'completed',
         paymentMethod: 'points',
         createdAt: now,
@@ -146,6 +147,7 @@ class PointProcessor {
         storeId: storeId,
         storeName: '', // 店舗名は別途取得
         amount: -points, // 負の値で使用を表現
+        paymentAmount: null,
         status: 'completed',
         paymentMethod: 'points',
         createdAt: now,

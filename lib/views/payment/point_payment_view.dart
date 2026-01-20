@@ -279,6 +279,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         storeId: storeId,
         storeName: storeName,
         amount: -points, // 負の値で使用を表現
+        paymentAmount: null,
         status: 'completed',
         paymentMethod: 'points',
         createdAt: now,

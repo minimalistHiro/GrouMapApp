@@ -26,6 +26,7 @@ mixin _$PointTransactionModel {
   String get storeId => throw _privateConstructorUsedError;
   String get storeName => throw _privateConstructorUsedError;
   int get amount => throw _privateConstructorUsedError;
+  int? get paymentAmount => throw _privateConstructorUsedError;
   String get status => throw _privateConstructorUsedError;
   String get paymentMethod => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
@@ -57,6 +58,7 @@ abstract class $PointTransactionModelCopyWith<$Res> {
       String storeId,
       String storeName,
       int amount,
+      int? paymentAmount,
       String status,
       String paymentMethod,
       DateTime createdAt,
@@ -88,6 +90,7 @@ class _$PointTransactionModelCopyWithImpl<$Res,
     Object? storeId = null,
     Object? storeName = null,
     Object? amount = null,
+    Object? paymentAmount = freezed,
     Object? status = null,
     Object? paymentMethod = null,
     Object? createdAt = null,
@@ -118,6 +121,10 @@ class _$PointTransactionModelCopyWithImpl<$Res,
           ? _value.amount
           : amount // ignore: cast_nullable_to_non_nullable
               as int,
+      paymentAmount: freezed == paymentAmount
+          ? _value.paymentAmount
+          : paymentAmount // ignore: cast_nullable_to_non_nullable
+              as int?,
       status: null == status
           ? _value.status
           : status // ignore: cast_nullable_to_non_nullable
@@ -169,6 +176,7 @@ abstract class _$$PointTransactionModelImplCopyWith<$Res>
       String storeId,
       String storeName,
       int amount,
+      int? paymentAmount,
       String status,
       String paymentMethod,
       DateTime createdAt,
@@ -198,6 +206,7 @@ class __$$PointTransactionModelImplCopyWithImpl<$Res>
     Object? storeId = null,
     Object? storeName = null,
     Object? amount = null,
+    Object? paymentAmount = freezed,
     Object? status = null,
     Object? paymentMethod = null,
     Object? createdAt = null,
@@ -228,6 +237,10 @@ class __$$PointTransactionModelImplCopyWithImpl<$Res>
           ? _value.amount
           : amount // ignore: cast_nullable_to_non_nullable
               as int,
+      paymentAmount: freezed == paymentAmount
+          ? _value.paymentAmount
+          : paymentAmount // ignore: cast_nullable_to_non_nullable
+              as int?,
       status: null == status
           ? _value.status
           : status // ignore: cast_nullable_to_non_nullable
@@ -273,6 +286,7 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
       required this.storeId,
       required this.storeName,
       required this.amount,
+      this.paymentAmount,
       this.status = 'completed',
       this.paymentMethod = 'points',
       required this.createdAt,
@@ -296,6 +310,8 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
   @override
   final int amount;
   @override
+  final int? paymentAmount;
+  @override
   @JsonKey()
   final String status;
   @override
@@ -316,7 +332,7 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
 
   @override
   String toString() {
-    return 'PointTransactionModel(transactionId: $transactionId, userId: $userId, storeId: $storeId, storeName: $storeName, amount: $amount, status: $status, paymentMethod: $paymentMethod, createdAt: $createdAt, updatedAt: $updatedAt, description: $description, qrCode: $qrCode, refundedAt: $refundedAt, refundReason: $refundReason)';
+    return 'PointTransactionModel(transactionId: $transactionId, userId: $userId, storeId: $storeId, storeName: $storeName, amount: $amount, paymentAmount: $paymentAmount, status: $status, paymentMethod: $paymentMethod, createdAt: $createdAt, updatedAt: $updatedAt, description: $description, qrCode: $qrCode, refundedAt: $refundedAt, refundReason: $refundReason)';
   }
 
   @override
@@ -331,6 +347,8 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
             (identical(other.storeName, storeName) ||
                 other.storeName == storeName) &&
             (identical(other.amount, amount) || other.amount == amount) &&
+            (identical(other.paymentAmount, paymentAmount) ||
+                other.paymentAmount == paymentAmount) &&
             (identical(other.status, status) || other.status == status) &&
             (identical(other.paymentMethod, paymentMethod) ||
                 other.paymentMethod == paymentMethod) &&
@@ -356,6 +374,7 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
       storeId,
       storeName,
       amount,
+      paymentAmount,
       status,
       paymentMethod,
       createdAt,
@@ -389,6 +408,7 @@ abstract class _PointTransactionModel implements PointTransactionModel {
       required final String storeId,
       required final String storeName,
       required final int amount,
+      final int? paymentAmount,
       final String status,
       final String paymentMethod,
       required final DateTime createdAt,
@@ -411,6 +431,8 @@ abstract class _PointTransactionModel implements PointTransactionModel {
   String get storeName;
   @override
   int get amount;
+  @override
+  int? get paymentAmount;
   @override
   String get status;
   @override

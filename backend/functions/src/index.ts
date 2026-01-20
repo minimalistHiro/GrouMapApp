@@ -456,6 +456,7 @@ async function updateUserPoints(userId: string, points: number, storeId: string)
         const pointTransaction = {
           userId,
           amount: points,
+          paymentAmount: null,
           type: 'check_in',
           description: `QRコードチェックイン (店舗: ${storeId})`,
           storeId: storeId,
