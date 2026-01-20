@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../stores/store_detail_view.dart';
 
@@ -42,6 +43,7 @@ class _MapViewState extends ConsumerState<MapView> {
   LatLng _currentCenter = _defaultLocation;
   double _currentZoom = 15.0;
   double _currentBearing = 0.0;
+  bool _didRestoreLastLocation = false;
   int _markerBuildToken = 0;
   final Map<String, Future<BitmapDescriptor>> _markerIconFutureCache = {};
   final Map<String, ui.Image> _markerImageCache = {};
@@ -67,6 +69,8 @@ class _MapViewState extends ConsumerState<MapView> {
   
   // デフォルトの座標（東京駅周辺）
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
+  static const String _lastLocationLatKey = 'map_last_location_lat';
+  static const String _lastLocationLngKey = 'map_last_location_lng';
   
   // 位置情報取得の試行回数
   int _locationRetryCount = 0;
@@ -76,7 +80,37 @@ class _MapViewState extends ConsumerState<MapView> {
   void initState() {
     super.initState();
     _currentCenter = _defaultLocation;
+    _loadLastLocationFromPrefs();
     _initializeMapData();
+  }
+
+  Future<void> _loadLastLocationFromPrefs() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final double? lat = prefs.getDouble(_lastLocationLatKey);
+    final double? lng = prefs.getDouble(_lastLocationLngKey);
+    if (lat == null || lng == null) return;
+    if (!mounted) return;
+    setState(() {
+      final LatLng savedLocation = LatLng(lat, lng);
+      _currentLocation = savedLocation;
+      _currentCenter = savedLocation;
+      _didRestoreLastLocation = true;
+    });
+    _mapController?.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _currentCenter,
+          zoom: _currentZoom,
+          bearing: _currentBearing,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveLastLocationToPrefs(LatLng location) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_lastLocationLatKey, location.latitude);
+    await prefs.setDouble(_lastLocationLngKey, location.longitude);
   }
   
   // 初期データ読み込み
@@ -403,13 +437,15 @@ class _MapViewState extends ConsumerState<MapView> {
       print('現在地を取得しました: ${position.latitude}, ${position.longitude}');
       
       if (mounted) {
+        final LatLng latestLocation = LatLng(position.latitude, position.longitude);
         setState(() {
-          _currentLocation = LatLng(position.latitude, position.longitude);
+          _currentLocation = latestLocation;
           _locationRetryCount = 0; // 成功したらリトライカウントをリセット
         });
+        await _saveLastLocationToPrefs(latestLocation);
 
         // 地図を現在地に移動
-        _currentCenter = _currentLocation!;
+        _currentCenter = latestLocation;
         _currentZoom = 15.0;
         _mapController?.animateCamera(
           CameraUpdate.newCameraPosition(
@@ -724,16 +760,7 @@ class _MapViewState extends ConsumerState<MapView> {
     final int buildToken = ++_markerBuildToken;
     final Set<Marker> markers = {};
     
-    // 現在地マーカー（青い円）
-    if (_currentLocation != null) {
-      markers.add(
-        Marker(
-          markerId: const MarkerId('current_location'),
-          position: _currentLocation!,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        ),
-      );
-    }
+    // 現在地は Google Map の標準の青丸表示を使うため、独自マーカーは追加しない
 
     // 店舗マーカー
     for (final store in _stores) {
@@ -751,7 +778,7 @@ class _MapViewState extends ConsumerState<MapView> {
         category: category,
         storeIconUrl: storeIconUrl,
       );
-      final double size = isExpanded ? 30.0 : 15.0;
+      final double size = isExpanded ? 50.0 : 25.0;
       final double borderWidth = isExpanded ? 0.6 : 0.3;
       final Color borderColor = visual.useImage ? Colors.black : Colors.white70;
       final Color iconColor = visual.useImage ? Colors.grey[700]! : Colors.white;
@@ -894,14 +921,26 @@ class _MapViewState extends ConsumerState<MapView> {
           // Google Map
           GoogleMap(
             initialCameraPosition: CameraPosition(
-              target: _currentLocation ?? _defaultLocation,
+              target: _currentCenter,
               zoom: _currentZoom,
               bearing: _currentBearing,
             ),
             onMapCreated: (controller) {
               _mapController = controller;
+              if (_didRestoreLastLocation && _currentLocation != null) {
+                _mapController?.moveCamera(
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(
+                      target: _currentCenter,
+                      zoom: _currentZoom,
+                      bearing: _currentBearing,
+                    ),
+                  ),
+                );
+              }
             },
             markers: _markers,
+            myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             onTap: (point) async {
