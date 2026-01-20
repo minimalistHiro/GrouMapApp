@@ -1019,7 +1019,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
   Widget _buildMenuGrid(BuildContext context, WidgetRef ref, bool isLoggedIn) {
     final menuItems = [
-      {'icon': Icons.monetization_on, 'label': 'ポイント履歴'},
+      {'icon': Icons.monetization_on, 'label': 'ポイント'},
       {'icon': Icons.military_tech, 'label': 'バッジ'},
       {'icon': Icons.store, 'label': '店舗一覧'},
       {'icon': Icons.emoji_events, 'label': 'ランキング'},
@@ -1711,13 +1711,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
       },
       child: Container(
         padding: const EdgeInsets.all(4),
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              isImage
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: iconSize ?? 24,
+              width: iconSize ?? 24,
+              child: isImage
                   ? Image.asset(
                       icon as String,
                       width: iconSize ?? 24,
@@ -1745,6 +1746,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       size: iconSize ?? 24,
                       color: isLogin ? Colors.white : Colors.grey,
                     ),
+            ),
             SizedBox(height: (iconSize ?? 24) * 0.2),
             Text(
               title,
@@ -1754,12 +1756,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 color: isLogin ? Colors.white : Colors.grey,
               ),
               textAlign: TextAlign.center,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
-      ),
       ),
     );
   }
