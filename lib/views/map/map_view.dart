@@ -1017,7 +1017,7 @@ class _MapViewState extends ConsumerState<MapView> {
                     shape: BoxShape.circle,
                     border: Border.all(
                       color: Colors.black,
-                      width: 2,
+                      width: 0.3,
                     ),
                   ),
                   child: ClipOval(

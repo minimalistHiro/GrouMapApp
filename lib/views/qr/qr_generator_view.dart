@@ -79,27 +79,31 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     final authState = ref.watch(authProvider);
 
     return Scaffold(
-      body: authState.when(
-        data: (user) {
-          if (user == null) {
-            return const Center(
-              child: Text('ログインが必要です'),
-            );
-          }
+      body: SafeArea(
+        top: true,
+        bottom: false,
+        child: authState.when(
+          data: (user) {
+            if (user == null) {
+              return const Center(
+                child: Text('ログインが必要です'),
+              );
+            }
 
-          return TabBarView(
-            controller: _tabController,
-            children: [
-              _buildQRCodeList(context, user),
-              _buildQRScanner(context),
-            ],
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(),
-        ),
-        error: (error, _) => Center(
-          child: Text('エラー: $error'),
+            return TabBarView(
+              controller: _tabController,
+              children: [
+                _buildQRCodeList(context, user),
+                _buildQRScanner(context),
+              ],
+            );
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(),
+          ),
+          error: (error, _) => Center(
+            child: Text('エラー: $error'),
+          ),
         ),
       ),
       bottomNavigationBar: Container(
@@ -242,37 +246,6 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
               ),
               const SizedBox(height: 16),
             ],
-            
-            // 説明テキスト
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: const Color(0xFFFF6B35).withOpacity(0.3),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    color: const Color(0xFFFF6B35),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'このQRコードは60秒ごとに自動更新されます。店舗でスキャンしてもらうとポイントが付与されます。',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: const Color(0xFFFF6B35),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
