@@ -76,6 +76,34 @@ class PointTransactionService {
         'createdAtClient': now,
       });
 
+      if (resolvedType == 'use' || resolvedType == 'award') {
+        final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+        final statsRef = _firestore
+            .collection('store_stats')
+            .doc(storeId)
+            .collection('daily')
+            .doc(todayStr);
+
+        final Map<String, dynamic> updates = {
+          'date': todayStr,
+          'visitorCount': FieldValue.increment(1),
+          'lastUpdated': FieldValue.serverTimestamp(),
+        };
+
+        if (resolvedType == 'use') {
+          final usedPoints = amount < 0 ? -amount : amount;
+          updates['pointsUsed'] = FieldValue.increment(usedPoints);
+        } else {
+          final issuedPoints = amount < 0 ? -amount : amount;
+          updates['pointsIssued'] = FieldValue.increment(issuedPoints);
+          updates['totalPointsAwarded'] = FieldValue.increment(issuedPoints);
+          updates['totalSales'] = FieldValue.increment(resolvedAmountYen);
+          updates['totalTransactions'] = FieldValue.increment(1);
+        }
+
+        await statsRef.set(updates, SetOptions(merge: true));
+      }
+
       return transactionId;
     } catch (e) {
       throw Exception('ポイント支払い履歴の作成に失敗しました: $e');
