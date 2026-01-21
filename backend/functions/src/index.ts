@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
 import { issueQRToken, verifyQRToken } from './utils/jwt';
@@ -22,6 +22,15 @@ const NOTIFICATIONS_COLLECTION = 'notifications';
 const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
 const USERS_COLLECTION = 'users';
 const ANNOUNCEMENT_TOPIC = 'announcements';
+
+function getDateKey(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
 
 type NotificationData = {
   userId?: string;
@@ -198,6 +207,89 @@ export const sendNotificationOnPublish = onDocumentWritten(
       isDelivered: true,
       deliveredAt: new Date(),
     });
+  }
+);
+
+export const updateStoreDailyStats = onDocumentCreated(
+  {
+    document: 'stores/{storeId}/transactions/{transactionId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    const data = event.data?.data() as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const storeId = event.params.storeId as string;
+    const createdAtValue = data['createdAt'];
+    const createdAt =
+      typeof createdAtValue === 'object' &&
+      createdAtValue !== null &&
+      'toDate' in createdAtValue &&
+      typeof (createdAtValue as { toDate: () => Date }).toDate === 'function'
+        ? (createdAtValue as { toDate: () => Date }).toDate()
+        : createdAtValue instanceof Date
+          ? createdAtValue
+          : new Date(event.time);
+
+    const dateKey = getDateKey(createdAt);
+    const type = typeof data['type'] === 'string' ? (data['type'] as string) : '';
+    const amountYen = typeof data['amountYen'] === 'number' ? (data['amountYen'] as number) : 0;
+    const points = typeof data['points'] === 'number' ? (data['points'] as number) : 0;
+    const userId = typeof data['userId'] === 'string' ? (data['userId'] as string) : '';
+
+    const updates: Record<string, unknown> = {
+      date: dateKey,
+      transactionCount: FieldValue.increment(1),
+      lastUpdated: new Date(),
+    };
+
+    if (amountYen > 0) {
+      updates['totalSales'] = FieldValue.increment(amountYen);
+    }
+    if (points > 0) {
+      updates['pointsIssued'] = FieldValue.increment(points);
+    } else if (points < 0) {
+      updates['pointsUsed'] = FieldValue.increment(Math.abs(points));
+    }
+    if (type === 'award') {
+      updates['visitorCount'] = FieldValue.increment(1);
+    }
+
+    await db
+      .collection('store_stats')
+      .doc(storeId)
+      .collection('daily')
+      .doc(dateKey)
+      .set(updates, { merge: true });
+
+    if (type === 'award' && userId) {
+      const userRef = db
+        .collection('store_users')
+        .doc(storeId)
+        .collection('users')
+        .doc(userId);
+
+      await db.runTransaction(async (transaction) => {
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists) {
+          transaction.set(userRef, {
+            userId,
+            storeId,
+            firstVisitAt: createdAt,
+            lastVisitAt: createdAt,
+            totalVisits: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        } else {
+          transaction.update(userRef, {
+            lastVisitAt: createdAt,
+            totalVisits: FieldValue.increment(1),
+            updatedAt: new Date(),
+          });
+        }
+      });
+    }
   }
 );
 

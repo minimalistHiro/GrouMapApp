@@ -14,6 +14,9 @@ class PointTransactionService {
     int? paymentAmount,
     String? description,
     String? qrCode,
+    String? transactionType,
+    int? amountYen,
+    String? source,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -46,6 +49,32 @@ class PointTransactionService {
           .collection(user.uid)
           .doc(transactionId)
           .set(transaction.toJson());
+
+      final resolvedType = transactionType ??
+          (amount < 0 ? 'use' : 'award');
+      final resolvedSource = source ??
+          (resolvedType == 'use' ? 'point_usage' : 'point_request');
+      final resolvedAmountYen = amountYen ?? paymentAmount ?? 0;
+
+      await _firestore
+          .collection('stores')
+          .doc(storeId)
+          .collection('transactions')
+          .doc(transactionId)
+          .set({
+        'transactionId': transactionId,
+        'storeId': storeId,
+        'storeName': storeName,
+        'userId': user.uid,
+        'type': resolvedType,
+        'amountYen': resolvedAmountYen,
+        'points': amount,
+        'paymentMethod': transaction.paymentMethod,
+        'status': transaction.status,
+        'source': resolvedSource,
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdAtClient': now,
+      });
 
       return transactionId;
     } catch (e) {

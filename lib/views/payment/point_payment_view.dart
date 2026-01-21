@@ -295,6 +295,25 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
           .collection(userId)
           .doc(transactionId);
       batch.set(nestedRef, transaction.toJson());
+      final storeTransactionRef = FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .collection('transactions')
+          .doc(transactionId);
+      batch.set(storeTransactionRef, {
+        'transactionId': transactionId,
+        'storeId': storeId,
+        'storeName': storeName,
+        'userId': userId,
+        'type': 'use',
+        'amountYen': 0,
+        'points': -points,
+        'paymentMethod': 'points',
+        'status': 'completed',
+        'source': 'point_usage',
+        'createdAt': FieldValue.serverTimestamp(),
+        'createdAtClient': now,
+      });
       await batch.commit();
 
       // ユーザーのポイントを更新

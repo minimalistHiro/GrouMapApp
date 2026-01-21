@@ -228,6 +228,9 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
             amount: points,
             paymentAmount: amountNum.toInt(),
             description: 'ポイント付与',
+            transactionType: 'award',
+            amountYen: amountNum.toInt(),
+            source: 'point_request',
           );
         } catch (_) {}
       }
