@@ -1665,7 +1665,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
           return;
         }
 
-        if (title == 'ポイント履歴') {
+        if (title == 'ポイント') {
           // ポイント履歴画面に遷移
           Navigator.of(context).push(
             MaterialPageRoute(
