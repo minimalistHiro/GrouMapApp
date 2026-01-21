@@ -314,6 +314,19 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         'createdAt': FieldValue.serverTimestamp(),
         'createdAtClient': now,
       });
+      final today = DateTime.now();
+      final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final storeStatsRef = FirebaseFirestore.instance
+          .collection('store_stats')
+          .doc(storeId)
+          .collection('daily')
+          .doc(todayStr);
+      batch.set(storeStatsRef, {
+        'date': todayStr,
+        'pointsUsed': FieldValue.increment(points),
+        'visitorCount': FieldValue.increment(1),
+        'lastUpdated': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       await batch.commit();
 
       // ユーザーのポイントを更新

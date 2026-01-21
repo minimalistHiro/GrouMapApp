@@ -698,34 +698,69 @@ class _MapViewState extends ConsumerState<MapView> {
     required ui.Image? image,
     required double devicePixelRatio,
   }) async {
+    const double pinHeightScale = 1.4;
+    const Color grouMapOrange = Color(0xFFFF6B35);
     final double scaledSize = size * devicePixelRatio;
+    final double scaledHeight = scaledSize * pinHeightScale;
+    final double circleBorderWidth = borderWidth * devicePixelRatio * 2.4;
+    final double triangleBorderWidth = borderWidth * devicePixelRatio;
+    double inset = circleBorderWidth / 2;
+    final double minInset = 2 * devicePixelRatio;
+    if (inset < minInset) {
+      inset = minInset;
+    }
     final ui.PictureRecorder recorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(recorder);
-    final Offset center = Offset(scaledSize / 2, scaledSize / 2);
-    final double radius = scaledSize / 2;
+    final double radius = (scaledSize / 2) - inset;
+    final Offset circleCenter = Offset(scaledSize / 2, inset + radius);
 
-    final Path circlePath = Path()
-      ..addOval(Rect.fromCircle(center: center, radius: radius));
-    canvas.drawShadow(circlePath, Colors.black.withOpacity(0.25), 4 * devicePixelRatio, true);
+    final Path circlePath =
+        Path()..addOval(Rect.fromCircle(center: circleCenter, radius: radius));
+    final double baseY = circleCenter.dy + radius * 0.45;
+    final double baseHalfWidth = radius * 0.95;
+    final Path trianglePath = Path()
+      ..moveTo(circleCenter.dx, scaledHeight)
+      ..lineTo(circleCenter.dx - baseHalfWidth, baseY)
+      ..lineTo(circleCenter.dx + baseHalfWidth, baseY)
+      ..close();
+    final Path pinPath =
+        Path()..addPath(circlePath, Offset.zero)..addPath(trianglePath, Offset.zero);
+    canvas.drawShadow(pinPath, Colors.black.withOpacity(0.25), 4 * devicePixelRatio, true);
 
-    final Paint fillPaint = Paint()..color = fillColor;
-    canvas.drawCircle(center, radius, fillPaint);
+    final Paint triangleFillPaint = Paint()..color = grouMapOrange;
+    canvas.drawPath(trianglePath, triangleFillPaint);
+    if (borderWidth > 0) {
+      final Paint triangleBorderPaint = Paint()
+        ..color = grouMapOrange
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = triangleBorderWidth;
+      canvas.drawPath(trianglePath, triangleBorderPaint);
+    }
+
+    // Draw the circle last so it fully covers the triangle overlap.
+    final Paint circleFillPaint = Paint()..color = fillColor;
+    canvas.drawPath(circlePath, circleFillPaint);
 
     if (image != null) {
       canvas.save();
       canvas.clipPath(circlePath);
-      final Rect dstRect = Rect.fromLTWH(0, 0, scaledSize, scaledSize);
+      final Rect dstRect = Rect.fromLTWH(
+        circleCenter.dx - radius,
+        circleCenter.dy - radius,
+        radius * 2,
+        radius * 2,
+      );
       final Rect srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
       canvas.drawImageRect(image, srcRect, dstRect, Paint());
       canvas.restore();
     }
 
     if (borderWidth > 0) {
-      final Paint borderPaint = Paint()
-        ..color = borderColor
+      final Paint circleBorderPaint = Paint()
+        ..color = grouMapOrange
         ..style = PaintingStyle.stroke
-        ..strokeWidth = borderWidth * devicePixelRatio;
-      canvas.drawCircle(center, radius - (borderWidth * devicePixelRatio / 2), borderPaint);
+        ..strokeWidth = circleBorderWidth;
+      canvas.drawPath(circlePath, circleBorderPaint);
     }
 
     if (iconData != null) {
@@ -744,12 +779,12 @@ class _MapViewState extends ConsumerState<MapView> {
       painter.layout();
       painter.paint(
         canvas,
-        center - Offset(painter.width / 2, painter.height / 2),
+        circleCenter - Offset(painter.width / 2, painter.height / 2),
       );
     }
 
     final ui.Image renderedImage =
-        await recorder.endRecording().toImage(scaledSize.toInt(), scaledSize.toInt());
+        await recorder.endRecording().toImage(scaledSize.toInt(), scaledHeight.toInt());
     final ByteData? byteData =
         await renderedImage.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
@@ -800,6 +835,7 @@ class _MapViewState extends ConsumerState<MapView> {
           markerId: MarkerId(storeId),
           position: store['position'],
           icon: markerIcon,
+          anchor: const Offset(0.5, 1.0),
           onTap: () async {
             setState(() {
               if (_expandedMarkerId == storeId) {

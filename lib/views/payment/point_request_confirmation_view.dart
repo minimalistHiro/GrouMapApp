@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
 import '../../providers/store_provider.dart';
-import '../../providers/level_provider.dart';
-import '../../services/point_transaction_service.dart';
 import '../stamps/stamp_punch_view.dart';
 
 class PointRequestConfirmationView extends ConsumerStatefulWidget {
@@ -19,6 +16,7 @@ class PointRequestConfirmationView extends ConsumerStatefulWidget {
 
 class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfirmationView> {
   bool _isProcessing = false;
+  bool _didNavigate = false;
 
   // 新しい構造に対応したリクエストストリームを取得
   Stream<DocumentSnapshot<Map<String, dynamic>>> _getRequestStream() {
@@ -60,9 +58,29 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
 
           final data = snapshot.data!.data()!;
           final String storeId = (data['storeId'] ?? '').toString();
+          final String userId = (data['userId'] ?? '').toString();
           final int points = (data['userPoints'] is int) ? data['userPoints'] as int : int.tryParse('${data['userPoints']}') ?? 0;
           final num amountNum = (data['amount'] is num) ? data['amount'] as num : num.tryParse('${data['amount']}') ?? 0;
           final String status = (data['status'] ?? '').toString();
+
+          if (status == 'accepted') {
+            if (!_didNavigate) {
+              _didNavigate = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(
+                    builder: (_) => StampPunchView(
+                      storeId: storeId,
+                      paid: amountNum.toInt(),
+                      pointsAwarded: points,
+                    ),
+                  ),
+                );
+              });
+            }
+            return const Center(child: CircularProgressIndicator());
+          }
 
           if (status != 'pending') {
             return const Center(child: Text('このリクエストは処理済みです'));
@@ -111,34 +129,46 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                   ),
                 ),
                 const Spacer(),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isProcessing ? null : () => _handleDecision(accept: false, requestData: data),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: const Text('拒否'),
-                      ),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: const Text(
+                    '店舗側の承認待ちです',
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isProcessing ? null : () => _handleDecision(accept: true, requestData: data),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6B35),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: _isProcessing
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                            : const Text('受け入れる'),
-                      ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _isProcessing
+                        ? null
+                        : () => _showCancelDialog(storeId: storeId, userId: userId),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                  ],
+                    child: _isProcessing
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text('キャンセル'),
+                  ),
                 ),
               ],
             ),
@@ -148,114 +178,83 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
     );
   }
 
-  Future<void> _handleDecision({required bool accept, required Map<String, dynamic> requestData}) async {
+  // 承認処理は店舗側アプリで実行する
+  Future<void> _showCancelDialog({
+    required String storeId,
+    required String userId,
+  }) async {
+    final shouldCancel = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('リクエストをキャンセルしますか？'),
+        content: const Text('店舗側の承認待ちをキャンセルします。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('戻る'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('キャンセルする'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldCancel == true) {
+      await _cancelRequest(storeId: storeId, userId: userId);
+    }
+  }
+
+  Future<void> _cancelRequest({
+    required String storeId,
+    required String userId,
+  }) async {
     setState(() {
       _isProcessing = true;
     });
 
-    final String requestId = widget.requestId;
-    final int points = (requestData['userPoints'] is int) ? requestData['userPoints'] as int : int.tryParse('${requestData['userPoints']}') ?? 0;
-    final num amountNum = (requestData['amount'] is num) ? requestData['amount'] as num : num.tryParse('${requestData['amount']}') ?? 0;
-
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
         throw Exception('ログインが必要です');
       }
-
-      // 新しい構造に対応：requestIdの形式: "storeId_userId"
-      final parts = requestId.split('_');
-      if (parts.length != 2) {
-        throw Exception('Invalid request ID format');
+      if (currentUser.uid != userId) {
+        throw Exception('リクエストのユーザーが一致しません');
       }
-      
-      final storeId = parts[0];
-      final userId = parts[1];
-      
-      // リクエスト更新とユーザーポイント加算を同一トランザクションで実行
-      final FirebaseFirestore db = FirebaseFirestore.instance;
-      final requestRef = db
+
+      await FirebaseFirestore.instance
           .collection('point_requests')
           .doc(storeId)
           .collection(userId)
-          .doc('request');
-      final userRef = db.collection('users').doc(user.uid);
-
-      await db.runTransaction((txn) async {
-        final reqSnap = await txn.get(requestRef);
-        if (!reqSnap.exists) {
-          throw Exception('リクエストが存在しません');
-        }
-
-        final current = (reqSnap.data() ?? const {}) as Map<String, dynamic>;
-        final currentStatus = (current['status'] ?? '').toString();
-
-        // 既に処理済みならスキップ
-        if (currentStatus != 'pending') {
-          return;
-        }
-
-        // リクエストの状態を更新
-        txn.update(requestRef, {
-          'status': accept ? 'accepted' : 'rejected',
-          'respondedAt': FieldValue.serverTimestamp(),
-          'respondedBy': user.uid,
-        });
-
-        // 承認時のみポイント加算（users/{userId}.points）
-        if (accept) {
-          txn.update(userRef, {
-            'points': FieldValue.increment(points),
-            'paid': FieldValue.increment(amountNum), // 総支払額に今回の支払額を加算
-          });
-        }
+          .doc('request')
+          .update({
+        'status': 'rejected',
+        'respondedAt': FieldValue.serverTimestamp(),
+        'respondedBy': currentUser.uid,
+        'rejectionReason': 'ユーザーがキャンセル',
       });
 
-      if (accept) {
-        try {
-          await LevelService().addExperience(userId: user.uid, experience: points);
-        } catch (_) {}
-      }
-
-      // 承認時はポイント付与履歴を保存: point_transactions/{storeId}/{userId}/{transactionId}
-      if (accept) {
-        try {
-          final storeDoc = await FirebaseFirestore.instance.collection('stores').doc(storeId).get();
-          final storeName = (storeDoc.data() ?? const {})['name']?.toString() ?? '店舗';
-          await PointTransactionService.createTransaction(
-            storeId: storeId,
-            storeName: storeName,
-            amount: points,
-            paymentAmount: amountNum.toInt(),
-            description: 'ポイント付与',
-            transactionType: 'award',
-            amountYen: amountNum.toInt(),
-            source: 'point_request',
-          );
-        } catch (_) {}
-      }
-
-          if (mounted) {
-        final message = accept ? 'ポイント付与を承認しました' : 'ポイント付与を拒否しました';
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: accept ? Colors.green : Colors.red),
+          const SnackBar(
+            content: Text('リクエストをキャンセルしました'),
+            backgroundColor: Colors.orange,
+          ),
         );
-        if (accept) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-                  builder: (_) => StampPunchView(
-                    storeId: storeId,
-                    paid: (amountNum is int) ? amountNum : amountNum.toInt(),
-                    pointsAwarded: points,
-                  ),
-            ),
-          );
-        }
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('処理に失敗しました: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('キャンセルに失敗しました: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {

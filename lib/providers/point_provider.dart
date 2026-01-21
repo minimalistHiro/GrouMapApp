@@ -168,11 +168,30 @@ class PointProcessor {
         await _firestore.collection('point_transactions').doc(transactionId).delete();
       } catch (_) {}
 
+      await _updateStoreStatsForPointsUsed(storeId, points);
+
       // ユーザーのポイント残高を更新
       await _updateUserPointBalance(userId, 0, points);
     } catch (e) {
       throw Exception('ポイント使用に失敗しました: $e');
     }
+  }
+
+  Future<void> _updateStoreStatsForPointsUsed(String storeId, int points) async {
+    final today = DateTime.now();
+    final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+    await _firestore
+        .collection('store_stats')
+        .doc(storeId)
+        .collection('daily')
+        .doc(todayStr)
+        .set({
+      'date': todayStr,
+      'pointsUsed': FieldValue.increment(points),
+      'visitorCount': FieldValue.increment(1),
+      'lastUpdated': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   // ユーザーのポイント残高を更新
