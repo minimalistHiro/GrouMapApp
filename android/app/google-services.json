@@ -14,6 +14,22 @@
       },
       "oauth_client": [
         {
+          "client_id": "1215704250-fo6cq3iipa6c3efs9h8rfcherecmhfdt.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.groumap.groumapapp",
+            "certificate_hash": "0aafcf2d3533a6b4997a408fa3f63b0fb6d3a5d6"
+          }
+        },
+        {
+          "client_id": "1215704250-pl6mdepuhi0tsiglld7fsck2f8fuf8h0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.groumap.groumapapp",
+            "certificate_hash": "ace87339e67abac431008eda4fea407eb4ab38ec"
+          }
+        },
+        {
           "client_id": "1215704250-p01g6955uhu17koi0qbur3qbi9v98ues.apps.googleusercontent.com",
           "client_type": 3
         }
@@ -43,9 +59,9 @@
     },
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1215704250:android:c8e551ea622ca9361f6683",
+        "mobilesdk_app_id": "1:1215704250:android:4157c5dd246835651f6683",
         "android_client_info": {
-          "package_name": "com.groumap.groumapstore"
+          "package_name": "com.groumap.groumapappstore"
         }
       },
       "oauth_client": [
