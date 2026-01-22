@@ -718,10 +718,30 @@ class _MapViewState extends ConsumerState<MapView> {
         Path()..addOval(Rect.fromCircle(center: circleCenter, radius: radius));
     final double baseY = circleCenter.dy + radius * 0.45;
     final double baseHalfWidth = radius * 0.95;
+    final Offset tip = Offset(circleCenter.dx, scaledHeight);
+    final Offset leftBase = Offset(circleCenter.dx - baseHalfWidth, baseY);
+    final Offset rightBase = Offset(circleCenter.dx + baseHalfWidth, baseY);
+    final Offset triCenter = Offset(circleCenter.dx, (scaledHeight + baseY) / 2);
     final Path trianglePath = Path()
-      ..moveTo(circleCenter.dx, scaledHeight)
-      ..lineTo(circleCenter.dx - baseHalfWidth, baseY)
-      ..lineTo(circleCenter.dx + baseHalfWidth, baseY)
+      ..moveTo(tip.dx, tip.dy)
+      ..quadraticBezierTo(
+        triCenter.dx - baseHalfWidth * 0.25,
+        triCenter.dy,
+        leftBase.dx,
+        leftBase.dy,
+      )
+      ..quadraticBezierTo(
+        triCenter.dx,
+        triCenter.dy + radius * 0.15,
+        rightBase.dx,
+        rightBase.dy,
+      )
+      ..quadraticBezierTo(
+        triCenter.dx + baseHalfWidth * 0.25,
+        triCenter.dy,
+        tip.dx,
+        tip.dy,
+      )
       ..close();
     final Path pinPath =
         Path()..addPath(circlePath, Offset.zero)..addPath(trianglePath, Offset.zero);
