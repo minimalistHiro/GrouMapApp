@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'views/home_view.dart';
@@ -105,13 +106,14 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
     _pushNotificationService.initialize();
 
     _authStateSubscription = ref.listenManual(authStateProvider, (previous, next) {
-      next.whenData((user) {
+      if (next is AsyncData<User?>) {
+        final user = next.value;
         if (user != null) {
           _pushNotificationService.registerForUser(user.uid);
         } else {
           _pushNotificationService.clearCurrentUser();
         }
-      });
+      }
     });
   }
 
@@ -124,16 +126,25 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
+    final emailVerificationStatus = ref.watch(emailVerificationStatusProvider);
     
     return authState.when(
       data: (user) {
         if (user != null) {
-          // メール認証が未完了の場合は保留画面へ
-          if (!(user.emailVerified)) {
-            return const EmailVerificationPendingView();
-          }
-          // ログイン済みかつ認証済みの場合はメインへ
-          return const MainNavigationView();
+          return emailVerificationStatus.when(
+            data: (isVerified) {
+              if (!isVerified) {
+                return const EmailVerificationPendingView(autoSendOnLoad: false);
+              }
+              return const MainNavigationView();
+            },
+            loading: () => const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+            error: (_, __) => const EmailVerificationPendingView(autoSendOnLoad: false),
+          );
         } else {
           debugPrint('AuthWrapper: User not logged in, showing MainNavigationView');
           return const MainNavigationView();

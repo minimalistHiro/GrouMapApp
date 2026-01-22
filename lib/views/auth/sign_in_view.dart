@@ -238,6 +238,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
           (route) => false,
         );
       } else {
+        await ref.read(authServiceProvider).sendEmailVerification();
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const EmailVerificationPendingView()),
           (route) => false,
