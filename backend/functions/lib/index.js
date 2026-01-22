@@ -1,12 +1,18 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.sendNotificationOnPublish = void 0;
+exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.requestEmailOtp = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
 const firestore_2 = require("firebase-admin/firestore");
 const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
+const params_1 = require("firebase-functions/params");
+const nodemailer_1 = __importDefault(require("nodemailer"));
+const crypto_1 = require("crypto");
 const jwt_1 = require("./utils/jwt");
 // Firebase Admin SDK初期化
 (0, app_1.initializeApp)();
@@ -20,7 +26,22 @@ console.log('Cloud Functions initialized with updated permissions');
 const NOTIFICATIONS_COLLECTION = 'notifications';
 const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
 const USERS_COLLECTION = 'users';
+const EMAIL_OTP_COLLECTION = 'email_otp';
 const ANNOUNCEMENT_TOPIC = 'announcements';
+const SMTP_HOST = (0, params_1.defineSecret)('SMTP_HOST');
+const SMTP_PORT = (0, params_1.defineSecret)('SMTP_PORT');
+const SMTP_USER = (0, params_1.defineSecret)('SMTP_USER');
+const SMTP_PASS = (0, params_1.defineSecret)('SMTP_PASS');
+const SMTP_FROM = (0, params_1.defineSecret)('SMTP_FROM');
+const SMTP_SECURE = (0, params_1.defineSecret)('SMTP_SECURE');
+function getDateKey(date) {
+    return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Tokyo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).format(date);
+}
 async function getUserFcmTokens(userId) {
     var _a;
     const tokens = new Set();
@@ -75,6 +96,48 @@ function buildNotificationPayload(notificationId, data) {
         title,
         body,
         data: payloadData,
+    };
+}
+function createOtp() {
+    const value = (0, crypto_1.randomInt)(0, 1000000);
+    return value.toString().padStart(6, '0');
+}
+function hashOtp(code, uid) {
+    return (0, crypto_1.createHash)('sha256').update(`${uid}:${code}`).digest('hex');
+}
+function buildOtpEmailText(code) {
+    return [
+        'Groumapをご利用いただきありがとうございます。',
+        '以下の6桁の認証コードをアプリに入力してください。',
+        '',
+        `認証コード: ${code}`,
+        '有効期限: 10分',
+        '',
+        'このメールに心当たりがない場合は、破棄してください。',
+        '',
+        'Groumap サポート',
+    ].join('\n');
+}
+function getSmtpConfig() {
+    var _a, _b;
+    const host = SMTP_HOST.value();
+    const port = Number((_a = SMTP_PORT.value()) !== null && _a !== void 0 ? _a : '587');
+    const user = SMTP_USER.value();
+    const pass = SMTP_PASS.value();
+    const from = SMTP_FROM.value();
+    const secure = ((_b = SMTP_SECURE.value()) !== null && _b !== void 0 ? _b : 'false').toLowerCase() === 'true';
+    if (!host || !user || !pass || !from) {
+        throw new https_1.HttpsError('failed-precondition', 'メール送信の設定が未完了です');
+    }
+    return {
+        host,
+        port,
+        secure,
+        auth: {
+            user,
+            pass,
+        },
+        from,
     };
 }
 exports.sendNotificationOnPublish = (0, firestore_1.onDocumentWritten)({
@@ -169,6 +232,179 @@ exports.sendNotificationOnPublish = (0, firestore_1.onDocumentWritten)({
         isDelivered: true,
         deliveredAt: new Date(),
     });
+});
+exports.requestEmailOtp = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE],
+}, async (request) => {
+    var _a, _b;
+    if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new https_1.HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    const uid = request.auth.uid;
+    const userRecord = await auth.getUser(uid);
+    const email = userRecord.email;
+    if (!email) {
+        throw new https_1.HttpsError('failed-precondition', 'メールアドレスが設定されていません');
+    }
+    const otpRef = db.collection(EMAIL_OTP_COLLECTION).doc(uid);
+    const otpSnapshot = await otpRef.get();
+    if (otpSnapshot.exists) {
+        const existing = otpSnapshot.data();
+        const lastSentAt = (_b = existing.lastSentAt) === null || _b === void 0 ? void 0 : _b.toDate();
+        if (lastSentAt && Date.now() - lastSentAt.getTime() < 60 * 1000) {
+            throw new https_1.HttpsError('resource-exhausted', '認証コードは1分以内に再送信できません');
+        }
+    }
+    const code = createOtp();
+    const codeHash = hashOtp(code, uid);
+    const expiresAt = firestore_2.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000));
+    await otpRef.set({
+        codeHash,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: firestore_2.Timestamp.fromDate(new Date()),
+        updatedAt: firestore_2.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    try {
+        const smtpConfig = getSmtpConfig();
+        const transporter = nodemailer_1.default.createTransport({
+            host: smtpConfig.host,
+            port: smtpConfig.port,
+            secure: smtpConfig.secure,
+            auth: smtpConfig.auth,
+        });
+        await transporter.sendMail({
+            from: smtpConfig.from,
+            to: email,
+            subject: '【Groumap】メール認証コードのお知らせ',
+            text: buildOtpEmailText(code),
+        });
+    }
+    catch (error) {
+        await otpRef.delete();
+        console.error('Failed to send OTP email:', error);
+        throw new https_1.HttpsError('internal', '認証コードの送信に失敗しました');
+    }
+    return { success: true };
+});
+exports.verifyEmailOtp = (0, https_1.onCall)({ region: 'asia-northeast1' }, async (request) => {
+    var _a, _b, _c, _d, _e;
+    if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new https_1.HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    const uid = request.auth.uid;
+    const code = String((_c = (_b = request.data) === null || _b === void 0 ? void 0 : _b.code) !== null && _c !== void 0 ? _c : '').trim();
+    if (!/^\d{6}$/.test(code)) {
+        throw new https_1.HttpsError('invalid-argument', '6桁の認証コードを入力してください');
+    }
+    const otpRef = db.collection(EMAIL_OTP_COLLECTION).doc(uid);
+    const otpSnapshot = await otpRef.get();
+    if (!otpSnapshot.exists) {
+        throw new https_1.HttpsError('not-found', '認証コードが見つかりません。再送信してください');
+    }
+    const data = otpSnapshot.data();
+    const expiresAt = (_d = data.expiresAt) === null || _d === void 0 ? void 0 : _d.toDate();
+    if (!expiresAt || expiresAt.getTime() < Date.now()) {
+        await otpRef.delete();
+        throw new https_1.HttpsError('failed-precondition', '認証コードの有効期限が切れています');
+    }
+    const attempts = (_e = data.attempts) !== null && _e !== void 0 ? _e : 0;
+    if (attempts >= 5) {
+        throw new https_1.HttpsError('resource-exhausted', '認証コードの試行回数が上限に達しました');
+    }
+    const codeHash = hashOtp(code, uid);
+    if (codeHash !== data.codeHash) {
+        await otpRef.update({
+            attempts: firestore_2.FieldValue.increment(1),
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        throw new https_1.HttpsError('invalid-argument', '認証コードが正しくありません');
+    }
+    await Promise.all([
+        otpRef.delete(),
+        db.collection(USERS_COLLECTION).doc(uid).set({
+            emailVerified: true,
+            emailVerifiedAt: firestore_2.FieldValue.serverTimestamp(),
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        }, { merge: true }),
+    ]);
+    return { verified: true };
+});
+exports.updateStoreDailyStats = (0, firestore_1.onDocumentCreated)({
+    document: 'stores/{storeId}/transactions/{transactionId}',
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a;
+    const data = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    if (!data)
+        return;
+    const storeId = event.params.storeId;
+    const createdAtValue = data['createdAt'];
+    const createdAt = typeof createdAtValue === 'object' &&
+        createdAtValue !== null &&
+        'toDate' in createdAtValue &&
+        typeof createdAtValue.toDate === 'function'
+        ? createdAtValue.toDate()
+        : createdAtValue instanceof Date
+            ? createdAtValue
+            : new Date(event.time);
+    const dateKey = getDateKey(createdAt);
+    const type = typeof data['type'] === 'string' ? data['type'] : '';
+    const amountYen = typeof data['amountYen'] === 'number' ? data['amountYen'] : 0;
+    const points = typeof data['points'] === 'number' ? data['points'] : 0;
+    const userId = typeof data['userId'] === 'string' ? data['userId'] : '';
+    const updates = {
+        date: dateKey,
+        transactionCount: firestore_2.FieldValue.increment(1),
+        lastUpdated: new Date(),
+    };
+    if (amountYen > 0) {
+        updates['totalSales'] = firestore_2.FieldValue.increment(amountYen);
+    }
+    if (points > 0) {
+        updates['pointsIssued'] = firestore_2.FieldValue.increment(points);
+    }
+    else if (points < 0) {
+        updates['pointsUsed'] = firestore_2.FieldValue.increment(Math.abs(points));
+    }
+    if (type === 'award') {
+        updates['visitorCount'] = firestore_2.FieldValue.increment(1);
+    }
+    await db
+        .collection('store_stats')
+        .doc(storeId)
+        .collection('daily')
+        .doc(dateKey)
+        .set(updates, { merge: true });
+    if (type === 'award' && userId) {
+        const userRef = db
+            .collection('store_users')
+            .doc(storeId)
+            .collection('users')
+            .doc(userId);
+        await db.runTransaction(async (transaction) => {
+            const userSnap = await transaction.get(userRef);
+            if (!userSnap.exists) {
+                transaction.set(userRef, {
+                    userId,
+                    storeId,
+                    firstVisitAt: createdAt,
+                    lastVisitAt: createdAt,
+                    totalVisits: 1,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                });
+            }
+            else {
+                transaction.update(userRef, {
+                    lastVisitAt: createdAt,
+                    totalVisits: firestore_2.FieldValue.increment(1),
+                    updatedAt: new Date(),
+                });
+            }
+        });
+    }
 });
 // シンプルなテスト関数（認証なし）
 exports.testFunction = (0, https_1.onCall)({
@@ -379,6 +615,7 @@ async function updateUserPoints(userId, points, storeId) {
                 const pointTransaction = {
                     userId,
                     amount: points,
+                    paymentAmount: null,
                     type: 'check_in',
                     description: `QRコードチェックイン (店舗: ${storeId})`,
                     storeId: storeId,

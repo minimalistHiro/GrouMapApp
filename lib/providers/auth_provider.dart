@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,21 @@ final authServiceProvider = Provider<AuthService>((ref) {
 // 認証状態プロバイダー
 final authStateProvider = StreamProvider<User?>((ref) {
   return ref.watch(authServiceProvider).authStateChanges;
+});
+
+// メール認証ステータス
+final emailVerificationStatusProvider = StreamProvider<bool>((ref) {
+  final authState = ref.watch(authStateProvider);
+  return authState.when(
+    data: (user) {
+      if (user == null) {
+        return Stream.value(true);
+      }
+      return ref.watch(authServiceProvider).emailVerificationStatusStream(user.uid);
+    },
+    loading: () => Stream.value(false),
+    error: (_, __) => Stream.value(false),
+  );
 });
 
 // サインイン状態管理

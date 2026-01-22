@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:io';
@@ -202,7 +203,7 @@ class AuthService {
     });
   }
 
-  // メール認証メールを送信
+  // メール認証コードを送信
   Future<void> sendEmailVerification() async {
     return await _retryOperation(() async {
       try {
@@ -210,13 +211,27 @@ class AuthService {
         if (user == null) {
           throw Exception('ユーザーがログインしていません');
         }
-        if (user.emailVerified) {
-          return; // 既に認証済み
-        }
-        await user.sendEmailVerification();
+
+        final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+        final callable = functions.httpsCallable('requestEmailOtp');
+        await callable();
       } catch (e) {
-        debugPrint('Send email verification error: $e');
-        throw _handleAuthError(e, 'メール認証メール送信');
+        debugPrint('Send email OTP error: $e');
+        throw _handleAuthError(e, 'メール認証コード送信');
+      }
+    });
+  }
+
+  // メール認証コードを検証
+  Future<void> verifyEmailOtp(String code) async {
+    return await _retryOperation(() async {
+      try {
+        final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+        final callable = functions.httpsCallable('verifyEmailOtp');
+        await callable.call({'code': code});
+      } catch (e) {
+        debugPrint('Verify email OTP error: $e');
+        throw _handleAuthError(e, 'メール認証コード確認');
       }
     });
   }
@@ -226,12 +241,21 @@ class AuthService {
     try {
       final user = _auth.currentUser;
       if (user == null) return false;
-      await user.reload();
-      return _auth.currentUser?.emailVerified ?? false;
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      final data = doc.data();
+      return data?['emailVerified'] == true;
     } catch (e) {
       debugPrint('Check email verified error: $e');
       return false;
     }
+  }
+
+  // メール認証状態のストリーム
+  Stream<bool> emailVerificationStatusStream(String uid) {
+    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
+      final data = doc.data();
+      return data?['emailVerified'] == true;
+    });
   }
 
   // Firestore上のメール認証状態を更新
@@ -474,6 +498,18 @@ class AuthService {
           return false;
       }
     }
+    if (error is FirebaseFunctionsException) {
+      switch (error.code) {
+        case 'invalid-argument':
+        case 'not-found':
+        case 'failed-precondition':
+        case 'resource-exhausted':
+        case 'unauthenticated':
+          return true;
+        default:
+          return false;
+      }
+    }
     return false;
   }
 
@@ -494,6 +530,12 @@ class AuthService {
     if (error is FirebaseAuthException) {
       return AuthException(
         message: _getJapaneseErrorMessage(error.code),
+        code: error.code,
+        operation: operation,
+      );
+    } else if (error is FirebaseFunctionsException) {
+      return AuthException(
+        message: _getFunctionsErrorMessage(error.code, error.message),
         code: error.code,
         operation: operation,
       );
@@ -559,6 +601,27 @@ class AuthService {
         return 'セキュリティのため、再度ログインしてください';
       default:
         return '認証エラーが発生しました: $errorCode';
+    }
+  }
+
+  String _getFunctionsErrorMessage(String errorCode, String? message) {
+    if (message != null && message.isNotEmpty) {
+      return message;
+    }
+
+    switch (errorCode) {
+      case 'invalid-argument':
+        return '入力内容に誤りがあります';
+      case 'not-found':
+        return '認証コードが見つかりません';
+      case 'failed-precondition':
+        return '認証コードの有効期限が切れています';
+      case 'resource-exhausted':
+        return 'リクエストが多すぎます。しばらくしてから再試行してください';
+      case 'unauthenticated':
+        return 'ログインが必要です';
+      default:
+        return '処理中にエラーが発生しました: $errorCode';
     }
   }
 }

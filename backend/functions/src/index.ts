@@ -1,9 +1,12 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { initializeApp } from 'firebase-admin/app';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
+import { defineSecret } from 'firebase-functions/params';
+import nodemailer from 'nodemailer';
+import { createHash, randomInt } from 'crypto';
 import { issueQRToken, verifyQRToken } from './utils/jwt';
 
 // Firebase Admin SDK初期化
@@ -21,7 +24,15 @@ console.log('Cloud Functions initialized with updated permissions');
 const NOTIFICATIONS_COLLECTION = 'notifications';
 const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
 const USERS_COLLECTION = 'users';
+const EMAIL_OTP_COLLECTION = 'email_otp';
 const ANNOUNCEMENT_TOPIC = 'announcements';
+
+const SMTP_HOST = defineSecret('SMTP_HOST');
+const SMTP_PORT = defineSecret('SMTP_PORT');
+const SMTP_USER = defineSecret('SMTP_USER');
+const SMTP_PASS = defineSecret('SMTP_PASS');
+const SMTP_FROM = defineSecret('SMTP_FROM');
+const SMTP_SECURE = defineSecret('SMTP_SECURE');
 
 function getDateKey(date: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -43,6 +54,13 @@ type NotificationData = {
   isPublished?: boolean;
   isActive?: boolean;
   isDelivered?: boolean;
+};
+
+type EmailOtpRecord = {
+  codeHash?: string;
+  expiresAt?: Timestamp;
+  attempts?: number;
+  lastSentAt?: Timestamp;
 };
 
 async function getUserFcmTokens(userId: string): Promise<string[]> {
@@ -98,6 +116,53 @@ function buildNotificationPayload(notificationId: string, data: NotificationData
     title,
     body,
     data: payloadData,
+  };
+}
+
+function createOtp(): string {
+  const value = randomInt(0, 1000000);
+  return value.toString().padStart(6, '0');
+}
+
+function hashOtp(code: string, uid: string): string {
+  return createHash('sha256').update(`${uid}:${code}`).digest('hex');
+}
+
+function buildOtpEmailText(code: string): string {
+  return [
+    'Groumapをご利用いただきありがとうございます。',
+    '以下の6桁の認証コードをアプリに入力してください。',
+    '',
+    `認証コード: ${code}`,
+    '有効期限: 10分',
+    '',
+    'このメールに心当たりがない場合は、破棄してください。',
+    '',
+    'Groumap サポート',
+  ].join('\n');
+}
+
+function getSmtpConfig() {
+  const host = SMTP_HOST.value();
+  const port = Number(SMTP_PORT.value() ?? '587');
+  const user = SMTP_USER.value();
+  const pass = SMTP_PASS.value();
+  const from = SMTP_FROM.value();
+  const secure = (SMTP_SECURE.value() ?? 'false').toLowerCase() === 'true';
+
+  if (!host || !user || !pass || !from) {
+    throw new HttpsError('failed-precondition', 'メール送信の設定が未完了です');
+  }
+
+  return {
+    host,
+    port,
+    secure,
+    auth: {
+      user,
+      pass,
+    },
+    from,
   };
 }
 
@@ -207,6 +272,130 @@ export const sendNotificationOnPublish = onDocumentWritten(
       isDelivered: true,
       deliveredAt: new Date(),
     });
+  }
+);
+
+export const requestEmailOtp = onCall(
+  {
+    region: 'asia-northeast1',
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE],
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'ログインが必要です');
+    }
+
+    const uid = request.auth.uid;
+    const userRecord = await auth.getUser(uid);
+    const email = userRecord.email;
+
+    if (!email) {
+      throw new HttpsError('failed-precondition', 'メールアドレスが設定されていません');
+    }
+
+    const otpRef = db.collection(EMAIL_OTP_COLLECTION).doc(uid);
+    const otpSnapshot = await otpRef.get();
+    if (otpSnapshot.exists) {
+      const existing = otpSnapshot.data() as EmailOtpRecord;
+      const lastSentAt = existing.lastSentAt?.toDate();
+      if (lastSentAt && Date.now() - lastSentAt.getTime() < 60 * 1000) {
+        throw new HttpsError('resource-exhausted', '認証コードは1分以内に再送信できません');
+      }
+    }
+
+    const code = createOtp();
+    const codeHash = hashOtp(code, uid);
+    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000));
+
+    await otpRef.set(
+      {
+        codeHash,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: Timestamp.fromDate(new Date()),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    try {
+      const smtpConfig = getSmtpConfig();
+      const transporter = nodemailer.createTransport({
+        host: smtpConfig.host,
+        port: smtpConfig.port,
+        secure: smtpConfig.secure,
+        auth: smtpConfig.auth,
+      });
+
+      await transporter.sendMail({
+        from: smtpConfig.from,
+        to: email,
+        subject: '【Groumap】メール認証コードのお知らせ',
+        text: buildOtpEmailText(code),
+      });
+    } catch (error) {
+      await otpRef.delete();
+      console.error('Failed to send OTP email:', error);
+      throw new HttpsError('internal', '認証コードの送信に失敗しました');
+    }
+
+    return { success: true };
+  }
+);
+
+export const verifyEmailOtp = onCall(
+  { region: 'asia-northeast1' },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'ログインが必要です');
+    }
+
+    const uid = request.auth.uid;
+    const code = String(request.data?.code ?? '').trim();
+    if (!/^\d{6}$/.test(code)) {
+      throw new HttpsError('invalid-argument', '6桁の認証コードを入力してください');
+    }
+
+    const otpRef = db.collection(EMAIL_OTP_COLLECTION).doc(uid);
+    const otpSnapshot = await otpRef.get();
+    if (!otpSnapshot.exists) {
+      throw new HttpsError('not-found', '認証コードが見つかりません。再送信してください');
+    }
+
+    const data = otpSnapshot.data() as EmailOtpRecord;
+    const expiresAt = data.expiresAt?.toDate();
+    if (!expiresAt || expiresAt.getTime() < Date.now()) {
+      await otpRef.delete();
+      throw new HttpsError('failed-precondition', '認証コードの有効期限が切れています');
+    }
+
+    const attempts = data.attempts ?? 0;
+    if (attempts >= 5) {
+      throw new HttpsError('resource-exhausted', '認証コードの試行回数が上限に達しました');
+    }
+
+    const codeHash = hashOtp(code, uid);
+    if (codeHash !== data.codeHash) {
+      await otpRef.update({
+        attempts: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      throw new HttpsError('invalid-argument', '認証コードが正しくありません');
+    }
+
+    await Promise.all([
+      otpRef.delete(),
+      db.collection(USERS_COLLECTION).doc(uid).set(
+        {
+          emailVerified: true,
+          emailVerifiedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      ),
+    ]);
+
+    return { verified: true };
   }
 );
 
