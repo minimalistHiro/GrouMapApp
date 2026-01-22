@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "1215704250-15h506i3253i4o0hfvbt0g6rq7kn17to.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.groumap.groumapapp",
+            "certificate_hash": "2ea0ae842cdb95abfecbbad5947955ce78187477"
+          }
+        },
+        {
           "client_id": "1215704250-fo6cq3iipa6c3efs9h8rfcherecmhfdt.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
