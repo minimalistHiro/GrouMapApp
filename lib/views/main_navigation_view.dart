@@ -68,8 +68,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   // ユーザーデータ読み込み
   Future<void> _loadUserData(String userId) async {
     try {
-      // ユーザーデータのプロバイダーを無効化して再読み込み
-      ref.invalidate(authStateProvider);
+      // ユーザー関連データは各Providerのストリームで管理する
     } catch (e) {
       debugPrint('ユーザーデータ読み込みエラー: $e');
     }
@@ -144,9 +143,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   Future<void> _loadHomeData(String userId) async {
     // ホーム画面のデータは既にuserDataProviderで管理されているため、
     // 必要に応じてプロバイダーを無効化
-    ref.invalidate(authStateProvider);
-    final pushService = ref.read(pushNotificationServiceProvider);
-    await pushService.syncForUser(userId);
   }
 
   Future<void> _loadMapData(String userId) async {
@@ -179,7 +175,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   Future<void> _loadProfileData(String userId) async {
     // プロフィール画面のデータ読み込み
     try {
-      ref.invalidate(authStateProvider);
       ref.invalidate(userBadgesProvider(userId));
     } catch (e) {
       debugPrint('プロフィールデータ読み込みエラー: $e');

@@ -9,7 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
-import '../payment/point_request_confirmation_view.dart';
+import '../stamps/stamp_punch_view.dart';
 
 class QRGeneratorView extends ConsumerStatefulWidget {
   const QRGeneratorView({Key? key}) : super(key: key);
@@ -505,6 +505,41 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     _checkPendingRequestOnce(userId);
   }
 
+  int _parseRequestPoints(Map<String, dynamic> data) {
+    final pointsValue = data['userPoints'] ?? data['pointsToAward'];
+    if (pointsValue is int) return pointsValue;
+    if (pointsValue is num) return pointsValue.toInt();
+    return int.tryParse('$pointsValue') ?? 0;
+  }
+
+  int _parseRequestAmount(Map<String, dynamic> data) {
+    final amountValue = data['amount'];
+    if (amountValue is int) return amountValue;
+    if (amountValue is num) return amountValue.toInt();
+    return int.tryParse('$amountValue') ?? 0;
+  }
+
+  bool _isRequestAlreadyNotified(Map<String, dynamic> data) {
+    final notified = data['userNotified'];
+    if (notified is bool && notified) return true;
+    return data.containsKey('userNotifiedAt') && data['userNotifiedAt'] != null;
+  }
+
+  Future<void> _markRequestNotified({
+    required String storeId,
+    required String userId,
+  }) async {
+    await FirebaseFirestore.instance
+        .collection('point_requests')
+        .doc(storeId)
+        .collection(userId)
+        .doc('request')
+        .update({
+      'userNotified': true,
+      'userNotifiedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   // 複合インデックス不要のフォールバック監視（stores/point_requests をリアルタイム購読し、
   // 各 store の user_requests/{userId} を直接監視）
   void _startPendingRequestListenerFallback(String userId) {
@@ -542,17 +577,25 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
           final data = doc.data() as Map<String, dynamic>;
           final status = (data['status'] ?? '').toString();
           print('PendingListener:doc data -> status=$status');
-          if (status != 'pending') return;
+          if (status != 'accepted') return;
+          if (_isRequestAlreadyNotified(data)) return;
           final combinedRequestId = '${storeId}_$userId';
           if (_isNavigatingToConfirmation || _lastHandledRequestId == combinedRequestId) return;
 
           _isNavigatingToConfirmation = true;
           _lastHandledRequestId = combinedRequestId;
           try {
-            print('PendingListener:navigate -> requestId=$combinedRequestId');
+            final points = _parseRequestPoints(data);
+            final amount = _parseRequestAmount(data);
+            await _markRequestNotified(storeId: storeId, userId: userId);
+            print('PendingListener:navigate accepted -> requestId=$combinedRequestId');
             await Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (context) => PointRequestConfirmationView(requestId: combinedRequestId),
+                builder: (context) => StampPunchView(
+                  storeId: storeId,
+                  paid: amount,
+                  pointsAwarded: points,
+                ),
               ),
             );
           } catch (_) {
@@ -601,15 +644,23 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         print('PendingOnce:check -> storeId=$storeId exists=${doc.exists}');
         if (!doc.exists) continue;
         final data = doc.data() as Map<String, dynamic>;
-        if ((data['status'] ?? '').toString() != 'pending') continue;
+        if ((data['status'] ?? '').toString() != 'accepted') continue;
+        if (_isRequestAlreadyNotified(data)) continue;
         final combinedRequestId = '${storeId}_$userId';
-        print('PendingOnce:found pending -> requestId=$combinedRequestId');
+        print('PendingOnce:found accepted -> requestId=$combinedRequestId');
         if (_lastHandledRequestId == combinedRequestId) return;
         _isNavigatingToConfirmation = true;
         _lastHandledRequestId = combinedRequestId;
+        final points = _parseRequestPoints(data);
+        final amount = _parseRequestAmount(data);
+        await _markRequestNotified(storeId: storeId, userId: userId);
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => PointRequestConfirmationView(requestId: combinedRequestId),
+            builder: (context) => StampPunchView(
+              storeId: storeId,
+              paid: amount,
+              pointsAwarded: points,
+            ),
           ),
         );
         return;
@@ -723,16 +774,24 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
               .get();
           if (!doc.exists) continue;
           final data = doc.data() as Map<String, dynamic>;
-          if ((data['status'] ?? '').toString() != 'pending') continue;
-          final combinedRequestId = '${storeId}_${user.uid}';
-          if (context.mounted) {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => PointRequestConfirmationView(requestId: combinedRequestId),
-              ),
-            );
+          if ((data['status'] ?? '').toString() == 'accepted') {
+            if (_isRequestAlreadyNotified(data)) continue;
+            final points = _parseRequestPoints(data);
+            final amount = _parseRequestAmount(data);
+            await _markRequestNotified(storeId: storeId, userId: user.uid);
+            if (context.mounted) {
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => StampPunchView(
+                    storeId: storeId,
+                    paid: amount,
+                    pointsAwarded: points,
+                  ),
+                ),
+              );
+            }
+            return;
           }
-          return;
         }
       }
     } catch (e) {
