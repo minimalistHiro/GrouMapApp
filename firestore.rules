@@ -12,17 +12,43 @@ service cloud.firestore {
           get(/databases/$(database)/documents/stores/$(storeId)).data.createdBy == request.auth.uid
         );
     }
+    function isStoreUser() {
+      return request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isStoreOwner == true ||
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores is list
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores.size() > 0
+        ) ||
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId is string
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId.size() > 0
+        )
+      );
+    }
+    function isStoreMember(storeId) {
+      return request.auth != null && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isStoreOwner == true ||
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId is string
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId == storeId
+        ) ||
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores is list
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores.hasAny([storeId])
+        )
+      );
+    }
     // ユーザーコレクションのルール
     match /users/{userId} {
       // 認証されたユーザーは自分のドキュメントを読み書き可能
-      allow read: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && (request.auth.uid == userId || isStoreUser());
       // 新規ユーザー作成時は認証されたユーザーのみ
       allow create: if request.auth != null && request.auth.uid == userId;
       allow update: if request.auth != null && (
         request.auth.uid == userId ||
         (
           request.resource.data.lastUpdatedByStoreId is string
-          && isStoreOwner(request.resource.data.lastUpdatedByStoreId)
+          && isStoreMember(request.resource.data.lastUpdatedByStoreId)
           && request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'points',
             'paid',
@@ -315,19 +341,35 @@ service cloud.firestore {
     // ポイント取引（ネスト構造）
     match /point_transactions/{storeId}/{userId}/{transactionId} {
       allow read: if request.auth != null
-        && (request.auth.uid == userId || isStoreOwner(storeId));
+        && (request.auth.uid == userId || isStoreMember(storeId));
       allow create: if request.auth != null
-        && (request.auth.uid == userId || isStoreOwner(storeId));
+        && (request.auth.uid == userId || isStoreMember(storeId));
       allow update, delete: if false;
+    }
+
+    // ユーザーポイント残高
+    match /user_point_balances/{userId} {
+      allow read: if request.auth != null
+        && (request.auth.uid == userId || isStoreUser());
+      allow create, update: if request.auth != null
+        && (
+          request.auth.uid == userId ||
+          (
+            request.resource.data.lastUpdatedByStoreId is string
+            && isStoreMember(request.resource.data.lastUpdatedByStoreId)
+            && request.resource.data.userId == userId
+          )
+        );
+      allow delete: if false;
     }
 
     // 店舗取引ログ（分析用の統一ログ）
     match /stores/{storeId}/transactions/{transactionId} {
       allow read: if request.auth != null
-        && (request.auth.uid == resource.data.userId || isStoreOwner(storeId));
+        && (request.auth.uid == resource.data.userId || isStoreMember(storeId));
       allow create: if request.auth != null
         && request.resource.data.storeId == storeId
-        && (request.auth.uid == request.resource.data.userId || isStoreOwner(storeId));
+        && (request.auth.uid == request.resource.data.userId || isStoreMember(storeId));
       allow update, delete: if false;
     }
 
@@ -380,7 +422,7 @@ service cloud.firestore {
       allow read: if request.auth != null && isStoreOwner(storeId);
       match /daily/{dateId} {
         allow read: if request.auth != null && isStoreOwner(storeId);
-        allow create, update: if request.auth != null && isStoreOwner(storeId);
+        allow create, update: if request.auth != null && isStoreMember(storeId);
         allow delete: if false;
       }
     }

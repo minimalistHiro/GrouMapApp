@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/store_provider.dart';
-import '../stamps/stamp_punch_view.dart';
+import 'point_payment_detail_view.dart';
 
 class PointRequestConfirmationView extends ConsumerStatefulWidget {
   final String requestId;
@@ -61,6 +61,9 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
           final String userId = (data['userId'] ?? '').toString();
           final int points = (data['userPoints'] is int) ? data['userPoints'] as int : int.tryParse('${data['userPoints']}') ?? 0;
           final num amountNum = (data['amount'] is num) ? data['amount'] as num : num.tryParse('${data['amount']}') ?? 0;
+          final int usedPoints = (data['usedPoints'] is int)
+              ? data['usedPoints'] as int
+              : int.tryParse('${data['usedPoints'] ?? 0}') ?? 0;
           final String status = (data['status'] ?? '').toString();
 
           if (status == 'accepted') {
@@ -70,10 +73,11 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                 if (!mounted) return;
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
-                    builder: (_) => StampPunchView(
+                    builder: (_) => PointPaymentDetailView(
                       storeId: storeId,
                       paid: amountNum.toInt(),
                       pointsAwarded: points,
+                      pointsUsed: usedPoints,
                     ),
                   ),
                 );
