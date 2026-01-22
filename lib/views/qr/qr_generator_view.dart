@@ -10,6 +10,7 @@ import '../../providers/qr_token_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
 import '../stamps/stamp_punch_view.dart';
+import '../payment/point_payment_detail_view.dart';
 
 class QRGeneratorView extends ConsumerStatefulWidget {
   const QRGeneratorView({Key? key}) : super(key: key);
@@ -519,6 +520,13 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     return int.tryParse('$amountValue') ?? 0;
   }
 
+  int _parseRequestUsedPoints(Map<String, dynamic> data) {
+    final usedValue = data['usedPoints'];
+    if (usedValue is int) return usedValue;
+    if (usedValue is num) return usedValue.toInt();
+    return int.tryParse('$usedValue') ?? 0;
+  }
+
   bool _isRequestAlreadyNotified(Map<String, dynamic> data) {
     final notified = data['userNotified'];
     if (notified is bool && notified) return true;
@@ -587,14 +595,16 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
           try {
             final points = _parseRequestPoints(data);
             final amount = _parseRequestAmount(data);
+            final usedPoints = _parseRequestUsedPoints(data);
             await _markRequestNotified(storeId: storeId, userId: userId);
             print('PendingListener:navigate accepted -> requestId=$combinedRequestId');
             await Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (context) => StampPunchView(
+                builder: (context) => PointPaymentDetailView(
                   storeId: storeId,
                   paid: amount,
                   pointsAwarded: points,
+                  pointsUsed: usedPoints,
                 ),
               ),
             );
@@ -653,13 +663,15 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         _lastHandledRequestId = combinedRequestId;
         final points = _parseRequestPoints(data);
         final amount = _parseRequestAmount(data);
+        final usedPoints = _parseRequestUsedPoints(data);
         await _markRequestNotified(storeId: storeId, userId: userId);
         await Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (context) => StampPunchView(
+            builder: (context) => PointPaymentDetailView(
               storeId: storeId,
               paid: amount,
               pointsAwarded: points,
+              pointsUsed: usedPoints,
             ),
           ),
         );
@@ -778,14 +790,16 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             if (_isRequestAlreadyNotified(data)) continue;
             final points = _parseRequestPoints(data);
             final amount = _parseRequestAmount(data);
+            final usedPoints = _parseRequestUsedPoints(data);
             await _markRequestNotified(storeId: storeId, userId: user.uid);
             if (context.mounted) {
               await Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => StampPunchView(
+                  builder: (context) => PointPaymentDetailView(
                     storeId: storeId,
                     paid: amount,
                     pointsAwarded: points,
+                    pointsUsed: usedPoints,
                   ),
                 ),
               );
