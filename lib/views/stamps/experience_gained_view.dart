@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:math' as math;
 import 'badge_awarded_view.dart';
 import '../../providers/level_provider.dart';
+import '../../widgets/custom_button.dart';
 
 class ExperienceGainedView extends StatefulWidget {
   final int gainedExperience;
@@ -317,31 +318,20 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
                 ),
               ),
               const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () {
-                    final list = widget.badges;
-                    if (list != null && list.isNotEmpty) {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (_) => BadgeAwardedView(badges: list),
-                        ),
-                      );
-                    } else {
-                      Navigator.of(context).pop(true);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6B35),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('確認'),
-                ),
+              CustomButton(
+                text: '確認',
+                onPressed: () {
+                  final list = widget.badges;
+                  if (list != null && list.isNotEmpty) {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => BadgeAwardedView(badges: list),
+                      ),
+                    );
+                  } else {
+                    Navigator.of(context).pop(true);
+                  }
+                },
               ),
             ],
           ),

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import 'experience_gained_view.dart';
 import '../../providers/level_provider.dart';
+import '../../widgets/custom_button.dart';
 
 class StampPunchView extends StatefulWidget {
   final String storeId;
@@ -263,8 +264,11 @@ class _StampPunchViewState extends State<StampPunchView>
           child: Row(
             children: [
               Expanded(
-                child: ElevatedButton(
-                  onPressed: () async {
+                child: CustomButton(
+                  text: '確認',
+                  onPressed: _submitting
+                      ? null
+                      : () async {
                     if (_submitting) return;
                     setState(() => _submitting = true);
                     try {
@@ -330,28 +334,7 @@ class _StampPunchViewState extends State<StampPunchView>
                       if (mounted) setState(() => _submitting = false);
                     }
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6B35),
-                    foregroundColor: Colors.white,
-                  ),
-                  child: _submitting
-                      ? Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            ),
-                            SizedBox(width: 10),
-                            Text('確認'),
-                          ],
-                        )
-                      : const Text('確認'),
+                  isLoading: _submitting,
                 ),
               ),
             ],
