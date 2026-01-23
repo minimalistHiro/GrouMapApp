@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import '../models/point_transaction_model.dart';
@@ -37,7 +36,6 @@ final userPointBalanceProvider = StreamProvider.family<UserPointBalance?, String
       .collection('user_point_balances')
       .doc(userId)
       .snapshots()
-      .timeout(const Duration(seconds: 5))
       .map((snapshot) {
     if (!snapshot.exists) return null;
     return UserPointBalance.fromJson({
@@ -353,69 +351,57 @@ final pointProcessorProvider = Provider<PointProcessor>((ref) {
 final userPointTransactionsProvider = StreamProvider.family<List<PointTransactionModel>, String>((ref, userId) {
   final firestore = ref.watch(pointServiceProvider);
 
-  final controller = StreamController<List<PointTransactionModel>>();
-  final Map<String, StreamSubscription<QuerySnapshot>> storeSubs = {};
-  StreamSubscription<QuerySnapshot>? storesRootSub;
-
-  void emitCombined() async {
-    // Combine all current snapshots into a single sorted list
-    final List<PointTransactionModel> all = [];
-    await Future.wait(storeSubs.entries.map((e) async {
-      // Read latest once from each subcollection (cache or server)
-      final snap = await firestore
-          .collection('point_transactions')
-          .doc(e.key)
-          .collection(userId)
-          .orderBy('createdAt', descending: true)
-          .get();
-      for (final d in snap.docs) {
-        final data = d.data() as Map<String, dynamic>;
-        all.add(PointTransactionModel.fromJson({
-          ...data,
-          'transactionId': d.id,
-        }));
-      }
-    }));
-    all.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    if (!controller.isClosed) controller.add(all);
+  DateTime _parseTimestamp(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
   }
 
-  // Watch store ids under point_transactions and attach per-store listeners
-  // 親ドキュメント未作成でも列挙できるよう、stores から storeId を取得
-  storesRootSub = firestore.collection('stores').snapshots().listen((storesSnap) {
-    final incoming = storesSnap.docs.map((d) => d.id).toSet();
-    final current = storeSubs.keys.toSet();
+  return firestore
+      .collectionGroup('transactions')
+      .where('userId', isEqualTo: userId)
+      .where('paymentMethod', isEqualTo: 'points')
+      .orderBy('createdAt', descending: true)
+      .snapshots()
+      .map((snapshot) {
+        return snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final createdAt = data['createdAt'] ?? data['createdAtClient'];
+          final updatedAt = data['updatedAt'] ?? createdAt;
+        final amountRaw = data['points'] ?? data['amount'];
+        final baseAmount = amountRaw is num ? amountRaw.toInt() : int.tryParse('$amountRaw') ?? 0;
+        final type = data['type'] as String?;
+        final source = data['source'] as String?;
+        final description = data['description'] as String?;
+        var amount = baseAmount;
+        if (amount > 0 &&
+            (type == 'use' ||
+                source == 'point_usage' ||
+                description == 'ポイント利用' ||
+                description == 'ポイント支払い')) {
+          amount = -amount;
+        }
 
-    // Add new store listeners
-    for (final storeId in incoming.difference(current)) {
-      final sub = firestore
-          .collection('point_transactions')
-          .doc(storeId)
-          .collection(userId)
-          .orderBy('createdAt', descending: true)
-          .snapshots()
-          .listen((_) {
-        emitCombined();
+          return PointTransactionModel(
+            transactionId: (data['transactionId'] as String?) ?? doc.id,
+            userId: (data['userId'] as String?) ?? userId,
+            storeId: (data['storeId'] as String?) ?? '',
+            storeName: (data['storeName'] as String?) ?? '店舗名なし',
+            amount: amount,
+            paymentAmount: (data['amountYen'] as num?)?.toInt(),
+            status: (data['status'] as String?) ?? 'completed',
+            paymentMethod: (data['paymentMethod'] as String?) ?? 'points',
+            createdAt: _parseTimestamp(createdAt),
+            updatedAt: _parseTimestamp(updatedAt),
+            description: data['description'] as String?,
+            qrCode: data['qrCode'] as String?,
+            refundedAt: data['refundedAt'] is Timestamp
+                ? (data['refundedAt'] as Timestamp).toDate()
+                : null,
+            refundReason: data['refundReason'] as String?,
+          );
+        }).toList();
       });
-      storeSubs[storeId] = sub;
-    }
-
-    // Remove obsolete listeners
-    for (final storeId in current.difference(incoming)) {
-      storeSubs.remove(storeId)?.cancel();
-    }
-
-    // Emit after topology change
-    emitCombined();
-  });
-
-  ref.onDispose(() {
-    storesRootSub?.cancel();
-    for (final s in storeSubs.values) {
-      s.cancel();
-    }
-    controller.close();
-  });
-
-  return controller.stream;
 });
