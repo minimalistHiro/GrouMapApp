@@ -341,6 +341,7 @@ class AuthService {
         'storeReferralCode': storeReferralCode, // 店舗紹介コード
         'storeReferralCount': 0, // 紹介した店舗数
         'storeReferralEarnings': 0, // 店舗紹介で獲得したポイント数
+        'favoriteStoreIds': <String>[], // お気に入り店舗IDリスト
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
