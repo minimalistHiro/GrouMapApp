@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../main_navigation_view.dart';
+import '../../widgets/custom_button.dart';
 
 class BadgeAwardedView extends StatefulWidget {
   final List<Map<String, dynamic>> badges;
@@ -125,16 +126,11 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
                     ),
                   ),
                 ),
-                ElevatedButton(
+                CustomButton(
+                  text: '確認',
                   onPressed: () {
                     Navigator.of(context).popUntil((route) => route.isFirst);
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF6B35),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  child: const Text('確認'),
                 ),
               ],
             ),
@@ -217,14 +213,9 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
               ),
               const SizedBox(height: 16),
               // Bottom pinned button stays visible
-              ElevatedButton(
+              CustomButton(
+                text: isLast ? '確認' : '次へ',
                 onPressed: _next,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B35),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                ),
-                child: Text(isLast ? '確認' : '次へ'),
               ),
             ],
           ),
@@ -233,5 +224,4 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
     );
   }
 }
-
 
