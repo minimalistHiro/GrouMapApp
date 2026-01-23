@@ -11,6 +11,7 @@ import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
 import '../stamps/stamp_punch_view.dart';
 import '../payment/point_payment_detail_view.dart';
+import '../points/point_usage_request_view.dart';
 
 class QRGeneratorView extends ConsumerStatefulWidget {
   const QRGeneratorView({Key? key}) : super(key: key);
@@ -25,8 +26,10 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
   bool _isScanning = false;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pendingRequestSub;
   String? _lastHandledRequestId;
+  String? _lastHandledUsageRequestId;
   bool _isNavigatingToConfirmation = false;
   bool _isNavigatingToPayment = false;
+  bool _isNavigatingToUsageInput = false;
   String? _listeningUserId;
   ProviderSubscription<dynamic>? _authStateSub; // 未使用化（下位互換のため保持）
   StreamSubscription<User?>? _authSub;
@@ -533,6 +536,12 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     return data.containsKey('userNotifiedAt') && data['userNotifiedAt'] != null;
   }
 
+  bool _isUsageInputAlreadyNotified(Map<String, dynamic> data) {
+    final notified = data['usageInputNotified'];
+    if (notified is bool && notified) return true;
+    return data.containsKey('usageInputNotifiedAt') && data['usageInputNotifiedAt'] != null;
+  }
+
   Future<void> _markRequestNotified({
     required String storeId,
     required String userId,
@@ -545,6 +554,21 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         .update({
       'userNotified': true,
       'userNotifiedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> _markUsageInputNotified({
+    required String storeId,
+    required String userId,
+  }) async {
+    await FirebaseFirestore.instance
+        .collection('point_requests')
+        .doc(storeId)
+        .collection(userId)
+        .doc('request')
+        .update({
+      'usageInputNotified': true,
+      'usageInputNotifiedAt': FieldValue.serverTimestamp(),
     });
   }
 
@@ -584,7 +608,33 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
           if (!doc.exists) return;
           final data = doc.data() as Map<String, dynamic>;
           final status = (data['status'] ?? '').toString();
+          final requestType = (data['requestType'] ?? '').toString();
           print('PendingListener:doc data -> status=$status');
+          if (status == 'usage_input_pending' && requestType == 'usage') {
+            if (_isUsageInputAlreadyNotified(data)) return;
+            final combinedRequestId = '${storeId}_$userId';
+            if (_isNavigatingToUsageInput || _lastHandledUsageRequestId == combinedRequestId) return;
+
+            _isNavigatingToUsageInput = true;
+            _lastHandledUsageRequestId = combinedRequestId;
+            try {
+              await _markUsageInputNotified(storeId: storeId, userId: userId);
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => PointUsageRequestView(
+                    storeId: storeId,
+                    storeName: (data['storeName'] ?? '店舗') as String,
+                  ),
+                ),
+              );
+            } finally {
+              if (mounted) {
+                _isNavigatingToUsageInput = false;
+              }
+            }
+            return;
+          }
+
           if (status != 'accepted') return;
           if (_isRequestAlreadyNotified(data)) return;
           final combinedRequestId = '${storeId}_$userId';
@@ -654,9 +704,33 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         print('PendingOnce:check -> storeId=$storeId exists=${doc.exists}');
         if (!doc.exists) continue;
         final data = doc.data() as Map<String, dynamic>;
-        if ((data['status'] ?? '').toString() != 'accepted') continue;
-        if (_isRequestAlreadyNotified(data)) continue;
         final combinedRequestId = '${storeId}_$userId';
+        final status = (data['status'] ?? '').toString();
+        final requestType = (data['requestType'] ?? '').toString();
+
+        if (status == 'usage_input_pending' && requestType == 'usage') {
+          if (_isUsageInputAlreadyNotified(data)) continue;
+          if (_isNavigatingToUsageInput || _lastHandledUsageRequestId == combinedRequestId) return;
+          _isNavigatingToUsageInput = true;
+          _lastHandledUsageRequestId = combinedRequestId;
+          try {
+            await _markUsageInputNotified(storeId: storeId, userId: userId);
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => PointUsageRequestView(
+                  storeId: storeId,
+                  storeName: (data['storeName'] ?? '店舗') as String,
+                ),
+              ),
+            );
+          } finally {
+            _isNavigatingToUsageInput = false;
+          }
+          return;
+        }
+
+        if (status != 'accepted') continue;
+        if (_isRequestAlreadyNotified(data)) continue;
         print('PendingOnce:found accepted -> requestId=$combinedRequestId');
         if (_lastHandledRequestId == combinedRequestId) return;
         _isNavigatingToConfirmation = true;

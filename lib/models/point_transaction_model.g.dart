@@ -17,13 +17,14 @@ _$PointTransactionModelImpl _$$PointTransactionModelImplFromJson(
       paymentAmount: (json['paymentAmount'] as num?)?.toInt(),
       status: json['status'] as String? ?? 'completed',
       paymentMethod: json['paymentMethod'] as String? ?? 'points',
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      createdAt:
+          const TimestampDateTimeConverter().fromJson(json['createdAt']),
+      updatedAt:
+          const TimestampDateTimeConverter().fromJson(json['updatedAt']),
       description: json['description'] as String?,
       qrCode: json['qrCode'] as String?,
-      refundedAt: json['refundedAt'] == null
-          ? null
-          : DateTime.parse(json['refundedAt'] as String),
+      refundedAt: const TimestampNullableDateTimeConverter()
+          .fromJson(json['refundedAt']),
       refundReason: json['refundReason'] as String?,
     );
 
@@ -38,10 +39,13 @@ Map<String, dynamic> _$$PointTransactionModelImplToJson(
       'paymentAmount': instance.paymentAmount,
       'status': instance.status,
       'paymentMethod': instance.paymentMethod,
-      'createdAt': instance.createdAt.toIso8601String(),
-      'updatedAt': instance.updatedAt.toIso8601String(),
+      'createdAt':
+          const TimestampDateTimeConverter().toJson(instance.createdAt),
+      'updatedAt':
+          const TimestampDateTimeConverter().toJson(instance.updatedAt),
       'description': instance.description,
       'qrCode': instance.qrCode,
-      'refundedAt': instance.refundedAt?.toIso8601String(),
+      'refundedAt':
+          const TimestampNullableDateTimeConverter().toJson(instance.refundedAt),
       'refundReason': instance.refundReason,
     };

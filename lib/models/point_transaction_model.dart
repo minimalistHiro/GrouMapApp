@@ -4,6 +4,60 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'point_transaction_model.freezed.dart';
 part 'point_transaction_model.g.dart';
 
+class TimestampDateTimeConverter implements JsonConverter<DateTime, Object?> {
+  const TimestampDateTimeConverter();
+
+  @override
+  DateTime fromJson(Object? json) {
+    if (json == null) {
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    if (json is Timestamp) {
+      return json.toDate();
+    }
+    if (json is DateTime) {
+      return json;
+    }
+    if (json is int) {
+      return DateTime.fromMillisecondsSinceEpoch(json);
+    }
+    if (json is String) {
+      return DateTime.tryParse(json) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  @override
+  Object toJson(DateTime object) => object.toIso8601String();
+}
+
+class TimestampNullableDateTimeConverter implements JsonConverter<DateTime?, Object?> {
+  const TimestampNullableDateTimeConverter();
+
+  @override
+  DateTime? fromJson(Object? json) {
+    if (json == null) {
+      return null;
+    }
+    if (json is Timestamp) {
+      return json.toDate();
+    }
+    if (json is DateTime) {
+      return json;
+    }
+    if (json is int) {
+      return DateTime.fromMillisecondsSinceEpoch(json);
+    }
+    if (json is String) {
+      return DateTime.tryParse(json);
+    }
+    return null;
+  }
+
+  @override
+  Object? toJson(DateTime? object) => object?.toIso8601String();
+}
+
 @freezed
 class PointTransactionModel with _$PointTransactionModel {
   const factory PointTransactionModel({
@@ -15,11 +69,11 @@ class PointTransactionModel with _$PointTransactionModel {
     int? paymentAmount,
     @Default('completed') String status,
     @Default('points') String paymentMethod,
-    required DateTime createdAt,
-    required DateTime updatedAt,
+    @TimestampDateTimeConverter() required DateTime createdAt,
+    @TimestampDateTimeConverter() required DateTime updatedAt,
     String? description,
     String? qrCode,
-    DateTime? refundedAt,
+    @TimestampNullableDateTimeConverter() DateTime? refundedAt,
     String? refundReason,
   }) = _PointTransactionModel;
 

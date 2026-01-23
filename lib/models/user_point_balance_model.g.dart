@@ -13,7 +13,8 @@ _$UserPointBalanceImpl _$$UserPointBalanceImplFromJson(
       totalPoints: (json['totalPoints'] as num).toInt(),
       availablePoints: (json['availablePoints'] as num).toInt(),
       usedPoints: (json['usedPoints'] as num).toInt(),
-      lastUpdated: DateTime.parse(json['lastUpdated'] as String),
+      lastUpdated:
+          const TimestampDateTimeConverter().fromJson(json['lastUpdated']),
     );
 
 Map<String, dynamic> _$$UserPointBalanceImplToJson(
@@ -23,5 +24,6 @@ Map<String, dynamic> _$$UserPointBalanceImplToJson(
       'totalPoints': instance.totalPoints,
       'availablePoints': instance.availablePoints,
       'usedPoints': instance.usedPoints,
-      'lastUpdated': instance.lastUpdated.toIso8601String(),
+      'lastUpdated':
+          const TimestampDateTimeConverter().toJson(instance.lastUpdated),
     };
