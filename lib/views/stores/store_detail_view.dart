@@ -24,12 +24,16 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   late TabController _tabController;
   Map<String, dynamic>? _userStamps;
   bool _isLoadingStamps = true;
+  bool _isFavorite = false;
+  bool _isFavoriteLoading = true;
+  bool _isUpdatingFavorite = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
     _loadUserStamps();
+    _loadFavoriteStatus();
   }
 
   @override
@@ -82,6 +86,112 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     } finally {
       setState(() {
         _isLoadingStamps = false;
+      });
+    }
+  }
+
+  Future<void> _loadFavoriteStatus() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        return;
+      }
+      final favoriteDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorite_stores')
+          .doc(widget.store['id'])
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _isFavorite = favoriteDoc.exists;
+      });
+    } catch (e) {
+      print('お気に入り状態の読み込みに失敗しました: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isFavoriteLoading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    if (_isUpdatingFavorite) return;
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      setState(() {
+        _isUpdatingFavorite = true;
+      });
+
+      final storeId = widget.store['id'];
+      final userDocRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final favoriteDocRef =
+          userDocRef.collection('favorite_stores').doc(storeId);
+      final storeFavoriteDocRef = FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .collection('favorite_users')
+          .doc(user.uid);
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      if (_isFavorite) {
+        batch.delete(favoriteDocRef);
+        batch.delete(storeFavoriteDocRef);
+        batch.set(
+          userDocRef,
+          {
+            'favoriteStoreIds': FieldValue.arrayRemove([storeId]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      } else {
+        batch.set(favoriteDocRef, {
+          'storeId': storeId,
+          'storeName': widget.store['name'],
+          'category': widget.store['category'],
+          'storeImageUrl': widget.store['storeImageUrl'],
+          'favoritedAt': FieldValue.serverTimestamp(),
+        });
+        batch.set(storeFavoriteDocRef, {
+          'userId': user.uid,
+          'userName': user.displayName ?? '匿名ユーザー',
+          'favoritedAt': FieldValue.serverTimestamp(),
+        });
+        batch.set(
+          userDocRef,
+          {
+            'favoriteStoreIds': FieldValue.arrayUnion([storeId]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      await batch.commit();
+
+      if (!mounted) return;
+      setState(() {
+        _isFavorite = !_isFavorite;
+      });
+    } catch (e) {
+      print('お気に入り更新エラー: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('お気に入りの更新に失敗しました: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isUpdatingFavorite = false;
       });
     }
   }
@@ -414,6 +524,32 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                       fontWeight: FontWeight.bold,
                       color: Colors.black87,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: (_isFavoriteLoading || _isUpdatingFavorite)
+                            ? null
+                            : _toggleFavorite,
+                        icon: Icon(
+                          _isFavorite ? Icons.star : Icons.star_border,
+                          color: _isFavorite ? Colors.amber[700] : Colors.grey,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        tooltip: _isFavorite ? 'お気に入り解除' : 'お気に入り登録',
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isFavorite ? 'お気に入り登録済み' : 'お気に入り',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: _isFavorite ? Colors.amber[700] : Colors.grey[700],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Container(
@@ -886,6 +1022,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildStoreDetailsTab() {
+    final displayAddress = _getDisplayAddress();
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -910,7 +1047,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           ],
           
           // 住所
-          if (_getStringValue(widget.store['address'], '').isNotEmpty) ...[
+          if (displayAddress.isNotEmpty) ...[
             const Text(
               '住所',
               style: TextStyle(
@@ -926,7 +1063,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    _getStringValue(widget.store['address'], ''),
+                    displayAddress,
                     style: const TextStyle(fontSize: 14),
                   ),
                 ),
@@ -1101,6 +1238,54 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     if (value is String) return value;
     if (value is Map) return value.toString();
     return value.toString();
+  }
+
+  String _getDisplayAddress() {
+    final addressValue = widget.store['address'];
+    if (addressValue is String && addressValue.trim().isNotEmpty) {
+      final trimmed = addressValue.trim();
+      if (!_looksLikeCoordinates(trimmed)) {
+        return trimmed;
+      }
+    }
+    if (addressValue is Map) {
+      final map = addressValue.cast<String, dynamic>();
+      final candidates = [
+        map['address'],
+        map['formattedAddress'],
+        map['fullAddress'],
+      ];
+      for (final candidate in candidates) {
+        if (candidate is String && candidate.trim().isNotEmpty) {
+          final trimmed = candidate.trim();
+          if (!_looksLikeCoordinates(trimmed)) {
+            return trimmed;
+          }
+        }
+      }
+    }
+    final locationValue = widget.store['location'];
+    if (locationValue is Map) {
+      final address = locationValue['address'] ?? locationValue['formattedAddress'];
+      if (address is String && address.trim().isNotEmpty) {
+        final trimmed = address.trim();
+        if (!_looksLikeCoordinates(trimmed)) {
+          return trimmed;
+        }
+      }
+    }
+    return '';
+  }
+
+  bool _looksLikeCoordinates(String value) {
+    final lower = value.toLowerCase();
+    if (lower.contains('latitude') ||
+        lower.contains('longitude') ||
+        lower.contains('geopoint')) {
+      return true;
+    }
+    final coordPattern = RegExp(r'^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$');
+    return coordPattern.hasMatch(value);
   }
 
   // 安全にboolを取得するヘルパーメソッド
