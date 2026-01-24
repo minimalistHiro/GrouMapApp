@@ -2,25 +2,59 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/owner_settings_provider.dart';
+import '../../widgets/custom_button.dart';
 
-class FriendReferralView extends StatefulWidget {
+class FriendReferralView extends ConsumerStatefulWidget {
   const FriendReferralView({Key? key}) : super(key: key);
 
   @override
-  State<FriendReferralView> createState() => _FriendReferralViewState();
+  ConsumerState<FriendReferralView> createState() => _FriendReferralViewState();
 }
 
-class _FriendReferralViewState extends State<FriendReferralView> {
+class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
   String? _referralCode;
   bool _isLoading = true;
   String? _error;
   int _referralCount = 0;
   int _totalEarnings = 0;
+  static const int _defaultRewardPoints = 100;
+  ProviderSubscription<AsyncValue<User?>>? _authSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadReferralData();
+    _authSubscription = ref.listenManual<AsyncValue<User?>>(
+      authStateProvider,
+      (previous, next) {
+        next.whenData((user) {
+          if (!mounted) {
+            return;
+          }
+          if (user == null) {
+            setState(() {
+              _referralCode = null;
+              _referralCount = 0;
+              _totalEarnings = 0;
+              _error = null;
+              _isLoading = false;
+            });
+            return;
+          }
+          _loadReferralData();
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.close();
+    super.dispose();
   }
 
   // 友達紹介データを読み込む
@@ -34,7 +68,7 @@ class _FriendReferralViewState extends State<FriendReferralView> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         setState(() {
-          _error = 'ログインが必要です';
+          _error = null;
           _isLoading = false;
         });
         return;
@@ -111,6 +145,7 @@ class _FriendReferralViewState extends State<FriendReferralView> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -118,11 +153,26 @@ class _FriendReferralViewState extends State<FriendReferralView> {
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
       ),
-      body: _buildBody(),
+      body: authState.when(
+        data: (user) {
+          if (user == null) {
+            return _buildAuthRequired(context);
+          }
+          return _buildBody(ref);
+        },
+        loading: () => const Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF6B35),
+          ),
+        ),
+        error: (error, _) => Center(
+          child: Text('エラー: $error'),
+        ),
+      ),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(WidgetRef ref) {
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
@@ -162,6 +212,21 @@ class _FriendReferralViewState extends State<FriendReferralView> {
       );
     }
 
+    final ownerSettings = ref.watch(ownerSettingsProvider).maybeWhen(
+      data: (settings) => _resolveCurrentSettings(settings),
+      orElse: () => <String, dynamic>{},
+    );
+    final inviterPoints = _resolveRewardPoints(
+      ownerSettings,
+      ['friendCampaignInviterPoints', 'friendCampaignUserPoints', 'friendCampaignPoints'],
+      _defaultRewardPoints,
+    );
+    final inviteePoints = _resolveRewardPoints(
+      ownerSettings,
+      ['friendCampaignInviteePoints', 'friendCampaignFriendPoints', 'friendCampaignPoints'],
+      _defaultRewardPoints,
+    );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -186,10 +251,61 @@ class _FriendReferralViewState extends State<FriendReferralView> {
           _buildInviteGuide(),
           
           const SizedBox(height: 24),
+
+          // アプリダウンロード
+          _buildDownloadButtons(),
+
+          const SizedBox(height: 24),
           
           // 特典情報
-          _buildRewardsInfo(),
+          _buildRewardsInfo(inviterPoints, inviteePoints),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAuthRequired(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'ログインが必要です',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: 'ログイン',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signin');
+                },
+                backgroundColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: '新規アカウント作成',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signup');
+                },
+                backgroundColor: Colors.white,
+                textColor: const Color(0xFFFF6B35),
+                borderColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -592,7 +708,7 @@ class _FriendReferralViewState extends State<FriendReferralView> {
     );
   }
 
-  Widget _buildRewardsInfo() {
+  Widget _buildRewardsInfo(int inviterPoints, int inviteePoints) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -622,7 +738,7 @@ class _FriendReferralViewState extends State<FriendReferralView> {
           
           _buildRewardItem(
             title: 'あなたの特典',
-            description: '友達1人につき100ポイント獲得',
+            description: '友達1人につき${inviterPoints}ポイント獲得',
             icon: Icons.stars,
             color: Colors.amber,
           ),
@@ -631,7 +747,7 @@ class _FriendReferralViewState extends State<FriendReferralView> {
           
           _buildRewardItem(
             title: '友達の特典',
-            description: '登録時に100ポイントをプレゼント',
+            description: '登録時に${inviteePoints}ポイントをプレゼント',
             icon: Icons.card_giftcard,
             color: Colors.green,
           ),
@@ -699,5 +815,106 @@ class _FriendReferralViewState extends State<FriendReferralView> {
         ),
       ],
     );
+  }
+
+  Widget _buildDownloadButtons() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'アプリをダウンロード',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _buildStoreButton(
+              imagePath: 'assets/images/app_store_download.jpg',
+              label: 'App Store',
+              onTap: () => _launchExternalUrl(
+                'https://apps.apple.com/jp/app/groumap/id6757521236',
+              ),
+            ),
+            _buildStoreButton(
+              imagePath: 'assets/images/google_play_download.jpg',
+              label: 'Google Play',
+              onTap: () => _launchExternalUrl(
+                'https://play.google.com/store/apps/details?id=com.groumap.groumapapp',
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStoreButton({
+    required String imagePath,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      label: '$labelでダウンロード',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.asset(
+            imagePath,
+            height: 48,
+            fit: BoxFit.contain,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchExternalUrl(String url) async {
+    final uri = Uri.parse(url);
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Map<String, dynamic> _resolveCurrentSettings(Map<String, dynamic>? ownerSettings) {
+    final rawCurrent = ownerSettings?['current'];
+    if (rawCurrent is Map<String, dynamic>) {
+      return rawCurrent;
+    }
+    return ownerSettings ?? <String, dynamic>{};
+  }
+
+  int _resolveRewardPoints(
+    Map<String, dynamic> settings,
+    List<String> keys,
+    int fallback,
+  ) {
+    for (final key in keys) {
+      final parsed = _parseInt(settings[key]);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  int? _parseInt(dynamic value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is double) {
+      return value.round();
+    }
+    if (value is String) {
+      return int.tryParse(value);
+    }
+    return null;
   }
 }
