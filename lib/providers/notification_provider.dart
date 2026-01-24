@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
@@ -11,13 +12,7 @@ final notificationProvider = Provider<NotificationService>((ref) {
 // ユーザーの通知一覧プロバイダー
 final userNotificationsProvider = StreamProvider.family<List<model.NotificationModel>, String>((ref, userId) {
   final notificationService = ref.watch(notificationProvider);
-  return notificationService.getUserNotifications(userId)
-      .timeout(const Duration(seconds: 5))
-      .handleError((error) {
-    debugPrint('User notifications provider error: $error');
-    // エラーが発生した場合は空のリストを返す
-    return <model.NotificationModel>[];
-  });
+  return notificationService.getUserNotifications(userId);
 });
 
 // 未読通知数プロバイダー
@@ -39,39 +34,50 @@ class NotificationService {
   Stream<List<model.NotificationModel>> getUserNotifications(String userId) {
     try {
       // インデックスエラーを回避するため、orderByを削除してクライアント側でソート
-      return _firestore
+      final controller = StreamController<List<model.NotificationModel>>.broadcast();
+      List<model.NotificationModel> topLevel = [];
+      List<model.NotificationModel> userScoped = [];
+
+      void emitMerged() {
+        final merged = [...topLevel, ...userScoped];
+        merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        controller.add(merged);
+      }
+
+      final topLevelSub = _firestore
           .collection('notifications')
           .where('userId', isEqualTo: userId)
           .limit(100)
           .snapshots()
-          .timeout(const Duration(seconds: 5))
-          .map((snapshot) {
-        final notifications = snapshot.docs.map((doc) {
-          try {
-            return model.NotificationModel.fromJson({
-              'id': doc.id,
-              ...doc.data(),
-            });
-          } catch (e) {
-            debugPrint('Error parsing notification document ${doc.id}: $e');
-            return null;
-          }
-        }).where((notification) => notification != null).cast<model.NotificationModel>().toList();
-        
-        // クライアント側で作成日時順にソート
-        notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        return notifications;
-      }).handleError((error) {
-        debugPrint('Error in notifications stream: $error');
-        // インデックスエラーや権限エラーの場合は空のリストを返す
-        if (error.toString().contains('failed-precondition') || 
-            error.toString().contains('permission-denied') ||
-            error.toString().contains('unavailable')) {
-          return <model.NotificationModel>[];
-        }
-        // その他のエラーも空のリストを返す
-        return <model.NotificationModel>[];
+          .listen((snapshot) {
+        topLevel = _parseNotificationsSnapshot(snapshot, source: 'global');
+        emitMerged();
+      }, onError: (error) {
+        debugPrint('Error in top-level notifications stream: $error');
+        emitMerged();
       });
+
+      final userScopedSub = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .limit(100)
+          .snapshots()
+          .listen((snapshot) {
+        userScoped = _parseNotificationsSnapshot(snapshot, source: 'user');
+        emitMerged();
+      }, onError: (error) {
+        debugPrint('Error in user notifications stream: $error');
+        emitMerged();
+      });
+
+      controller.onCancel = () {
+        topLevelSub.cancel();
+        userScopedSub.cancel();
+        controller.close();
+      };
+
+      return controller.stream;
     } catch (e) {
       debugPrint('Error getting user notifications: $e');
       // すべてのエラーに対して空のリストを返す
@@ -82,12 +88,50 @@ class NotificationService {
   // 未読通知数を取得
   Stream<int> getUnreadNotificationCount(String userId) {
     try {
-      return _firestore
+      final controller = StreamController<int>.broadcast();
+      int topCount = 0;
+      int userCount = 0;
+
+      void emitCount() {
+        controller.add(topCount + userCount);
+      }
+
+      final topSub = _firestore
           .collection('notifications')
           .where('userId', isEqualTo: userId)
           .where('isRead', isEqualTo: false)
           .snapshots()
-          .map((snapshot) => snapshot.docs.length);
+          .listen((snapshot) {
+        topCount = snapshot.docs.length;
+        emitCount();
+      }, onError: (error) {
+        debugPrint('Error getting top-level unread count: $error');
+        topCount = 0;
+        emitCount();
+      });
+
+      final userSub = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .snapshots()
+          .listen((snapshot) {
+        userCount = snapshot.docs.length;
+        emitCount();
+      }, onError: (error) {
+        debugPrint('Error getting user unread count: $error');
+        userCount = 0;
+        emitCount();
+      });
+
+      controller.onCancel = () {
+        topSub.cancel();
+        userSub.cancel();
+        controller.close();
+      };
+
+      return controller.stream;
     } catch (e) {
       debugPrint('Error getting unread notification count: $e');
       // Firestoreの権限エラーの場合は0を返す
@@ -155,13 +199,69 @@ class NotificationService {
     }
   }
 
-  // 通知を既読にする
-  Future<void> markAsRead(String notificationId) async {
+  // ユーザー配下の通知を作成
+  Future<void> createUserNotification({
+    required String userId,
+    required String title,
+    required String body,
+    required model.NotificationType type,
+    Map<String, dynamic>? data,
+    String? imageUrl,
+    String? actionUrl,
+    List<String> tags = const [],
+  }) async {
     try {
+      final notificationId = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .doc()
+          .id;
+      final notification = model.NotificationModel(
+        id: notificationId,
+        userId: userId,
+        title: title,
+        body: body,
+        type: type,
+        createdAt: DateTime.now(),
+        data: {
+          'source': 'user',
+          ...?data,
+        },
+        imageUrl: imageUrl,
+        actionUrl: actionUrl,
+        tags: tags,
+      );
+
       await _firestore
+          .collection('users')
+          .doc(userId)
           .collection('notifications')
           .doc(notificationId)
-          .update({'isRead': true});
+          .set(notification.toJson());
+    } catch (e) {
+      debugPrint('Error creating user notification: $e');
+      throw Exception('通知の作成に失敗しました: $e');
+    }
+  }
+
+  // 通知を既読にする
+  Future<void> markAsRead(String userId, String notificationId, {String? source}) async {
+    try {
+      final resolvedSource = source ?? 'global';
+      if (resolvedSource == 'user') {
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .doc(notificationId)
+            .update({'isRead': true});
+      } else {
+        await _firestore
+            .collection('notifications')
+            .doc(notificationId)
+            .update({'isRead': true});
+      }
     } catch (e) {
       debugPrint('Error marking notification as read: $e');
       throw Exception('通知の既読化に失敗しました: $e');
@@ -182,6 +282,17 @@ class NotificationService {
         batch.update(doc.reference, {'isRead': true});
       }
 
+      final userScopedNotifications = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      for (final doc in userScopedNotifications.docs) {
+        batch.update(doc.reference, {'isRead': true});
+      }
+
       await batch.commit();
     } catch (e) {
       debugPrint('Error marking all notifications as read: $e');
@@ -190,12 +301,22 @@ class NotificationService {
   }
 
   // 通知を削除
-  Future<void> deleteNotification(String notificationId) async {
+  Future<void> deleteNotification(String userId, String notificationId, {String? source}) async {
     try {
-      await _firestore
-          .collection('notifications')
-          .doc(notificationId)
-          .delete();
+      final resolvedSource = source ?? 'global';
+      if (resolvedSource == 'user') {
+        await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .doc(notificationId)
+            .delete();
+      } else {
+        await _firestore
+            .collection('notifications')
+            .doc(notificationId)
+            .delete();
+      }
     } catch (e) {
       debugPrint('Error deleting notification: $e');
       throw Exception('通知の削除に失敗しました: $e');
@@ -230,6 +351,32 @@ class NotificationService {
       debugPrint('Error sending push notification: $e');
       // プッシュ通知の送信に失敗してもアプリ内通知は作成済みなので、エラーを無視
     }
+  }
+
+  List<model.NotificationModel> _parseNotificationsSnapshot(
+    QuerySnapshot<Map<String, dynamic>> snapshot, {
+    required String source,
+  }) {
+    final notifications = snapshot.docs.map((doc) {
+      try {
+        final data = doc.data();
+        final mergedData = {
+          ...data,
+          'data': {
+            'source': source,
+            ...?(data['data'] as Map<String, dynamic>?),
+          },
+        };
+        return model.NotificationModel.fromJson({
+          'id': doc.id,
+          ...mergedData,
+        });
+      } catch (e) {
+        debugPrint('Error parsing notification document ${doc.id}: $e');
+        return null;
+      }
+    }).where((notification) => notification != null).cast<model.NotificationModel>().toList();
+    return notifications;
   }
 
   // ランキング通知を作成

@@ -45,7 +45,10 @@
   "functions": {
     "source": "backend/functions",
     "runtime": "nodejs20",
-    "region": "asia-northeast1"
+    "region": "asia-northeast1",
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" run build"
+    ]
   },
   "storage": {
     "rules": "storage.rules"

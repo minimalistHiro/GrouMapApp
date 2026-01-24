@@ -32,11 +32,33 @@ enum _MainTab {
 
 class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   int _currentIndex = 0;
+  ProviderSubscription<AsyncValue<User?>>? _authSubscription;
+  ProviderSubscription<AsyncValue<Map<String, dynamic>?>>? _userDataSubscription;
+  bool _referralPopupShown = false;
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+    _authSubscription = ref.listenManual<AsyncValue<User?>>(
+      authStateProvider,
+      (previous, next) {
+        next.whenData((user) {
+          _userDataSubscription?.close();
+          if (user == null) {
+            return;
+          }
+          _userDataSubscription = ref.listenManual<AsyncValue<Map<String, dynamic>?>>(
+            userDataProvider(user.uid),
+            (prev, data) {
+              final userData = data.valueOrNull;
+              if (userData == null) return;
+              _maybeShowReferralPopup(user.uid, userData);
+            },
+          );
+        });
+      },
+    );
     // 初期データ読み込みをフレーム後に実行
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authState = ref.read(authStateProvider);
@@ -258,6 +280,99 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       return length - 1;
     }
     return _currentIndex;
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.close();
+    _userDataSubscription?.close();
+    super.dispose();
+  }
+
+  void _maybeShowReferralPopup(String userId, Map<String, dynamic> userData) {
+    if (_referralPopupShown) return;
+    final inviteePopupShown = userData['friendReferralPopupShown'] == true;
+    final inviteePopupData = userData['friendReferralPopup'];
+    final referrerPopupShown = userData['friendReferralPopupReferrerShown'] == true;
+    final referrerPopupData = userData['friendReferralPopupReferrer'];
+
+    if (!inviteePopupShown && inviteePopupData is Map) {
+      _showInviteeReferralPopup(userId, inviteePopupData);
+      return;
+    }
+    if (!referrerPopupShown && referrerPopupData is Map) {
+      _showReferrerReferralPopup(userId, referrerPopupData);
+    }
+  }
+
+  void _showInviteeReferralPopup(String userId, Map<dynamic, dynamic> popupData) {
+    final pointsRaw = popupData['points'];
+    final referrerNameRaw = popupData['referrerName'];
+    final points = pointsRaw is int
+        ? pointsRaw
+        : pointsRaw is num
+            ? pointsRaw.toInt()
+            : int.tryParse('$pointsRaw') ?? 0;
+    final referrerName = (referrerNameRaw is String && referrerNameRaw.trim().isNotEmpty)
+        ? referrerNameRaw.trim()
+        : '友達';
+    _referralPopupShown = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('友達紹介ポイント獲得'),
+          content: Text('$referrerNameさんの友達コードで${points}ポイント付与されました'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'friendReferralPopupShown': true,
+        'friendReferralPopup': FieldValue.delete(),
+      });
+    });
+  }
+
+  void _showReferrerReferralPopup(String userId, Map<dynamic, dynamic> popupData) {
+    final pointsRaw = popupData['points'];
+    final referredNameRaw = popupData['referredName'];
+    final points = pointsRaw is int
+        ? pointsRaw
+        : pointsRaw is num
+            ? pointsRaw.toInt()
+            : int.tryParse('$pointsRaw') ?? 0;
+    final referredName = (referredNameRaw is String && referredNameRaw.trim().isNotEmpty)
+        ? referredNameRaw.trim()
+        : '友達';
+    _referralPopupShown = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('友達紹介ポイント獲得'),
+          content: Text('$referredNameさんがあなたの友達コードで登録し${points}ポイント付与されました'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'friendReferralPopupReferrerShown': true,
+        'friendReferralPopupReferrer': FieldValue.delete(),
+      });
+    });
   }
 
   @override
