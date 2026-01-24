@@ -63,10 +63,18 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE75B41),
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color(0xFFFF6B35),
+        foregroundColor: Colors.white,
         elevation: 0,
+        title: const Text(
+          'ユーザー情報入力',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -78,24 +86,11 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
               children: [
                 const SizedBox(height: 24),
                 
-                // タイトル
-                const Text(
-                  'ユーザー情報入力',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                
-                const SizedBox(height: 8),
-                
                 const Text(
                   'アカウント作成のため、情報を入力してください',
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.white,
+                    color: Colors.black54,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -288,7 +283,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                      color: Colors.black87,
                     ),
                   ),
                   
@@ -349,34 +344,6 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                   text: '次へ',
                   onPressed: _handleNext,
                   borderRadius: 999,
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // スキップボタン
-                TextButton(
-                  onPressed: () {
-                    final currentUser = ref.read(authServiceProvider).currentUser;
-                    if (currentUser == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('先にログインしてください'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(builder: (context) => const MainNavigationView()),
-                    );
-                  },
-                  child: const Text(
-                    'スキップ',
-                    style: TextStyle(
-                      color: Colors.white,
-                      decoration: TextDecoration.underline,
-                    ),
-                  ),
                 ),
               ],
             ),
