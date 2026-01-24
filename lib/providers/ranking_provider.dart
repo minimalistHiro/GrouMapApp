@@ -145,6 +145,9 @@ class RankingService {
       for (final doc in snapshot.docs) {
         try {
           final data = doc.data();
+          if (_shouldExcludeUser(data)) {
+            continue;
+          }
           final userId = doc.id;
           final profileImageUrl = data['profileImageUrl'];
           
@@ -266,6 +269,9 @@ class RankingService {
         for (final doc in snapshot.docs) {
           try {
             final data = doc.data();
+            if (_shouldExcludeUser(data)) {
+              continue;
+            }
             final userId = doc.id;
             final profileImageUrl = data['profileImageUrl'];
             
@@ -337,6 +343,14 @@ class RankingService {
       debugPrint('Error getting ranking data: $e');
       return Stream.value([]);
     }
+  }
+
+  bool _shouldExcludeUser(Map<String, dynamic> data) {
+    final isStoreOwner = data['isStoreOwner'] == true;
+    final isOwner = data['isOwner'] == true;
+    final displayName = data['displayName'];
+    final hasValidName = displayName is String && displayName.trim().isNotEmpty;
+    return isStoreOwner || isOwner || !hasValidName;
   }
 
   // ユーザーのランキング位置を取得
