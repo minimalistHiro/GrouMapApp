@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/custom_button.dart';
 
 class StoreReferralView extends ConsumerStatefulWidget {
   const StoreReferralView({Key? key}) : super(key: key);
@@ -21,16 +22,99 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
         if (user != null) {
           return _buildStoreReferralContent(context, ref, user.uid);
         } else {
-          return const Center(
-            child: Text('ログインが必要です'),
-          );
+          return _buildAuthRequiredScaffold(context);
         }
       },
-      loading: () => const Center(
+      loading: () => _buildLoadingScaffold(),
+      error: (error, _) => _buildErrorScaffold(error),
+    );
+  }
+
+  Widget _buildAuthRequiredScaffold(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text('店舗紹介'),
+        backgroundColor: const Color(0xFFFF6B35),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: _buildAuthRequired(context),
+    );
+  }
+
+  Widget _buildLoadingScaffold() {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text('店舗紹介'),
+        backgroundColor: const Color(0xFFFF6B35),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: const Center(
         child: CircularProgressIndicator(),
       ),
-      error: (error, _) => Center(
+    );
+  }
+
+  Widget _buildErrorScaffold(Object error) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text('店舗紹介'),
+        backgroundColor: const Color(0xFFFF6B35),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: Center(
         child: Text('エラー: $error'),
+      ),
+    );
+  }
+
+  Widget _buildAuthRequired(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'ログインが必要です',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: 'ログイン',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signin');
+                },
+                backgroundColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: '新規アカウント作成',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signup');
+                },
+                backgroundColor: Colors.white,
+                textColor: const Color(0xFFFF6B35),
+                borderColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
