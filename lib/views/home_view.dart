@@ -203,6 +203,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
   }
 
   Widget _buildHomeContent(BuildContext context, WidgetRef ref, User? user) {
+    final maintenanceGate = _buildMaintenanceGate(context, ref, user);
+    if (maintenanceGate != null) {
+      return maintenanceGate;
+    }
+
     final isLoggedIn = user != null;
     final userId = user?.uid ?? 'guest';
     return Scaffold(
@@ -227,6 +232,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 isLoggedIn
                     ? _buildHeader(context, ref, user!)
                     : _buildGuestHeader(context),
+
+                _buildMaintenanceNoticeBar(context, ref),
                 
                 const SizedBox(height: 24),
                 
@@ -596,6 +603,222 @@ class _HomeViewState extends ConsumerState<HomeView> {
         ],
       ),
     );
+  }
+
+  Widget _buildMaintenanceNoticeBar(BuildContext context, WidgetRef ref) {
+    final settingsAsync = ref.watch(ownerSettingsProvider);
+
+    return settingsAsync.when(
+      data: (settings) {
+        final currentSettings = _resolveCurrentSettings(settings);
+        final startDate = _parseDate(currentSettings['maintenanceStartDate']);
+        final startTime = _parseString(currentSettings['maintenanceStartTime']);
+        final startAt = _combineDateTime(startDate, startTime);
+        if (startAt == null) {
+          return const SizedBox.shrink();
+        }
+        final now = DateTime.now();
+        final oneWeekBefore = startAt.subtract(const Duration(days: 7));
+        final shouldShow = !now.isBefore(oneWeekBefore) && !now.isAfter(startAt);
+        if (!shouldShow) {
+          return const SizedBox.shrink();
+        }
+
+        final endDate = _parseDate(currentSettings['maintenanceEndDate']);
+        final endTime = _parseString(currentSettings['maintenanceEndTime']);
+        final endAt = _combineDateTime(endDate, endTime);
+        final displayText = endAt == null
+            ? 'メンテナンスのお知らせ: ${_formatDateTime(startAt)}'
+            : _isSameDate(startAt, endAt)
+                ? 'メンテナンスのお知らせ: ${_formatDate(startAt)} ${_formatTime(startAt)}〜${_formatTime(endAt)}'
+                : 'メンテナンスのお知らせ: ${_formatDateTime(startAt)} 〜 ${_formatDateTime(endAt)}';
+
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E88E5),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.info_outline, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  displayText,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget? _buildMaintenanceGate(BuildContext context, WidgetRef ref, User? user) {
+    final settings = ref.watch(ownerSettingsProvider).maybeWhen(
+          data: (value) => value,
+          orElse: () => null,
+        );
+    if (settings == null) {
+      return null;
+    }
+    final currentSettings = _resolveCurrentSettings(settings);
+    final startDate = _parseDate(currentSettings['maintenanceStartDate']);
+    final startTime = _parseString(currentSettings['maintenanceStartTime']);
+    final endDate = _parseDate(currentSettings['maintenanceEndDate']);
+    final endTime = _parseString(currentSettings['maintenanceEndTime']);
+    final startAt = _combineDateTime(startDate, startTime);
+    final endAt = _combineDateTime(endDate, endTime);
+    if (startAt == null || endAt == null) {
+      return null;
+    }
+    final now = DateTime.now();
+    if (now.isBefore(startAt) || now.isAfter(endAt)) {
+      return null;
+    }
+    final userId = user?.uid;
+    if (userId == null) {
+      return _buildMaintenanceScreen(context, startAt, endAt);
+    }
+    final userData = ref.watch(userDataProvider(userId)).maybeWhen(
+          data: (value) => value,
+          orElse: () => null,
+        );
+    if (userData == null) {
+      return null;
+    }
+    final isOwner = userData['isOwner'] == true;
+    if (isOwner) {
+      return null;
+    }
+    return _buildMaintenanceScreen(context, startAt, endAt);
+  }
+
+  Widget _buildMaintenanceScreen(
+    BuildContext context,
+    DateTime startAt,
+    DateTime endAt,
+  ) {
+    final displayText = _isSameDate(startAt, endAt)
+        ? '${_formatDate(startAt)} ${_formatTime(startAt)}〜${_formatTime(endAt)}'
+        : '${_formatDateTime(startAt)} 〜 ${_formatDateTime(endAt)}';
+    return Scaffold(
+      backgroundColor: const Color(0xFFE3F2FD),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.build_circle_outlined,
+                  size: 72,
+                  color: Color(0xFF1E88E5),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'メンテナンス中',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '現在メンテナンスを実施しています。',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  displayText,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1E88E5),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String? _parseString(dynamic value) {
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+    return null;
+  }
+
+  DateTime? _combineDateTime(DateTime? date, String? time) {
+    if (date == null || time == null || time.trim().isEmpty) {
+      return null;
+    }
+    final parsed = _parseTime(time);
+    if (parsed == null) {
+      return null;
+    }
+    return DateTime(date.year, date.month, date.day, parsed.hour, parsed.minute);
+  }
+
+  TimeOfDay? _parseTime(String value) {
+    final parts = value.split(':');
+    if (parts.length != 2) {
+      return null;
+    }
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) {
+      return null;
+    }
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return null;
+    }
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    final year = dateTime.year.toString();
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$year/$month/$day $hour:$minute';
+  }
+
+  String _formatDate(DateTime dateTime) {
+    final year = dateTime.year.toString();
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    return '$year/$month/$day';
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  bool _isSameDate(DateTime start, DateTime end) {
+    return start.year == end.year && start.month == end.month && start.day == end.day;
   }
 
   Widget _buildStatsCard(BuildContext context, WidgetRef ref, String userId) {

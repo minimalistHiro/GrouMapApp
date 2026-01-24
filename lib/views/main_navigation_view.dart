@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/auth_provider.dart';
 import '../providers/store_provider.dart';
@@ -262,6 +263,11 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
 
+    final maintenanceGate = _buildMaintenanceGate(context, ref, authState);
+    if (maintenanceGate != null) {
+      return maintenanceGate;
+    }
+
     return authState.when(
       data: (user) {
         final tabs = _tabsForUser(user);
@@ -301,5 +307,197 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         body: Center(child: Text('エラー: $error')),
       ),
     );
+  }
+
+  Widget? _buildMaintenanceGate(
+    BuildContext context,
+    WidgetRef ref,
+    AsyncValue<User?> authState,
+  ) {
+    final settings = ref.watch(ownerSettingsProvider).maybeWhen(
+          data: (value) => value,
+          orElse: () => null,
+        );
+    if (settings == null) {
+      return null;
+    }
+    final currentSettings = _resolveCurrentSettings(settings);
+    final startDate = _parseDate(currentSettings['maintenanceStartDate']);
+    final startTime = _parseString(currentSettings['maintenanceStartTime']);
+    final endDate = _parseDate(currentSettings['maintenanceEndDate']);
+    final endTime = _parseString(currentSettings['maintenanceEndTime']);
+    final startAt = _combineDateTime(startDate, startTime);
+    final endAt = _combineDateTime(endDate, endTime);
+    if (startAt == null || endAt == null) {
+      return null;
+    }
+    final now = DateTime.now();
+    if (now.isBefore(startAt) || now.isAfter(endAt)) {
+      return null;
+    }
+    final userId = authState.maybeWhen(
+      data: (user) => user?.uid,
+      orElse: () => null,
+    );
+    if (userId == null) {
+      return _buildMaintenanceScreen(context, startAt, endAt);
+    }
+    final userData = ref.watch(userDataProvider(userId)).maybeWhen(
+          data: (value) => value,
+          orElse: () => null,
+        );
+    if (userData == null) {
+      return null;
+    }
+    final isOwner = userData['isOwner'] == true;
+    if (isOwner) {
+      return null;
+    }
+    return _buildMaintenanceScreen(context, startAt, endAt);
+  }
+
+  Widget _buildMaintenanceScreen(
+    BuildContext context,
+    DateTime startAt,
+    DateTime endAt,
+  ) {
+    final displayText = _isSameDate(startAt, endAt)
+        ? '${_formatDate(startAt)} ${_formatTime(startAt)}〜${_formatTime(endAt)}'
+        : '${_formatDateTime(startAt)} 〜 ${_formatDateTime(endAt)}';
+    return Scaffold(
+      backgroundColor: const Color(0xFFE3F2FD),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.build_circle_outlined,
+                  size: 72,
+                  color: Color(0xFF1E88E5),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'メンテナンス中',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '現在メンテナンスを実施しています。',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  displayText,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1E88E5),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+    if (value is DateTime) {
+      return value;
+    }
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value);
+    }
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+    return null;
+  }
+
+  String? _parseString(dynamic value) {
+    if (value is String && value.trim().isNotEmpty) {
+      return value.trim();
+    }
+    return null;
+  }
+
+  DateTime? _combineDateTime(DateTime? date, String? time) {
+    if (date == null || time == null || time.trim().isEmpty) {
+      return null;
+    }
+    final parsed = _parseTime(time);
+    if (parsed == null) {
+      return null;
+    }
+    return DateTime(date.year, date.month, date.day, parsed.hour, parsed.minute);
+  }
+
+  TimeOfDay? _parseTime(String value) {
+    final parts = value.split(':');
+    if (parts.length != 2) {
+      return null;
+    }
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) {
+      return null;
+    }
+    if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      return null;
+    }
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    final year = dateTime.year.toString();
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$year/$month/$day $hour:$minute';
+  }
+
+  String _formatDate(DateTime dateTime) {
+    final year = dateTime.year.toString();
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    return '$year/$month/$day';
+  }
+
+  String _formatTime(DateTime dateTime) {
+    final hour = dateTime.hour.toString().padLeft(2, '0');
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  bool _isSameDate(DateTime start, DateTime end) {
+    return start.year == end.year && start.month == end.month && start.day == end.day;
+  }
+
+  Map<String, dynamic> _resolveCurrentSettings(Map<String, dynamic>? ownerSettings) {
+    final rawCurrent = ownerSettings?['current'];
+    if (rawCurrent is Map<String, dynamic>) {
+      return rawCurrent;
+    }
+    return ownerSettings ?? <String, dynamic>{};
   }
 }
