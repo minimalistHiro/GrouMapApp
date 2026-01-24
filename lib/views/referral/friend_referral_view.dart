@@ -85,7 +85,16 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
         setState(() {
           _referralCode = userData['referralCode'] ?? _generateReferralCode(user.uid);
           _referralCount = userData['referralCount'] ?? 0;
-          _totalEarnings = (userData['referralEarnings'] ?? 0) * 100; // ポイントに変換
+          final earningsPoints = userData['referralEarningsPoints'] ?? userData['referralEarnings'];
+          if (earningsPoints is int) {
+            _totalEarnings = earningsPoints;
+          } else if (earningsPoints is num) {
+            _totalEarnings = earningsPoints.toInt();
+          } else if (earningsPoints is String) {
+            _totalEarnings = int.tryParse(earningsPoints) ?? 0;
+          } else {
+            _totalEarnings = 0;
+          }
           _isLoading = false;
         });
       } else {

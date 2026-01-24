@@ -9,6 +9,7 @@ import '../providers/auth_provider.dart';
 import '../providers/owner_settings_provider.dart';
 import '../providers/coupon_provider.dart';
 import '../providers/announcement_provider.dart';
+import '../providers/notification_provider.dart';
 import '../providers/posts_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/level_provider.dart';
@@ -509,44 +510,44 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       
                       final readNotifications = List<String>.from(userData['readNotifications'] ?? []);
                       
-                      return ref.watch(announcementsProvider).when(
-                        data: (announcements) {
-                          // 未読のお知らせ数を計算
-                          final unreadCount = announcements.where((announcement) => 
-                            !readNotifications.contains(announcement['id'])
-                          ).length;
-                          
-                          if (unreadCount > 0) {
-                            return Positioned(
-                              right: 0,
-                              top: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(2),
-                                decoration: BoxDecoration(
-                                  color: Colors.red,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                constraints: const BoxConstraints(
-                                  minWidth: 16,
-                                  minHeight: 16,
-                                ),
-                                child: Text(
-                                  unreadCount > 99 ? '99+' : unreadCount.toString(),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
+                      final unreadAnnouncements = ref.watch(announcementsProvider).maybeWhen(
+                            data: (announcements) => announcements
+                                .where((announcement) => !readNotifications.contains(announcement['id']))
+                                .length,
+                            orElse: () => 0,
+                          );
+                      final unreadNotifications = ref
+                          .watch(unreadNotificationCountProvider(userId))
+                          .maybeWhen(data: (count) => count, orElse: () => 0);
+                      final totalUnread = unreadAnnouncements + unreadNotifications;
+
+                      if (totalUnread > 0) {
+                        return Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              totalUnread > 99 ? '99+' : totalUnread.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
                               ),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                        loading: () => const SizedBox.shrink(),
-                        error: (_, __) => const SizedBox.shrink(),
-                      );
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
                     },
                     loading: () => const SizedBox.shrink(),
                     error: (_, __) => const SizedBox.shrink(),
@@ -779,6 +780,13 @@ class _HomeViewState extends ConsumerState<HomeView> {
     return '$hour:$minute';
   }
 
+  int _parsePoints(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
   bool _isSameDate(DateTime start, DateTime end) {
     return start.year == end.year && start.month == end.month && start.day == end.day;
   }
@@ -806,7 +814,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
           ref.watch(userDataProvider(userId)).when(
             data: (userData) {
               if (userData != null) {
-                final String pointsText = '${userData['points'] ?? 0}';
+                final points = _parsePoints(userData['points']);
+                final specialPoints = _parsePoints(userData['specialPoints']);
+                final totalPoints = points + specialPoints;
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -825,7 +835,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                           child: Center(
                             child: RichText(
                               text: TextSpan(
-                                text: pointsText,
+                                text: '$totalPoints',
                                 style: const TextStyle(
                                   fontSize: 44,
                                   fontWeight: FontWeight.bold,
@@ -847,6 +857,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '特別ポイント: $specialPoints pt',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
                     ),
                   ],
                 );

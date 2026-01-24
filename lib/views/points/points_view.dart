@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
+import '../../providers/owner_settings_provider.dart';
 import '../../models/point_transaction_model.dart';
 import '../../providers/store_provider.dart';
 import '../../widgets/custom_button.dart';
@@ -94,6 +95,73 @@ class _PointsViewState extends ConsumerState<PointsView>
 
     return Column(
       children: [
+        ref.watch(userDataProvider(userId)).when(
+          data: (userData) {
+            if (userData == null) return const SizedBox.shrink();
+            final points = _parsePoints(userData['points']);
+            final specialPoints = _parsePoints(userData['specialPoints']);
+            final totalPoints = points + specialPoints;
+            return Container(
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Text(
+                    '保有ポイント',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  RichText(
+                    text: TextSpan(
+                      text: '$totalPoints',
+                      style: const TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                      children: const [
+                        TextSpan(
+                          text: ' pt',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '特別ポイント: $specialPoints pt',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
         // タブコンテンツ
         Expanded(
           child: TabBarView(
@@ -110,6 +178,13 @@ class _PointsViewState extends ConsumerState<PointsView>
   }
 
   // 残高カードは削除済み
+
+  int _parsePoints(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
 
   Widget _buildAuthRequired(BuildContext context) {
     return Center(

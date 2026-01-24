@@ -329,6 +329,8 @@ class AuthService {
         'isOwner': false, // デフォルトで一般ユーザー
         'points': 0, // 初期ポイント
         'totalPoints': 0, // 総ポイント（ランキング用）
+        'specialPoints': 0, // 特別ポイント残高
+        'specialPointsTotal': 0, // 特別ポイント累計
         'pointReturnRate': 1.0, // ポイント還元率（初期値 1.0%）
         'paid': 0, // 初期支払額
         'rank': 'ブロンズ', // 初期ランク
@@ -338,6 +340,8 @@ class AuthService {
         'referralCode': referralCode, // 友達紹介コード
         'referralCount': 0, // 招待した友達数
         'referralEarnings': 0, // 友達紹介で獲得したポイント数
+        'referralEarningsPoints': 0, // 友達紹介で獲得したポイント合計
+        'referralUsed': false, // 紹介コードの使用済みフラグ
         'storeReferralCode': storeReferralCode, // 店舗紹介コード
         'storeReferralCount': 0, // 紹介した店舗数
         'storeReferralEarnings': 0, // 店舗紹介で獲得したポイント数

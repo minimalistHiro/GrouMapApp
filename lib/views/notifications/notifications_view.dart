@@ -7,6 +7,7 @@ import '../../models/notification_model.dart' as model;
 import '../../widgets/custom_button.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'announcement_detail_view.dart';
+import 'notification_detail_view.dart';
 
 // ユーザーデータプロバイダー（usersコレクションから直接取得）
 final userDataProvider = StreamProvider.family<Map<String, dynamic>?, String>((ref, userId) {
@@ -50,27 +51,41 @@ class _NotificationsViewState extends ConsumerState<NotificationsView> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('お知らせ'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
-      ),
-      body: authState.when(
-        data: (user) {
-          if (user != null) {
-            return _buildAnnouncementsList(context, ref, user.uid);
-          } else {
-            return const Center(
-              child: Text('ログインが必要です'),
-            );
-          }
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('お知らせ'),
+          backgroundColor: const Color(0xFFFF6B35),
+          foregroundColor: Colors.white,
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'お知らせ'),
+              Tab(text: '通知'),
+            ],
+          ),
         ),
-        error: (error, _) => Center(
-          child: Text('エラー: $error'),
+        body: authState.when(
+          data: (user) {
+            if (user != null) {
+              return TabBarView(
+                children: [
+                  _buildAnnouncementsList(context, ref, user.uid),
+                  _buildNotificationsList(context, ref, user.uid),
+                ],
+              );
+            } else {
+              return const Center(
+                child: Text('ログインが必要です'),
+              );
+            }
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(),
+          ),
+          error: (error, _) => Center(
+            child: Text('エラー: $error'),
+          ),
         ),
       ),
     );
@@ -385,16 +400,11 @@ class _NotificationsViewState extends ConsumerState<NotificationsView> {
             ),
           ],
         ),
-        trailing: notification.isRead
-            ? IconButton(
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _deleteNotification(context, ref, notification.id),
-              )
-            : IconButton(
-                icon: const Icon(Icons.mark_email_read),
-                onPressed: () => _markAsRead(context, ref, notification.id),
-              ),
-        onTap: () => _showNotificationDetails(context, notification),
+        trailing: IconButton(
+          icon: const Icon(Icons.mark_email_read),
+          onPressed: () => _markAsRead(context, ref, notification),
+        ),
+        onTap: () => _navigateToNotificationDetail(context, notification),
       ),
     );
   }
@@ -407,73 +417,17 @@ class _NotificationsViewState extends ConsumerState<NotificationsView> {
     );
   }
 
-  void _showNotificationDetails(BuildContext context, model.NotificationModel notification) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Text(notification.type.icon),
-            const SizedBox(width: 8),
-            Expanded(child: Text(notification.title)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(notification.body),
-            if (notification.imageUrl != null) ...[
-              const SizedBox(height: 16),
-              Image.network(notification.imageUrl!),
-            ],
-            const SizedBox(height: 16),
-            _buildDetailRow('タイプ:', notification.type.displayName),
-            _buildDetailRow('作成日時:', _formatDateTime(notification.createdAt)),
-            _buildDetailRow('既読:', notification.isRead ? 'はい' : 'いいえ'),
-            if (notification.tags.isNotEmpty)
-              _buildDetailRow('タグ:', notification.tags.join(', ')),
-          ],
-        ),
-        actions: [
-          if (notification.actionUrl != null)
-            TextButton(
-              onPressed: () {
-                // TODO: アクションURLを開く
-                Navigator.of(context).pop();
-              },
-              child: const Text('アクション'),
-            ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+  void _navigateToNotificationDetail(BuildContext context, model.NotificationModel notification) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => NotificationDetailView(notification: notification),
       ),
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Expanded(child: Text(value)),
-        ],
-      ),
-    );
-  }
-
-  void _markAsRead(BuildContext context, WidgetRef ref, String notificationId) {
-    ref.read(notificationProvider).markAsRead(notificationId);
+  void _markAsRead(BuildContext context, WidgetRef ref, model.NotificationModel notification) {
+    final source = notification.data?['source'] as String?;
+    ref.read(notificationProvider).markAsRead(notification.userId, notification.id, source: source);
   }
 
   void _markAllAsRead(BuildContext context, WidgetRef ref) {
@@ -488,12 +442,6 @@ class _NotificationsViewState extends ConsumerState<NotificationsView> {
     });
   }
 
-  void _deleteNotification(BuildContext context, WidgetRef ref, String notificationId) {
-    ref.read(notificationProvider).deleteNotification(notificationId);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('通知を削除しました')),
-    );
-  }
 
   Color _getCategoryColor(String category) {
     switch (category) {

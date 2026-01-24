@@ -26,6 +26,14 @@ const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
 const USERS_COLLECTION = 'users';
 const EMAIL_OTP_COLLECTION = 'email_otp';
 const ANNOUNCEMENT_TOPIC = 'announcements';
+const OWNER_SETTINGS_COLLECTION = 'owner_settings';
+const REFERRAL_USES_COLLECTION = 'referral_uses';
+const POINT_LEDGER_COLLECTION = 'point_ledger';
+
+type ReferralPoints = {
+  inviterPoints: number;
+  inviteePoints: number;
+};
 
 const SMTP_HOST = defineSecret('SMTP_HOST');
 const SMTP_PORT = defineSecret('SMTP_PORT');
@@ -41,6 +49,38 @@ function getDateKey(date: Date): string {
     month: '2-digit',
     day: '2-digit',
   }).format(date);
+}
+
+function normalizeReferralCode(code?: string): string {
+  return (code ?? '').trim().toUpperCase();
+}
+
+async function resolveReferralPoints(): Promise<ReferralPoints> {
+  const settingsDoc = await db.collection(OWNER_SETTINGS_COLLECTION).doc('current').get();
+  const settings = (settingsDoc.data() as Record<string, unknown> | undefined) ?? {};
+
+  const readPoints = (keys: string[], fallback: number): number => {
+    for (const key of keys) {
+      const value = settings[key];
+      if (typeof value === 'number') return Math.floor(value);
+      if (typeof value === 'string') {
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+    }
+    return fallback;
+  };
+
+  return {
+    inviterPoints: readPoints(
+      ['friendCampaignInviterPoints', 'friendCampaignUserPoints', 'friendCampaignPoints'],
+      100,
+    ),
+    inviteePoints: readPoints(
+      ['friendCampaignInviteePoints', 'friendCampaignFriendPoints', 'friendCampaignPoints'],
+      100,
+    ),
+  };
 }
 
 type NotificationData = {
@@ -273,6 +313,262 @@ export const sendNotificationOnPublish = onDocumentWritten(
       deliveredAt: new Date(),
     });
   }
+);
+
+export const processFriendReferral = onDocumentWritten(
+  {
+    document: `${USERS_COLLECTION}/{userId}`,
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    if (!event.data?.after.exists) return;
+
+    const afterData = event.data.after.data() as Record<string, unknown>;
+    const beforeData = event.data.before.exists
+      ? (event.data.before.data() as Record<string, unknown>)
+      : undefined;
+    const userId = event.params.userId as string;
+    const friendCode = normalizeReferralCode(
+      typeof afterData.friendCode === 'string' ? afterData.friendCode : undefined,
+    );
+
+    if (!friendCode) return;
+    if (afterData.referralUsed === true || afterData.referredBy) return;
+
+    const beforeFriendCode = normalizeReferralCode(
+      typeof beforeData?.friendCode === 'string' ? beforeData?.friendCode : undefined,
+    );
+    if (
+      beforeFriendCode === friendCode &&
+      (beforeData?.referralUsed ?? false) === (afterData.referralUsed ?? false)
+    ) {
+      return;
+    }
+
+    const referrerQuery = await db
+      .collection(USERS_COLLECTION)
+      .where('referralCode', '==', friendCode)
+      .limit(1)
+      .get();
+
+    if (referrerQuery.empty) {
+      await event.data.after.ref.update({
+        friendCode: FieldValue.delete(),
+        friendCodeStatus: 'invalid',
+        friendCodeCheckedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    const referrerDoc = referrerQuery.docs[0];
+    if (referrerDoc.id === userId) {
+      await event.data.after.ref.update({
+        friendCode: FieldValue.delete(),
+        friendCodeStatus: 'self',
+        friendCodeCheckedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    const { inviterPoints, inviteePoints } = await resolveReferralPoints();
+    const now = new Date();
+
+    await db.runTransaction(async (transaction) => {
+      const userRef = db.collection(USERS_COLLECTION).doc(userId);
+      const referrerRef = db.collection(USERS_COLLECTION).doc(referrerDoc.id);
+      const userSnap = await transaction.get(userRef);
+      if (!userSnap.exists) return;
+
+      const referrerSnap = await transaction.get(referrerRef);
+      if (!referrerSnap.exists) return;
+
+      const userData = userSnap.data() as Record<string, unknown>;
+      if (userData.referralUsed === true || userData.referredBy) return;
+
+      const currentFriendCode = normalizeReferralCode(
+        typeof userData.friendCode === 'string' ? userData.friendCode : undefined,
+      );
+      if (!currentFriendCode || currentFriendCode !== friendCode) return;
+
+      const referrerData = referrerSnap.data() as Record<string, unknown>;
+      const referrerCode = normalizeReferralCode(
+        typeof referrerData.referralCode === 'string' ? referrerData.referralCode : undefined,
+      );
+      if (referrerCode !== friendCode) return;
+
+      const referredName =
+        typeof userData.displayName === 'string' ? userData.displayName.trim() : '';
+      const referrerName =
+        typeof referrerData.displayName === 'string' ? referrerData.displayName.trim() : '';
+      const safeReferredName = referredName.length === 0 ? '友達' : referredName;
+      const safeReferrerName = referrerName.length === 0 ? '友達' : referrerName;
+
+      const referralUseRef = db.collection(REFERRAL_USES_COLLECTION).doc();
+      transaction.set(referralUseRef, {
+        referrerUserId: referrerRef.id,
+        referredUserId: userId,
+        usedCode: friendCode,
+        awardedPoints: {
+          inviter: inviterPoints,
+          invitee: inviteePoints,
+        },
+        status: 'awarded',
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      transaction.update(userRef, {
+        referredBy: referrerRef.id,
+        referralUsed: true,
+        referralUsedAt: FieldValue.serverTimestamp(),
+        friendCode: FieldValue.delete(),
+        friendCodeStatus: 'applied',
+        friendCodeCheckedAt: FieldValue.serverTimestamp(),
+        friendReferralPopupShown: false,
+        friendReferralPopup: {
+          points: inviteePoints,
+          referrerName: safeReferrerName,
+        },
+        specialPoints: FieldValue.increment(inviteePoints),
+        specialPointsTotal: FieldValue.increment(inviteePoints),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      transaction.update(referrerRef, {
+        referralCount: FieldValue.increment(1),
+        referralEarningsPoints: FieldValue.increment(inviterPoints),
+        specialPoints: FieldValue.increment(inviterPoints),
+        specialPointsTotal: FieldValue.increment(inviterPoints),
+        friendReferralPopupReferrerShown: false,
+        friendReferralPopupReferrer: {
+          points: inviterPoints,
+          referredName: safeReferredName,
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      const inviterLedgerRef = db.collection(POINT_LEDGER_COLLECTION).doc();
+      transaction.set(inviterLedgerRef, {
+        userId: referrerRef.id,
+        amount: inviterPoints,
+        category: 'special',
+        reason: 'friend_referral',
+        relatedUserId: userId,
+        refId: referralUseRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      const inviteeLedgerRef = db.collection(POINT_LEDGER_COLLECTION).doc();
+      transaction.set(inviteeLedgerRef, {
+        userId,
+        amount: inviteePoints,
+        category: 'special',
+        reason: 'friend_referral',
+        relatedUserId: referrerRef.id,
+        refId: referralUseRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      const referrerNotificationRef = referrerRef.collection('notifications').doc();
+      transaction.set(referrerNotificationRef, {
+        id: referrerNotificationRef.id,
+        userId: referrerRef.id,
+        title: '友達紹介ポイント獲得',
+        body: `${safeReferredName}さんがあなたの友達コードで登録し${inviterPoints}ポイント付与されました`,
+        type: 'social',
+        createdAt: now.toISOString(),
+        isRead: false,
+        isDelivered: true,
+        data: {
+          source: 'user',
+          reason: 'friend_referral',
+          referralUseId: referralUseRef.id,
+          points: inviterPoints,
+          referredUserId: userId,
+        },
+        tags: ['referral'],
+      });
+
+      const referredNotificationRef = userRef.collection('notifications').doc();
+      transaction.set(referredNotificationRef, {
+        id: referredNotificationRef.id,
+        userId,
+        title: '友達紹介ポイント獲得',
+        body: `${safeReferrerName}さんの友達コードで${inviteePoints}ポイント付与されました`,
+        type: 'social',
+        createdAt: now.toISOString(),
+        isRead: false,
+        isDelivered: true,
+        data: {
+          source: 'user',
+          reason: 'friend_referral',
+          referralUseId: referralUseRef.id,
+          points: inviteePoints,
+          referrerUserId: referrerRef.id,
+        },
+        tags: ['referral'],
+      });
+    });
+  },
+);
+
+export const sendUserNotificationOnCreate = onDocumentCreated(
+  {
+    document: `${USERS_COLLECTION}/{userId}/notifications/{notificationId}`,
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    if (!event.data?.exists) return;
+
+    const notificationId = event.data.id;
+    const userId = event.params.userId as string;
+    const data = event.data.data() as NotificationData | undefined;
+    if (!data) return;
+
+    const pushEnabled = await isPushEnabled(userId);
+    if (!pushEnabled) {
+      console.log(`Push disabled for user ${userId}, skipping notification ${notificationId}`);
+      return;
+    }
+
+    const tokens = await getUserFcmTokens(userId);
+    if (tokens.length === 0) {
+      console.log(`No FCM tokens found for user ${userId}, skipping notification ${notificationId}`);
+      return;
+    }
+
+    const payload = buildNotificationPayload(notificationId, data);
+
+    const response = await messaging.sendEachForMulticast({
+      tokens,
+      notification: {
+        title: payload.title,
+        body: payload.body,
+      },
+      data: payload.data,
+      android: {
+        notification: {
+          sound: 'default',
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+          },
+        },
+      },
+    });
+
+    console.log(
+      `Sent user notification ${notificationId} to user ${userId}: ` +
+        `${response.successCount} success, ${response.failureCount} failure`
+    );
+
+    await event.data.ref.update({
+      isDelivered: true,
+      deliveredAt: new Date(),
+    });
+  },
 );
 
 export const requestEmailOtp = onCall(

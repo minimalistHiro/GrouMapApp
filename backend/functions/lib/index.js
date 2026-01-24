@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.requestEmailOtp = exports.sendNotificationOnPublish = void 0;
+exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
@@ -28,6 +28,9 @@ const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
 const USERS_COLLECTION = 'users';
 const EMAIL_OTP_COLLECTION = 'email_otp';
 const ANNOUNCEMENT_TOPIC = 'announcements';
+const OWNER_SETTINGS_COLLECTION = 'owner_settings';
+const REFERRAL_USES_COLLECTION = 'referral_uses';
+const POINT_LEDGER_COLLECTION = 'point_ledger';
 const SMTP_HOST = (0, params_1.defineSecret)('SMTP_HOST');
 const SMTP_PORT = (0, params_1.defineSecret)('SMTP_PORT');
 const SMTP_USER = (0, params_1.defineSecret)('SMTP_USER');
@@ -41,6 +44,31 @@ function getDateKey(date) {
         month: '2-digit',
         day: '2-digit',
     }).format(date);
+}
+function normalizeReferralCode(code) {
+    return (code !== null && code !== void 0 ? code : '').trim().toUpperCase();
+}
+async function resolveReferralPoints() {
+    var _a;
+    const settingsDoc = await db.collection(OWNER_SETTINGS_COLLECTION).doc('current').get();
+    const settings = (_a = settingsDoc.data()) !== null && _a !== void 0 ? _a : {};
+    const readPoints = (keys, fallback) => {
+        for (const key of keys) {
+            const value = settings[key];
+            if (typeof value === 'number')
+                return Math.floor(value);
+            if (typeof value === 'string') {
+                const parsed = Number.parseInt(value, 10);
+                if (!Number.isNaN(parsed))
+                    return parsed;
+            }
+        }
+        return fallback;
+    };
+    return {
+        inviterPoints: readPoints(['friendCampaignInviterPoints', 'friendCampaignUserPoints', 'friendCampaignPoints'], 100),
+        inviteePoints: readPoints(['friendCampaignInviteePoints', 'friendCampaignFriendPoints', 'friendCampaignPoints'], 100),
+    };
 }
 async function getUserFcmTokens(userId) {
     var _a;
@@ -229,6 +257,225 @@ exports.sendNotificationOnPublish = (0, firestore_1.onDocumentWritten)({
         console.log(`Sent announcement notification ${notificationId} to topic ${ANNOUNCEMENT_TOPIC}`);
     }
     await event.data.after.ref.update({
+        isDelivered: true,
+        deliveredAt: new Date(),
+    });
+});
+exports.processFriendReferral = (0, firestore_1.onDocumentWritten)({
+    document: `${USERS_COLLECTION}/{userId}`,
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c;
+    if (!((_a = event.data) === null || _a === void 0 ? void 0 : _a.after.exists))
+        return;
+    const afterData = event.data.after.data();
+    const beforeData = event.data.before.exists
+        ? event.data.before.data()
+        : undefined;
+    const userId = event.params.userId;
+    const friendCode = normalizeReferralCode(typeof afterData.friendCode === 'string' ? afterData.friendCode : undefined);
+    if (!friendCode)
+        return;
+    if (afterData.referralUsed === true || afterData.referredBy)
+        return;
+    const beforeFriendCode = normalizeReferralCode(typeof (beforeData === null || beforeData === void 0 ? void 0 : beforeData.friendCode) === 'string' ? beforeData === null || beforeData === void 0 ? void 0 : beforeData.friendCode : undefined);
+    if (beforeFriendCode === friendCode &&
+        ((_b = beforeData === null || beforeData === void 0 ? void 0 : beforeData.referralUsed) !== null && _b !== void 0 ? _b : false) === ((_c = afterData.referralUsed) !== null && _c !== void 0 ? _c : false)) {
+        return;
+    }
+    const referrerQuery = await db
+        .collection(USERS_COLLECTION)
+        .where('referralCode', '==', friendCode)
+        .limit(1)
+        .get();
+    if (referrerQuery.empty) {
+        await event.data.after.ref.update({
+            friendCode: firestore_2.FieldValue.delete(),
+            friendCodeStatus: 'invalid',
+            friendCodeCheckedAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        return;
+    }
+    const referrerDoc = referrerQuery.docs[0];
+    if (referrerDoc.id === userId) {
+        await event.data.after.ref.update({
+            friendCode: firestore_2.FieldValue.delete(),
+            friendCodeStatus: 'self',
+            friendCodeCheckedAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        return;
+    }
+    const { inviterPoints, inviteePoints } = await resolveReferralPoints();
+    const now = new Date();
+    await db.runTransaction(async (transaction) => {
+        const userRef = db.collection(USERS_COLLECTION).doc(userId);
+        const referrerRef = db.collection(USERS_COLLECTION).doc(referrerDoc.id);
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists)
+            return;
+        const referrerSnap = await transaction.get(referrerRef);
+        if (!referrerSnap.exists)
+            return;
+        const userData = userSnap.data();
+        if (userData.referralUsed === true || userData.referredBy)
+            return;
+        const currentFriendCode = normalizeReferralCode(typeof userData.friendCode === 'string' ? userData.friendCode : undefined);
+        if (!currentFriendCode || currentFriendCode !== friendCode)
+            return;
+        const referrerData = referrerSnap.data();
+        const referrerCode = normalizeReferralCode(typeof referrerData.referralCode === 'string' ? referrerData.referralCode : undefined);
+        if (referrerCode !== friendCode)
+            return;
+        const referredName = typeof userData.displayName === 'string' ? userData.displayName.trim() : '';
+        const referrerName = typeof referrerData.displayName === 'string' ? referrerData.displayName.trim() : '';
+        const safeReferredName = referredName.length === 0 ? '友達' : referredName;
+        const safeReferrerName = referrerName.length === 0 ? '友達' : referrerName;
+        const referralUseRef = db.collection(REFERRAL_USES_COLLECTION).doc();
+        transaction.set(referralUseRef, {
+            referrerUserId: referrerRef.id,
+            referredUserId: userId,
+            usedCode: friendCode,
+            awardedPoints: {
+                inviter: inviterPoints,
+                invitee: inviteePoints,
+            },
+            status: 'awarded',
+            createdAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        transaction.update(userRef, {
+            referredBy: referrerRef.id,
+            referralUsed: true,
+            referralUsedAt: firestore_2.FieldValue.serverTimestamp(),
+            friendCode: firestore_2.FieldValue.delete(),
+            friendCodeStatus: 'applied',
+            friendCodeCheckedAt: firestore_2.FieldValue.serverTimestamp(),
+            friendReferralPopupShown: false,
+            friendReferralPopup: {
+                points: inviteePoints,
+                referrerName: safeReferrerName,
+            },
+            specialPoints: firestore_2.FieldValue.increment(inviteePoints),
+            specialPointsTotal: firestore_2.FieldValue.increment(inviteePoints),
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        transaction.update(referrerRef, {
+            referralCount: firestore_2.FieldValue.increment(1),
+            referralEarningsPoints: firestore_2.FieldValue.increment(inviterPoints),
+            specialPoints: firestore_2.FieldValue.increment(inviterPoints),
+            specialPointsTotal: firestore_2.FieldValue.increment(inviterPoints),
+            friendReferralPopupReferrerShown: false,
+            friendReferralPopupReferrer: {
+                points: inviterPoints,
+                referredName: safeReferredName,
+            },
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        const inviterLedgerRef = db.collection(POINT_LEDGER_COLLECTION).doc();
+        transaction.set(inviterLedgerRef, {
+            userId: referrerRef.id,
+            amount: inviterPoints,
+            category: 'special',
+            reason: 'friend_referral',
+            relatedUserId: userId,
+            refId: referralUseRef.id,
+            createdAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        const inviteeLedgerRef = db.collection(POINT_LEDGER_COLLECTION).doc();
+        transaction.set(inviteeLedgerRef, {
+            userId,
+            amount: inviteePoints,
+            category: 'special',
+            reason: 'friend_referral',
+            relatedUserId: referrerRef.id,
+            refId: referralUseRef.id,
+            createdAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        const referrerNotificationRef = referrerRef.collection('notifications').doc();
+        transaction.set(referrerNotificationRef, {
+            id: referrerNotificationRef.id,
+            userId: referrerRef.id,
+            title: '友達紹介ポイント獲得',
+            body: `${safeReferredName}さんがあなたの友達コードで登録し${inviterPoints}ポイント付与されました`,
+            type: 'social',
+            createdAt: now.toISOString(),
+            isRead: false,
+            isDelivered: true,
+            data: {
+                source: 'user',
+                reason: 'friend_referral',
+                referralUseId: referralUseRef.id,
+                points: inviterPoints,
+                referredUserId: userId,
+            },
+            tags: ['referral'],
+        });
+        const referredNotificationRef = userRef.collection('notifications').doc();
+        transaction.set(referredNotificationRef, {
+            id: referredNotificationRef.id,
+            userId,
+            title: '友達紹介ポイント獲得',
+            body: `${safeReferrerName}さんの友達コードで${inviteePoints}ポイント付与されました`,
+            type: 'social',
+            createdAt: now.toISOString(),
+            isRead: false,
+            isDelivered: true,
+            data: {
+                source: 'user',
+                reason: 'friend_referral',
+                referralUseId: referralUseRef.id,
+                points: inviteePoints,
+                referrerUserId: referrerRef.id,
+            },
+            tags: ['referral'],
+        });
+    });
+});
+exports.sendUserNotificationOnCreate = (0, firestore_1.onDocumentCreated)({
+    document: `${USERS_COLLECTION}/{userId}/notifications/{notificationId}`,
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a;
+    if (!((_a = event.data) === null || _a === void 0 ? void 0 : _a.exists))
+        return;
+    const notificationId = event.data.id;
+    const userId = event.params.userId;
+    const data = event.data.data();
+    if (!data)
+        return;
+    const pushEnabled = await isPushEnabled(userId);
+    if (!pushEnabled) {
+        console.log(`Push disabled for user ${userId}, skipping notification ${notificationId}`);
+        return;
+    }
+    const tokens = await getUserFcmTokens(userId);
+    if (tokens.length === 0) {
+        console.log(`No FCM tokens found for user ${userId}, skipping notification ${notificationId}`);
+        return;
+    }
+    const payload = buildNotificationPayload(notificationId, data);
+    const response = await messaging.sendEachForMulticast({
+        tokens,
+        notification: {
+            title: payload.title,
+            body: payload.body,
+        },
+        data: payload.data,
+        android: {
+            notification: {
+                sound: 'default',
+            },
+        },
+        apns: {
+            payload: {
+                aps: {
+                    sound: 'default',
+                },
+            },
+        },
+    });
+    console.log(`Sent user notification ${notificationId} to user ${userId}: ` +
+        `${response.successCount} success, ${response.failureCount} failure`);
+    await event.data.ref.update({
         isDelivered: true,
         deliveredAt: new Date(),
     });
