@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
+import '../providers/owner_settings_provider.dart';
 import '../providers/coupon_provider.dart';
 import '../providers/announcement_provider.dart';
 import '../providers/posts_provider.dart';
@@ -13,38 +14,16 @@ import '../providers/store_provider.dart';
 import '../providers/level_provider.dart';
 import '../models/coupon_model.dart' as model;
 import '../widgets/custom_button.dart';
-import 'notifications/notifications_view.dart';
+import 'notifications/notifications_view.dart' hide userDataProvider;
 import 'points/points_view.dart';
 import 'ranking/leaderboard_view.dart';
 import 'stores/store_list_view.dart';
 import 'referral/friend_referral_view.dart';
-import 'referral/store_referral_view.dart';
+import 'referral/store_referral_view.dart' hide userDataProvider;
 import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
 import 'coupons/coupons_view.dart';
 import 'badges/badges_view.dart';
-
-// ユーザーデータプロバイダー（usersコレクションから直接取得）
-final userDataProvider = StreamProvider.family<Map<String, dynamic>?, String>((ref, userId) {
-  try {
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((snapshot) {
-      if (snapshot.exists) {
-        return snapshot.data();
-      }
-      return null;
-    }).handleError((error) {
-      debugPrint('Error fetching user data: $error');
-      return null;
-    });
-  } catch (e) {
-    debugPrint('Error creating user data stream: $e');
-    return Stream.value(null);
-  }
-});
 
 // ユーザーが所持しているバッジ数
 final userBadgeCountProvider = StreamProvider.family<int, String>((ref, userId) {
@@ -65,23 +44,6 @@ final userBadgeCountProvider = StreamProvider.family<int, String>((ref, userId) 
   }
 });
 
-// オーナー設定（current）を取得
-final ownerSettingsProvider = StreamProvider<Map<String, dynamic>?>((ref) {
-  try {
-    return FirebaseFirestore.instance
-        .collection('owner_settings')
-        .doc('current')
-        .snapshots()
-        .map((snapshot) => snapshot.data())
-        .handleError((error) {
-      debugPrint('Error fetching owner settings: $error');
-      return null;
-    });
-  } catch (e) {
-    debugPrint('Error creating owner settings stream: $e');
-    return Stream.value(null);
-  }
-});
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({Key? key}) : super(key: key);

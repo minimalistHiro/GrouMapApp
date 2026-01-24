@@ -12,6 +12,7 @@ import 'views/auth/email_verification_pending_view.dart';
 import 'views/main_navigation_view.dart';
 import 'providers/auth_provider.dart';
 import 'services/push_notification_service.dart';
+import 'widgets/app_update_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -78,7 +79,9 @@ class MyApp extends ConsumerWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
       ),
-      home: const AuthWrapper(),
+      home: const AppUpdateGate(
+        child: AuthWrapper(),
+      ),
       routes: {
         '/signin': (context) => const SignInView(),
         '/signup': (context) => const TermsPrivacyConsentView(),
