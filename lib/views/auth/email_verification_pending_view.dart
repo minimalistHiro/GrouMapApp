@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/custom_button.dart';
 import '../home_view.dart';
 import '../main_navigation_view.dart';
 import 'user_info_view.dart';
@@ -96,88 +97,42 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
                 ),
               ),
               const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _isVerifying ? null : _verifyEmailOtp,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B35),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+              CustomButton(
+                text: '認証する',
+                onPressed: _verifyEmailOtp,
+                isLoading: _isVerifying,
+                backgroundColor: const Color(0xFFFF6B35),
+                textColor: Colors.white,
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                child: _isVerifying
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Text(
-                        '認証する',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
               ),
               const SizedBox(height: 12),
-              OutlinedButton(
-                onPressed: _isResending ? null : _resendEmailVerification,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFFFF6B35),
-                  side: const BorderSide(color: Color(0xFFFF6B35)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+              CustomButton(
+                text: '認証コードを再送信',
+                onPressed: _resendEmailVerification,
+                isLoading: _isResending,
+                backgroundColor: Colors.white,
+                textColor: const Color(0xFFFF6B35),
+                borderColor: const Color(0xFFFF6B35),
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                child: _isResending
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
-                        ),
-                      )
-                    : const Text(
-                        '認証コードを再送信',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
               ),
               const SizedBox(height: 32),
-              OutlinedButton(
-                onPressed: _isDeleting ? null : _deleteAccountAndGoHome,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.redAccent,
-                  side: const BorderSide(color: Colors.redAccent),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+              CustomButton(
+                text: 'トップに戻る',
+                onPressed: _deleteAccountAndGoHome,
+                isLoading: _isDeleting,
+                backgroundColor: Colors.white,
+                textColor: Colors.redAccent,
+                borderColor: Colors.redAccent,
+                textStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
                 ),
-                child: _isDeleting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.redAccent),
-                        ),
-                      )
-                    : const Text(
-                        'トップに戻る',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
               ),
             ],
           ),
