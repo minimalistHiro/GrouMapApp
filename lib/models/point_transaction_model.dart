@@ -73,6 +73,9 @@ class PointTransactionModel with _$PointTransactionModel {
     @TimestampDateTimeConverter() required DateTime updatedAt,
     String? description,
     String? qrCode,
+    int? usedNormalPoints,
+    int? usedSpecialPoints,
+    int? totalUsedPoints,
     @TimestampNullableDateTimeConverter() DateTime? refundedAt,
     String? refundReason,
   }) = _PointTransactionModel;

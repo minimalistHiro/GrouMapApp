@@ -17,12 +17,13 @@ _$PointTransactionModelImpl _$$PointTransactionModelImplFromJson(
       paymentAmount: (json['paymentAmount'] as num?)?.toInt(),
       status: json['status'] as String? ?? 'completed',
       paymentMethod: json['paymentMethod'] as String? ?? 'points',
-      createdAt:
-          const TimestampDateTimeConverter().fromJson(json['createdAt']),
-      updatedAt:
-          const TimestampDateTimeConverter().fromJson(json['updatedAt']),
+      createdAt: const TimestampDateTimeConverter().fromJson(json['createdAt']),
+      updatedAt: const TimestampDateTimeConverter().fromJson(json['updatedAt']),
       description: json['description'] as String?,
       qrCode: json['qrCode'] as String?,
+      usedNormalPoints: (json['usedNormalPoints'] as num?)?.toInt(),
+      usedSpecialPoints: (json['usedSpecialPoints'] as num?)?.toInt(),
+      totalUsedPoints: (json['totalUsedPoints'] as num?)?.toInt(),
       refundedAt: const TimestampNullableDateTimeConverter()
           .fromJson(json['refundedAt']),
       refundReason: json['refundReason'] as String?,
@@ -45,7 +46,10 @@ Map<String, dynamic> _$$PointTransactionModelImplToJson(
           const TimestampDateTimeConverter().toJson(instance.updatedAt),
       'description': instance.description,
       'qrCode': instance.qrCode,
-      'refundedAt':
-          const TimestampNullableDateTimeConverter().toJson(instance.refundedAt),
+      'usedNormalPoints': instance.usedNormalPoints,
+      'usedSpecialPoints': instance.usedSpecialPoints,
+      'totalUsedPoints': instance.totalUsedPoints,
+      'refundedAt': const TimestampNullableDateTimeConverter()
+          .toJson(instance.refundedAt),
       'refundReason': instance.refundReason,
     };

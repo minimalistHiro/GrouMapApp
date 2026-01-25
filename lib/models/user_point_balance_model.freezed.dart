@@ -24,6 +24,7 @@ mixin _$UserPointBalance {
   int get totalPoints => throw _privateConstructorUsedError;
   int get availablePoints => throw _privateConstructorUsedError;
   int get usedPoints => throw _privateConstructorUsedError;
+  @TimestampDateTimeConverter()
   DateTime get lastUpdated => throw _privateConstructorUsedError;
 
   /// Serializes this UserPointBalance to a JSON map.
@@ -47,7 +48,7 @@ abstract class $UserPointBalanceCopyWith<$Res> {
       int totalPoints,
       int availablePoints,
       int usedPoints,
-      DateTime lastUpdated});
+      @TimestampDateTimeConverter() DateTime lastUpdated});
 }
 
 /// @nodoc
@@ -109,7 +110,7 @@ abstract class _$$UserPointBalanceImplCopyWith<$Res>
       int totalPoints,
       int availablePoints,
       int usedPoints,
-      DateTime lastUpdated});
+      @TimestampDateTimeConverter() DateTime lastUpdated});
 }
 
 /// @nodoc
@@ -164,7 +165,7 @@ class _$UserPointBalanceImpl implements _UserPointBalance {
       required this.totalPoints,
       required this.availablePoints,
       required this.usedPoints,
-      required this.lastUpdated});
+      @TimestampDateTimeConverter() required this.lastUpdated});
 
   factory _$UserPointBalanceImpl.fromJson(Map<String, dynamic> json) =>
       _$$UserPointBalanceImplFromJson(json);
@@ -178,6 +179,7 @@ class _$UserPointBalanceImpl implements _UserPointBalance {
   @override
   final int usedPoints;
   @override
+  @TimestampDateTimeConverter()
   final DateTime lastUpdated;
 
   @override
@@ -225,11 +227,12 @@ class _$UserPointBalanceImpl implements _UserPointBalance {
 
 abstract class _UserPointBalance implements UserPointBalance {
   const factory _UserPointBalance(
-      {required final String userId,
-      required final int totalPoints,
-      required final int availablePoints,
-      required final int usedPoints,
-      required final DateTime lastUpdated}) = _$UserPointBalanceImpl;
+          {required final String userId,
+          required final int totalPoints,
+          required final int availablePoints,
+          required final int usedPoints,
+          @TimestampDateTimeConverter() required final DateTime lastUpdated}) =
+      _$UserPointBalanceImpl;
 
   factory _UserPointBalance.fromJson(Map<String, dynamic> json) =
       _$UserPointBalanceImpl.fromJson;
@@ -243,6 +246,7 @@ abstract class _UserPointBalance implements UserPointBalance {
   @override
   int get usedPoints;
   @override
+  @TimestampDateTimeConverter()
   DateTime get lastUpdated;
 
   /// Create a copy of UserPointBalance

@@ -51,6 +51,7 @@ service cloud.firestore {
           && isStoreMember(request.resource.data.lastUpdatedByStoreId)
           && request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'points',
+            'specialPoints',
             'paid',
             'lastUpdated',
             'lastUpdatedByStoreId'

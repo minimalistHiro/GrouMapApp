@@ -29,10 +29,16 @@ mixin _$PointTransactionModel {
   int? get paymentAmount => throw _privateConstructorUsedError;
   String get status => throw _privateConstructorUsedError;
   String get paymentMethod => throw _privateConstructorUsedError;
+  @TimestampDateTimeConverter()
   DateTime get createdAt => throw _privateConstructorUsedError;
+  @TimestampDateTimeConverter()
   DateTime get updatedAt => throw _privateConstructorUsedError;
   String? get description => throw _privateConstructorUsedError;
   String? get qrCode => throw _privateConstructorUsedError;
+  int? get usedNormalPoints => throw _privateConstructorUsedError;
+  int? get usedSpecialPoints => throw _privateConstructorUsedError;
+  int? get totalUsedPoints => throw _privateConstructorUsedError;
+  @TimestampNullableDateTimeConverter()
   DateTime? get refundedAt => throw _privateConstructorUsedError;
   String? get refundReason => throw _privateConstructorUsedError;
 
@@ -61,11 +67,14 @@ abstract class $PointTransactionModelCopyWith<$Res> {
       int? paymentAmount,
       String status,
       String paymentMethod,
-      DateTime createdAt,
-      DateTime updatedAt,
+      @TimestampDateTimeConverter() DateTime createdAt,
+      @TimestampDateTimeConverter() DateTime updatedAt,
       String? description,
       String? qrCode,
-      DateTime? refundedAt,
+      int? usedNormalPoints,
+      int? usedSpecialPoints,
+      int? totalUsedPoints,
+      @TimestampNullableDateTimeConverter() DateTime? refundedAt,
       String? refundReason});
 }
 
@@ -97,6 +106,9 @@ class _$PointTransactionModelCopyWithImpl<$Res,
     Object? updatedAt = null,
     Object? description = freezed,
     Object? qrCode = freezed,
+    Object? usedNormalPoints = freezed,
+    Object? usedSpecialPoints = freezed,
+    Object? totalUsedPoints = freezed,
     Object? refundedAt = freezed,
     Object? refundReason = freezed,
   }) {
@@ -149,6 +161,18 @@ class _$PointTransactionModelCopyWithImpl<$Res,
           ? _value.qrCode
           : qrCode // ignore: cast_nullable_to_non_nullable
               as String?,
+      usedNormalPoints: freezed == usedNormalPoints
+          ? _value.usedNormalPoints
+          : usedNormalPoints // ignore: cast_nullable_to_non_nullable
+              as int?,
+      usedSpecialPoints: freezed == usedSpecialPoints
+          ? _value.usedSpecialPoints
+          : usedSpecialPoints // ignore: cast_nullable_to_non_nullable
+              as int?,
+      totalUsedPoints: freezed == totalUsedPoints
+          ? _value.totalUsedPoints
+          : totalUsedPoints // ignore: cast_nullable_to_non_nullable
+              as int?,
       refundedAt: freezed == refundedAt
           ? _value.refundedAt
           : refundedAt // ignore: cast_nullable_to_non_nullable
@@ -179,11 +203,14 @@ abstract class _$$PointTransactionModelImplCopyWith<$Res>
       int? paymentAmount,
       String status,
       String paymentMethod,
-      DateTime createdAt,
-      DateTime updatedAt,
+      @TimestampDateTimeConverter() DateTime createdAt,
+      @TimestampDateTimeConverter() DateTime updatedAt,
       String? description,
       String? qrCode,
-      DateTime? refundedAt,
+      int? usedNormalPoints,
+      int? usedSpecialPoints,
+      int? totalUsedPoints,
+      @TimestampNullableDateTimeConverter() DateTime? refundedAt,
       String? refundReason});
 }
 
@@ -213,6 +240,9 @@ class __$$PointTransactionModelImplCopyWithImpl<$Res>
     Object? updatedAt = null,
     Object? description = freezed,
     Object? qrCode = freezed,
+    Object? usedNormalPoints = freezed,
+    Object? usedSpecialPoints = freezed,
+    Object? totalUsedPoints = freezed,
     Object? refundedAt = freezed,
     Object? refundReason = freezed,
   }) {
@@ -265,6 +295,18 @@ class __$$PointTransactionModelImplCopyWithImpl<$Res>
           ? _value.qrCode
           : qrCode // ignore: cast_nullable_to_non_nullable
               as String?,
+      usedNormalPoints: freezed == usedNormalPoints
+          ? _value.usedNormalPoints
+          : usedNormalPoints // ignore: cast_nullable_to_non_nullable
+              as int?,
+      usedSpecialPoints: freezed == usedSpecialPoints
+          ? _value.usedSpecialPoints
+          : usedSpecialPoints // ignore: cast_nullable_to_non_nullable
+              as int?,
+      totalUsedPoints: freezed == totalUsedPoints
+          ? _value.totalUsedPoints
+          : totalUsedPoints // ignore: cast_nullable_to_non_nullable
+              as int?,
       refundedAt: freezed == refundedAt
           ? _value.refundedAt
           : refundedAt // ignore: cast_nullable_to_non_nullable
@@ -289,11 +331,14 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
       this.paymentAmount,
       this.status = 'completed',
       this.paymentMethod = 'points',
-      required this.createdAt,
-      required this.updatedAt,
+      @TimestampDateTimeConverter() required this.createdAt,
+      @TimestampDateTimeConverter() required this.updatedAt,
       this.description,
       this.qrCode,
-      this.refundedAt,
+      this.usedNormalPoints,
+      this.usedSpecialPoints,
+      this.totalUsedPoints,
+      @TimestampNullableDateTimeConverter() this.refundedAt,
       this.refundReason});
 
   factory _$PointTransactionModelImpl.fromJson(Map<String, dynamic> json) =>
@@ -318,21 +363,30 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
   @JsonKey()
   final String paymentMethod;
   @override
+  @TimestampDateTimeConverter()
   final DateTime createdAt;
   @override
+  @TimestampDateTimeConverter()
   final DateTime updatedAt;
   @override
   final String? description;
   @override
   final String? qrCode;
   @override
+  final int? usedNormalPoints;
+  @override
+  final int? usedSpecialPoints;
+  @override
+  final int? totalUsedPoints;
+  @override
+  @TimestampNullableDateTimeConverter()
   final DateTime? refundedAt;
   @override
   final String? refundReason;
 
   @override
   String toString() {
-    return 'PointTransactionModel(transactionId: $transactionId, userId: $userId, storeId: $storeId, storeName: $storeName, amount: $amount, paymentAmount: $paymentAmount, status: $status, paymentMethod: $paymentMethod, createdAt: $createdAt, updatedAt: $updatedAt, description: $description, qrCode: $qrCode, refundedAt: $refundedAt, refundReason: $refundReason)';
+    return 'PointTransactionModel(transactionId: $transactionId, userId: $userId, storeId: $storeId, storeName: $storeName, amount: $amount, paymentAmount: $paymentAmount, status: $status, paymentMethod: $paymentMethod, createdAt: $createdAt, updatedAt: $updatedAt, description: $description, qrCode: $qrCode, usedNormalPoints: $usedNormalPoints, usedSpecialPoints: $usedSpecialPoints, totalUsedPoints: $totalUsedPoints, refundedAt: $refundedAt, refundReason: $refundReason)';
   }
 
   @override
@@ -359,6 +413,12 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
             (identical(other.description, description) ||
                 other.description == description) &&
             (identical(other.qrCode, qrCode) || other.qrCode == qrCode) &&
+            (identical(other.usedNormalPoints, usedNormalPoints) ||
+                other.usedNormalPoints == usedNormalPoints) &&
+            (identical(other.usedSpecialPoints, usedSpecialPoints) ||
+                other.usedSpecialPoints == usedSpecialPoints) &&
+            (identical(other.totalUsedPoints, totalUsedPoints) ||
+                other.totalUsedPoints == totalUsedPoints) &&
             (identical(other.refundedAt, refundedAt) ||
                 other.refundedAt == refundedAt) &&
             (identical(other.refundReason, refundReason) ||
@@ -381,6 +441,9 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
       updatedAt,
       description,
       qrCode,
+      usedNormalPoints,
+      usedSpecialPoints,
+      totalUsedPoints,
       refundedAt,
       refundReason);
 
@@ -411,11 +474,14 @@ abstract class _PointTransactionModel implements PointTransactionModel {
       final int? paymentAmount,
       final String status,
       final String paymentMethod,
-      required final DateTime createdAt,
-      required final DateTime updatedAt,
+      @TimestampDateTimeConverter() required final DateTime createdAt,
+      @TimestampDateTimeConverter() required final DateTime updatedAt,
       final String? description,
       final String? qrCode,
-      final DateTime? refundedAt,
+      final int? usedNormalPoints,
+      final int? usedSpecialPoints,
+      final int? totalUsedPoints,
+      @TimestampNullableDateTimeConverter() final DateTime? refundedAt,
       final String? refundReason}) = _$PointTransactionModelImpl;
 
   factory _PointTransactionModel.fromJson(Map<String, dynamic> json) =
@@ -438,14 +504,23 @@ abstract class _PointTransactionModel implements PointTransactionModel {
   @override
   String get paymentMethod;
   @override
+  @TimestampDateTimeConverter()
   DateTime get createdAt;
   @override
+  @TimestampDateTimeConverter()
   DateTime get updatedAt;
   @override
   String? get description;
   @override
   String? get qrCode;
   @override
+  int? get usedNormalPoints;
+  @override
+  int? get usedSpecialPoints;
+  @override
+  int? get totalUsedPoints;
+  @override
+  @TimestampNullableDateTimeConverter()
   DateTime? get refundedAt;
   @override
   String? get refundReason;

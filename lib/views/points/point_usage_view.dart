@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
+import '../../providers/owner_settings_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 
@@ -61,6 +62,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
 
   Widget _buildContent(BuildContext context, String userId) {
     final pointBalance = ref.watch(userPointBalanceProvider(userId));
+    final userData = ref.watch(userDataProvider(userId));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -68,7 +70,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 現在のポイント残高
-          _buildBalanceCard(context, pointBalance),
+          _buildBalanceCard(context, userData, pointBalance),
           const SizedBox(height: 24),
           
           // ポイント使用フォーム
@@ -152,7 +154,11 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
     );
   }
 
-  Widget _buildBalanceCard(BuildContext context, AsyncValue<dynamic> pointBalance) {
+  Widget _buildBalanceCard(
+    BuildContext context,
+    AsyncValue<Map<String, dynamic>?> userData,
+    AsyncValue<dynamic> pointBalance,
+  ) {
     return Card(
       elevation: 4,
       child: Padding(
@@ -168,29 +174,34 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
               ),
             ),
             const SizedBox(height: 16),
-            pointBalance.when(
-              data: (balance) {
-                if (balance == null) {
-                  return const Text(
-                    '0',
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blue,
+            userData.when(
+              data: (data) {
+                final points = _parsePoints(data?['points']);
+                final specialPoints = _parsePoints(data?['specialPoints']);
+                final totalPoints = points + specialPoints;
+                return Column(
+                  children: [
+                    Text(
+                      '$totalPoints',
+                      style: const TextStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
                     ),
-                  );
-                }
-                return Text(
-                  '${balance.availablePoints}',
-                  style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue,
-                  ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '特別ポイント: $specialPoints pt',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
                 );
               },
               loading: () => const CircularProgressIndicator(),
-              error: (error, _) => Text(
+              error: (error, _) => const Text(
                 'エラー',
                 style: TextStyle(color: Colors.red),
               ),
@@ -214,6 +225,13 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
         ),
       ),
     );
+  }
+
+  int _parsePoints(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 
   Future<void> _usePoints(BuildContext context, String userId) async {

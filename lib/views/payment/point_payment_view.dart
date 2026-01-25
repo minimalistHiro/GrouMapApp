@@ -173,11 +173,15 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
 
       final userData = userDoc.data()!;
       final userPoints = userData['points'] as int? ?? 0;
+      final specialPoints = _parseInt(userData['specialPoints']);
+      final availablePoints = userPoints + specialPoints;
 
       // ポイント残高が足りないかチェック
-      if (userPoints < amount) {
-        throw Exception('ポイントが不足しています。現在の残高: ${userPoints}ポイント');
+      if (availablePoints < amount) {
+        throw Exception('ポイントが不足しています。現在の残高: ${availablePoints}ポイント');
       }
+      final useSpecial = specialPoints >= amount ? amount : specialPoints;
+      final useNormal = amount - useSpecial;
 
       // ポイントを消費し、取引IDを取得（DBへ記録もここで実施）
       final transactionId = await _useUserPoints(
@@ -186,13 +190,20 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         storeName: store.name,
         points: amount,
         description: 'ポイント支払い',
+        usedSpecialPoints: useSpecial,
+        usedNormalPoints: useNormal,
+      );
+      await _syncUserPointBalance(
+        userId: user.uid,
+        points: userPoints - useNormal,
+        specialPoints: specialPoints - useSpecial,
       );
 
       // 画面上の現在ポイントを更新
       if (mounted) {
         setState(() {
           if (_currentPoints != null) {
-            _currentPoints = (_currentPoints! - amount).clamp(0, 1 << 31);
+            _currentPoints = (_currentPoints! - useNormal).clamp(0, 1 << 31);
           }
         });
       }
@@ -267,6 +278,8 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
     required String storeName,
     required int points,
     required String description,
+    required int usedSpecialPoints,
+    required int usedNormalPoints,
   }) async {
     try {
       // 取引履歴を作成
@@ -285,6 +298,9 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         createdAt: now,
         updatedAt: now,
         description: description,
+        usedSpecialPoints: usedSpecialPoints,
+        usedNormalPoints: usedNormalPoints,
+        totalUsedPoints: points,
       );
 
       // 取引を記録（ネスト構造） point_transactions/{storeId}/{userId}/{transactionId}
@@ -313,6 +329,9 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         'source': 'point_usage',
         'createdAt': FieldValue.serverTimestamp(),
         'createdAtClient': now,
+        'usedSpecialPoints': usedSpecialPoints,
+        'usedNormalPoints': usedNormalPoints,
+        'totalUsedPoints': points,
       });
       final today = DateTime.now();
       final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
@@ -334,7 +353,8 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
           .collection('users')
           .doc(userId)
           .update({
-        'points': FieldValue.increment(-points),
+        if (usedSpecialPoints > 0) 'specialPoints': FieldValue.increment(-usedSpecialPoints),
+        if (usedNormalPoints > 0) 'points': FieldValue.increment(-usedNormalPoints),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -343,6 +363,34 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
     } catch (e) {
       throw Exception('ポイント使用に失敗しました: $e');
     }
+  }
+
+  int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  Future<void> _syncUserPointBalance({
+    required String userId,
+    required int points,
+    required int specialPoints,
+  }) async {
+    final firestore = FirebaseFirestore.instance;
+    final balanceRef = firestore.collection('user_point_balances').doc(userId);
+    final balanceDoc = await balanceRef.get();
+    final usedPoints = _parseInt(balanceDoc.data()?['usedPoints']);
+    final availablePoints = points + specialPoints;
+    final totalPoints = availablePoints + usedPoints;
+
+    await balanceRef.set({
+      'userId': userId,
+      'totalPoints': totalPoints,
+      'availablePoints': availablePoints,
+      'usedPoints': usedPoints,
+      'lastUpdated': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   @override
