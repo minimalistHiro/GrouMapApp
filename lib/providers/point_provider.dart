@@ -358,6 +358,12 @@ final userPointTransactionsProvider = StreamProvider.family<List<PointTransactio
     if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
     return DateTime.now();
   }
+  int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
 
   return firestore
       .collectionGroup('transactions')
@@ -397,6 +403,9 @@ final userPointTransactionsProvider = StreamProvider.family<List<PointTransactio
             updatedAt: _parseTimestamp(updatedAt),
             description: data['description'] as String?,
             qrCode: data['qrCode'] as String?,
+            usedNormalPoints: _parseInt(data['usedNormalPoints']),
+            usedSpecialPoints: _parseInt(data['usedSpecialPoints']),
+            totalUsedPoints: _parseInt(data['totalUsedPoints']),
             refundedAt: data['refundedAt'] is Timestamp
                 ? (data['refundedAt'] as Timestamp).toDate()
                 : null,

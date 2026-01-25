@@ -305,6 +305,14 @@ class _PointsViewState extends ConsumerState<PointsView>
   Widget _buildTransactionItem(WidgetRef ref, PointTransactionModel transaction) {
     final isEarned = transaction.amount > 0;
     final storeAsync = ref.watch(storeProvider(transaction.storeId));
+    final usedNormal = transaction.usedNormalPoints ?? 0;
+    final usedSpecial = transaction.usedSpecialPoints ?? 0;
+    final hasBreakdown = !isEarned && (usedNormal > 0 || usedSpecial > 0);
+    final dateText =
+        '${transaction.createdAt.month}/${transaction.createdAt.day} ${transaction.createdAt.hour}:${transaction.createdAt.minute.toString().padLeft(2, '0')}';
+    final subtitleText = hasBreakdown
+        ? '$dateText\n内訳: 普通 ${usedNormal}pt / 特別 ${usedSpecial}pt'
+        : dateText;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8.0),
@@ -353,7 +361,7 @@ class _PointsViewState extends ConsumerState<PointsView>
           error: (_, __) => Text(transaction.storeName),
         ),
         subtitle: Text(
-          '${transaction.createdAt.month}/${transaction.createdAt.day} ${transaction.createdAt.hour}:${transaction.createdAt.minute.toString().padLeft(2, '0')}',
+          subtitleText,
         ),
         trailing: Text(
           '${isEarned ? '+' : ''}${transaction.amount}pt',
