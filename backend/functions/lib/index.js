@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.sendNotificationOnPublish = void 0;
+exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
@@ -17,6 +17,7 @@ const jwt_1 = require("./utils/jwt");
 // Firebase Admin SDK初期化
 (0, app_1.initializeApp)();
 const db = (0, firestore_2.getFirestore)();
+db.settings({ ignoreUndefinedProperties: true });
 const auth = (0, auth_1.getAuth)();
 const messaging = (0, messaging_1.getMessaging)();
 // タイムゾーン設定
@@ -31,6 +32,326 @@ const ANNOUNCEMENT_TOPIC = 'announcements';
 const OWNER_SETTINGS_COLLECTION = 'owner_settings';
 const REFERRAL_USES_COLLECTION = 'referral_uses';
 const POINT_LEDGER_COLLECTION = 'point_ledger';
+const USER_ACHIEVEMENT_EVENTS_COLLECTION = 'user_achievement_events';
+const MAX_STAMPS = 10;
+function stripUndefined(value) {
+    const entries = Object.entries(value).filter(([, v]) => v !== undefined);
+    return Object.fromEntries(entries);
+}
+function asInt(value, fallback = 0) {
+    if (typeof value === 'number')
+        return Math.trunc(value);
+    if (typeof value === 'string') {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isNaN(parsed) ? fallback : parsed;
+    }
+    return fallback;
+}
+function startFromPeriod(period) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    switch (period) {
+        case 'day':
+            return todayStart;
+        case 'week': {
+            const diff = (todayStart.getDay() + 6) % 7; // Monday=0
+            return new Date(todayStart.getTime() - diff * 24 * 60 * 60 * 1000);
+        }
+        case 'month':
+            return new Date(now.getFullYear(), now.getMonth(), 1);
+        case 'year':
+            return new Date(now.getFullYear(), 0, 1);
+        default:
+            return new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+}
+function weekdayToStr(date) {
+    var _a;
+    const idx = (date.getDay() + 6) % 7;
+    const map = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    return (_a = map[idx]) !== null && _a !== void 0 ? _a : 'monday';
+}
+const LEVEL_BASE_REQUIRED_EXPERIENCE = 20;
+const LEVEL_REQUIRED_EXPERIENCE_INCREMENT = 10;
+const LEVEL_MAX = 50;
+function requiredExperienceForLevel(level) {
+    const safeLevel = Math.max(1, Math.min(LEVEL_MAX, level));
+    return LEVEL_BASE_REQUIRED_EXPERIENCE + (safeLevel - 1) * LEVEL_REQUIRED_EXPERIENCE_INCREMENT;
+}
+function totalExperienceToReachLevel(level) {
+    const safeLevel = Math.max(1, Math.min(LEVEL_MAX, level));
+    let total = 0;
+    for (let i = 1; i < safeLevel; i += 1) {
+        total += requiredExperienceForLevel(i);
+    }
+    return total;
+}
+function levelFromTotalExperience(totalExperience) {
+    if (totalExperience <= 0)
+        return 1;
+    let remaining = totalExperience;
+    let level = 1;
+    while (level < LEVEL_MAX) {
+        const required = requiredExperienceForLevel(level);
+        if (remaining < required)
+            break;
+        remaining -= required;
+        level += 1;
+    }
+    return Math.max(1, Math.min(LEVEL_MAX, level));
+}
+function experienceForStampPunch() {
+    return 10;
+}
+function experienceForStampCardComplete() {
+    return 100;
+}
+async function countTransactions(params) {
+    const { userId, since, onlyPositive = true, dayOfWeek, storeId } = params;
+    let count = 0;
+    const storeIds = storeId
+        ? [storeId]
+        : (await db.collection('stores').get()).docs.map((doc) => doc.id);
+    for (const sid of storeIds) {
+        const snap = await db.collection('point_transactions').doc(sid).collection(userId).get();
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const amount = asInt(data['amount'], 0);
+            const raw = data['createdAt'];
+            let ts = new Date();
+            if (raw instanceof firestore_2.Timestamp) {
+                ts = raw.toDate();
+            }
+            else if (typeof raw === 'string') {
+                const parsed = new Date(raw);
+                if (!Number.isNaN(parsed.getTime()))
+                    ts = parsed;
+            }
+            else if (typeof raw === 'number') {
+                ts = new Date(raw);
+            }
+            const inPeriod = ts.getTime() >= since.getTime();
+            const weekdayOk = dayOfWeek ? weekdayToStr(ts) === dayOfWeek : true;
+            const positiveOk = onlyPositive ? amount > 0 : true;
+            if (inPeriod && weekdayOk && positiveOk)
+                count += 1;
+        }
+    }
+    return count;
+}
+async function sumTransactionAmounts(params) {
+    const { userId, since } = params;
+    let sum = 0;
+    const stores = await db.collection('stores').get();
+    for (const store of stores.docs) {
+        const snap = await db.collection('point_transactions').doc(store.id).collection(userId).get();
+        for (const doc of snap.docs) {
+            const data = doc.data();
+            const raw = data['createdAt'];
+            let ts = new Date();
+            if (raw instanceof firestore_2.Timestamp) {
+                ts = raw.toDate();
+            }
+            else if (typeof raw === 'string') {
+                const parsed = new Date(raw);
+                if (!Number.isNaN(parsed.getTime()))
+                    ts = parsed;
+            }
+            else if (typeof raw === 'number') {
+                ts = new Date(raw);
+            }
+            if (ts.getTime() >= since.getTime()) {
+                const amount = asInt(data['amount'], 0);
+                if (amount > 0)
+                    sum += amount;
+            }
+        }
+    }
+    return sum;
+}
+async function getUserBadgeCount(userId) {
+    const snap = await db.collection('user_badges').doc(userId).collection('badges').get();
+    return snap.size;
+}
+async function getUserLevel(userId) {
+    var _a;
+    const doc = await db.collection('users').doc(userId).get();
+    if (!doc.exists)
+        return 1;
+    return asInt((_a = doc.data()) === null || _a === void 0 ? void 0 : _a['level'], 1);
+}
+async function getUserTotalPoints(userId) {
+    var _a;
+    const doc = await db.collection('user_point_balances').doc(userId).get();
+    if (!doc.exists)
+        return 0;
+    return asInt((_a = doc.data()) === null || _a === void 0 ? void 0 : _a['totalPoints'], 0);
+}
+async function checkAndAwardBadges(params) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
+    const { userId, storeId } = params;
+    const firestore = db;
+    const badgesSnap = await firestore.collection('badges').get();
+    const badgeCount = await getUserBadgeCount(userId);
+    const userLevel = await getUserLevel(userId);
+    const totalPoints = await getUserTotalPoints(userId);
+    const newlyAwarded = [];
+    for (const doc of badgesSnap.docs) {
+        const data = doc.data();
+        const isActive = (_a = data['isActive']) !== null && _a !== void 0 ? _a : true;
+        if (!isActive)
+            continue;
+        const rawCond = (_c = (_b = data['condition']) !== null && _b !== void 0 ? _b : data['conditionData']) !== null && _c !== void 0 ? _c : data['jsonLogicCondition'];
+        let condMap = null;
+        if (typeof rawCond === 'string') {
+            try {
+                const parsed = JSON.parse(rawCond);
+                if (parsed && typeof parsed === 'object')
+                    condMap = parsed;
+            }
+            catch (_) { }
+        }
+        else if (rawCond && typeof rawCond === 'object') {
+            condMap = rawCond;
+        }
+        if (!condMap)
+            continue;
+        let isSatisfied = false;
+        const mode = ((_d = condMap['mode']) !== null && _d !== void 0 ? _d : 'typed').toString();
+        if (mode === 'typed') {
+            const rule = ((_e = condMap['rule']) !== null && _e !== void 0 ? _e : {});
+            const type = ((_f = rule['type']) !== null && _f !== void 0 ? _f : '').toString();
+            const params = ((_g = rule['params']) !== null && _g !== void 0 ? _g : {});
+            switch (type) {
+                case 'first_checkin': {
+                    const c = await countTransactions({ userId, since: new Date(0) });
+                    isSatisfied = c >= 1;
+                    break;
+                }
+                case 'points_total': {
+                    const threshold = asInt(params['threshold']);
+                    isSatisfied = totalPoints >= threshold;
+                    break;
+                }
+                case 'points_in_period': {
+                    const threshold = asInt(params['threshold']);
+                    const period = ((_h = params['period']) !== null && _h !== void 0 ? _h : 'month').toString();
+                    const since = startFromPeriod(period);
+                    const sum = await sumTransactionAmounts({ userId, since });
+                    isSatisfied = sum >= threshold;
+                    break;
+                }
+                case 'checkins_count': {
+                    const threshold = asInt(params['threshold']);
+                    const period = ((_j = params['period']) !== null && _j !== void 0 ? _j : 'month').toString();
+                    const since = startFromPeriod(period);
+                    const c = await countTransactions({ userId, since });
+                    isSatisfied = c >= threshold;
+                    break;
+                }
+                case 'user_level': {
+                    const threshold = asInt(params['threshold']);
+                    isSatisfied = userLevel >= threshold;
+                    break;
+                }
+                case 'badge_count': {
+                    const threshold = asInt(params['threshold']);
+                    isSatisfied = badgeCount >= threshold;
+                    break;
+                }
+                case 'payment_amount': {
+                    const threshold = asInt(params['threshold']);
+                    const period = ((_k = params['period']) !== null && _k !== void 0 ? _k : 'month').toString();
+                    const since = startFromPeriod(period);
+                    const sum = await sumTransactionAmounts({ userId, since });
+                    isSatisfied = sum >= threshold;
+                    break;
+                }
+                case 'day_of_week_count': {
+                    const threshold = asInt(params['threshold']);
+                    const period = ((_l = params['period']) !== null && _l !== void 0 ? _l : 'week').toString();
+                    const dow = ((_m = params['day_of_week']) !== null && _m !== void 0 ? _m : 'monday').toString();
+                    const since = startFromPeriod(period);
+                    const c = await countTransactions({
+                        userId,
+                        since,
+                        dayOfWeek: dow,
+                    });
+                    isSatisfied = c >= threshold;
+                    break;
+                }
+                case 'usage_count': {
+                    const threshold = asInt(params['threshold']);
+                    const period = ((_o = params['period']) !== null && _o !== void 0 ? _o : 'month').toString();
+                    const since = period === 'unlimited' ? new Date(0) : startFromPeriod(period);
+                    const c = await countTransactions({ userId, since });
+                    isSatisfied = c >= threshold;
+                    break;
+                }
+                case 'visit_frequency': {
+                    const threshold = asInt(params['threshold']);
+                    const period = ((_p = params['period']) !== null && _p !== void 0 ? _p : 'day').toString();
+                    const since = period === 'unlimited' ? new Date(0) : startFromPeriod(period);
+                    const c = await countTransactions({
+                        userId,
+                        since,
+                        storeId,
+                        onlyPositive: false,
+                    });
+                    isSatisfied = c >= threshold;
+                    break;
+                }
+                default:
+                    isSatisfied = false;
+            }
+        }
+        else {
+            isSatisfied = false;
+        }
+        if (!isSatisfied)
+            continue;
+        const badgeId = doc.id;
+        const userBadgeRef = firestore
+            .collection('user_badges')
+            .doc(userId)
+            .collection('badges')
+            .doc(badgeId);
+        const userBadgeSnap = await userBadgeRef.get();
+        const alreadyOwned = userBadgeSnap.exists;
+        if (!alreadyOwned) {
+            const badgeDoc = stripUndefined({
+                userId,
+                badgeId,
+                unlockedAt: firestore_2.FieldValue.serverTimestamp(),
+                isNew: true,
+                name: data['name'],
+                description: data['description'],
+                category: data['category'],
+                imageUrl: data['imageUrl'],
+                iconUrl: data['iconUrl'],
+                iconPath: data['iconPath'],
+                rarity: data['rarity'],
+                order: (_q = data['order']) !== null && _q !== void 0 ? _q : 0,
+            });
+            await userBadgeRef.set(badgeDoc);
+        }
+        const badgeAward = stripUndefined({
+            id: badgeId,
+            name: data['name'],
+            description: data['description'],
+            category: data['category'],
+            imageUrl: data['imageUrl'],
+            iconUrl: data['iconUrl'],
+            iconPath: data['iconPath'],
+            rarity: data['rarity'],
+            order: asInt(data['order'], 0),
+            alreadyOwned,
+        });
+        newlyAwarded.push(badgeAward);
+    }
+    newlyAwarded.sort((a, b) => asInt(a.order) - asInt(b.order));
+    return newlyAwarded;
+}
 const SMTP_HOST = (0, params_1.defineSecret)('SMTP_HOST');
 const SMTP_PORT = (0, params_1.defineSecret)('SMTP_PORT');
 const SMTP_USER = (0, params_1.defineSecret)('SMTP_USER');
@@ -260,6 +581,118 @@ exports.sendNotificationOnPublish = (0, firestore_1.onDocumentWritten)({
         isDelivered: true,
         deliveredAt: new Date(),
     });
+});
+exports.processAwardAchievement = (0, firestore_1.onDocumentCreated)({
+    document: 'stores/{storeId}/transactions/{transactionId}',
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d, _e, _f;
+    const data = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    if (!data)
+        return;
+    const type = ((_b = data['type']) !== null && _b !== void 0 ? _b : '').toString();
+    if (type !== 'award')
+        return;
+    const userId = ((_c = data['userId']) !== null && _c !== void 0 ? _c : '').toString();
+    if (!userId)
+        return;
+    const storeId = event.params.storeId;
+    const transactionId = event.params.transactionId;
+    const storeName = ((_d = data['storeName']) !== null && _d !== void 0 ? _d : '').toString();
+    const pointsAwarded = asInt((_e = data['points']) !== null && _e !== void 0 ? _e : data['amount'], 0);
+    if (pointsAwarded <= 0)
+        return;
+    const eventRef = db
+        .collection(USER_ACHIEVEMENT_EVENTS_COLLECTION)
+        .doc(userId)
+        .collection('events')
+        .doc(transactionId);
+    const existingEvent = await eventRef.get();
+    if (existingEvent.exists)
+        return;
+    const transactionRef = (_f = event.data) === null || _f === void 0 ? void 0 : _f.ref;
+    if (!transactionRef)
+        return;
+    const summary = await db.runTransaction(async (txn) => {
+        var _a, _b;
+        const txnSnap = await txn.get(transactionRef);
+        const txnData = txnSnap.data();
+        if (!txnData)
+            return null;
+        if (txnData['achievementProcessedAt']) {
+            const existingSummary = txnData['achievementSummary'];
+            if (!existingSummary) {
+                return {
+                    storeId,
+                    storeName,
+                    pointsAwarded,
+                    stampsAdded: 0,
+                    stampsAfter: 0,
+                    cardCompleted: false,
+                    xpAdded: 0,
+                    xpBreakdown: {
+                        points: 0,
+                        stampPunch: 0,
+                        cardComplete: 0,
+                    },
+                };
+            }
+            return existingSummary;
+        }
+        const userRef = db.collection(USERS_COLLECTION).doc(userId);
+        const userStoreRef = userRef.collection('stores').doc(storeId);
+        const userStoreSnap = await txn.get(userStoreRef);
+        const userSnap = await txn.get(userRef);
+        const currentStamps = asInt((_a = userStoreSnap.data()) === null || _a === void 0 ? void 0 : _a['stamps'], 0);
+        const canAddStamp = currentStamps < MAX_STAMPS;
+        const stampsAdded = canAddStamp ? 1 : 0;
+        const nextStamps = canAddStamp ? currentStamps + 1 : currentStamps;
+        const cardCompleted = canAddStamp && nextStamps >= MAX_STAMPS && currentStamps < MAX_STAMPS;
+        if (stampsAdded > 0) {
+            txn.set(userStoreRef, {
+                stamps: nextStamps,
+                lastVisited: firestore_2.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        const pointsXp = pointsAwarded;
+        const stampXp = stampsAdded > 0 ? experienceForStampPunch() : 0;
+        const cardXp = cardCompleted ? experienceForStampCardComplete() : 0;
+        const xpAdded = pointsXp + stampXp + cardXp;
+        if (xpAdded > 0) {
+            const currentExp = asInt((_b = userSnap.data()) === null || _b === void 0 ? void 0 : _b['experience'], 0);
+            const maxTotal = totalExperienceToReachLevel(LEVEL_MAX) + requiredExperienceForLevel(LEVEL_MAX);
+            const newExp = Math.max(0, Math.min(maxTotal, currentExp + xpAdded));
+            const newLevel = levelFromTotalExperience(newExp);
+            txn.set(userRef, {
+                experience: newExp,
+                level: newLevel,
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        const summaryData = {
+            storeId,
+            storeName,
+            pointsAwarded,
+            stampsAdded,
+            stampsAfter: nextStamps,
+            cardCompleted,
+            xpAdded,
+            xpBreakdown: {
+                points: pointsXp,
+                stampPunch: stampXp,
+                cardComplete: cardXp,
+            },
+        };
+        txn.update(transactionRef, {
+            achievementProcessedAt: firestore_2.FieldValue.serverTimestamp(),
+            achievementSummary: summaryData,
+        });
+        return summaryData;
+    });
+    if (!summary)
+        return;
+    const badges = await checkAndAwardBadges({ userId, storeId });
+    await eventRef.set(Object.assign(Object.assign({ type: 'point_award', transactionId }, summary), { badges, createdAt: firestore_2.FieldValue.serverTimestamp(), seenAt: null }), { merge: true });
 });
 exports.processFriendReferral = (0, firestore_1.onDocumentWritten)({
     document: `${USERS_COLLECTION}/{userId}`,

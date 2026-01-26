@@ -349,6 +349,17 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // ユーザーの達成イベント（Home表示用）
+    match /user_achievement_events/{userId}/events/{eventId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow create: if false;
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['seenAt'])
+        && request.resource.data.seenAt is timestamp;
+      allow delete: if false;
+    }
+
     // バッジ進捗
     match /badge_progress/{docId} {
       // 自分の進捗のみ閲覧可
