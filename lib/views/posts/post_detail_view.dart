@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/posts_provider.dart';
+import '../../widgets/common_header.dart';
 
 class PostDetailView extends ConsumerStatefulWidget {
   final PostModel post;
@@ -360,17 +361,15 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: const CommonHeader(title: '投稿'),
       backgroundColor: Colors.white,
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            // ヘッダー
-            SliverToBoxAdapter(child: _buildHeader()),
-
             // 画像スライダー
             SliverToBoxAdapter(
-              child: SizedBox(
-                height: 320,
+              child: AspectRatio(
+                aspectRatio: 1,
                 child: _buildImageSlider(),
               ),
             ),
@@ -379,37 +378,6 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
             SliverToBoxAdapter(child: _buildPostInfo()),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      color: const Color(0xFFFF6B35),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.post.storeName ?? '店舗名なし',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

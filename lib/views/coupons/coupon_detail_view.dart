@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/coupon_model.dart' as model;
 import '../../providers/store_provider.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/common_header.dart';
 
 class CouponDetailView extends ConsumerStatefulWidget {
   final model.Coupon coupon;
@@ -334,7 +335,15 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: const CommonHeader(title: 'クーポン'),
       backgroundColor: Colors.grey[50],
+      bottomNavigationBar: SafeArea(
+        child: Container(
+          color: Colors.white,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: _buildUseButtonContent(),
+        ),
+      ),
       body: CustomScrollView(
         slivers: [
           // クーポン画像ヘッダー
@@ -348,106 +357,96 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
           
           // 店舗情報
           _buildStoreInfo(),
-          
-          // 使用ボタン
-          _buildUseButton(),
+
+          // 注意事項
+          _buildNotice(),
         ],
       ),
     );
   }
 
   Widget _buildCouponHeader() {
-    return SliverAppBar(
-      expandedHeight: 300,
-      pinned: true,
-      backgroundColor: const Color(0xFFFF6B35),
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          width: double.infinity,
-          height: 300,
-          child: widget.coupon.imageUrl != null
-              ? Image.network(
-                  widget.coupon.imageUrl!,
-                  width: double.infinity,
-                  height: 300,
-                  fit: BoxFit.cover,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
-                      width: double.infinity,
-                      height: 300,
-                      color: const Color(0xFFFF6B35),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                              : null,
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      width: double.infinity,
-                      height: 300,
-                      color: const Color(0xFFFF6B35),
-                      child: const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.card_giftcard,
-                              size: 80,
-                              color: Colors.white,
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'クーポン画像なし',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                )
-              : Container(
-                  width: double.infinity,
-                  height: 300,
-                  color: const Color(0xFFFF6B35),
-                  child: const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.card_giftcard,
-                          size: 80,
-                          color: Colors.white,
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'クーポン画像なし',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
+    final Widget imageContent = widget.coupon.imageUrl != null
+        ? Image.network(
+            widget.coupon.imageUrl!,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: const Color(0xFFFF6B35),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                        : null,
+                    color: Colors.white,
+                    strokeWidth: 2,
                   ),
                 ),
-        ),
-      ),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () => Navigator.of(context).pop(),
+              );
+            },
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: double.infinity,
+                height: double.infinity,
+                color: const Color(0xFFFF6B35),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.card_giftcard,
+                        size: 80,
+                        color: Colors.white,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'クーポン画像なし',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          )
+        : Container(
+            width: double.infinity,
+            height: double.infinity,
+            color: const Color(0xFFFF6B35),
+            child: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.card_giftcard,
+                    size: 80,
+                    color: Colors.white,
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'クーポン画像なし',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+    return SliverToBoxAdapter(
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: imageContent,
       ),
     );
   }
@@ -648,116 +647,116 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     );
   }
 
-  Widget _buildUseButton() {
+  Widget _buildUseButtonContent() {
     final user = FirebaseAuth.instance.currentUser;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (user == null) ...[
+          Row(
+            children: [
+              Expanded(
+                child: CustomButton(
+                  text: 'ログイン',
+                  onPressed: () {
+                    Navigator.of(context).pushNamed('/signin');
+                  },
+                  backgroundColor: const Color(0xFFFF6B35),
+                  textColor: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: CustomButton(
+                  text: '新規アカウント作成',
+                  onPressed: () {
+                    Navigator.of(context).pushNamed('/signup');
+                  },
+                  backgroundColor: Colors.white,
+                  textColor: const Color(0xFFFF6B35),
+                  borderColor: const Color(0xFFFF6B35),
+                ),
+              ),
+            ],
+          ),
+        ] else if (_isUsed) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.green.withOpacity(0.3),
+              ),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 24,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'クーポン使用済み',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ] else ...[
+          CustomButton(
+            text: _isUsing ? '使用中...' : 'クーポンを使用',
+            onPressed: _isUsing ? null : _useCoupon,
+            backgroundColor: const Color(0xFFFF6B35),
+            textColor: Colors.white,
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildNotice() {
     return SliverToBoxAdapter(
       child: Container(
         margin: const EdgeInsets.only(top: 8, bottom: 20),
         color: Colors.white,
         padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            if (user == null) ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: CustomButton(
-                      text: 'ログイン',
-                      onPressed: () {
-                        Navigator.of(context).pushNamed('/signin');
-                      },
-                      backgroundColor: const Color(0xFFFF6B35),
-                      textColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: CustomButton(
-                      text: '新規アカウント作成',
-                      onPressed: () {
-                        Navigator.of(context).pushNamed('/signup');
-                      },
-                      backgroundColor: Colors.white,
-                      textColor: const Color(0xFFFF6B35),
-                      borderColor: const Color(0xFFFF6B35),
-                    ),
-                  ),
-                ],
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.orange.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Colors.orange.withOpacity(0.3),
+            ),
+          ),
+          child: const Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.info_outline,
+                color: Colors.orange,
+                size: 20,
               ),
-            ] else if (_isUsed) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.green.withOpacity(0.3),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'クーポンは店舗で提示してご利用ください。\n有効期限を過ぎたクーポンは使用できません。',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange,
                   ),
                 ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      color: Colors.green,
-                      size: 24,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      'クーポン使用済み',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ] else ...[
-              CustomButton(
-                text: _isUsing ? '使用中...' : 'クーポンを使用',
-                onPressed: _isUsing ? null : _useCoupon,
-                backgroundColor: const Color(0xFFFF6B35),
-                textColor: Colors.white,
               ),
             ],
-            
-            const SizedBox(height: 12),
-            
-            // 注意事項
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: Colors.orange.withOpacity(0.3),
-                ),
-              ),
-              child: const Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    color: Colors.orange,
-                    size: 20,
-                  ),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'クーポンは店舗で提示してご利用ください。\n有効期限を過ぎたクーポンは使用できません。',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
