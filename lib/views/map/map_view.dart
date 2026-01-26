@@ -833,7 +833,7 @@ class _MapViewState extends ConsumerState<MapView> {
         category: category,
         storeIconUrl: storeIconUrl,
       );
-      final double size = isExpanded ? 50.0 : 25.0;
+      final double size = isExpanded ? 80.0 : 40.0;
       final double borderWidth = isExpanded ? 0.6 : 0.3;
       final Color borderColor = visual.useImage ? Colors.black : Colors.white70;
       final Color iconColor = visual.useImage ? Colors.grey[700]! : Colors.white;

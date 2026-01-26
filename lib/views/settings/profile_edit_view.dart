@@ -17,7 +17,6 @@ class ProfileEditView extends ConsumerStatefulWidget {
 class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _displayNameController = TextEditingController();
-  final TextEditingController _friendCodeController = TextEditingController();
   bool _isSaving = false;
   bool _isUploadingImage = false;
 
@@ -28,6 +27,9 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
 
   // ユーザー情報
   DateTime? _selectedDate;
+  int? _selectedYear;
+  int? _selectedMonth;
+  int? _selectedDay;
   String? _selectedGender;
   String? _selectedPrefecture;
   String? _selectedCity;
@@ -57,7 +59,6 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
       if (doc != null && doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
         _displayNameController.text = (data['displayName'] ?? '').toString();
-        _friendCodeController.text = (data['friendCode'] ?? data['friendcode'] ?? '').toString();
         _profileImageUrl = (data['profileImageUrl'] ?? '').toString();
 
         final birthDate = data['birthDate'];
@@ -72,6 +73,11 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
             } catch (_) {}
           }
         }
+        if (_selectedDate != null) {
+          _selectedYear = _selectedDate!.year;
+          _selectedMonth = _selectedDate!.month;
+          _selectedDay = _selectedDate!.day;
+        }
 
         _selectedGender = (data['gender'] as String?)?.isNotEmpty == true ? data['gender'] : null;
         _selectedPrefecture = (data['prefecture'] as String?)?.isNotEmpty == true ? data['prefecture'] : null;
@@ -79,6 +85,9 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
 
         if (_selectedPrefecture != null) {
           await _loadCitiesForPrefecture(_selectedPrefecture!);
+        }
+        if (mounted) {
+          setState(() {});
         }
       }
     } catch (_) {}
@@ -91,15 +100,11 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
     try {
       final isGoogleUser = _isGoogleUser();
       final newDisplayName = _displayNameController.text.trim();
-      final friendCode = _friendCodeController.text.trim();
-
       final updateData = <String, dynamic>{
         'birthDate': _selectedDate,
         'gender': _selectedGender,
         'prefecture': _selectedPrefecture,
         'city': _selectedCity,
-        'friendCode': friendCode,
-        'friendcode': FieldValue.delete(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
       if (!isGoogleUser) {
@@ -247,37 +252,35 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
     return user.providerData.any((provider) => provider.providerId == 'google.com');
   }
 
-  // 生年月日選択
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime initial = _selectedDate ?? DateTime.now().subtract(const Duration(days: 365 * 20));
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-      locale: const Locale('ja', 'JP'),
-      builder: (context, child) {
-        return Localizations.override(
-          context: context,
-          locale: const Locale('ja', 'JP'),
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: const ColorScheme.light(
-                primary: Color(0xFFFF6B35),
-                onPrimary: Colors.white,
-                surface: Colors.white,
-                onSurface: Colors.black,
-              ),
-            ),
-            child: child!,
-          ),
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
+  List<int> get _yearOptions {
+    final currentYear = DateTime.now().year;
+    return List.generate(currentYear - 1900 + 1, (index) => currentYear - index);
+  }
+
+  List<int> get _monthOptions {
+    return List.generate(12, (index) => index + 1);
+  }
+
+  List<int> get _dayOptions {
+    if (_selectedYear == null || _selectedMonth == null) {
+      return [];
+    }
+    final daysInMonth = DateUtils.getDaysInMonth(_selectedYear!, _selectedMonth!);
+    return List.generate(daysInMonth, (index) => index + 1);
+  }
+
+  void _syncDaySelection() {
+    final validDays = _dayOptions;
+    if (_selectedDay != null && !validDays.contains(_selectedDay)) {
+      _selectedDay = null;
+    }
+  }
+
+  void _updateSelectedDate() {
+    if (_selectedYear != null && _selectedMonth != null && _selectedDay != null) {
+      _selectedDate = DateTime(_selectedYear!, _selectedMonth!, _selectedDay!);
+    } else {
+      _selectedDate = null;
     }
   }
 
@@ -510,31 +513,87 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                 // 生年月日
                 const Text('生年月日', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
-                GestureDetector(
-                  onTap: () => _selectDate(context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today, color: Colors.grey),
-                        const SizedBox(width: 12),
-                        Text(
-                          _selectedDate != null
-                              ? '${_selectedDate!.year}年${_selectedDate!.month}月${_selectedDate!.day}日'
-                              : '生年月日を選択',
-                          style: TextStyle(
-                            color: _selectedDate != null ? Colors.black : Colors.grey,
-                            fontSize: 16,
-                          ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedYear,
+                        decoration: InputDecoration(
+                          labelText: '年',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                         ),
-                      ],
+                        items: _yearOptions.map((year) {
+                          return DropdownMenuItem<int>(
+                            value: year,
+                            child: Text('$year'),
+                          );
+                        }).toList(),
+                        onChanged: (int? newValue) {
+                          setState(() {
+                            _selectedYear = newValue;
+                            _syncDaySelection();
+                            _updateSelectedDate();
+                          });
+                        },
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedMonth,
+                        decoration: InputDecoration(
+                          labelText: '月',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        items: _monthOptions.map((month) {
+                          return DropdownMenuItem<int>(
+                            value: month,
+                            child: Text('$month'),
+                          );
+                        }).toList(),
+                        onChanged: (int? newValue) {
+                          setState(() {
+                            _selectedMonth = newValue;
+                            _syncDaySelection();
+                            _updateSelectedDate();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedDay,
+                        decoration: InputDecoration(
+                          labelText: '日',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        items: _dayOptions.map((day) {
+                          return DropdownMenuItem<int>(
+                            value: day,
+                            child: Text('$day'),
+                          );
+                        }).toList(),
+                        onChanged: (_selectedYear == null || _selectedMonth == null)
+                            ? null
+                            : (int? newValue) {
+                                setState(() {
+                                  _selectedDay = newValue;
+                                  _updateSelectedDate();
+                                });
+                              },
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
@@ -589,23 +648,6 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                     onChanged: (v) => setState(() => _selectedCity = v),
                   ),
                 if (_selectedPrefecture != null) const SizedBox(height: 16),
-
-                // 紹介コード
-                TextFormField(
-                  controller: _friendCodeController,
-                  decoration: InputDecoration(
-                    labelText: '友だち紹介コード（任意）',
-                    hintText: '紹介コードがあれば入力',
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: Colors.grey.shade300),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
 
                 if (!isGoogleUser) ...[
                   const Text('プロフィール画像（任意）', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),

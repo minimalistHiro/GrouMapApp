@@ -22,11 +22,15 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   final _friendCodeController = TextEditingController();
   
   DateTime? _selectedDate;
+  int? _selectedYear;
+  int? _selectedMonth;
+  int? _selectedDay;
   String? _selectedGender;
   String? _selectedPrefecture;
   String? _selectedCity;
   List<String> _cities = [];
   bool _isLoadingCities = false;
+  bool _showBirthDateError = false;
   
   // プロフィール画像関連
   XFile? _selectedImage;
@@ -51,6 +55,10 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
     super.initState();
     // 初期化時に日本語ロケールを設定
     Intl.defaultLocale = 'ja';
+    _selectedYear = 2000;
+    _selectedMonth = 1;
+    _selectedDay = 1;
+    _updateSelectedDate();
   }
 
   @override
@@ -117,34 +125,102 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                   const SizedBox(height: 16),
                 
                 // 生年月日選択
-                GestureDetector(
-                  onTap: () => _selectDate(context),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today, color: Colors.grey),
-                        const SizedBox(width: 12),
-                        Text(
-                          _selectedDate != null
-                              ? '${_selectedDate!.year}年${_selectedDate!.month}月${_selectedDate!.day}日'
-                              : '生年月日を選択',
-                          style: TextStyle(
-                            color: _selectedDate != null ? Colors.black : Colors.grey,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
+                const Text(
+                  '生年月日',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedYear,
+                        decoration: const InputDecoration(
+                          labelText: '年',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        items: _yearOptions.map((year) {
+                          return DropdownMenuItem<int>(
+                            value: year,
+                            child: Text('$year'),
+                          );
+                        }).toList(),
+                        onChanged: (int? newValue) {
+                          setState(() {
+                            _showBirthDateError = false;
+                            _selectedYear = newValue;
+                            _syncDaySelection();
+                            _updateSelectedDate();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedMonth,
+                        decoration: const InputDecoration(
+                          labelText: '月',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        items: _monthOptions.map((month) {
+                          return DropdownMenuItem<int>(
+                            value: month,
+                            child: Text('$month'),
+                          );
+                        }).toList(),
+                        onChanged: (int? newValue) {
+                          setState(() {
+                            _showBirthDateError = false;
+                            _selectedMonth = newValue;
+                            _syncDaySelection();
+                            _updateSelectedDate();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedDay,
+                        decoration: const InputDecoration(
+                          labelText: '日',
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                        ),
+                        items: _dayOptions.map((day) {
+                          return DropdownMenuItem<int>(
+                            value: day,
+                            child: Text('$day'),
+                          );
+                        }).toList(),
+                        onChanged: (_selectedYear == null || _selectedMonth == null)
+                            ? null
+                            : (int? newValue) {
+                                setState(() {
+                                  _showBirthDateError = false;
+                                  _selectedDay = newValue;
+                                  _updateSelectedDate();
+                                });
+                              },
+                      ),
+                    ),
+                  ],
+                ),
                 // 生年月日のバリデーションエラー表示
-                if (_selectedDate == null && _formKey.currentState?.validate() == false)
+                if (_showBirthDateError)
                   const Padding(
                     padding: EdgeInsets.only(top: 8, left: 12),
                     child: Text(
@@ -341,7 +417,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                 
                 // 次へボタン
                 CustomButton(
-                  text: '次へ',
+                  text: '設定を完了',
                   onPressed: _handleNext,
                   borderRadius: 999,
                 ),
@@ -544,35 +620,36 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
     }
   }
 
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now().subtract(const Duration(days: 365 * 20)), // 20歳をデフォルト
-      firstDate: DateTime(1900),
-      lastDate: DateTime.now(),
-      locale: const Locale('ja', 'JP'), // 日本語ロケールを指定
-      builder: (context, child) {
-        return Localizations.override(
-          context: context,
-          locale: const Locale('ja', 'JP'),
-          child: Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: const ColorScheme.light(
-                primary: Color(0xFFE75B41),
-                onPrimary: Colors.white,
-                surface: Colors.white,
-                onSurface: Colors.black,
-              ),
-            ),
-            child: child!,
-          ),
-        );
-      },
-    );
-    if (picked != null && picked != _selectedDate) {
-      setState(() {
-        _selectedDate = picked;
-      });
+  List<int> get _yearOptions {
+    final currentYear = DateTime.now().year;
+    return List.generate(currentYear - 1900 + 1, (index) => currentYear - index);
+  }
+
+  List<int> get _monthOptions {
+    return List.generate(12, (index) => index + 1);
+  }
+
+  List<int> get _dayOptions {
+    if (_selectedYear == null || _selectedMonth == null) {
+      return [];
+    }
+    final daysInMonth = DateUtils.getDaysInMonth(_selectedYear!, _selectedMonth!);
+    return List.generate(daysInMonth, (index) => index + 1);
+  }
+
+  void _syncDaySelection() {
+    final validDays = _dayOptions;
+    if (_selectedDay != null && !validDays.contains(_selectedDay)) {
+      _selectedDay = null;
+    }
+  }
+
+  void _updateSelectedDate() {
+    if (_selectedYear != null && _selectedMonth != null && _selectedDay != null) {
+      _selectedDate = DateTime(_selectedYear!, _selectedMonth!, _selectedDay!);
+      _showBirthDateError = false;
+    } else {
+      _selectedDate = null;
     }
   }
 
@@ -798,6 +875,9 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   void _handleNext() async {
     // 生年月日のバリデーション
     if (_selectedDate == null) {
+      setState(() {
+        _showBirthDateError = true;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('生年月日を選択してください'),
