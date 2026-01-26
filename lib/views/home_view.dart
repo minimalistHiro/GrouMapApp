@@ -25,6 +25,7 @@ import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
 import 'coupons/coupons_view.dart';
 import 'badges/badges_view.dart';
+import 'stamps/experience_gained_view.dart';
 
 // ユーザーが所持しているバッジ数
 final userBadgeCountProvider = StreamProvider.family<int, String>((ref, userId) {
@@ -58,6 +59,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Timer? _referralTimer;
   int _referralPageIndex = 0;
   int _referralPageCount = 0;
+  bool _isShowingAchievement = false;
+  String? _lastAchievementUserId;
+  DateTime? _lastAchievementCheckAt;
 
   Future<void> _openCouponDetail(BuildContext context, dynamic coupon) async {
     final storeId = coupon.storeId as String?;
@@ -173,6 +177,12 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
     final isLoggedIn = user != null;
     final userId = user?.uid ?? 'guest';
+    if (isLoggedIn) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _checkAchievementEvents(user!);
+      });
+    }
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: SafeArea(
@@ -2108,5 +2118,111 @@ class _HomeViewState extends ConsumerState<HomeView> {
         ],
       ),
     );
+  }
+
+  Future<void> _checkAchievementEvents(User user) async {
+    if (_isShowingAchievement) return;
+    if (_lastAchievementUserId != user.uid) {
+      _lastAchievementUserId = user.uid;
+      _lastAchievementCheckAt = null;
+    }
+    final now = DateTime.now();
+    if (_lastAchievementCheckAt != null &&
+        now.difference(_lastAchievementCheckAt!) < const Duration(seconds: 5)) {
+      return;
+    }
+    _lastAchievementCheckAt = now;
+
+    final eventsRef = FirebaseFirestore.instance
+        .collection('user_achievement_events')
+        .doc(user.uid)
+        .collection('events');
+
+    QuerySnapshot<Map<String, dynamic>> snapshot;
+    try {
+      snapshot = await eventsRef
+          .where('seenAt', isEqualTo: null)
+          .orderBy('createdAt')
+          .get();
+    } catch (_) {
+      return;
+    }
+
+    if (snapshot.docs.isEmpty) return;
+
+    final badgeMap = <String, Map<String, dynamic>>{};
+    int totalXp = 0;
+    int pointsXpTotal = 0;
+    int stampXpTotal = 0;
+    int cardXpTotal = 0;
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      if (data['seenAt'] != null) {
+        continue;
+      }
+
+      final xpAdded = (data['xpAdded'] is num) ? (data['xpAdded'] as num).toInt() : 0;
+      totalXp += xpAdded;
+
+      final breakdownData = data['xpBreakdown'];
+      if (breakdownData is Map) {
+        pointsXpTotal += (breakdownData['points'] is num)
+            ? (breakdownData['points'] as num).toInt()
+            : 0;
+        stampXpTotal += (breakdownData['stampPunch'] is num)
+            ? (breakdownData['stampPunch'] as num).toInt()
+            : 0;
+        cardXpTotal += (breakdownData['cardComplete'] is num)
+            ? (breakdownData['cardComplete'] as num).toInt()
+            : 0;
+      }
+
+      final badgesRaw = data['badges'];
+      if (badgesRaw is List) {
+        for (final raw in badgesRaw) {
+          if (raw is! Map) continue;
+          final badge = Map<String, dynamic>.from(raw as Map);
+          final key = (badge['badgeId'] ?? badge['id'] ?? badge['name'] ?? '').toString();
+          if (key.isEmpty) continue;
+          badgeMap[key] = badge;
+        }
+      }
+
+      batch.update(doc.reference, {'seenAt': Timestamp.now()});
+    }
+
+    if (totalXp <= 0 && badgeMap.isEmpty) {
+      await batch.commit();
+      return;
+    }
+
+    final breakdown = <Map<String, dynamic>>[];
+    if (pointsXpTotal > 0) {
+      breakdown.add({'label': 'ポイント付与', 'xp': pointsXpTotal});
+    }
+    if (stampXpTotal > 0) {
+      breakdown.add({'label': 'スタンプ押印', 'xp': stampXpTotal});
+    }
+    if (cardXpTotal > 0) {
+      breakdown.add({'label': 'カードコンプリート', 'xp': cardXpTotal});
+    }
+
+    _isShowingAchievement = true;
+    try {
+      await batch.commit();
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ExperienceGainedView(
+            gainedExperience: totalXp,
+            badges: badgeMap.isNotEmpty ? badgeMap.values.toList() : null,
+            breakdown: breakdown.isNotEmpty ? breakdown : null,
+          ),
+        ),
+      );
+    } finally {
+      _isShowingAchievement = false;
+    }
   }
 }

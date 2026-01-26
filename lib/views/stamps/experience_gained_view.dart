@@ -195,16 +195,20 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
                                             height: 84,
                                             fit: BoxFit.cover,
                                             errorBuilder: (context, error, stackTrace) {
-                                              return Container(
-                                                color: Colors.grey[300],
-                                                child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                              return ClipOval(
+                                                child: Container(
+                                                  color: Colors.grey[300],
+                                                  child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                                ),
                                               );
                                             },
                                           ),
                                         )
-                                      : Container(
-                                          color: Colors.grey[300],
-                                          child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                      : ClipOval(
+                                          child: Container(
+                                            color: Colors.grey[300],
+                                            child: const Icon(Icons.person, size: 40, color: Colors.grey),
+                                          ),
                                         ),
                                 ),
                                 Positioned(
