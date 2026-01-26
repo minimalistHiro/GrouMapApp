@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:typed_data';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/common_header.dart';
 
 class ProfileEditView extends ConsumerStatefulWidget {
   const ProfileEditView({Key? key}) : super(key: key);
@@ -451,11 +452,7 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
   Widget build(BuildContext context) {
     final isGoogleUser = _isGoogleUser();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('プロフィール編集'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
-      ),
+      appBar: const CommonHeader(title: 'プロフィール編集'),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
