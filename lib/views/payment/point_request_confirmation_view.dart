@@ -33,7 +33,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         .collection('point_requests')
         .doc(storeId)
         .collection(userId)
-        .doc('request')
+        .doc('award_request')
         .snapshots();
   }
 
@@ -235,7 +235,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
           .collection('point_requests')
           .doc(storeId)
           .collection(userId)
-          .doc('request')
+          .doc('award_request')
           .update({
         'status': 'rejected',
         'respondedAt': FieldValue.serverTimestamp(),

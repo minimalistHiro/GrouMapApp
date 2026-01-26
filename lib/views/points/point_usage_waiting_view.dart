@@ -33,7 +33,7 @@ class _PointUsageWaitingViewState extends State<PointUsageWaitingView> {
         .collection('point_requests')
         .doc(widget.storeId)
         .collection(user.uid)
-        .doc('request');
+        .doc('usage_request');
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
