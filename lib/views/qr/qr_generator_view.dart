@@ -11,7 +11,7 @@ import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
 import '../stamps/stamp_punch_view.dart';
 import '../payment/point_payment_detail_view.dart';
-import '../points/point_usage_request_view.dart';
+import '../points/point_usage_approval_view.dart';
 
 class QRGeneratorView extends ConsumerStatefulWidget {
   const QRGeneratorView({Key? key}) : super(key: key);
@@ -536,9 +536,12 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     return data.containsKey('userNotifiedAt') && data['userNotifiedAt'] != null;
   }
 
-  bool _isUsageInputAlreadyNotified(Map<String, dynamic> data) {
-    final notified = data['usageInputNotified'];
+  bool _isUsageApprovalAlreadyNotified(Map<String, dynamic> data) {
+    final notified = data['usageApprovalNotified'] ?? data['usageInputNotified'];
     if (notified is bool && notified) return true;
+    if (data.containsKey('usageApprovalNotifiedAt') && data['usageApprovalNotifiedAt'] != null) {
+      return true;
+    }
     return data.containsKey('usageInputNotifiedAt') && data['usageInputNotifiedAt'] != null;
   }
 
@@ -550,14 +553,14 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         .collection('point_requests')
         .doc(storeId)
         .collection(userId)
-        .doc('request')
+        .doc('award_request')
         .update({
       'userNotified': true,
       'userNotifiedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  Future<void> _markUsageInputNotified({
+  Future<void> _markUsageApprovalNotified({
     required String storeId,
     required String userId,
   }) async {
@@ -565,10 +568,37 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         .collection('point_requests')
         .doc(storeId)
         .collection(userId)
-        .doc('request')
+        .doc('usage_request')
         .update({
-      'usageInputNotified': true,
-      'usageInputNotifiedAt': FieldValue.serverTimestamp(),
+      'usageApprovalNotified': true,
+      'usageApprovalNotifiedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  bool _isUsageRequestExpired(Map<String, dynamic> data) {
+    final expiresAt = data['expiresAt'];
+    if (expiresAt is Timestamp) {
+      return DateTime.now().isAfter(expiresAt.toDate());
+    }
+    final updatedAt = data['updatedAt'];
+    if (updatedAt is Timestamp) {
+      return DateTime.now().difference(updatedAt.toDate()).inMinutes >= 5;
+    }
+    return false;
+  }
+
+  Future<void> _markUsageExpired({
+    required String storeId,
+    required String userId,
+  }) async {
+    await FirebaseFirestore.instance
+        .collection('point_requests')
+        .doc(storeId)
+        .collection(userId)
+        .doc('usage_request')
+        .update({
+      'status': 'usage_expired',
+      'usageExpiredAt': FieldValue.serverTimestamp(),
     });
   }
 
@@ -590,38 +620,44 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       if (!mounted) return;
       print('PendingListener:stores snapshot -> count=${storesSnap.docs.length}');
       // 既に購読済みの storeId を維持しつつ、新規 storeId を追加監視
-      final currentStoreIds = _storeRequestDocSubs.keys.toSet();
+      final currentStoreIds =
+          _storeRequestDocSubs.keys.map((key) => key.split(':').first).toSet();
       final incomingStoreIds = storesSnap.docs.map((d) => d.id).toSet();
       print('PendingListener:current=${currentStoreIds.toList()} incoming=${incomingStoreIds.toList()}');
 
       // 新規 storeId に対して購読を追加
       for (final storeId in incomingStoreIds.difference(currentStoreIds)) {
-        final docRef = FirebaseFirestore.instance
+        final usageKey = '$storeId:usage';
+        final usageRef = FirebaseFirestore.instance
             .collection('point_requests')
             .doc(storeId)
             .collection(userId)
-            .doc('request');
-        print('PendingListener:attach doc sub -> path=point_requests/$storeId/$userId/request');
-        final sub = docRef.snapshots().listen((doc) async {
+            .doc('usage_request');
+        print('PendingListener:attach usage sub -> path=point_requests/$storeId/$userId/usage_request');
+        final usageSub = usageRef.snapshots().listen((doc) async {
           if (!mounted) return;
-          print('PendingListener:doc snapshot -> storeId=$storeId exists=${doc.exists}');
+          print('PendingListener:usage snapshot -> storeId=$storeId exists=${doc.exists}');
           if (!doc.exists) return;
           final data = doc.data() as Map<String, dynamic>;
           final status = (data['status'] ?? '').toString();
           final requestType = (data['requestType'] ?? '').toString();
           print('PendingListener:doc data -> status=$status');
-          if (status == 'usage_input_pending' && requestType == 'usage') {
-            if (_isUsageInputAlreadyNotified(data)) return;
+          if (status == 'usage_pending_user_approval' && requestType == 'usage') {
+            if (_isUsageRequestExpired(data)) {
+              await _markUsageExpired(storeId: storeId, userId: userId);
+              return;
+            }
+            if (_isUsageApprovalAlreadyNotified(data)) return;
             final combinedRequestId = '${storeId}_$userId';
             if (_isNavigatingToUsageInput || _lastHandledUsageRequestId == combinedRequestId) return;
 
             _isNavigatingToUsageInput = true;
             _lastHandledUsageRequestId = combinedRequestId;
             try {
-              await _markUsageInputNotified(storeId: storeId, userId: userId);
+              await _markUsageApprovalNotified(storeId: storeId, userId: userId);
               await Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => PointUsageRequestView(
+                  builder: (context) => PointUsageApprovalView(
                     storeId: storeId,
                     storeName: (data['storeName'] ?? '店舗') as String,
                   ),
@@ -634,7 +670,22 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             }
             return;
           }
+        });
+        _storeRequestDocSubs[usageKey] = usageSub;
 
+        final awardKey = '$storeId:award';
+        final awardRef = FirebaseFirestore.instance
+            .collection('point_requests')
+            .doc(storeId)
+            .collection(userId)
+            .doc('award_request');
+        print('PendingListener:attach award sub -> path=point_requests/$storeId/$userId/award_request');
+        final awardSub = awardRef.snapshots().listen((doc) async {
+          if (!mounted) return;
+          print('PendingListener:award snapshot -> storeId=$storeId exists=${doc.exists}');
+          if (!doc.exists) return;
+          final data = doc.data() as Map<String, dynamic>;
+          final status = (data['status'] ?? '').toString();
           if (status != 'accepted') return;
           if (_isRequestAlreadyNotified(data)) return;
           final combinedRequestId = '${storeId}_$userId';
@@ -665,12 +716,13 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             }
           }
         });
-        _storeRequestDocSubs[storeId] = sub;
+        _storeRequestDocSubs[awardKey] = awardSub;
       }
 
       // 無くなった storeId の購読を解除
       for (final removedId in currentStoreIds.difference(incomingStoreIds)) {
-        _storeRequestDocSubs.remove(removedId)?.cancel();
+        _storeRequestDocSubs.remove('$removedId:usage')?.cancel();
+        _storeRequestDocSubs.remove('$removedId:award')?.cancel();
       }
     }, onError: (_) {});
   }
@@ -695,40 +747,56 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       print('PendingOnce:stores -> count=${storesSnap.docs.length}');
       for (final storeDoc in storesSnap.docs) {
         final storeId = storeDoc.id;
-        final doc = await FirebaseFirestore.instance
+        final usageDoc = await FirebaseFirestore.instance
             .collection('point_requests')
             .doc(storeId)
             .collection(userId)
-            .doc('request')
+            .doc('usage_request')
             .get(const GetOptions(source: Source.server));
-        print('PendingOnce:check -> storeId=$storeId exists=${doc.exists}');
-        if (!doc.exists) continue;
-        final data = doc.data() as Map<String, dynamic>;
-        final combinedRequestId = '${storeId}_$userId';
-        final status = (data['status'] ?? '').toString();
-        final requestType = (data['requestType'] ?? '').toString();
+        print('PendingOnce:check usage -> storeId=$storeId exists=${usageDoc.exists}');
+        if (usageDoc.exists) {
+          final data = usageDoc.data() as Map<String, dynamic>;
+          final combinedRequestId = '${storeId}_$userId';
+          final status = (data['status'] ?? '').toString();
+          final requestType = (data['requestType'] ?? '').toString();
 
-        if (status == 'usage_input_pending' && requestType == 'usage') {
-          if (_isUsageInputAlreadyNotified(data)) continue;
-          if (_isNavigatingToUsageInput || _lastHandledUsageRequestId == combinedRequestId) return;
-          _isNavigatingToUsageInput = true;
-          _lastHandledUsageRequestId = combinedRequestId;
-          try {
-            await _markUsageInputNotified(storeId: storeId, userId: userId);
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => PointUsageRequestView(
-                  storeId: storeId,
-                  storeName: (data['storeName'] ?? '店舗') as String,
+          if (status == 'usage_pending_user_approval' && requestType == 'usage') {
+            if (_isUsageRequestExpired(data)) {
+              await _markUsageExpired(storeId: storeId, userId: userId);
+              continue;
+            }
+            if (_isUsageApprovalAlreadyNotified(data)) continue;
+            if (_isNavigatingToUsageInput || _lastHandledUsageRequestId == combinedRequestId) return;
+            _isNavigatingToUsageInput = true;
+            _lastHandledUsageRequestId = combinedRequestId;
+            try {
+              await _markUsageApprovalNotified(storeId: storeId, userId: userId);
+              await Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => PointUsageApprovalView(
+                    storeId: storeId,
+                    storeName: (data['storeName'] ?? '店舗') as String,
+                  ),
                 ),
-              ),
-            );
-          } finally {
-            _isNavigatingToUsageInput = false;
+              );
+            } finally {
+              _isNavigatingToUsageInput = false;
+            }
+            return;
           }
-          return;
         }
 
+        final awardDoc = await FirebaseFirestore.instance
+            .collection('point_requests')
+            .doc(storeId)
+            .collection(userId)
+            .doc('award_request')
+            .get(const GetOptions(source: Source.server));
+        print('PendingOnce:check award -> storeId=$storeId exists=${awardDoc.exists}');
+        if (!awardDoc.exists) continue;
+        final data = awardDoc.data() as Map<String, dynamic>;
+        final combinedRequestId = '${storeId}_$userId';
+        final status = (data['status'] ?? '').toString();
         if (status != 'accepted') continue;
         if (_isRequestAlreadyNotified(data)) continue;
         print('PendingOnce:found accepted -> requestId=$combinedRequestId');
@@ -856,7 +924,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
               .collection('point_requests')
               .doc(storeId)
               .collection(user.uid)
-              .doc('request')
+              .doc('award_request')
               .get();
           if (!doc.exists) continue;
           final data = doc.data() as Map<String, dynamic>;

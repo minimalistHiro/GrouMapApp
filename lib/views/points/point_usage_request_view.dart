@@ -357,7 +357,7 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
           .collection('point_requests')
           .doc(widget.storeId)
           .collection(userId)
-          .doc('request')
+          .doc('usage_request')
           .update({
         'usedPoints': points,
         'status': 'usage_input_done',
@@ -398,7 +398,7 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
           .collection('point_requests')
           .doc(widget.storeId)
           .collection(userId)
-          .doc('request')
+          .doc('usage_request')
           .update({
         'status': 'usage_input_cancelled',
         'usageCancelledAt': FieldValue.serverTimestamp(),
