@@ -35,7 +35,8 @@ service cloud.firestore {
         (
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores is list
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores.hasAny([storeId])
-        )
+        ) ||
+        get(/databases/$(database)/documents/stores/$(storeId)).data.createdBy == request.auth.uid
       );
     }
     // ユーザーコレクションのルール
@@ -68,7 +69,14 @@ service cloud.firestore {
       // ユーザーの使用済みクーポン（users/{userId}/used_coupons/{couponId}）
       match /used_coupons/{couponId} {
         allow read: if request.auth != null && request.auth.uid == userId;
-        allow create, update: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null
+          && (
+            request.auth.uid == userId ||
+            (
+              request.resource.data.userId == userId
+              && isStoreMember(request.resource.data.storeId)
+            )
+          );
         allow delete: if false;
       }
 
@@ -258,8 +266,10 @@ service cloud.firestore {
       match /usedBy/{userId} {
         // 認証されたユーザーは読み取り可能
         allow read: if request.auth != null;
-        // 認証されたユーザーは自分の使用履歴を作成可能
-        allow create: if request.auth != null && request.auth.uid == userId;
+        // 店舗側が使用履歴を作成可能
+        allow create: if request.auth != null
+          && request.resource.data.userId == userId
+          && isStoreMember(storeId);
         // 更新・削除は禁止
         allow update, delete: if false;
       }

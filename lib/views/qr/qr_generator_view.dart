@@ -530,6 +530,14 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     return int.tryParse('$usedValue') ?? 0;
   }
 
+  List<String> _parseRequestCouponIds(Map<String, dynamic> data) {
+    final raw = data['selectedCouponIds'] ?? data['usedCouponIds'];
+    if (raw is List) {
+      return raw.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+    }
+    return [];
+  }
+
   bool _isRequestAlreadyNotified(Map<String, dynamic> data) {
     final notified = data['userNotified'];
     if (notified is bool && notified) return true;
@@ -697,6 +705,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             final points = _parseRequestPoints(data);
             final amount = _parseRequestAmount(data);
             final usedPoints = _parseRequestUsedPoints(data);
+            final usedCouponIds = _parseRequestCouponIds(data);
             await _markRequestNotified(storeId: storeId, userId: userId);
             print('PendingListener:navigate accepted -> requestId=$combinedRequestId');
             await Navigator.of(context).push(
@@ -706,6 +715,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
                   paid: amount,
                   pointsAwarded: points,
                   pointsUsed: usedPoints,
+                  usedCouponIds: usedCouponIds,
                 ),
               ),
             );
@@ -806,6 +816,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         final points = _parseRequestPoints(data);
         final amount = _parseRequestAmount(data);
         final usedPoints = _parseRequestUsedPoints(data);
+        final usedCouponIds = _parseRequestCouponIds(data);
         await _markRequestNotified(storeId: storeId, userId: userId);
         await Navigator.of(context).push(
           MaterialPageRoute(
@@ -814,6 +825,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
               paid: amount,
               pointsAwarded: points,
               pointsUsed: usedPoints,
+              usedCouponIds: usedCouponIds,
             ),
           ),
         );
@@ -933,6 +945,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             final points = _parseRequestPoints(data);
             final amount = _parseRequestAmount(data);
             final usedPoints = _parseRequestUsedPoints(data);
+            final usedCouponIds = _parseRequestCouponIds(data);
             await _markRequestNotified(storeId: storeId, userId: user.uid);
             if (context.mounted) {
               await Navigator.of(context).push(
@@ -942,6 +955,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
                     paid: amount,
                     pointsAwarded: points,
                     pointsUsed: usedPoints,
+                    usedCouponIds: usedCouponIds,
                   ),
                 ),
               );

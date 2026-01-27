@@ -61,6 +61,7 @@ class _PointUsageWaitingViewState extends State<PointUsageWaitingView> {
             final points = _parseInt(data['userPoints']);
             final amount = _parseInt(data['amount']);
             final usedPoints = _parseInt(data['usedPoints']);
+            final usedCouponIds = _parseCouponIds(data['selectedCouponIds']);
             requestRef.update({
               'userNotified': true,
               'userNotifiedAt': FieldValue.serverTimestamp(),
@@ -74,6 +75,7 @@ class _PointUsageWaitingViewState extends State<PointUsageWaitingView> {
                     paid: amount,
                     pointsAwarded: points,
                     pointsUsed: usedPoints,
+                    usedCouponIds: usedCouponIds,
                   ),
                 ),
               );
@@ -123,5 +125,12 @@ class _PointUsageWaitingViewState extends State<PointUsageWaitingView> {
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
+  }
+
+  List<String> _parseCouponIds(dynamic value) {
+    if (value is List) {
+      return value.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+    }
+    return [];
   }
 }

@@ -8,6 +8,7 @@ class PointPaymentDetailView extends StatefulWidget {
   final int paid;
   final int pointsAwarded;
   final int pointsUsed;
+  final List<String> usedCouponIds;
 
   const PointPaymentDetailView({
     Key? key,
@@ -15,6 +16,7 @@ class PointPaymentDetailView extends StatefulWidget {
     required this.paid,
     required this.pointsAwarded,
     required this.pointsUsed,
+    this.usedCouponIds = const [],
   }) : super(key: key);
 
   @override
@@ -31,6 +33,8 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
   int _stamps = 0;
   int _displayStamps = 0;
   bool _isSyncing = false;
+  bool _isLoadingCoupons = false;
+  List<String> _usedCouponTitles = [];
   static const int _maxStamps = 10;
   late final AnimationController _animController;
   late final Animation<double> _scaleAnim;
@@ -57,6 +61,7 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
     _shineAnim = Tween<double>(begin: -1.0, end: 2.0)
         .animate(CurvedAnimation(parent: _shineController, curve: Curves.linear));
     _loadStampData();
+    _loadUsedCouponTitles();
   }
 
   @override
@@ -151,6 +156,38 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
     });
   }
 
+  Future<void> _loadUsedCouponTitles() async {
+    if (widget.usedCouponIds.isEmpty) return;
+    setState(() {
+      _isLoadingCoupons = true;
+    });
+    try {
+      final futures = widget.usedCouponIds.map((couponId) async {
+        final doc = await FirebaseFirestore.instance
+            .collection('coupons')
+            .doc(widget.storeId)
+            .collection('coupons')
+            .doc(couponId)
+            .get();
+        final data = doc.data();
+        final title = data?['title'] as String?;
+        return (title == null || title.isEmpty) ? couponId : title;
+      }).toList();
+      final titles = await Future.wait(futures);
+      if (!mounted) return;
+      setState(() {
+        _usedCouponTitles = titles;
+        _isLoadingCoupons = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _usedCouponTitles = widget.usedCouponIds;
+        _isLoadingCoupons = false;
+      });
+    }
+  }
+
   Future<void> _loadPunchAnimationState(String userId) async {
     try {
       final eventsSnap = await FirebaseFirestore.instance
@@ -216,6 +253,15 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
                   _buildDetailRow('獲得ポイント', '${widget.pointsAwarded}pt'),
                   const SizedBox(height: 12),
                   _buildDetailRow('支払い金額', '${widget.paid}円'),
+                  if (widget.usedCouponIds.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _buildDetailRowMultiline(
+                      '使用クーポン',
+                      _isLoadingCoupons
+                          ? '読み込み中...'
+                          : _usedCouponTitles.join('、'),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -257,6 +303,26 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
         Text(
           value,
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailRowMultiline(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(fontSize: 14, color: Colors.grey),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
         ),
       ],
     );
