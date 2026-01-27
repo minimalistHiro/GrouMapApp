@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/qr_token_provider.dart';
+import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
 import '../stamps/stamp_punch_view.dart';
@@ -86,28 +87,35 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       body: SafeArea(
         top: true,
         bottom: false,
-        child: authState.when(
-          data: (user) {
-            if (user == null) {
-              return const Center(
-                child: Text('ログインが必要です'),
-              );
-            }
+        child: Column(
+          children: [
+            const CommonHeader(title: 'QRコード'),
+            Expanded(
+              child: authState.when(
+                data: (user) {
+                  if (user == null) {
+                    return const Center(
+                      child: Text('ログインが必要です'),
+                    );
+                  }
 
-            return TabBarView(
-              controller: _tabController,
-              children: [
-                _buildQRCodeList(context, user),
-                _buildQRScanner(context),
-              ],
-            );
-          },
-          loading: () => const Center(
-            child: CircularProgressIndicator(),
-          ),
-          error: (error, _) => Center(
-            child: Text('エラー: $error'),
-          ),
+                  return TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildQRCodeList(context, user),
+                      _buildQRScanner(context),
+                    ],
+                  );
+                },
+                loading: () => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                error: (error, _) => Center(
+                  child: Text('エラー: $error'),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: Container(
@@ -131,6 +139,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       ),
     );
   }
+
 
   Widget _buildQRCodeList(BuildContext context, User user) {
     final qrTokenState = ref.watch(qrTokenProvider);
