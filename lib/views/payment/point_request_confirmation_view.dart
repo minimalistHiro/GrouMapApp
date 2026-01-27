@@ -64,6 +64,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
           final int usedPoints = (data['usedPoints'] is int)
               ? data['usedPoints'] as int
               : int.tryParse('${data['usedPoints'] ?? 0}') ?? 0;
+          final List<String> usedCouponIds = _parseCouponIds(data['selectedCouponIds']);
           final String status = (data['status'] ?? '').toString();
 
           if (status == 'accepted') {
@@ -73,15 +74,16 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                 if (!mounted) return;
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
-                    builder: (_) => PointPaymentDetailView(
-                      storeId: storeId,
-                      paid: amountNum.toInt(),
-                      pointsAwarded: points,
-                      pointsUsed: usedPoints,
-                    ),
+                  builder: (_) => PointPaymentDetailView(
+                    storeId: storeId,
+                    paid: amountNum.toInt(),
+                    pointsAwarded: points,
+                    pointsUsed: usedPoints,
+                    usedCouponIds: usedCouponIds,
                   ),
-                );
-              });
+                ),
+              );
+            });
             }
             return const Center(child: CircularProgressIndicator());
           }
@@ -180,6 +182,13 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         },
       ),
     );
+  }
+
+  List<String> _parseCouponIds(dynamic value) {
+    if (value is List) {
+      return value.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+    }
+    return [];
   }
 
   // 承認処理は店舗側アプリで実行する
