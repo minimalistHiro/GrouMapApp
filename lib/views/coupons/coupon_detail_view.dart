@@ -7,6 +7,7 @@ import '../../models/coupon_model.dart' as model;
 import '../../providers/store_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/common_header.dart';
+import '../../widgets/error_dialog.dart';
 
 class CouponDetailView extends ConsumerStatefulWidget {
   final model.Coupon coupon;
@@ -160,11 +161,20 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('クーポンを使用しました！'),
-            backgroundColor: Colors.green,
-          ),
+        await showDialog<void>(
+          context: context,
+          builder: (BuildContext dialogContext) {
+            return AlertDialog(
+              title: const Text('完了'),
+              content: const Text('クーポンを使用しました。'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('閉じる'),
+                ),
+              ],
+            );
+          },
         );
       }
     } catch (e) {
@@ -175,12 +185,11 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('エラー: クーポンが見つかりませんでした。\n詳細: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
+        ErrorDialog.show(
+          context,
+          title: 'エラー',
+          message: 'クーポンを使用できませんでした。',
+          details: 'しばらくしてから再度お試しください。',
         );
       }
     }
