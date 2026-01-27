@@ -38,6 +38,13 @@ mixin _$PointTransactionModel {
   int? get usedNormalPoints => throw _privateConstructorUsedError;
   int? get usedSpecialPoints => throw _privateConstructorUsedError;
   int? get totalUsedPoints => throw _privateConstructorUsedError;
+  int? get normalPointsAwarded => throw _privateConstructorUsedError;
+  int? get specialPointsAwarded => throw _privateConstructorUsedError;
+  int? get totalPointsAwarded => throw _privateConstructorUsedError;
+  double? get baseRate => throw _privateConstructorUsedError;
+  double? get appliedRate => throw _privateConstructorUsedError;
+  String? get rateSource => throw _privateConstructorUsedError;
+  String? get campaignId => throw _privateConstructorUsedError;
   @TimestampNullableDateTimeConverter()
   DateTime? get refundedAt => throw _privateConstructorUsedError;
   String? get refundReason => throw _privateConstructorUsedError;
@@ -74,6 +81,13 @@ abstract class $PointTransactionModelCopyWith<$Res> {
       int? usedNormalPoints,
       int? usedSpecialPoints,
       int? totalUsedPoints,
+      int? normalPointsAwarded,
+      int? specialPointsAwarded,
+      int? totalPointsAwarded,
+      double? baseRate,
+      double? appliedRate,
+      String? rateSource,
+      String? campaignId,
       @TimestampNullableDateTimeConverter() DateTime? refundedAt,
       String? refundReason});
 }
@@ -109,6 +123,13 @@ class _$PointTransactionModelCopyWithImpl<$Res,
     Object? usedNormalPoints = freezed,
     Object? usedSpecialPoints = freezed,
     Object? totalUsedPoints = freezed,
+    Object? normalPointsAwarded = freezed,
+    Object? specialPointsAwarded = freezed,
+    Object? totalPointsAwarded = freezed,
+    Object? baseRate = freezed,
+    Object? appliedRate = freezed,
+    Object? rateSource = freezed,
+    Object? campaignId = freezed,
     Object? refundedAt = freezed,
     Object? refundReason = freezed,
   }) {
@@ -173,6 +194,34 @@ class _$PointTransactionModelCopyWithImpl<$Res,
           ? _value.totalUsedPoints
           : totalUsedPoints // ignore: cast_nullable_to_non_nullable
               as int?,
+      normalPointsAwarded: freezed == normalPointsAwarded
+          ? _value.normalPointsAwarded
+          : normalPointsAwarded // ignore: cast_nullable_to_non_nullable
+              as int?,
+      specialPointsAwarded: freezed == specialPointsAwarded
+          ? _value.specialPointsAwarded
+          : specialPointsAwarded // ignore: cast_nullable_to_non_nullable
+              as int?,
+      totalPointsAwarded: freezed == totalPointsAwarded
+          ? _value.totalPointsAwarded
+          : totalPointsAwarded // ignore: cast_nullable_to_non_nullable
+              as int?,
+      baseRate: freezed == baseRate
+          ? _value.baseRate
+          : baseRate // ignore: cast_nullable_to_non_nullable
+              as double?,
+      appliedRate: freezed == appliedRate
+          ? _value.appliedRate
+          : appliedRate // ignore: cast_nullable_to_non_nullable
+              as double?,
+      rateSource: freezed == rateSource
+          ? _value.rateSource
+          : rateSource // ignore: cast_nullable_to_non_nullable
+              as String?,
+      campaignId: freezed == campaignId
+          ? _value.campaignId
+          : campaignId // ignore: cast_nullable_to_non_nullable
+              as String?,
       refundedAt: freezed == refundedAt
           ? _value.refundedAt
           : refundedAt // ignore: cast_nullable_to_non_nullable
@@ -210,6 +259,13 @@ abstract class _$$PointTransactionModelImplCopyWith<$Res>
       int? usedNormalPoints,
       int? usedSpecialPoints,
       int? totalUsedPoints,
+      int? normalPointsAwarded,
+      int? specialPointsAwarded,
+      int? totalPointsAwarded,
+      double? baseRate,
+      double? appliedRate,
+      String? rateSource,
+      String? campaignId,
       @TimestampNullableDateTimeConverter() DateTime? refundedAt,
       String? refundReason});
 }
@@ -243,6 +299,13 @@ class __$$PointTransactionModelImplCopyWithImpl<$Res>
     Object? usedNormalPoints = freezed,
     Object? usedSpecialPoints = freezed,
     Object? totalUsedPoints = freezed,
+    Object? normalPointsAwarded = freezed,
+    Object? specialPointsAwarded = freezed,
+    Object? totalPointsAwarded = freezed,
+    Object? baseRate = freezed,
+    Object? appliedRate = freezed,
+    Object? rateSource = freezed,
+    Object? campaignId = freezed,
     Object? refundedAt = freezed,
     Object? refundReason = freezed,
   }) {
@@ -307,6 +370,34 @@ class __$$PointTransactionModelImplCopyWithImpl<$Res>
           ? _value.totalUsedPoints
           : totalUsedPoints // ignore: cast_nullable_to_non_nullable
               as int?,
+      normalPointsAwarded: freezed == normalPointsAwarded
+          ? _value.normalPointsAwarded
+          : normalPointsAwarded // ignore: cast_nullable_to_non_nullable
+              as int?,
+      specialPointsAwarded: freezed == specialPointsAwarded
+          ? _value.specialPointsAwarded
+          : specialPointsAwarded // ignore: cast_nullable_to_non_nullable
+              as int?,
+      totalPointsAwarded: freezed == totalPointsAwarded
+          ? _value.totalPointsAwarded
+          : totalPointsAwarded // ignore: cast_nullable_to_non_nullable
+              as int?,
+      baseRate: freezed == baseRate
+          ? _value.baseRate
+          : baseRate // ignore: cast_nullable_to_non_nullable
+              as double?,
+      appliedRate: freezed == appliedRate
+          ? _value.appliedRate
+          : appliedRate // ignore: cast_nullable_to_non_nullable
+              as double?,
+      rateSource: freezed == rateSource
+          ? _value.rateSource
+          : rateSource // ignore: cast_nullable_to_non_nullable
+              as String?,
+      campaignId: freezed == campaignId
+          ? _value.campaignId
+          : campaignId // ignore: cast_nullable_to_non_nullable
+              as String?,
       refundedAt: freezed == refundedAt
           ? _value.refundedAt
           : refundedAt // ignore: cast_nullable_to_non_nullable
@@ -338,6 +429,13 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
       this.usedNormalPoints,
       this.usedSpecialPoints,
       this.totalUsedPoints,
+      this.normalPointsAwarded,
+      this.specialPointsAwarded,
+      this.totalPointsAwarded,
+      this.baseRate,
+      this.appliedRate,
+      this.rateSource,
+      this.campaignId,
       @TimestampNullableDateTimeConverter() this.refundedAt,
       this.refundReason});
 
@@ -379,6 +477,20 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
   @override
   final int? totalUsedPoints;
   @override
+  final int? normalPointsAwarded;
+  @override
+  final int? specialPointsAwarded;
+  @override
+  final int? totalPointsAwarded;
+  @override
+  final double? baseRate;
+  @override
+  final double? appliedRate;
+  @override
+  final String? rateSource;
+  @override
+  final String? campaignId;
+  @override
   @TimestampNullableDateTimeConverter()
   final DateTime? refundedAt;
   @override
@@ -386,7 +498,7 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
 
   @override
   String toString() {
-    return 'PointTransactionModel(transactionId: $transactionId, userId: $userId, storeId: $storeId, storeName: $storeName, amount: $amount, paymentAmount: $paymentAmount, status: $status, paymentMethod: $paymentMethod, createdAt: $createdAt, updatedAt: $updatedAt, description: $description, qrCode: $qrCode, usedNormalPoints: $usedNormalPoints, usedSpecialPoints: $usedSpecialPoints, totalUsedPoints: $totalUsedPoints, refundedAt: $refundedAt, refundReason: $refundReason)';
+    return 'PointTransactionModel(transactionId: $transactionId, userId: $userId, storeId: $storeId, storeName: $storeName, amount: $amount, paymentAmount: $paymentAmount, status: $status, paymentMethod: $paymentMethod, createdAt: $createdAt, updatedAt: $updatedAt, description: $description, qrCode: $qrCode, usedNormalPoints: $usedNormalPoints, usedSpecialPoints: $usedSpecialPoints, totalUsedPoints: $totalUsedPoints, normalPointsAwarded: $normalPointsAwarded, specialPointsAwarded: $specialPointsAwarded, totalPointsAwarded: $totalPointsAwarded, baseRate: $baseRate, appliedRate: $appliedRate, rateSource: $rateSource, campaignId: $campaignId, refundedAt: $refundedAt, refundReason: $refundReason)';
   }
 
   @override
@@ -419,6 +531,20 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
                 other.usedSpecialPoints == usedSpecialPoints) &&
             (identical(other.totalUsedPoints, totalUsedPoints) ||
                 other.totalUsedPoints == totalUsedPoints) &&
+            (identical(other.normalPointsAwarded, normalPointsAwarded) ||
+                other.normalPointsAwarded == normalPointsAwarded) &&
+            (identical(other.specialPointsAwarded, specialPointsAwarded) ||
+                other.specialPointsAwarded == specialPointsAwarded) &&
+            (identical(other.totalPointsAwarded, totalPointsAwarded) ||
+                other.totalPointsAwarded == totalPointsAwarded) &&
+            (identical(other.baseRate, baseRate) ||
+                other.baseRate == baseRate) &&
+            (identical(other.appliedRate, appliedRate) ||
+                other.appliedRate == appliedRate) &&
+            (identical(other.rateSource, rateSource) ||
+                other.rateSource == rateSource) &&
+            (identical(other.campaignId, campaignId) ||
+                other.campaignId == campaignId) &&
             (identical(other.refundedAt, refundedAt) ||
                 other.refundedAt == refundedAt) &&
             (identical(other.refundReason, refundReason) ||
@@ -427,25 +553,33 @@ class _$PointTransactionModelImpl implements _PointTransactionModel {
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(
-      runtimeType,
-      transactionId,
-      userId,
-      storeId,
-      storeName,
-      amount,
-      paymentAmount,
-      status,
-      paymentMethod,
-      createdAt,
-      updatedAt,
-      description,
-      qrCode,
-      usedNormalPoints,
-      usedSpecialPoints,
-      totalUsedPoints,
-      refundedAt,
-      refundReason);
+  int get hashCode => Object.hashAll([
+        runtimeType,
+        transactionId,
+        userId,
+        storeId,
+        storeName,
+        amount,
+        paymentAmount,
+        status,
+        paymentMethod,
+        createdAt,
+        updatedAt,
+        description,
+        qrCode,
+        usedNormalPoints,
+        usedSpecialPoints,
+        totalUsedPoints,
+        normalPointsAwarded,
+        specialPointsAwarded,
+        totalPointsAwarded,
+        baseRate,
+        appliedRate,
+        rateSource,
+        campaignId,
+        refundedAt,
+        refundReason
+      ]);
 
   /// Create a copy of PointTransactionModel
   /// with the given fields replaced by the non-null parameter values.
@@ -481,6 +615,13 @@ abstract class _PointTransactionModel implements PointTransactionModel {
       final int? usedNormalPoints,
       final int? usedSpecialPoints,
       final int? totalUsedPoints,
+      final int? normalPointsAwarded,
+      final int? specialPointsAwarded,
+      final int? totalPointsAwarded,
+      final double? baseRate,
+      final double? appliedRate,
+      final String? rateSource,
+      final String? campaignId,
       @TimestampNullableDateTimeConverter() final DateTime? refundedAt,
       final String? refundReason}) = _$PointTransactionModelImpl;
 
@@ -519,6 +660,20 @@ abstract class _PointTransactionModel implements PointTransactionModel {
   int? get usedSpecialPoints;
   @override
   int? get totalUsedPoints;
+  @override
+  int? get normalPointsAwarded;
+  @override
+  int? get specialPointsAwarded;
+  @override
+  int? get totalPointsAwarded;
+  @override
+  double? get baseRate;
+  @override
+  double? get appliedRate;
+  @override
+  String? get rateSource;
+  @override
+  String? get campaignId;
   @override
   @TimestampNullableDateTimeConverter()
   DateTime? get refundedAt;

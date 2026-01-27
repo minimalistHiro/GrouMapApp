@@ -53,6 +53,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'points',
             'specialPoints',
+            'specialPointsTotal',
             'paid',
             'lastUpdated',
             'lastUpdatedByStoreId'

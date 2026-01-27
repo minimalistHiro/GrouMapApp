@@ -208,6 +208,9 @@ class TransactionHistoryView extends ConsumerWidget {
   }
 
   void _showTransactionDetails(BuildContext context, PointTransactionModel transaction) {
+    final totalAwarded = transaction.totalPointsAwarded ?? (transaction.amount > 0 ? transaction.amount : null);
+    final normalAwarded = transaction.normalPointsAwarded ?? totalAwarded;
+    final specialAwarded = transaction.specialPointsAwarded ?? 0;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -218,6 +221,8 @@ class TransactionHistoryView extends ConsumerWidget {
           children: [
             _buildDetailRow('説明', transaction.description ?? ''),
             _buildDetailRow('ポイント', '${transaction.amount}pt'),
+            if (totalAwarded != null && specialAwarded > 0)
+              _buildDetailRow('内訳', '通常${normalAwarded ?? totalAwarded}pt / 特別${specialAwarded}pt'),
             _buildDetailRow('店舗ID', transaction.storeId),
             _buildDetailRow('日時', _formatDateTime(transaction.createdAt)),
             if (transaction.qrCode != null)
