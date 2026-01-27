@@ -254,7 +254,12 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                           _buildUserAvatar(user, _userData),
                           const SizedBox(height: 16),
                           Text(
-                            user.displayName ?? 'ユーザー',
+                            (_userData?['displayName'] is String &&
+                                    (_userData?['displayName'] as String).trim().isNotEmpty)
+                                ? (_userData?['displayName'] as String).trim()
+                                : (user.displayName?.trim().isNotEmpty == true
+                                    ? user.displayName!.trim()
+                                    : 'ユーザー'),
                             style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
