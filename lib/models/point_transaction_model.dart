@@ -76,6 +76,13 @@ class PointTransactionModel with _$PointTransactionModel {
     int? usedNormalPoints,
     int? usedSpecialPoints,
     int? totalUsedPoints,
+    int? normalPointsAwarded,
+    int? specialPointsAwarded,
+    int? totalPointsAwarded,
+    double? baseRate,
+    double? appliedRate,
+    String? rateSource,
+    String? campaignId,
     @TimestampNullableDateTimeConverter() DateTime? refundedAt,
     String? refundReason,
   }) = _PointTransactionModel;

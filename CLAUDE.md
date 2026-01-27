@@ -185,6 +185,10 @@ Firebase関連の設定変更は、このプロジェクト内のファイルを
 - `owner_settings/current`: オーナー設定
   - `basePointReturnRate`: 基本還元率
   - `levelPointReturnRateRanges`: レベル別還元率（`minLevel`, `maxLevel`, `rate`）
+  - `campaignReturnRateBonus`: 還元率の上乗せ（キャンペーン）
+  - `campaignReturnRateStartDate`: 還元率キャンペーン開始日
+  - `campaignReturnRateEndDate`: 還元率キャンペーン終了日
+  - `campaignReturnRateId`: 還元率キャンペーンID
   - `friendCampaignStartDate`: 友達紹介開始日
   - `friendCampaignEndDate`: 友達紹介終了日
   - `friendCampaignPoints`: 友達紹介付与ポイント
@@ -232,6 +236,14 @@ Firebase関連の設定変更は、このプロジェクト内のファイルを
   - `requestType`: `award`
   - `pointsToAward`: 付与予定ポイント
   - `userPoints`: ユーザー付与ポイント
+  - `baseRate`: 基本還元率（固定1.0）
+  - `appliedRate`: 最終適用還元率
+  - `normalPoints`: 通常ポイント
+  - `specialPoints`: 特別ポイント
+  - `totalPoints`: 付与合計ポイント
+  - `rateCalculatedAt`: 還元率確定日時
+  - `rateSource`: 還元率の適用元（level/campaign 等）
+  - `campaignId`: 還元率キャンペーンID
   - `amount`: 会計金額
   - `storeId`: 店舗ID
   - `storeName`: 店舗名
@@ -264,6 +276,13 @@ Firebase関連の設定変更は、このプロジェクト内のファイルを
   - `usedSpecialPoints`: 特別ポイント使用数
   - `usedNormalPoints`: 通常ポイント使用数
   - `totalUsedPoints`: 使用合計
+  - `normalPointsAwarded`: 通常ポイント付与数
+  - `specialPointsAwarded`: 特別ポイント付与数
+  - `totalPointsAwarded`: 付与合計ポイント
+  - `baseRate`: 基本還元率
+  - `appliedRate`: 最終適用還元率
+  - `rateSource`: 還元率の適用元（level/campaign 等）
+  - `campaignId`: 還元率キャンペーンID
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時
 
@@ -343,6 +362,7 @@ Firebase関連の設定変更は、このプロジェクト内のファイルを
   - `pointsIssued`: 付与ポイント
   - `pointsUsed`: 使用ポイント
   - `totalPointsAwarded`: 付与合計
+  - `specialPointsIssued`: 特別ポイント付与合計
   - `totalSales`: 売上合計
   - `totalTransactions`: 取引回数
   - `visitorCount`: 来店人数

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
@@ -368,6 +368,57 @@ function getDateKey(date) {
 }
 function normalizeReferralCode(code) {
     return (code !== null && code !== void 0 ? code : '').trim().toUpperCase();
+}
+function toDate(value) {
+    if (!value)
+        return null;
+    if (value instanceof Date)
+        return value;
+    if (value instanceof firestore_2.Timestamp)
+        return value.toDate();
+    if (typeof value === 'number')
+        return new Date(value);
+    if (typeof value === 'string') {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    return null;
+}
+function parseRate(value, fallback = 0) {
+    if (typeof value === 'number')
+        return value;
+    if (typeof value === 'string') {
+        const parsed = Number.parseFloat(value);
+        return Number.isNaN(parsed) ? fallback : parsed;
+    }
+    return fallback;
+}
+function resolveLevelReturnRate(level, ranges) {
+    if (!Array.isArray(ranges))
+        return 1.0;
+    for (const range of ranges) {
+        const min = asInt(range.minLevel, 1);
+        const max = asInt(range.maxLevel, LEVEL_MAX);
+        const rate = parseRate(range.rate, 1.0);
+        if (level >= min && level <= max) {
+            return rate;
+        }
+    }
+    return 1.0;
+}
+function resolveCampaignBonus(settings) {
+    const bonusRate = parseRate(settings['campaignReturnRateBonus'], 0);
+    const start = toDate(settings['campaignReturnRateStartDate']);
+    const end = toDate(settings['campaignReturnRateEndDate']);
+    if (!bonusRate || !start || !end)
+        return { bonusRate: 0 };
+    const now = new Date();
+    if (now < start || now > end)
+        return { bonusRate: 0 };
+    const campaignId = typeof settings['campaignReturnRateId'] === 'string'
+        ? settings['campaignReturnRateId']
+        : undefined;
+    return { bonusRate, campaignId };
 }
 async function resolveReferralPoints() {
     var _a;
@@ -967,6 +1018,55 @@ exports.requestEmailOtp = (0, https_1.onCall)({
         throw new https_1.HttpsError('internal', '認証コードの送信に失敗しました');
     }
     return { success: true };
+});
+exports.calculatePointRequestRates = (0, firestore_1.onDocumentWritten)({
+    document: 'point_requests/{storeId}/{userId}/award_request',
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d;
+    if (!((_a = event.data) === null || _a === void 0 ? void 0 : _a.after.exists))
+        return;
+    const data = event.data.after.data();
+    if (!data)
+        return;
+    if (data['rateCalculatedAt'])
+        return;
+    if (((_b = data['requestType']) !== null && _b !== void 0 ? _b : 'award') !== 'award')
+        return;
+    const amount = asInt(data['amount'], 0);
+    if (amount <= 0)
+        return;
+    const userId = event.params.userId;
+    const settingsDoc = await db.collection(OWNER_SETTINGS_COLLECTION).doc('current').get();
+    const settings = (_c = settingsDoc.data()) !== null && _c !== void 0 ? _c : {};
+    const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+    const userLevel = asInt((_d = userDoc.data()) === null || _d === void 0 ? void 0 : _d['level'], 1);
+    const levelRate = resolveLevelReturnRate(userLevel, settings['levelPointReturnRateRanges']);
+    const { bonusRate, campaignId } = resolveCampaignBonus(settings);
+    const appliedRate = levelRate + bonusRate;
+    const baseRate = 1.0;
+    const normalPoints = Math.floor(amount * Math.min(appliedRate, baseRate) / 100);
+    const specialPoints = Math.floor(amount * Math.max(appliedRate - baseRate, 0) / 100);
+    const totalPoints = normalPoints + specialPoints;
+    let rateSource = 'base';
+    if (bonusRate > 0 && levelRate !== baseRate)
+        rateSource = 'level+campaign';
+    else if (bonusRate > 0)
+        rateSource = 'campaign';
+    else if (levelRate !== baseRate)
+        rateSource = 'level';
+    await event.data.after.ref.update(stripUndefined({
+        baseRate,
+        appliedRate,
+        normalPoints,
+        specialPoints,
+        totalPoints,
+        pointsToAward: totalPoints,
+        userPoints: totalPoints,
+        rateCalculatedAt: firestore_2.FieldValue.serverTimestamp(),
+        rateSource,
+        campaignId,
+    }));
 });
 exports.verifyEmailOtp = (0, https_1.onCall)({ region: 'asia-northeast1' }, async (request) => {
     var _a, _b, _c, _d, _e;

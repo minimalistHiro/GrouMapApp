@@ -60,12 +60,18 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
           final String storeId = (data['storeId'] ?? '').toString();
           final String userId = (data['userId'] ?? '').toString();
           final int points = (data['userPoints'] is int) ? data['userPoints'] as int : int.tryParse('${data['userPoints']}') ?? 0;
+          final int normalPoints = _parseInt(data['normalPoints']);
+          final int specialPoints = _parseInt(data['specialPoints']);
+          final int totalPoints = _parseInt(data['totalPoints']);
           final num amountNum = (data['amount'] is num) ? data['amount'] as num : num.tryParse('${data['amount']}') ?? 0;
           final int usedPoints = (data['usedPoints'] is int)
               ? data['usedPoints'] as int
               : int.tryParse('${data['usedPoints'] ?? 0}') ?? 0;
           final List<String> usedCouponIds = _parseCouponIds(data['selectedCouponIds']);
           final String status = (data['status'] ?? '').toString();
+          final int resolvedPoints = totalPoints > 0 ? totalPoints : points;
+          final int resolvedNormalPoints = normalPoints > 0 ? normalPoints : resolvedPoints;
+          final int resolvedSpecialPoints = specialPoints > 0 ? specialPoints : 0;
 
           if (status == 'accepted') {
             if (!_didNavigate) {
@@ -77,9 +83,11 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                   builder: (_) => PointPaymentDetailView(
                     storeId: storeId,
                     paid: amountNum.toInt(),
-                    pointsAwarded: points,
+                    pointsAwarded: resolvedPoints,
                     pointsUsed: usedPoints,
                     usedCouponIds: usedCouponIds,
+                    normalPointsAwarded: resolvedNormalPoints,
+                    specialPointsAwarded: resolvedSpecialPoints,
                   ),
                 ),
               );
@@ -122,7 +130,14 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                           const SizedBox(height: 16),
                           const Text('付与ポイント', style: TextStyle(fontSize: 12, color: Colors.grey)),
                           const SizedBox(height: 4),
-                          Text('$points ポイント', style: const TextStyle(fontSize: 18, color: Color(0xFFFF6B35), fontWeight: FontWeight.bold)),
+                          Text('$resolvedPoints ポイント', style: const TextStyle(fontSize: 18, color: Color(0xFFFF6B35), fontWeight: FontWeight.bold)),
+                          if (resolvedSpecialPoints > 0) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '通常${resolvedNormalPoints}pt / 特別${resolvedSpecialPoints}pt',
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ],
                           const SizedBox(height: 16),
                           const Text('支払い金額', style: TextStyle(fontSize: 12, color: Colors.grey)),
                           const SizedBox(height: 4),
@@ -189,6 +204,15 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
       return value.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
     }
     return [];
+  }
+
+  int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      return int.tryParse(value) ?? 0;
+    }
+    return 0;
   }
 
   // 承認処理は店舗側アプリで実行する

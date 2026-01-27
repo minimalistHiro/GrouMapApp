@@ -381,6 +381,12 @@ type ReferralPoints = {
   inviteePoints: number;
 };
 
+type ReturnRateRange = {
+  minLevel?: number;
+  maxLevel?: number;
+  rate?: number;
+};
+
 const SMTP_HOST = defineSecret('SMTP_HOST');
 const SMTP_PORT = defineSecret('SMTP_PORT');
 const SMTP_USER = defineSecret('SMTP_USER');
@@ -399,6 +405,56 @@ function getDateKey(date: Date): string {
 
 function normalizeReferralCode(code?: string): string {
   return (code ?? '').trim().toUpperCase();
+}
+
+function toDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (value instanceof Timestamp) return value.toDate();
+  if (typeof value === 'number') return new Date(value);
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
+function parseRate(value: unknown, fallback = 0): number {
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isNaN(parsed) ? fallback : parsed;
+  }
+  return fallback;
+}
+
+function resolveLevelReturnRate(level: number, ranges: ReturnRateRange[] | undefined): number {
+  if (!Array.isArray(ranges)) return 1.0;
+  for (const range of ranges) {
+    const min = asInt(range.minLevel, 1);
+    const max = asInt(range.maxLevel, LEVEL_MAX);
+    const rate = parseRate(range.rate, 1.0);
+    if (level >= min && level <= max) {
+      return rate;
+    }
+  }
+  return 1.0;
+}
+
+function resolveCampaignBonus(settings: Record<string, unknown>): {
+  bonusRate: number;
+  campaignId?: string;
+} {
+  const bonusRate = parseRate(settings['campaignReturnRateBonus'], 0);
+  const start = toDate(settings['campaignReturnRateStartDate']);
+  const end = toDate(settings['campaignReturnRateEndDate']);
+  if (!bonusRate || !start || !end) return { bonusRate: 0 };
+  const now = new Date();
+  if (now < start || now > end) return { bonusRate: 0 };
+  const campaignId = typeof settings['campaignReturnRateId'] === 'string'
+    ? settings['campaignReturnRateId']
+    : undefined;
+  return { bonusRate, campaignId };
 }
 
 async function resolveReferralPoints(): Promise<ReferralPoints> {
@@ -1125,6 +1181,62 @@ export const requestEmailOtp = onCall(
 
     return { success: true };
   }
+);
+
+export const calculatePointRequestRates = onDocumentWritten(
+  {
+    document: 'point_requests/{storeId}/{userId}/award_request',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    if (!event.data?.after.exists) return;
+    const data = event.data.after.data() as Record<string, unknown>;
+    if (!data) return;
+    if (data['rateCalculatedAt']) return;
+    if ((data['requestType'] ?? 'award') !== 'award') return;
+
+    const amount = asInt(data['amount'], 0);
+    if (amount <= 0) return;
+
+    const userId = event.params.userId as string;
+    const settingsDoc = await db.collection(OWNER_SETTINGS_COLLECTION).doc('current').get();
+    const settings = (settingsDoc.data() as Record<string, unknown> | undefined) ?? {};
+
+    const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+    const userLevel = asInt(userDoc.data()?.['level'], 1);
+
+    const levelRate = resolveLevelReturnRate(
+      userLevel,
+      settings['levelPointReturnRateRanges'] as ReturnRateRange[] | undefined,
+    );
+    const { bonusRate, campaignId } = resolveCampaignBonus(settings);
+    const appliedRate = levelRate + bonusRate;
+    const baseRate = 1.0;
+
+    const normalPoints = Math.floor(amount * Math.min(appliedRate, baseRate) / 100);
+    const specialPoints = Math.floor(amount * Math.max(appliedRate - baseRate, 0) / 100);
+    const totalPoints = normalPoints + specialPoints;
+
+    let rateSource = 'base';
+    if (bonusRate > 0 && levelRate !== baseRate) rateSource = 'level+campaign';
+    else if (bonusRate > 0) rateSource = 'campaign';
+    else if (levelRate !== baseRate) rateSource = 'level';
+
+    await event.data.after.ref.update(
+      stripUndefined({
+        baseRate,
+        appliedRate,
+        normalPoints,
+        specialPoints,
+        totalPoints,
+        pointsToAward: totalPoints,
+        userPoints: totalPoints,
+        rateCalculatedAt: FieldValue.serverTimestamp(),
+        rateSource,
+        campaignId,
+      }),
+    );
+  },
 );
 
 export const verifyEmailOtp = onCall(

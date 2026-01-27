@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../main_navigation_view.dart';
 
 class PointPaymentDetailView extends StatefulWidget {
   final String storeId;
@@ -9,6 +10,8 @@ class PointPaymentDetailView extends StatefulWidget {
   final int pointsAwarded;
   final int pointsUsed;
   final List<String> usedCouponIds;
+  final int? normalPointsAwarded;
+  final int? specialPointsAwarded;
 
   const PointPaymentDetailView({
     Key? key,
@@ -16,6 +19,8 @@ class PointPaymentDetailView extends StatefulWidget {
     required this.paid,
     required this.pointsAwarded,
     required this.pointsUsed,
+    this.normalPointsAwarded,
+    this.specialPointsAwarded,
     this.usedCouponIds = const [],
   }) : super(key: key);
 
@@ -35,6 +40,8 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
   bool _isSyncing = false;
   bool _isLoadingCoupons = false;
   List<String> _usedCouponTitles = [];
+  String? _transactionId;
+  bool _isLoadingTransactionId = true;
   static const int _maxStamps = 10;
   late final AnimationController _animController;
   late final Animation<double> _scaleAnim;
@@ -62,6 +69,7 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
         .animate(CurvedAnimation(parent: _shineController, curve: Curves.linear));
     _loadStampData();
     _loadUsedCouponTitles();
+    _loadTransactionId();
   }
 
   @override
@@ -188,6 +196,54 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
     }
   }
 
+  Future<void> _loadTransactionId() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() {
+          _isLoadingTransactionId = false;
+        });
+        return;
+      }
+      final snap = await FirebaseFirestore.instance
+          .collection('point_transactions')
+          .doc(widget.storeId)
+          .collection(user.uid)
+          .orderBy('createdAt', descending: true)
+          .limit(20)
+          .get();
+
+      String? matchId;
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        final amount = _parseInt(data['amount']);
+        final paymentAmount = _parseInt(data['paymentAmount']);
+        if (amount == widget.pointsAwarded && paymentAmount == widget.paid) {
+          matchId = doc.id;
+          break;
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _transactionId = matchId;
+        _isLoadingTransactionId = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingTransactionId = false;
+      });
+    }
+  }
+
+  int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
   Future<void> _loadPunchAnimationState(String userId) async {
     try {
       final eventsSnap = await FirebaseFirestore.instance
@@ -218,6 +274,8 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
 
   @override
   Widget build(BuildContext context) {
+    final normalPoints = widget.normalPointsAwarded ?? widget.pointsAwarded;
+    final specialPoints = widget.specialPointsAwarded ?? 0;
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -251,8 +309,32 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
                   _buildDetailRow('利用ポイント', '${widget.pointsUsed}pt'),
                   const SizedBox(height: 12),
                   _buildDetailRow('獲得ポイント', '${widget.pointsAwarded}pt'),
+                  if (specialPoints > 0) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '特別ポイント ${specialPoints}pt',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _buildDetailRow('支払い金額', '${widget.paid}円'),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '取引ID',
+                        style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                      Text(
+                        _isLoadingTransactionId ? '取得中...' : (_transactionId ?? '-'),
+                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                    ],
+                  ),
                   if (widget.usedCouponIds.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _buildDetailRowMultiline(
@@ -272,7 +354,14 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) => const MainNavigationView(),
+                    ),
+                    (route) => false,
+                  );
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B35),
                   foregroundColor: Colors.white,
