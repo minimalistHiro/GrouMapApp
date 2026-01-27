@@ -22,6 +22,17 @@ class MainNavigationView extends ConsumerStatefulWidget {
   ConsumerState<MainNavigationView> createState() => _MainNavigationViewState();
 }
 
+class _LoweredFabLocation extends FloatingActionButtonLocation {
+  final double offset;
+  const _LoweredFabLocation(this.offset);
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    final baseOffset = FloatingActionButtonLocation.centerDocked.getOffset(scaffoldGeometry);
+    return Offset(baseOffset.dx, baseOffset.dy + offset);
+  }
+}
+
 enum _MainTab {
   home,
   map,
@@ -32,6 +43,10 @@ enum _MainTab {
 
 class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   int _currentIndex = 0;
+  int _lastNonQrTabIndex = 0;
+  static const double _fabVerticalOffset = 12;
+  static const double _fabIconSize = 20;
+  static const double _fabLabelSize = 10;
   ProviderSubscription<AsyncValue<User?>>? _authSubscription;
   ProviderSubscription<AsyncValue<Map<String, dynamic>?>>? _userDataSubscription;
   bool _referralPopupShown = false;
@@ -121,15 +136,38 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
   }
 
-  // タブ切り替え時のデータ読み込み
-  Future<void> _onTabChanged(int index, List<_MainTab> tabs) async {
+  List<_MainTab> _bottomTabsFor(List<_MainTab> tabs) {
+    return tabs.where((tab) => tab != _MainTab.qr).toList();
+  }
+
+  void _setCurrentTab(int index, List<_MainTab> tabs) {
+    _currentIndex = index;
+    final tab = tabs[index];
+    if (tab != _MainTab.qr) {
+      final bottomIndex = _bottomTabsFor(tabs).indexOf(tab);
+      if (bottomIndex >= 0) {
+        _lastNonQrTabIndex = bottomIndex;
+      }
+    }
+  }
+
+  // タブ切り替え時のデータ読み込み（BottomNavigationBar用）
+  Future<void> _onBottomTabChanged(int bottomIndex, List<_MainTab> tabs) async {
+    final bottomTabs = _bottomTabsFor(tabs);
+    final showPlaceholder = tabs.contains(_MainTab.qr);
+    final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+    final bottomTabIndex = _bottomTabIndexForVisualIndex(bottomIndex, placeholderIndex);
+    if (bottomTabIndex == null) {
+      return;
+    }
+    final nextTab = bottomTabs[bottomTabIndex];
+    final nextIndex = tabs.indexOf(nextTab);
     setState(() {
-      _currentIndex = index;
+      _setCurrentTab(nextIndex, tabs);
     });
 
     // タブに応じて必要なデータを読み込み
-    final tab = tabs[index];
-    await _loadTabSpecificData(tab);
+    await _loadTabSpecificData(nextTab);
   }
 
   // タブ固有のデータ読み込み
@@ -237,6 +275,69 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     final tabs = _tabsForUser(user);
     final safeIndex = _coerceIndex(tabs.length);
     _loadTabSpecificData(tabs[safeIndex]);
+  }
+
+  void _onQrFabPressed(List<_MainTab> tabs) {
+    if (!tabs.contains(_MainTab.qr)) {
+      return;
+    }
+    _loadTabSpecificData(_MainTab.qr);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const QRGeneratorView(),
+      ),
+    );
+  }
+
+  int _safeBottomIndex(List<_MainTab> bottomTabs) {
+    if (bottomTabs.isEmpty) {
+      return 0;
+    }
+    return _lastNonQrTabIndex.clamp(0, bottomTabs.length - 1);
+  }
+
+  int _placeholderIndexFor(List<_MainTab> bottomTabs) {
+    final mapIndex = bottomTabs.indexOf(_MainTab.map);
+    final couponsIndex = bottomTabs.indexOf(_MainTab.coupons);
+    if (mapIndex >= 0 && couponsIndex >= 0 && mapIndex < couponsIndex) {
+      return mapIndex + 1;
+    }
+    return -1;
+  }
+
+  int? _bottomTabIndexForVisualIndex(int visualIndex, int placeholderIndex) {
+    if (placeholderIndex < 0) {
+      return visualIndex;
+    }
+    if (visualIndex == placeholderIndex) {
+      return null;
+    }
+    return visualIndex > placeholderIndex ? visualIndex - 1 : visualIndex;
+  }
+
+  int _visualIndexForBottomTabIndex(int bottomTabIndex, int placeholderIndex) {
+    if (placeholderIndex < 0) {
+      return bottomTabIndex;
+    }
+    return bottomTabIndex >= placeholderIndex ? bottomTabIndex + 1 : bottomTabIndex;
+  }
+
+  List<BottomNavigationBarItem> _bottomNavItemsWithPlaceholder(
+    List<_MainTab> bottomTabs,
+    bool showPlaceholder,
+  ) {
+    final items = _navItemsForTabs(bottomTabs);
+    final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+    if (placeholderIndex >= 0 && placeholderIndex <= items.length) {
+      items.insert(
+        placeholderIndex,
+        const BottomNavigationBarItem(
+          icon: SizedBox.shrink(),
+          label: '',
+        ),
+      );
+    }
+    return items;
   }
 
   List<Widget> _pagesForTabs(List<_MainTab> tabs) {
@@ -404,24 +505,62 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       data: (user) {
         final tabs = _tabsForUser(user);
         final pages = _pagesForTabs(tabs);
-        final items = _navItemsForTabs(tabs);
+        final bottomTabs = _bottomTabsFor(tabs);
+        final showPlaceholder = tabs.contains(_MainTab.qr);
+        final items = _bottomNavItemsWithPlaceholder(bottomTabs, showPlaceholder);
+        final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
         final safeIndex = _coerceIndex(pages.length);
 
         if (safeIndex != _currentIndex) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             setState(() {
-              _currentIndex = safeIndex;
+              _setCurrentTab(safeIndex, tabs);
             });
           });
         }
 
+        final currentTab = tabs[safeIndex];
+        final bottomIndex = bottomTabs.isEmpty
+            ? 0
+            : currentTab == _MainTab.qr
+                ? _visualIndexForBottomTabIndex(_safeBottomIndex(bottomTabs), placeholderIndex)
+                : _visualIndexForBottomTabIndex(
+                    bottomTabs.indexOf(currentTab).clamp(0, bottomTabs.length - 1),
+                    placeholderIndex,
+                  );
+
         return Scaffold(
           body: pages[safeIndex],
+          floatingActionButton: tabs.contains(_MainTab.qr)
+              ? FloatingActionButton(
+                  onPressed: () => _onQrFabPressed(tabs),
+                  backgroundColor: const Color(0xFFFF6B35),
+                  shape: const CircleBorder(),
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.qr_code, color: Colors.white, size: _fabIconSize),
+                      SizedBox(height: 2),
+                      Text(
+                        'QRコード',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: _fabLabelSize,
+                          height: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : null,
+          floatingActionButtonLocation: tabs.contains(_MainTab.qr)
+              ? const _LoweredFabLocation(_fabVerticalOffset)
+              : null,
           bottomNavigationBar: BottomNavigationBar(
             type: BottomNavigationBarType.fixed,
-            currentIndex: safeIndex,
-            onTap: (index) => _onTabChanged(index, tabs),
+            currentIndex: bottomIndex,
+            onTap: (index) => _onBottomTabChanged(index, tabs),
             selectedItemColor: const Color(0xFFFF6B35),
             unselectedItemColor: Colors.grey,
             selectedLabelStyle: const TextStyle(fontSize: 10),

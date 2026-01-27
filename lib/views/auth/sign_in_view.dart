@@ -38,7 +38,6 @@ class _SignInViewState extends ConsumerState<SignInView> {
       if (next == SignInState.error) {
         _showErrorDialog(signInNotifier);
       } else if (next == SignInState.success) {
-        SuccessSnackBar.show(context, message: 'ログインしました');
         _navigateAfterSignIn();
       }
     });
