@@ -64,6 +64,16 @@ Firebase関連の設定変更は、このプロジェクト内のファイルを
 - **ボタン**: `/Users/kanekohiroki/Desktop/groumapapp/lib/widgets/custom_button.dart`
 - **テキストフィールド**: `/Users/kanekohiroki/Desktop/groumapapp/lib/widgets/error_dialog.dart`
 
+## 画面背景の統一
+
+- ホーム画面の背景色は `Colors.grey[50]` を基準とし、他の画面も同系統で統一すること
+
+## 上部タブの統一
+
+- 上部にタブを設置する場合は `/Users/kanekohiroki/Desktop/groumapapp/lib/widgets/custom_top_tab_bar.dart` を使用する
+- デフォルトのオレンジは `#FF6B35`（`Color(0xFFFF6B35)`）
+- 上部タブの配色はオレンジ背景（`#FF6B35`）+ 白テキストで統一する
+
 ## 通知・エラー表示ルール
 
 - **成功時**: 緑のスナックバーで通知していた箇所は、何も表示しない

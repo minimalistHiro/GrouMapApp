@@ -8,6 +8,7 @@ import '../../providers/posts_provider.dart';
 import '../../providers/store_provider.dart';
 import '../../models/coupon_model.dart' as model;
 import '../../widgets/custom_button.dart';
+import '../../widgets/custom_top_tab_bar.dart';
 import '../posts/post_detail_view.dart';
 import 'coupon_detail_view.dart';
 
@@ -93,7 +94,7 @@ class CouponsView extends ConsumerWidget {
       initialIndex: _coerceIndex(initialTopTabIndex, 2),
       child: Column(
         children: [
-          const TabBar(
+          const CustomTopTabBar(
             tabs: [
               Tab(text: '投稿', icon: Icon(Icons.article)),
               Tab(text: 'クーポン', icon: Icon(Icons.card_giftcard)),
@@ -221,7 +222,7 @@ class CouponsView extends ConsumerWidget {
       initialIndex: _coerceIndex(initialCouponTabIndex, tabs.length),
       child: Column(
         children: [
-          TabBar(tabs: tabs),
+          CustomTopTabBar(tabs: tabs),
           Expanded(
             child: TabBarView(
               children: views,

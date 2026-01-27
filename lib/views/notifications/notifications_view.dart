@@ -5,6 +5,7 @@ import '../../providers/announcement_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/notification_model.dart' as model;
 import '../../widgets/custom_button.dart';
+import '../../widgets/custom_top_tab_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'announcement_detail_view.dart';
 import 'notification_detail_view.dart';
@@ -58,10 +59,7 @@ class _NotificationsViewState extends ConsumerState<NotificationsView> {
           title: const Text('お知らせ'),
           backgroundColor: const Color(0xFFFF6B35),
           foregroundColor: Colors.white,
-          bottom: const TabBar(
-            labelColor: Colors.white,
-            unselectedLabelColor: Colors.white,
-            indicatorColor: Colors.white,
+          bottom: const CustomTopTabBar(
             tabs: [
               Tab(text: 'お知らせ'),
               Tab(text: '通知'),
