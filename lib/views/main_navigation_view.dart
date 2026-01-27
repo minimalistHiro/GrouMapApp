@@ -35,6 +35,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   ProviderSubscription<AsyncValue<User?>>? _authSubscription;
   ProviderSubscription<AsyncValue<Map<String, dynamic>?>>? _userDataSubscription;
   bool _referralPopupShown = false;
+  bool _didInitialLoad = false;
+  String? _lastInitialUserId;
 
   @override
   void initState() {
@@ -44,6 +46,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       authStateProvider,
       (previous, next) {
         next.whenData((user) {
+          _triggerInitialLoad(user);
           _userDataSubscription?.close();
           if (user == null) {
             return;
@@ -61,13 +64,13 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     );
     // 初期データ読み込みをフレーム後に実行
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_didInitialLoad) {
+        return;
+      }
       final authState = ref.read(authStateProvider);
       authState.when(
         data: (user) async {
-          await _loadInitialData(user);
-          final tabs = _tabsForUser(user);
-          final safeIndex = _coerceIndex(tabs.length);
-          await _loadTabSpecificData(tabs[safeIndex]);
+          _triggerInitialLoad(user);
         },
         loading: () {},
         error: (_, __) {},
@@ -92,7 +95,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   // ユーザーデータ読み込み
   Future<void> _loadUserData(String userId) async {
     try {
-      // ユーザー関連データは各Providerのストリームで管理する
+      ref.invalidate(userDataProvider(userId));
     } catch (e) {
       debugPrint('ユーザーデータ読み込みエラー: $e');
     }
@@ -221,6 +224,19 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       _MainTab.coupons,
       _MainTab.profile,
     ];
+  }
+
+  void _triggerInitialLoad(User? user) {
+    final userId = user?.uid;
+    if (_didInitialLoad && userId == _lastInitialUserId) {
+      return;
+    }
+    _didInitialLoad = true;
+    _lastInitialUserId = userId;
+    _loadInitialData(user);
+    final tabs = _tabsForUser(user);
+    final safeIndex = _coerceIndex(tabs.length);
+    _loadTabSpecificData(tabs[safeIndex]);
   }
 
   List<Widget> _pagesForTabs(List<_MainTab> tabs) {
