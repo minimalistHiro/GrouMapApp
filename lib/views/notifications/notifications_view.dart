@@ -59,6 +59,9 @@ class _NotificationsViewState extends ConsumerState<NotificationsView> {
           backgroundColor: const Color(0xFFFF6B35),
           foregroundColor: Colors.white,
           bottom: const TabBar(
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white,
+            indicatorColor: Colors.white,
             tabs: [
               Tab(text: 'お知らせ'),
               Tab(text: '通知'),
