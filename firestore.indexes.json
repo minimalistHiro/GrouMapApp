@@ -1,11 +1,133 @@
 {
   "indexes": [
     {
-      "collectionGroup": "usedBy",
+      "collectionGroup": "transactions",
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recommendation_impressions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetStoreId",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "shownAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recommendation_impressions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetStoreId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "shownAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recommendation_impressions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetStoreId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "shownAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recommendation_visits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetStoreId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visitAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recommendation_visits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetStoreId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visitAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recommendation_visits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "sourceStoreId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visitAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recommendation_visits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "sourceStoreId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visitAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
           "order": "ASCENDING"
         }
       ]
@@ -15,7 +137,7 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "type",
+          "fieldPath": "userId",
           "order": "ASCENDING"
         },
         {

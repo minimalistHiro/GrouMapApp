@@ -532,6 +532,42 @@ service cloud.firestore {
       allow create: if isOwner() || isStoreOwner(request.resource.data.storeId);
       allow update, delete: if isOwner() || isStoreOwner(resource.data.storeId);
     }
+
+    // レコメンドログ
+    match /recommendation_impressions/{impressionId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.sourceStoreId is string
+        && request.resource.data.targetStoreId is string
+        && request.resource.data.triggerType is string
+        && request.resource.data.algorithmVersion is string
+        && request.resource.data.reason is string
+        && request.resource.data.shownAt is timestamp;
+      allow update, delete: if false;
+    }
+
+    match /recommendation_clicks/{clickId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.sourceStoreId is string
+        && request.resource.data.targetStoreId is string
+        && request.resource.data.triggerType is string
+        && request.resource.data.clickedAt is timestamp;
+      allow update, delete: if false;
+    }
+
+    match /recommendation_visits/{visitId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.sourceStoreId is string
+        && request.resource.data.targetStoreId is string
+        && request.resource.data.triggerType is string
+        && request.resource.data.visitAt is timestamp;
+      allow update, delete: if false;
+    }
     
     // その他のコレクションは認証されたユーザーのみ読み取り可能
     match /{document=**} {
