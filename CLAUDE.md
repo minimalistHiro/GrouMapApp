@@ -352,6 +352,43 @@ Firebase関連の設定変更は、このプロジェクト内のファイルを
   - `imageUrls`: 画像URL配列
   - `imageCount`: 画像数
 
+### recommendation_clicks
+- `recommendation_clicks/{clickId}`: レコメンドのクリックログ
+  - `userId`: ユーザーUID
+  - `sourceStoreId`: 送客元店舗ID
+  - `targetStoreId`: 送客先店舗ID
+  - `triggerType`: トリガー種別（例: `badge_reward`）
+  - `impressionId`: 参照した表示ログID
+  - `clickedAt`: クリック時刻
+  - `distanceMeters`: 距離（任意）
+
+### recommendation_impressions
+- `recommendation_impressions/{impressionId}`: レコメンドの表示ログ
+  - `userId`: ユーザーUID
+  - `sourceStoreId`: 送客元店舗ID
+  - `targetStoreId`: 送客先店舗ID
+  - `triggerType`: トリガー種別（例: `badge_reward`）
+  - `algorithmVersion`: レコメンドバージョン
+  - `reason`: 表示理由（例: `nearby`）
+  - `shownAt`: 表示時刻
+  - `distanceMeters`: 距離（任意）
+
+### recommendation_visits
+- `recommendation_visits/{visitId}`: レコメンド起点の来店ログ
+  - `userId`: ユーザーUID
+  - `sourceStoreId`: 送客元店舗ID
+  - `targetStoreId`: 送客先店舗ID
+  - `triggerType`: トリガー種別（例: `badge_reward`）
+  - `impressionId`: 参照した表示ログID
+  - `visitAt`: 来店時刻
+  - `firstPointAwardAt`: 初回ポイント付与時刻
+  - `withinHours`: 計測ウィンドウ（時間）
+  - `distanceMeters`: 距離（任意）
+
+### 送客ログの作成条件
+- `point_requests/{storeId}/{userId}/award_request` が `accepted` になったタイミングで Functions が作成する
+- レコメンド表示から30日以内の `recommendation_impressions` を対象に `recommendation_visits` を記録する
+
 ### sales
 - `sales/{saleId}`: 売上記録（ポイント付与リクエスト作成時）
   - `storeId`: 店舗ID
