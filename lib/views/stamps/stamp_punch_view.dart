@@ -127,6 +127,7 @@ class _StampPunchViewState extends State<StampPunchView>
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

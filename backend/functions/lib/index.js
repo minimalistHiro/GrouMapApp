@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
@@ -33,6 +33,8 @@ const OWNER_SETTINGS_COLLECTION = 'owner_settings';
 const REFERRAL_USES_COLLECTION = 'referral_uses';
 const POINT_LEDGER_COLLECTION = 'point_ledger';
 const USER_ACHIEVEMENT_EVENTS_COLLECTION = 'user_achievement_events';
+const RECOMMENDATION_IMPRESSIONS_COLLECTION = 'recommendation_impressions';
+const RECOMMENDATION_VISITS_COLLECTION = 'recommendation_visits';
 const MAX_STAMPS = 10;
 function stripUndefined(value) {
     const entries = Object.entries(value).filter(([, v]) => v !== undefined);
@@ -1067,6 +1069,85 @@ exports.calculatePointRequestRates = (0, firestore_1.onDocumentWritten)({
         rateSource,
         campaignId,
     }));
+});
+exports.recordRecommendationVisitOnPointAward = (0, firestore_1.onDocumentWritten)({
+    document: 'point_requests/{storeId}/{userId}/award_request',
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+    try {
+        console.log('recordRecommendationVisitOnPointAward:start', {
+            storeId: event.params.storeId,
+            userId: event.params.userId,
+            hasBefore: !!((_b = (_a = event.data) === null || _a === void 0 ? void 0 : _a.before) === null || _b === void 0 ? void 0 : _b.exists),
+            hasAfter: !!((_d = (_c = event.data) === null || _c === void 0 ? void 0 : _c.after) === null || _d === void 0 ? void 0 : _d.exists),
+        });
+        if (!((_e = event.data) === null || _e === void 0 ? void 0 : _e.after.exists))
+            return;
+        const after = ((_f = event.data.after.data()) !== null && _f !== void 0 ? _f : {});
+        const status = String((_g = after['status']) !== null && _g !== void 0 ? _g : '');
+        console.log('recordRecommendationVisitOnPointAward:after-status', { status });
+        if (status !== 'accepted')
+            return;
+        const beforeStatus = ((_h = event.data.before) === null || _h === void 0 ? void 0 : _h.exists)
+            ? String((_k = ((_j = event.data.before.data()) !== null && _j !== void 0 ? _j : {})['status']) !== null && _k !== void 0 ? _k : '')
+            : '';
+        console.log('recordRecommendationVisitOnPointAward:before-status', { beforeStatus });
+        if (beforeStatus === 'accepted')
+            return;
+        const storeId = event.params.storeId;
+        const userId = event.params.userId;
+        const since = firestore_2.Timestamp.fromMillis(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const impressionSnap = await db
+            .collection(RECOMMENDATION_IMPRESSIONS_COLLECTION)
+            .where('userId', '==', userId)
+            .where('targetStoreId', '==', storeId)
+            .where('shownAt', '>=', since)
+            .orderBy('shownAt', 'desc')
+            .limit(1)
+            .get();
+        console.log('recordRecommendationVisitOnPointAward:impression-check', {
+            storeId,
+            userId,
+            impressionCount: impressionSnap.size,
+        });
+        if (impressionSnap.empty)
+            return;
+        const impressionDoc = impressionSnap.docs[0];
+        const impressionData = ((_l = impressionDoc.data()) !== null && _l !== void 0 ? _l : {});
+        const impressionId = impressionDoc.id;
+        const existing = await db
+            .collection(RECOMMENDATION_VISITS_COLLECTION)
+            .where('impressionId', '==', impressionId)
+            .limit(1)
+            .get();
+        console.log('recordRecommendationVisitOnPointAward:existing-visit-check', {
+            impressionId,
+            existingCount: existing.size,
+        });
+        if (!existing.empty)
+            return;
+        const sourceStoreId = typeof impressionData['sourceStoreId'] === 'string' ? impressionData['sourceStoreId'] : '';
+        const triggerType = typeof impressionData['triggerType'] === 'string' ? impressionData['triggerType'] : 'point_award';
+        await db.collection(RECOMMENDATION_VISITS_COLLECTION).add(stripUndefined({
+            userId,
+            sourceStoreId,
+            targetStoreId: storeId,
+            triggerType,
+            impressionId,
+            visitAt: firestore_2.FieldValue.serverTimestamp(),
+            firstPointAwardAt: firestore_2.FieldValue.serverTimestamp(),
+            withinHours: 720,
+        }));
+        console.log('recordRecommendationVisitOnPointAward:visit-created', {
+            impressionId,
+            targetStoreId: storeId,
+            userId,
+        });
+    }
+    catch (error) {
+        console.error('recordRecommendationVisitOnPointAward failed', error);
+    }
 });
 exports.verifyEmailOtp = (0, https_1.onCall)({ region: 'asia-northeast1' }, async (request) => {
     var _a, _b, _c, _d, _e;

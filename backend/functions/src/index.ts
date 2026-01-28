@@ -31,6 +31,8 @@ const OWNER_SETTINGS_COLLECTION = 'owner_settings';
 const REFERRAL_USES_COLLECTION = 'referral_uses';
 const POINT_LEDGER_COLLECTION = 'point_ledger';
 const USER_ACHIEVEMENT_EVENTS_COLLECTION = 'user_achievement_events';
+const RECOMMENDATION_IMPRESSIONS_COLLECTION = 'recommendation_impressions';
+const RECOMMENDATION_VISITS_COLLECTION = 'recommendation_visits';
 const MAX_STAMPS = 10;
 
 type BadgeAward = {
@@ -1236,6 +1238,95 @@ export const calculatePointRequestRates = onDocumentWritten(
         campaignId,
       }),
     );
+  },
+);
+
+export const recordRecommendationVisitOnPointAward = onDocumentWritten(
+  {
+    document: 'point_requests/{storeId}/{userId}/award_request',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    try {
+      console.log('recordRecommendationVisitOnPointAward:start', {
+        storeId: event.params.storeId,
+        userId: event.params.userId,
+        hasBefore: !!event.data?.before?.exists,
+        hasAfter: !!event.data?.after?.exists,
+      });
+      if (!event.data?.after.exists) return;
+
+      const after = (event.data.after.data() ?? {}) as Record<string, unknown>;
+      const status = String(after['status'] ?? '');
+      console.log('recordRecommendationVisitOnPointAward:after-status', { status });
+      if (status !== 'accepted') return;
+
+      const beforeStatus = event.data.before?.exists
+        ? String((event.data.before.data() ?? {})['status'] ?? '')
+        : '';
+      console.log('recordRecommendationVisitOnPointAward:before-status', { beforeStatus });
+      if (beforeStatus === 'accepted') return;
+
+      const storeId = event.params.storeId as string;
+      const userId = event.params.userId as string;
+      const since = Timestamp.fromMillis(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+      const impressionSnap = await db
+        .collection(RECOMMENDATION_IMPRESSIONS_COLLECTION)
+        .where('userId', '==', userId)
+        .where('targetStoreId', '==', storeId)
+        .where('shownAt', '>=', since)
+        .orderBy('shownAt', 'desc')
+        .limit(1)
+        .get();
+
+      console.log('recordRecommendationVisitOnPointAward:impression-check', {
+        storeId,
+        userId,
+        impressionCount: impressionSnap.size,
+      });
+      if (impressionSnap.empty) return;
+
+      const impressionDoc = impressionSnap.docs[0];
+      const impressionData = (impressionDoc.data() ?? {}) as Record<string, unknown>;
+      const impressionId = impressionDoc.id;
+
+      const existing = await db
+        .collection(RECOMMENDATION_VISITS_COLLECTION)
+        .where('impressionId', '==', impressionId)
+        .limit(1)
+        .get();
+      console.log('recordRecommendationVisitOnPointAward:existing-visit-check', {
+        impressionId,
+        existingCount: existing.size,
+      });
+      if (!existing.empty) return;
+
+      const sourceStoreId =
+        typeof impressionData['sourceStoreId'] === 'string' ? (impressionData['sourceStoreId'] as string) : '';
+      const triggerType =
+        typeof impressionData['triggerType'] === 'string' ? (impressionData['triggerType'] as string) : 'point_award';
+
+      await db.collection(RECOMMENDATION_VISITS_COLLECTION).add(
+        stripUndefined({
+          userId,
+          sourceStoreId,
+          targetStoreId: storeId,
+          triggerType,
+          impressionId,
+          visitAt: FieldValue.serverTimestamp(),
+          firstPointAwardAt: FieldValue.serverTimestamp(),
+          withinHours: 720,
+        }),
+      );
+      console.log('recordRecommendationVisitOnPointAward:visit-created', {
+        impressionId,
+        targetStoreId: storeId,
+        userId,
+      });
+    } catch (error) {
+      console.error('recordRecommendationVisitOnPointAward failed', error);
+    }
   },
 );
 

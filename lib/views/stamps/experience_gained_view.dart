@@ -12,6 +12,7 @@ class ExperienceGainedView extends StatefulWidget {
   final List<Map<String, dynamic>>? badges; // 渡された場合は確認で直接遷移
   final List<Map<String, dynamic>>? breakdown; // [{label: String, xp: int}]
   final int? paid; // 支払い額（将来用に保持、XP付与は行わない）
+  final String? sourceStoreId; // バッジ発生元店舗（送客ログ用）
 
   const ExperienceGainedView({
     Key? key,
@@ -20,6 +21,7 @@ class ExperienceGainedView extends StatefulWidget {
     this.badges,
     this.breakdown,
     this.paid,
+    this.sourceStoreId,
   }) : super(key: key);
 
   @override
@@ -329,7 +331,10 @@ class _ExperienceGainedViewState extends State<ExperienceGainedView>
                   if (list != null && list.isNotEmpty) {
                     Navigator.of(context).pushReplacement(
                       MaterialPageRoute(
-                        builder: (_) => BadgeAwardedView(badges: list),
+                        builder: (_) => BadgeAwardedView(
+                          badges: list,
+                          sourceStoreId: widget.sourceStoreId,
+                        ),
                       ),
                     );
                   } else {

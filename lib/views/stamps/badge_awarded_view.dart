@@ -3,11 +3,17 @@ import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../main_navigation_view.dart';
 import '../../widgets/custom_button.dart';
+import 'recommendation_after_badge_view.dart';
 
 class BadgeAwardedView extends StatefulWidget {
   final List<Map<String, dynamic>> badges;
+  final String? sourceStoreId;
 
-  const BadgeAwardedView({Key? key, required this.badges}) : super(key: key);
+  const BadgeAwardedView({
+    Key? key,
+    required this.badges,
+    this.sourceStoreId,
+  }) : super(key: key);
 
   @override
   State<BadgeAwardedView> createState() => _BadgeAwardedViewState();
@@ -71,16 +77,26 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
         ..reset()
         ..forward();
     } else {
-      // ProviderScope を再作成して Riverpod のキャッシュをクリアした状態でホームへ
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => ProviderScope(
-            key: UniqueKey(),
-            child: const MainNavigationView(initialIndex: 0),
+      if (widget.sourceStoreId != null && widget.sourceStoreId!.isNotEmpty) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => RecommendationAfterBadgeView(
+              sourceStoreId: widget.sourceStoreId!,
+            ),
           ),
-        ),
-        (route) => false,
-      );
+        );
+      } else {
+        // ProviderScope を再作成して Riverpod のキャッシュをクリアした状態でホームへ
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => ProviderScope(
+              key: UniqueKey(),
+              child: const MainNavigationView(initialIndex: 0),
+            ),
+          ),
+          (route) => false,
+        );
+      }
     }
   }
 
@@ -129,7 +145,17 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
                 CustomButton(
                   text: '確認',
                   onPressed: () {
-                    Navigator.of(context).popUntil((route) => route.isFirst);
+                    if (widget.sourceStoreId != null && widget.sourceStoreId!.isNotEmpty) {
+                      Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (_) => RecommendationAfterBadgeView(
+                            sourceStoreId: widget.sourceStoreId!,
+                          ),
+                        ),
+                      );
+                    } else {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    }
                   },
                 ),
               ],
@@ -224,4 +250,3 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
     );
   }
 }
-

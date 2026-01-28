@@ -2155,6 +2155,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     int pointsXpTotal = 0;
     int stampXpTotal = 0;
     int cardXpTotal = 0;
+    String? sourceStoreId;
     final batch = FirebaseFirestore.instance.batch();
 
     for (final doc in snapshot.docs) {
@@ -2190,6 +2191,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
         }
       }
 
+      final storeId = data['storeId'];
+      if (storeId is String && storeId.isNotEmpty) {
+        sourceStoreId = storeId;
+      }
+
       batch.update(doc.reference, {'seenAt': Timestamp.now()});
     }
 
@@ -2218,6 +2224,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
             gainedExperience: totalXp,
             badges: badgeMap.isNotEmpty ? badgeMap.values.toList() : null,
             breakdown: breakdown.isNotEmpty ? breakdown : null,
+            sourceStoreId: sourceStoreId,
           ),
         ),
       );
