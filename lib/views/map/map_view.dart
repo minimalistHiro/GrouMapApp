@@ -834,7 +834,7 @@ class _MapViewState extends ConsumerState<MapView> {
         storeIconUrl: storeIconUrl,
       );
       final double size = isExpanded ? 80.0 : 40.0;
-      final double borderWidth = isExpanded ? 0.6 : 0.3;
+      final double borderWidth = isExpanded ? 2.4 : 1.2;
       final Color borderColor = visual.useImage ? Colors.black : Colors.white70;
       final Color iconColor = visual.useImage ? Colors.grey[700]! : Colors.white;
       final String cacheKey =

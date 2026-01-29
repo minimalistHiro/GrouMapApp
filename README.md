@@ -2,6 +2,11 @@
 
 GrouMap is a location-based social app with rotating QR tokens for user check-ins.
 
+## 日本語での解説
+
+- 「店舗用」と言われた場合は `/Users/kanekohiroki/Desktop/groumapapp_store` を対象プロジェクトとする。
+- 「ユーザー用」と言われた場合は `/Users/kanekohiroki/Desktop/groumapapp` を対象プロジェクトとする。
+
 ## Project Structure
 
 ```
