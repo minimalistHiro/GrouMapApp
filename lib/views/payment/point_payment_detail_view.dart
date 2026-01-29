@@ -274,8 +274,6 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
 
   @override
   Widget build(BuildContext context) {
-    final normalPoints = widget.normalPointsAwarded ?? widget.pointsAwarded;
-    final specialPoints = widget.specialPointsAwarded ?? 0;
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -288,66 +286,7 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'ご利用内容',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDetailRow('利用ポイント', '${widget.pointsUsed}pt'),
-                  const SizedBox(height: 12),
-                  _buildDetailRow('獲得ポイント', '${widget.pointsAwarded}pt'),
-                  if (specialPoints > 0) ...[
-                    const SizedBox(height: 6),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Text(
-                        '特別ポイント ${specialPoints}pt',
-                        style: const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  _buildDetailRow('支払い金額', '${widget.paid}円'),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '取引ID',
-                        style: TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                      Text(
-                        _isLoadingTransactionId ? '取得中...' : (_transactionId ?? '-'),
-                        style: const TextStyle(fontSize: 14, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                  if (widget.usedCouponIds.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildDetailRowMultiline(
-                      '使用クーポン',
-                      _isLoadingCoupons
-                          ? '読み込み中...'
-                          : _usedCouponTitles.join('、'),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
+            const Spacer(),
             _buildStampCard(),
             const Spacer(),
             SizedBox(
@@ -396,6 +335,7 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       ],
     );
   }
+
 
   Widget _buildDetailRowMultiline(String label, String value) {
     return Row(

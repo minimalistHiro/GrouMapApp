@@ -126,16 +126,16 @@
   - `createdAt`: 作成日時
 
 ### point_requests
-- `point_requests/{storeId}/{userId}/award_request`: 付与リクエスト
+- `point_requests/{storeId}/{userId}/award_request`: スタンプ押印リクエスト（ポイント付与は行わない）
   - `status`: 状態（pending/accepted/rejected）
-  - `requestType`: `award`
-  - `pointsToAward`: 付与予定ポイント
-  - `userPoints`: ユーザー付与ポイント
-  - `amount`: 会計金額
+  - `requestType`: `stamp`
+  - `pointsToAward`: 0
+  - `userPoints`: 0
+  - `amount`: 0
   - `storeId`: 店舗ID
   - `storeName`: 店舗名
   - `userId`: ユーザーID
-  - `usedPoints`: 使用ポイント
+  - `usedPoints`: 0
   - `selectedCouponIds`: 使用クーポンID
   - `createdAt`: 作成日時
   - `respondedAt`: 応答日時
