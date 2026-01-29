@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
@@ -1435,6 +1435,113 @@ exports.verifyQrToken = (0, https_1.onCall)({
         const errorMessage = error instanceof Error ? error.message : String(error);
         throw new https_1.HttpsError('internal', `Failed to verify QR token: ${errorMessage}`);
     }
+});
+// スタンプ押印（店舗側アプリ用）
+exports.punchStamp = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+    enforceAppCheck: false,
+}, async (request) => {
+    var _a;
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Store must be authenticated');
+    }
+    const { userId, storeId } = request.data || {};
+    if (!userId || !storeId) {
+        throw new https_1.HttpsError('invalid-argument', 'Missing required parameters: userId and storeId');
+    }
+    const storeUserId = request.auth.uid;
+    const storeUserRef = db.collection(USERS_COLLECTION).doc(storeUserId);
+    const storeRef = db.collection('stores').doc(storeId);
+    const targetUserRef = db.collection(USERS_COLLECTION).doc(userId);
+    const targetStoreRef = targetUserRef.collection('stores').doc(storeId);
+    const storeUserStatsRef = db.collection('store_users').doc(storeId).collection('users').doc(userId);
+    const result = await db.runTransaction(async (txn) => {
+        var _a, _b, _c, _d, _e, _f, _g;
+        const [storeUserSnap, storeSnap] = await Promise.all([
+            txn.get(storeUserRef),
+            txn.get(storeRef),
+        ]);
+        if (!storeUserSnap.exists) {
+            throw new https_1.HttpsError('permission-denied', 'Store user not found');
+        }
+        if (!storeSnap.exists) {
+            throw new https_1.HttpsError('not-found', 'Store not found');
+        }
+        const storeUserData = storeUserSnap.data();
+        const currentStoreId = ((_a = storeUserData['currentStoreId']) !== null && _a !== void 0 ? _a : '').toString();
+        const createdStores = (_b = storeUserData['createdStores']) !== null && _b !== void 0 ? _b : [];
+        const isOwner = storeUserData['isOwner'] === true || storeUserData['isStoreOwner'] === true;
+        const storeCreatedBy = ((_d = (_c = storeSnap.data()) === null || _c === void 0 ? void 0 : _c.createdBy) !== null && _d !== void 0 ? _d : '').toString();
+        const isMember = currentStoreId === storeId || createdStores.includes(storeId) || storeCreatedBy === storeUserId;
+        if (!isOwner && !isMember) {
+            throw new https_1.HttpsError('permission-denied', 'Not authorized for this store');
+        }
+        const storeName = ((_f = (_e = storeSnap.data()) === null || _e === void 0 ? void 0 : _e.name) !== null && _f !== void 0 ? _f : '').toString();
+        const targetStoreSnap = await txn.get(targetStoreRef);
+        const currentStamps = asInt((_g = targetStoreSnap.data()) === null || _g === void 0 ? void 0 : _g['stamps'], 0);
+        const canAddStamp = currentStamps < MAX_STAMPS;
+        const stampsAdded = canAddStamp ? 1 : 0;
+        const nextStamps = canAddStamp ? currentStamps + 1 : currentStamps;
+        const cardCompleted = canAddStamp && nextStamps >= MAX_STAMPS && currentStamps < MAX_STAMPS;
+        const storeUserStatsSnap = await txn.get(storeUserStatsRef);
+        if (stampsAdded > 0) {
+            txn.set(targetStoreRef, stripUndefined({
+                storeId,
+                storeName: storeName || undefined,
+                stamps: nextStamps,
+                lastVisited: firestore_2.FieldValue.serverTimestamp(),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            }), { merge: true });
+        }
+        if (storeUserStatsSnap.exists) {
+            txn.set(storeUserStatsRef, {
+                lastVisitAt: firestore_2.FieldValue.serverTimestamp(),
+                totalVisits: firestore_2.FieldValue.increment(1),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            }, { merge: true });
+        }
+        else {
+            txn.set(storeUserStatsRef, {
+                userId,
+                storeId,
+                firstVisitAt: firestore_2.FieldValue.serverTimestamp(),
+                lastVisitAt: firestore_2.FieldValue.serverTimestamp(),
+                totalVisits: 1,
+                createdAt: firestore_2.FieldValue.serverTimestamp(),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            });
+        }
+        return {
+            userId,
+            storeId,
+            storeName,
+            stampsAdded,
+            stampsAfter: nextStamps,
+            cardCompleted,
+        };
+    });
+    const requestRef = db
+        .collection('point_requests')
+        .doc(storeId)
+        .collection(userId)
+        .doc('award_request');
+    await requestRef.set({
+        status: 'accepted',
+        requestType: 'stamp',
+        pointsToAward: 0,
+        userPoints: 0,
+        amount: 0,
+        usedPoints: 0,
+        storeId,
+        storeName: (_a = result.storeName) !== null && _a !== void 0 ? _a : '',
+        userId,
+        respondedBy: storeUserId,
+        createdAt: firestore_2.FieldValue.serverTimestamp(),
+        respondedAt: firestore_2.FieldValue.serverTimestamp(),
+        userNotified: false,
+        userNotifiedAt: firestore_2.FieldValue.delete(),
+    }, { merge: true });
+    return result;
 });
 // チェックイン記録
 async function recordCheckIn(userId, storeId, jti, deviceId) {

@@ -1673,6 +1673,140 @@ export const verifyQrToken = onCall(
   }
 );
 
+// スタンプ押印（店舗側アプリ用）
+export const punchStamp = onCall(
+  {
+    region: 'asia-northeast1',
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Store must be authenticated');
+    }
+
+    const { userId, storeId } = request.data || {};
+    if (!userId || !storeId) {
+      throw new HttpsError('invalid-argument', 'Missing required parameters: userId and storeId');
+    }
+
+    const storeUserId = request.auth.uid;
+    const storeUserRef = db.collection(USERS_COLLECTION).doc(storeUserId);
+    const storeRef = db.collection('stores').doc(storeId);
+    const targetUserRef = db.collection(USERS_COLLECTION).doc(userId);
+    const targetStoreRef = targetUserRef.collection('stores').doc(storeId);
+    const storeUserStatsRef = db.collection('store_users').doc(storeId).collection('users').doc(userId);
+
+    const result = await db.runTransaction(async (txn) => {
+      const [storeUserSnap, storeSnap] = await Promise.all([
+        txn.get(storeUserRef),
+        txn.get(storeRef),
+      ]);
+
+      if (!storeUserSnap.exists) {
+        throw new HttpsError('permission-denied', 'Store user not found');
+      }
+      if (!storeSnap.exists) {
+        throw new HttpsError('not-found', 'Store not found');
+      }
+
+      const storeUserData = storeUserSnap.data() as Record<string, unknown>;
+      const currentStoreId = (storeUserData['currentStoreId'] ?? '').toString();
+      const createdStores = (storeUserData['createdStores'] as string[]) ?? [];
+      const isOwner = storeUserData['isOwner'] === true || storeUserData['isStoreOwner'] === true;
+      const storeCreatedBy = (storeSnap.data()?.createdBy ?? '').toString();
+
+      const isMember =
+        currentStoreId === storeId || createdStores.includes(storeId) || storeCreatedBy === storeUserId;
+
+      if (!isOwner && !isMember) {
+        throw new HttpsError('permission-denied', 'Not authorized for this store');
+      }
+
+      const storeName = (storeSnap.data()?.name ?? '').toString();
+
+      const targetStoreSnap = await txn.get(targetStoreRef);
+      const currentStamps = asInt(targetStoreSnap.data()?.['stamps'], 0);
+      const canAddStamp = currentStamps < MAX_STAMPS;
+      const stampsAdded = canAddStamp ? 1 : 0;
+      const nextStamps = canAddStamp ? currentStamps + 1 : currentStamps;
+      const cardCompleted = canAddStamp && nextStamps >= MAX_STAMPS && currentStamps < MAX_STAMPS;
+
+      const storeUserStatsSnap = await txn.get(storeUserStatsRef);
+
+      if (stampsAdded > 0) {
+        txn.set(
+          targetStoreRef,
+          stripUndefined({
+            storeId,
+            storeName: storeName || undefined,
+            stamps: nextStamps,
+            lastVisited: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }),
+          { merge: true },
+        );
+      }
+      if (storeUserStatsSnap.exists) {
+        txn.set(
+          storeUserStatsRef,
+          {
+            lastVisitAt: FieldValue.serverTimestamp(),
+            totalVisits: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } else {
+        txn.set(storeUserStatsRef, {
+          userId,
+          storeId,
+          firstVisitAt: FieldValue.serverTimestamp(),
+          lastVisitAt: FieldValue.serverTimestamp(),
+          totalVisits: 1,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      return {
+        userId,
+        storeId,
+        storeName,
+        stampsAdded,
+        stampsAfter: nextStamps,
+        cardCompleted,
+      };
+    });
+
+    const requestRef = db
+      .collection('point_requests')
+      .doc(storeId)
+      .collection(userId)
+      .doc('award_request');
+    await requestRef.set(
+      {
+        status: 'accepted',
+        requestType: 'stamp',
+        pointsToAward: 0,
+        userPoints: 0,
+        amount: 0,
+        usedPoints: 0,
+        storeId,
+        storeName: result.storeName ?? '',
+        userId,
+        respondedBy: storeUserId,
+        createdAt: FieldValue.serverTimestamp(),
+        respondedAt: FieldValue.serverTimestamp(),
+        userNotified: false,
+        userNotifiedAt: FieldValue.delete(),
+      },
+      { merge: true },
+    );
+
+    return result;
+  },
+);
+
 // チェックイン記録
 async function recordCheckIn(
   userId: string, 

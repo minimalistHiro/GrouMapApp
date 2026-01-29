@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -13,6 +14,7 @@ import 'map/map_view.dart';
 import 'qr/qr_generator_view.dart';
 import 'profile/profile_view.dart';
 import 'coupons/coupons_view.dart';
+import 'payment/point_payment_detail_view.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
   final int initialIndex;
@@ -49,6 +51,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   static const double _fabLabelSize = 10;
   ProviderSubscription<AsyncValue<User?>>? _authSubscription;
   ProviderSubscription<AsyncValue<Map<String, dynamic>?>>? _userDataSubscription;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _storesSub;
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>> _storeRequestSubs = {};
+  bool _isNavigatingToPointDetail = false;
+  String? _lastHandledRequestId;
   bool _referralPopupShown = false;
   bool _didInitialLoad = false;
   String? _lastInitialUserId;
@@ -63,9 +69,11 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         next.whenData((user) {
           _triggerInitialLoad(user);
           _userDataSubscription?.close();
+          _stopPointRequestListener();
           if (user == null) {
             return;
           }
+          _startPointRequestListener(user.uid);
           _userDataSubscription = ref.listenManual<AsyncValue<Map<String, dynamic>?>>(
             userDataProvider(user.uid),
             (prev, data) {
@@ -403,7 +411,127 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   void dispose() {
     _authSubscription?.close();
     _userDataSubscription?.close();
+    _stopPointRequestListener();
     super.dispose();
+  }
+
+  void _startPointRequestListener(String userId) {
+    _stopPointRequestListener();
+    _storesSub = FirebaseFirestore.instance.collection('stores').snapshots().listen((storesSnap) {
+      if (!mounted) return;
+      final currentStoreIds =
+          _storeRequestSubs.keys.map((key) => key.split(':').first).toSet();
+      final incomingStoreIds = storesSnap.docs.map((d) => d.id).toSet();
+
+      for (final storeId in incomingStoreIds.difference(currentStoreIds)) {
+        final key = '$storeId:award';
+        final docRef = FirebaseFirestore.instance
+            .collection('point_requests')
+            .doc(storeId)
+            .collection(userId)
+            .doc('award_request');
+        final sub = docRef.snapshots().listen((doc) async {
+          if (!mounted) return;
+          if (!doc.exists) return;
+          final data = doc.data() as Map<String, dynamic>;
+          final status = (data['status'] ?? '').toString();
+          if (status != 'accepted') return;
+          if (_isRequestAlreadyNotified(data)) return;
+          final combinedRequestId = '${storeId}_$userId';
+          if (_isNavigatingToPointDetail || _lastHandledRequestId == combinedRequestId) return;
+
+          _isNavigatingToPointDetail = true;
+          _lastHandledRequestId = combinedRequestId;
+          try {
+            final points = _parseRequestPoints(data);
+            final amount = _parseRequestAmount(data);
+            final usedPoints = _parseRequestUsedPoints(data);
+            final usedCouponIds = _parseRequestCouponIds(data);
+            await _markRequestNotified(storeId: storeId, userId: userId);
+            if (!mounted) return;
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => PointPaymentDetailView(
+                  storeId: storeId,
+                  paid: amount,
+                  pointsAwarded: points,
+                  pointsUsed: usedPoints,
+                  usedCouponIds: usedCouponIds,
+                ),
+              ),
+            );
+          } finally {
+            if (mounted) {
+              _isNavigatingToPointDetail = false;
+            }
+          }
+        });
+        _storeRequestSubs[key] = sub;
+      }
+
+      for (final removedId in currentStoreIds.difference(incomingStoreIds)) {
+        _storeRequestSubs.remove('$removedId:award')?.cancel();
+      }
+    }, onError: (_) {});
+  }
+
+  void _stopPointRequestListener() {
+    _storesSub?.cancel();
+    _storesSub = null;
+    for (final sub in _storeRequestSubs.values) {
+      sub.cancel();
+    }
+    _storeRequestSubs.clear();
+  }
+
+  bool _isRequestAlreadyNotified(Map<String, dynamic> data) {
+    final notified = data['userNotified'];
+    if (notified is bool && notified) return true;
+    return data.containsKey('userNotifiedAt') && data['userNotifiedAt'] != null;
+  }
+
+  int _parseRequestPoints(Map<String, dynamic> data) {
+    final pointsValue = data['userPoints'] ?? data['pointsToAward'];
+    if (pointsValue is int) return pointsValue;
+    if (pointsValue is num) return pointsValue.toInt();
+    return int.tryParse('$pointsValue') ?? 0;
+  }
+
+  int _parseRequestAmount(Map<String, dynamic> data) {
+    final amountValue = data['amount'];
+    if (amountValue is int) return amountValue;
+    if (amountValue is num) return amountValue.toInt();
+    return int.tryParse('$amountValue') ?? 0;
+  }
+
+  int _parseRequestUsedPoints(Map<String, dynamic> data) {
+    final usedValue = data['usedPoints'];
+    if (usedValue is int) return usedValue;
+    if (usedValue is num) return usedValue.toInt();
+    return int.tryParse('$usedValue') ?? 0;
+  }
+
+  List<String> _parseRequestCouponIds(Map<String, dynamic> data) {
+    final raw = data['selectedCouponIds'] ?? data['usedCouponIds'];
+    if (raw is List) {
+      return raw.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+    }
+    return [];
+  }
+
+  Future<void> _markRequestNotified({
+    required String storeId,
+    required String userId,
+  }) async {
+    await FirebaseFirestore.instance
+        .collection('point_requests')
+        .doc(storeId)
+        .collection(userId)
+        .doc('award_request')
+        .update({
+      'userNotified': true,
+      'userNotifiedAt': FieldValue.serverTimestamp(),
+    });
   }
 
   void _maybeShowReferralPopup(String userId, Map<String, dynamic> userData) {
