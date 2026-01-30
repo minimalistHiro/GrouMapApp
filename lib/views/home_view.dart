@@ -17,7 +17,6 @@ import '../providers/level_provider.dart';
 import '../models/coupon_model.dart' as model;
 import '../widgets/custom_button.dart';
 import 'notifications/notifications_view.dart' hide userDataProvider;
-import 'points/points_view.dart';
 import 'ranking/leaderboard_view.dart';
 import 'stores/store_list_view.dart';
 import 'referral/friend_referral_view.dart';
@@ -27,6 +26,7 @@ import 'coupons/coupon_detail_view.dart';
 import 'coupons/coupons_view.dart';
 import 'badges/badges_view.dart';
 import 'stamps/experience_gained_view.dart';
+import 'stamps/stamp_cards_view.dart';
 
 // ユーザーが所持しているバッジ数
 final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
@@ -47,6 +47,42 @@ final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((r
     });
   } catch (e) {
     debugPrint('Error creating user badge count stream: $e');
+    return Stream.value(0);
+  }
+});
+
+int _parseStampCount(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? 0;
+  return 0;
+}
+
+// ユーザーが所持しているスタンプ合計数
+final userTotalStampsProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
+  try {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      return Stream.value(0);
+    }
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('stores')
+        .snapshots()
+        .map((snapshot) {
+          var total = 0;
+          for (final doc in snapshot.docs) {
+            total += _parseStampCount(doc.data()['stamps']);
+          }
+          return total;
+        })
+        .handleError((error) {
+          debugPrint('Error fetching user total stamps: $error');
+          return 0;
+        });
+  } catch (e) {
+    debugPrint('Error creating user total stamps stream: $e');
     return Stream.value(0);
   }
 });
@@ -836,13 +872,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
     return '$hour:$minute';
   }
 
-  int _parsePoints(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    if (value is String) return int.tryParse(value) ?? 0;
-    return 0;
-  }
-
   bool _isSameDate(DateTime start, DateTime end) {
     return start.year == end.year && start.month == end.month && start.day == end.day;
   }
@@ -866,67 +895,60 @@ class _HomeViewState extends ConsumerState<HomeView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 獲得ポイント（画像のような表記に変更）
-          ref.watch(userDataProvider(userId)).when(
-            data: (userData) {
-              if (userData != null) {
-                final points = _parsePoints(userData['points']);
-                final specialPoints = _parsePoints(userData['specialPoints']);
-                final totalPoints = points + specialPoints;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text(
-                      '獲得ポイント',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+          // 保有スタンプ合計（画像のような表記に変更）
+          ref.watch(userTotalStampsProvider(userId)).when(
+            data: (totalStamps) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Text(
+                    '保有スタンプ',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
-                    const SizedBox(height: 15),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Center(
-                            child: RichText(
-                              text: TextSpan(
-                                text: '$totalPoints',
-                                style: const TextStyle(
-                                  fontSize: 44,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                  height: 1.0,
-                                ),
-                                children: const [
-                                  TextSpan(
-                                    text: '  pt',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ],
+                  ),
+                  const SizedBox(height: 15),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Center(
+                          child: RichText(
+                            text: TextSpan(
+                              text: '$totalStamps',
+                              style: const TextStyle(
+                                fontSize: 44,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                                height: 1.0,
                               ),
+                              children: const [
+                                TextSpan(
+                                  text: '  スタンプ',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '特別ポイント: $specialPoints pt',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '全店舗合計',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
                     ),
-                  ],
-                );
-              } else {
-                return const SizedBox.shrink();
-              }
+                  ),
+                ],
+              );
             },
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
@@ -1278,7 +1300,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
   Widget _buildMenuGrid(BuildContext context, WidgetRef ref, bool isLoggedIn) {
     final menuItems = [
-      {'icon': Icons.monetization_on, 'label': 'ポイント'},
+      {'icon': Icons.local_activity, 'label': 'スタンプカード'},
       {'icon': Icons.military_tech, 'label': 'バッジ'},
       {'icon': Icons.store, 'label': '店舗一覧'},
       {'icon': Icons.emoji_events, 'label': 'ランキング'},
@@ -1929,11 +1951,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
           return;
         }
 
-        if (title == 'ポイント' || title == 'ポイント履歴') {
-          // ポイント履歴画面に遷移
+        if (title == 'スタンプカード') {
+          // スタンプカード画面に遷移
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (context) => const PointsView(),
+              builder: (context) => const StampCardsView(),
             ),
           );
         } else if (title == 'バッジ') {
