@@ -12,7 +12,6 @@ final couponProvider = Provider<CouponService>((ref) {
 final storeCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, storeId) {
   final couponService = ref.watch(couponProvider);
   return couponService.getStoreCoupons(storeId)
-      .timeout(const Duration(seconds: 5))
       .handleError((error) {
     debugPrint('Store coupons provider error: $error');
     return <Coupon>[];
@@ -23,7 +22,6 @@ final storeCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, s
 final storeCouponsNestedProvider = StreamProvider.family<List<Coupon>, String>((ref, storeId) {
   final couponService = ref.watch(couponProvider);
   return couponService.getStoreCouponsNested(storeId)
-      .timeout(const Duration(seconds: 5))
       .handleError((error) {
     debugPrint('Store coupons nested provider error: $error');
     return <Coupon>[];
@@ -34,7 +32,6 @@ final storeCouponsNestedProvider = StreamProvider.family<List<Coupon>, String>((
 final userCouponsProvider = StreamProvider.family<List<UserCoupon>, String>((ref, userId) {
   final couponService = ref.watch(couponProvider);
   return couponService.getUserCoupons(userId)
-      .timeout(const Duration(seconds: 5))
       .handleError((error) {
     debugPrint('User coupons provider error: $error');
     if (error.toString().contains('permission-denied')) {
@@ -48,7 +45,6 @@ final userCouponsProvider = StreamProvider.family<List<UserCoupon>, String>((ref
 final availableCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, userId) {
   final couponService = ref.watch(couponProvider);
   return couponService.getAvailableCoupons(userId)
-      .timeout(const Duration(seconds: 5))
       .handleError((error) {
     debugPrint('Available coupons provider error: $error');
     if (error.toString().contains('permission-denied')) {
@@ -62,7 +58,6 @@ final availableCouponsProvider = StreamProvider.family<List<Coupon>, String>((re
 final promotionsProvider = StreamProvider<List<Promotion>>((ref) {
   final couponService = ref.watch(couponProvider);
   return couponService.getActivePromotions()
-      .timeout(const Duration(seconds: 5))
       .handleError((error) {
     debugPrint('Promotions provider error: $error');
     return <Promotion>[];
@@ -73,7 +68,6 @@ final promotionsProvider = StreamProvider<List<Promotion>>((ref) {
 final usedCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, userId) {
   final couponService = ref.watch(couponProvider);
   return couponService.getUsedCoupons(userId)
-      .timeout(const Duration(seconds: 5))
       .handleError((error) {
     debugPrint('Used coupons provider error: $error');
     if (error.toString().contains('permission-denied')) {
@@ -93,7 +87,6 @@ class CouponService {
           .collection('public_coupons')
           .where('storeId', isEqualTo: storeId)
           .snapshots()
-          .timeout(const Duration(seconds: 8))
           .map((snapshot) {
         final coupons = snapshot.docs
             .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
@@ -119,7 +112,6 @@ class CouponService {
           .doc(storeId)
           .collection('coupons')
           .snapshots()
-          .timeout(const Duration(seconds: 8))
           .map((snapshot) {
         final coupons = snapshot.docs
             .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
@@ -144,7 +136,6 @@ class CouponService {
           .collection('user_coupons')
           .where('userId', isEqualTo: userId)
           .snapshots()
-          .timeout(const Duration(seconds: 5))
           .map((snapshot) {
         return snapshot.docs.map((doc) {
           return UserCoupon.fromFirestore(doc.data(), doc.id);
@@ -181,7 +172,6 @@ class CouponService {
           .where('isActive', isEqualTo: true)
           .where('validUntil', isGreaterThan: Timestamp.fromDate(now))
           .snapshots()
-          .timeout(const Duration(seconds: 10))
           .map((snapshot) {
         final items = snapshot.docs
             .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
@@ -207,7 +197,6 @@ class CouponService {
           .where('isActive', isEqualTo: true)
           .where('validUntil', isGreaterThan: Timestamp.fromDate(now))
           .snapshots()
-          .timeout(const Duration(seconds: 10))
           .asyncMap((snapshot) async {
         final usedSnapshot = await _firestore
             .collection('users')
@@ -254,7 +243,6 @@ class CouponService {
       return _firestore
           .collection('promotions')
           .snapshots()
-          .timeout(const Duration(seconds: 5))
           .map((snapshot) {
         return snapshot.docs.map((doc) {
           return Promotion.fromFirestore(doc.data(), doc.id);

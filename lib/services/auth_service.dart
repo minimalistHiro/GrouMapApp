@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:io';
@@ -252,10 +253,28 @@ class AuthService {
 
   // メール認証状態のストリーム
   Stream<bool> emailVerificationStatusStream(String uid) {
-    return _firestore.collection('users').doc(uid).snapshots().map((doc) {
-      final data = doc.data();
-      return data?['emailVerified'] == true;
-    });
+    final controller = StreamController<bool>.broadcast();
+    final sub = _firestore.collection('users').doc(uid).snapshots().listen(
+      (doc) {
+        if (!doc.exists) {
+          controller.add(true);
+          return;
+        }
+        final data = doc.data();
+        controller.add(data?['emailVerified'] == true);
+      },
+      onError: (error) {
+        debugPrint('Email verification status error: $error');
+        controller.add(true);
+      },
+    );
+
+    controller.onCancel = () {
+      sub.cancel();
+      controller.close();
+    };
+
+    return controller.stream;
   }
 
   // Firestore上のメール認証状態を更新
@@ -280,14 +299,74 @@ class AuthService {
       try {
         final user = _auth.currentUser;
         if (user != null) {
-          await _firestore.collection('users').doc(user.uid).delete();
+          final userDocRef = _firestore.collection('users').doc(user.uid);
+          String? profileImageUrl;
+          try {
+            final doc = await userDocRef.get();
+            final data = doc.data();
+            if (data != null && data['profileImageUrl'] != null) {
+              profileImageUrl = data['profileImageUrl'].toString();
+            }
+          } catch (e) {
+            debugPrint('Fetch user profile image error: $e');
+          }
+
+          await _deleteUserSubcollections(userDocRef);
+          await _deleteProfileImageIfNeeded(profileImageUrl);
+          await userDocRef.delete();
           await user.delete();
+          await Future.wait([
+            _auth.signOut(),
+            _googleSignIn.signOut(),
+          ]);
         }
       } catch (e) {
         debugPrint('Account deletion error: $e');
         throw _handleAuthError(e, 'アカウント削除');
       }
     });
+  }
+
+  Future<void> _deleteProfileImageIfNeeded(String? imageUrl) async {
+    if (imageUrl == null || imageUrl.isEmpty) return;
+    if (!_isFirebaseStorageUrl(imageUrl)) return;
+    try {
+      await FirebaseStorage.instance.refFromURL(imageUrl).delete();
+    } on FirebaseException catch (e) {
+      if (e.code == 'object-not-found') return;
+      rethrow;
+    }
+  }
+
+  bool _isFirebaseStorageUrl(String url) {
+    return url.contains('firebasestorage.googleapis.com') || url.contains('storage.googleapis.com');
+  }
+
+  Future<void> _deleteUserSubcollections(DocumentReference<Map<String, dynamic>> userDocRef) async {
+    final subcollectionNames = <String>[
+      'stores',
+      'used_coupons',
+      'liked_posts',
+      'favorite_stores',
+      'comments',
+      'notifications',
+    ];
+    for (final name in subcollectionNames) {
+      final collectionRef = userDocRef.collection(name);
+      await _deleteCollection(collectionRef);
+    }
+  }
+
+  Future<void> _deleteCollection(CollectionReference<Map<String, dynamic>> collectionRef) async {
+    while (true) {
+      final snapshot = await collectionRef.limit(200).get();
+      if (snapshot.docs.isEmpty) break;
+      final batch = _firestore.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    }
   }
 
   // サインアウト
