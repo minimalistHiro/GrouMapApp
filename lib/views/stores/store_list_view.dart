@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
-import '../stamps/stamp_cards_view.dart';
 import 'store_detail_view.dart';
 
 class StoreListView extends ConsumerStatefulWidget {
@@ -89,17 +88,9 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     return authState.when(
       data: (user) {
         if (user == null) {
-          return Scaffold(
-            backgroundColor: Colors.grey[50],
-            appBar: AppBar(
-              title: const Text('店舗一覧'),
-              backgroundColor: const Color(0xFFFF6B35),
-              foregroundColor: Colors.white,
-            ),
-            body: _buildBody(),
-          );
+          return _buildStoreListScaffold();
         }
-        return _buildTabbedScaffold();
+        return _buildStoreListScaffold();
       },
       loading: () => const Scaffold(
         backgroundColor: Colors.grey,
@@ -121,34 +112,15 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     );
   }
 
-  Widget _buildTabbedScaffold() {
-    return DefaultTabController(
-      length: 2,
-      child: Builder(
-        builder: (context) {
-          final tabController = DefaultTabController.of(context)!;
-          return Scaffold(
-            backgroundColor: Colors.grey[50],
-            appBar: AppBar(
-              title: const Text('店舗一覧'),
-              backgroundColor: const Color(0xFFFF6B35),
-              foregroundColor: Colors.white,
-              bottom: const TabBar(
-                tabs: [
-                  Tab(text: '店舗一覧'),
-                  Tab(text: 'スタンプ'),
-                ],
-              ),
-            ),
-            body: TabBarView(
-              children: [
-                _buildBody(),
-                const StampCardsView(showAppBar: false),
-              ],
-            ),
-          );
-        },
+  Widget _buildStoreListScaffold() {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text('店舗一覧'),
+        backgroundColor: const Color(0xFFFF6B35),
+        foregroundColor: Colors.white,
       ),
+      body: _buildBody(),
     );
   }
 
