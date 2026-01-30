@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/owner_settings_provider.dart';
@@ -28,8 +29,12 @@ import 'badges/badges_view.dart';
 import 'stamps/experience_gained_view.dart';
 
 // ユーザーが所持しているバッジ数
-final userBadgeCountProvider = StreamProvider.family<int, String>((ref, userId) {
+final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
   try {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      return Stream.value(0);
+    }
     return FirebaseFirestore.instance
         .collection('user_badges')
         .doc(userId)
@@ -62,6 +67,46 @@ class _HomeViewState extends ConsumerState<HomeView> {
   bool _isShowingAchievement = false;
   String? _lastAchievementUserId;
   DateTime? _lastAchievementCheckAt;
+  static const bool _showDebugLoadingLabels = false;
+
+  Widget _buildLoadingIndicatorWithLabel(
+    String label, {
+    Color? color,
+    double? strokeWidth,
+  }) {
+    if (!_showDebugLoadingLabels) {
+      return CircularProgressIndicator(
+        color: color,
+        strokeWidth: strokeWidth ?? 4,
+      );
+    }
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        CircularProgressIndicator(
+          color: color,
+          strokeWidth: strokeWidth ?? 4,
+        ),
+        Positioned(
+          bottom: -18,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 9,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   Future<void> _openCouponDetail(BuildContext context, dynamic coupon) async {
     final storeId = coupon.storeId as String?;
@@ -133,8 +178,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
       data: (user) {
         return _buildHomeContent(context, ref, user);
       },
-      loading: () => const Center(
-        child: CircularProgressIndicator(),
+      loading: () => Center(
+        child: _buildLoadingIndicatorWithLabel('HOME: authState loading'),
       ),
       error: (error, _) => Center(
         child: Column(
@@ -489,11 +534,12 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     ),
                   );
                 },
-                loading: () => const SizedBox(
+                loading: () => SizedBox(
                   width: 60,
                   height: 60,
-                  child: CircularProgressIndicator(
-                    color: Color(0xFFFF6B35),
+                  child: _buildLoadingIndicatorWithLabel(
+                    'HOME: userData header loading',
+                    color: const Color(0xFFFF6B35),
                     strokeWidth: 2,
                   ),
                 ),
@@ -1337,9 +1383,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 },
               );
             },
-            loading: () => const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
+            loading: () => Center(
+              child: _buildLoadingIndicatorWithLabel(
+                'HOME: coupons loading',
+                color: const Color(0xFFFF6B35),
               ),
             ),
             error: (error, _) => const Center(
@@ -1427,15 +1474,16 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 },
               );
             },
-            loading: () => const Center(
+            loading: () => Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularProgressIndicator(
-                    color: Color(0xFFFF6B35),
+                  _buildLoadingIndicatorWithLabel(
+                    'HOME: posts loading',
+                    color: const Color(0xFFFF6B35),
                   ),
-                  SizedBox(height: 8),
-                  Text(
+                  const SizedBox(height: 8),
+                  const Text(
                     '投稿を読み込み中...',
                     style: TextStyle(
                       fontSize: 12,

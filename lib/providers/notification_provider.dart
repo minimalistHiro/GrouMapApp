@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../models/notification_model.dart' as model;
 
 // 通知サービスプロバイダー
@@ -10,19 +11,19 @@ final notificationProvider = Provider<NotificationService>((ref) {
 });
 
 // ユーザーの通知一覧プロバイダー
-final userNotificationsProvider = StreamProvider.family<List<model.NotificationModel>, String>((ref, userId) {
+final userNotificationsProvider = StreamProvider.autoDispose.family<List<model.NotificationModel>, String>((ref, userId) {
   final notificationService = ref.watch(notificationProvider);
   return notificationService.getUserNotifications(userId);
 });
 
 // 未読通知数プロバイダー
-final unreadNotificationCountProvider = StreamProvider.family<int, String>((ref, userId) {
+final unreadNotificationCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
   final notificationService = ref.watch(notificationProvider);
   return notificationService.getUnreadNotificationCount(userId);
 });
 
 // 通知設定プロバイダー
-final notificationSettingsProvider = StreamProvider.family<model.NotificationSettings?, String>((ref, userId) {
+final notificationSettingsProvider = StreamProvider.autoDispose.family<model.NotificationSettings?, String>((ref, userId) {
   final notificationService = ref.watch(notificationProvider);
   return notificationService.getNotificationSettings(userId);
 });
@@ -33,6 +34,10 @@ class NotificationService {
   // ユーザーの通知一覧を取得
   Stream<List<model.NotificationModel>> getUserNotifications(String userId) {
     try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null || currentUser.uid != userId) {
+        return Stream.value([]);
+      }
       // インデックスエラーを回避するため、orderByを削除してクライアント側でソート
       final controller = StreamController<List<model.NotificationModel>>.broadcast();
       List<model.NotificationModel> topLevel = [];
@@ -88,6 +93,10 @@ class NotificationService {
   // 未読通知数を取得
   Stream<int> getUnreadNotificationCount(String userId) {
     try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null || currentUser.uid != userId) {
+        return Stream.value(0);
+      }
       final controller = StreamController<int>.broadcast();
       int topCount = 0;
       int userCount = 0;

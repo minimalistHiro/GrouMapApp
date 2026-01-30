@@ -139,7 +139,9 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
               if (!isVerified) {
                 return const EmailVerificationPendingView(autoSendOnLoad: false);
               }
-              return const MainNavigationView();
+              return MainNavigationView(
+                key: ValueKey('user:${user.uid}'),
+              );
             },
             loading: () => const Scaffold(
               body: Center(
@@ -150,7 +152,9 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
           );
         } else {
           debugPrint('AuthWrapper: User not logged in, showing MainNavigationView');
-          return const MainNavigationView();
+          return const MainNavigationView(
+            key: ValueKey('guest'),
+          );
         }
       },
       loading: () => const Scaffold(

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 // お知らせサービスプロバイダー
 final announcementProvider = Provider<AnnouncementService>((ref) {
@@ -8,10 +9,9 @@ final announcementProvider = Provider<AnnouncementService>((ref) {
 });
 
 // お知らせ一覧プロバイダー
-final announcementsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+final announcementsProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
   final announcementService = ref.watch(announcementProvider);
   return announcementService.getAnnouncements()
-      .timeout(const Duration(seconds: 5))
       .handleError((error) {
     debugPrint('Announcements provider error: $error');
     return <Map<String, dynamic>>[];
@@ -24,12 +24,15 @@ class AnnouncementService {
   // お知らせ一覧を取得
   Stream<List<Map<String, dynamic>>> getAnnouncements() {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        return Stream.value([]);
+      }
       return _firestore
           .collection('notifications')
           .where('isActive', isEqualTo: true)
           .where('isPublished', isEqualTo: true)
           .snapshots()
-          .timeout(const Duration(seconds: 5))
           .map((snapshot) {
         final announcements = snapshot.docs.map((doc) {
           final data = doc.data();

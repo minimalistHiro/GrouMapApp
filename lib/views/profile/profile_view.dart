@@ -17,6 +17,7 @@ import '../legal/terms_view.dart';
 import '../support/help_view.dart';
 import '../feedback/feedback_view.dart';
 import '../main_navigation_view.dart';
+import '../auth/account_deletion_views.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({Key? key}) : super(key: key);
@@ -364,7 +365,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   ),
                   _buildMenuItem(
                     icon: Icons.delete_forever,
-                    title: 'アカウント削除',
+                    title: '退会する',
                     onTap: () => _showDeleteAccountDialog(context),
                     isDestructive: true,
                   ),
@@ -878,7 +879,11 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       if (context.mounted) {
         Navigator.of(context).pop();
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainNavigationView()),
+          MaterialPageRoute(
+            builder: (context) => const MainNavigationView(
+              key: ValueKey('guest'),
+            ),
+          ),
           (route) => false,
         );
       }
@@ -892,13 +897,13 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     }
   }
 
-  // 軽量なアカウント削除ダイアログ（SettingsView 削除に伴いこちらで提供）
+  // 退会ダイアログ（SettingsView 削除に伴いこちらで提供）
   void _showDeleteAccountDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('アカウント削除'),
-        content: const Text('アカウントを削除しますか？この操作は取り消せません。'),
+        title: const Text('退会'),
+        content: const Text('退会しますか？この操作は取り消せません。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -907,13 +912,15 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           ElevatedButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              // ここでは実際の削除処理は行わず、ガードのみ提供
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('アカウント削除機能は管理画面から実行してください'), backgroundColor: Colors.orange),
+              if (!context.mounted) return;
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AccountDeletionProcessingView(),
+                ),
               );
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('削除する'),
+            child: const Text('退会する'),
           ),
         ],
       ),
