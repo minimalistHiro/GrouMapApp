@@ -1445,10 +1445,14 @@ exports.punchStamp = (0, https_1.onCall)({
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Store must be authenticated');
     }
-    const { userId, storeId } = request.data || {};
+    const { userId, storeId, selectedCouponIds: rawSelectedCouponIds } = request.data || {};
     if (!userId || !storeId) {
         throw new https_1.HttpsError('invalid-argument', 'Missing required parameters: userId and storeId');
     }
+    const selectedCouponIds = Array.isArray(rawSelectedCouponIds)
+        ? rawSelectedCouponIds.filter((id) => typeof id === 'string' && id.trim().length > 0)
+        : [];
+    console.log('[punchStamp] selectedCouponIds:', selectedCouponIds);
     const storeUserId = request.auth.uid;
     const storeUserRef = db.collection(USERS_COLLECTION).doc(storeUserId);
     const storeRef = db.collection('stores').doc(storeId);
@@ -1456,7 +1460,7 @@ exports.punchStamp = (0, https_1.onCall)({
     const targetStoreRef = targetUserRef.collection('stores').doc(storeId);
     const storeUserStatsRef = db.collection('store_users').doc(storeId).collection('users').doc(userId);
     const result = await db.runTransaction(async (txn) => {
-        var _a, _b, _c, _d, _e, _f, _g;
+        var _a, _b, _c, _d, _e, _f, _g, _h;
         const [storeUserSnap, storeSnap] = await Promise.all([
             txn.get(storeUserRef),
             txn.get(storeRef),
@@ -1478,12 +1482,42 @@ exports.punchStamp = (0, https_1.onCall)({
         }
         const storeName = ((_f = (_e = storeSnap.data()) === null || _e === void 0 ? void 0 : _e.name) !== null && _f !== void 0 ? _f : '').toString();
         const targetStoreSnap = await txn.get(targetStoreRef);
+        const storeUserStatsSnap = await txn.get(storeUserStatsRef);
         const currentStamps = asInt((_g = targetStoreSnap.data()) === null || _g === void 0 ? void 0 : _g['stamps'], 0);
         const canAddStamp = currentStamps < MAX_STAMPS;
         const stampsAdded = canAddStamp ? 1 : 0;
         const nextStamps = canAddStamp ? currentStamps + 1 : currentStamps;
         const cardCompleted = canAddStamp && nextStamps >= MAX_STAMPS && currentStamps < MAX_STAMPS;
-        const storeUserStatsSnap = await txn.get(storeUserStatsRef);
+        const couponReads = [];
+        if (selectedCouponIds.length > 0) {
+            for (const couponId of selectedCouponIds) {
+                const couponRef = db
+                    .collection('coupons')
+                    .doc(storeId)
+                    .collection('coupons')
+                    .doc(couponId);
+                const publicCouponRef = db.collection('public_coupons').doc(couponId);
+                const usedByRef = couponRef.collection('usedBy').doc(userId);
+                const userUsedRef = targetUserRef.collection('used_coupons').doc(couponId);
+                const [couponSnap, usedBySnap, userUsedSnap, publicSnap] = await Promise.all([
+                    txn.get(couponRef),
+                    txn.get(usedByRef),
+                    txn.get(userUsedRef),
+                    txn.get(publicCouponRef),
+                ]);
+                couponReads.push({
+                    couponId,
+                    couponRef,
+                    publicCouponRef,
+                    usedByRef,
+                    userUsedRef,
+                    couponSnap,
+                    usedBySnap,
+                    userUsedSnap,
+                    publicSnap,
+                });
+            }
+        }
         if (stampsAdded > 0) {
             txn.set(targetStoreRef, stripUndefined({
                 storeId,
@@ -1511,6 +1545,59 @@ exports.punchStamp = (0, https_1.onCall)({
                 updatedAt: firestore_2.FieldValue.serverTimestamp(),
             });
         }
+        if (couponReads.length > 0) {
+            const now = new Date();
+            for (const entry of couponReads) {
+                const { couponId, couponRef, publicCouponRef, usedByRef, userUsedRef, couponSnap, usedBySnap, userUsedSnap, publicSnap } = entry;
+                if (!couponSnap.exists) {
+                    throw new https_1.HttpsError('not-found', `Coupon not found: ${couponId}`);
+                }
+                const couponData = (_h = couponSnap.data()) !== null && _h !== void 0 ? _h : {};
+                const isActive = couponData['isActive'] !== false;
+                const usageLimit = asInt(couponData['usageLimit'], 0);
+                const usedCount = asInt(couponData['usedCount'], 0);
+                const noExpiry = couponData['noExpiry'] === true;
+                const validUntilValue = couponData['validUntil'];
+                const validUntil = validUntilValue instanceof firestore_2.Timestamp ? validUntilValue.toDate() : undefined;
+                const isNoExpiry = noExpiry || (validUntil && validUntil.getFullYear() >= 2100);
+                if (!isActive) {
+                    throw new https_1.HttpsError('failed-precondition', `Coupon inactive: ${couponId}`);
+                }
+                if (!isNoExpiry && (!validUntil || validUntil.getTime() <= now.getTime())) {
+                    throw new https_1.HttpsError('failed-precondition', `Coupon expired: ${couponId}`);
+                }
+                if (usageLimit <= 0) {
+                    throw new https_1.HttpsError('failed-precondition', `Coupon usage limit invalid: ${couponId}`);
+                }
+                if (usedCount >= usageLimit) {
+                    throw new https_1.HttpsError('failed-precondition', `Coupon usage limit reached: ${couponId}`);
+                }
+                if (usedBySnap.exists) {
+                    throw new https_1.HttpsError('already-exists', `Coupon already used: ${couponId}`);
+                }
+                if (userUsedSnap.exists) {
+                    throw new https_1.HttpsError('already-exists', `Coupon already used: ${couponId}`);
+                }
+                txn.set(usedByRef, {
+                    userId,
+                    usedAt: firestore_2.FieldValue.serverTimestamp(),
+                    couponId,
+                    storeId,
+                });
+                txn.set(userUsedRef, {
+                    userId,
+                    usedAt: firestore_2.FieldValue.serverTimestamp(),
+                    couponId,
+                    storeId,
+                });
+                const nextUsedCount = usedCount + 1;
+                const shouldDeactivate = usageLimit > 0 && nextUsedCount === usageLimit;
+                txn.update(couponRef, Object.assign(Object.assign({ usedCount: nextUsedCount }, (shouldDeactivate ? { isActive: false } : {})), { updatedAt: firestore_2.FieldValue.serverTimestamp() }));
+                if (publicSnap.exists) {
+                    txn.update(publicCouponRef, Object.assign(Object.assign({ usedCount: nextUsedCount }, (shouldDeactivate ? { isActive: false } : {})), { updatedAt: firestore_2.FieldValue.serverTimestamp() }));
+                }
+            }
+        }
         return {
             userId,
             storeId,
@@ -1525,22 +1612,7 @@ exports.punchStamp = (0, https_1.onCall)({
         .doc(storeId)
         .collection(userId)
         .doc('award_request');
-    await requestRef.set({
-        status: 'accepted',
-        requestType: 'stamp',
-        pointsToAward: 0,
-        userPoints: 0,
-        amount: 0,
-        usedPoints: 0,
-        storeId,
-        storeName: (_a = result.storeName) !== null && _a !== void 0 ? _a : '',
-        userId,
-        respondedBy: storeUserId,
-        createdAt: firestore_2.FieldValue.serverTimestamp(),
-        respondedAt: firestore_2.FieldValue.serverTimestamp(),
-        userNotified: false,
-        userNotifiedAt: firestore_2.FieldValue.delete(),
-    }, { merge: true });
+    await requestRef.set(Object.assign(Object.assign({ status: 'accepted', requestType: 'stamp', pointsToAward: 0, userPoints: 0, amount: 0, usedPoints: 0 }, (selectedCouponIds.length > 0 ? { selectedCouponIds } : {})), { storeId, storeName: (_a = result.storeName) !== null && _a !== void 0 ? _a : '', userId, respondedBy: storeUserId, createdAt: firestore_2.FieldValue.serverTimestamp(), respondedAt: firestore_2.FieldValue.serverTimestamp(), userNotified: false, userNotifiedAt: firestore_2.FieldValue.delete() }), { merge: true });
     return result;
 });
 // チェックイン記録

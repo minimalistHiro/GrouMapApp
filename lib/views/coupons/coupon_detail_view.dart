@@ -171,40 +171,80 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         throw Exception('クーポンの店舗情報が見つかりません');
       }
 
-      // usedByサブコレクションにユーザー情報を追加
-      final couponRef = FirebaseFirestore.instance
+      final firestore = FirebaseFirestore.instance;
+      final couponRef = firestore
           .collection('coupons')
           .doc(storeId)
           .collection('coupons')
           .doc(widget.coupon.id);
-      
-      // サブコレクションにユーザーIDをドキュメントとして追加
-      await couponRef
-          .collection('usedBy')
-          .doc(user.uid)
-          .set({
-        'userId': user.uid,
-        'usedAt': FieldValue.serverTimestamp(),
-        'couponId': widget.coupon.id,
-        'storeId': widget.coupon.storeId,
-      });
-
-      // ユーザー側にも使用済みクーポンを保存
-      await FirebaseFirestore.instance
+      final publicCouponRef =
+          firestore.collection('public_coupons').doc(widget.coupon.id);
+      final usedByRef = couponRef.collection('usedBy').doc(user.uid);
+      final userUsedRef = firestore
           .collection('users')
           .doc(user.uid)
           .collection('used_coupons')
-          .doc(widget.coupon.id)
-          .set({
-        'userId': user.uid,
-        'usedAt': FieldValue.serverTimestamp(),
-        'couponId': widget.coupon.id,
-        'storeId': widget.coupon.storeId,
-      });
-      
-      // 使用回数をインクリメント
-      await couponRef.update({
-        'usedCount': FieldValue.increment(1),
+          .doc(widget.coupon.id);
+
+      await firestore.runTransaction((txn) async {
+        final couponSnap = await txn.get(couponRef);
+        if (!couponSnap.exists) {
+          throw Exception('クーポンが見つかりません');
+        }
+        final data = couponSnap.data() ?? {};
+        final isActive = data['isActive'] as bool? ?? true;
+        final validUntil = (data['validUntil'] as Timestamp?)?.toDate();
+        final usageLimit = (data['usageLimit'] as num?)?.toInt() ?? 0;
+        final usedCount = (data['usedCount'] as num?)?.toInt() ?? 0;
+
+        if (!isActive) {
+          throw Exception('クーポンが無効です');
+        }
+        if (validUntil == null || !validUntil.isAfter(DateTime.now())) {
+          throw Exception('クーポンの有効期限が切れています');
+        }
+        if (usedCount >= usageLimit) {
+          throw Exception('クーポンの上限に達しています');
+        }
+
+        final usedBySnap = await txn.get(usedByRef);
+        if (usedBySnap.exists) {
+          throw Exception('このクーポンは既に使用済みです');
+        }
+        final userUsedSnap = await txn.get(userUsedRef);
+        if (userUsedSnap.exists) {
+          throw Exception('このクーポンは既に使用済みです');
+        }
+
+        txn.set(usedByRef, {
+          'userId': user.uid,
+          'usedAt': FieldValue.serverTimestamp(),
+          'couponId': widget.coupon.id,
+          'storeId': widget.coupon.storeId,
+        });
+        txn.set(userUsedRef, {
+          'userId': user.uid,
+          'usedAt': FieldValue.serverTimestamp(),
+          'couponId': widget.coupon.id,
+          'storeId': widget.coupon.storeId,
+        });
+
+        final nextUsedCount = usedCount + 1;
+        final shouldDeactivate = usageLimit > 0 && nextUsedCount == usageLimit;
+        txn.update(couponRef, {
+          'usedCount': nextUsedCount,
+          if (shouldDeactivate) 'isActive': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        final publicSnap = await txn.get(publicCouponRef);
+        if (publicSnap.exists) {
+          txn.update(publicCouponRef, {
+            'usedCount': nextUsedCount,
+            if (shouldDeactivate) 'isActive': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
       });
 
       debugPrint('Coupon used successfully');
@@ -231,9 +271,17 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
           },
         );
       }
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('クーポン使用エラー: $e');
-      
+      debugPrint('クーポン使用エラー詳細: $st');
+
+      String? details;
+      if (e is FirebaseException) {
+        details = 'code=${e.code} message=${e.message ?? 'unknown'}';
+      } else {
+        details = e.toString();
+      }
+
       setState(() {
         _isUsing = false;
       });
@@ -243,7 +291,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
           context,
           title: 'エラー',
           message: 'クーポンを使用できませんでした。',
-          details: 'しばらくしてから再度お試しください。',
+          details: details,
         );
       }
     }
@@ -681,15 +729,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               label: '現在のスタンプ',
               value: _isStampInfoLoading ? '読み込み中...' : '$_userStampCount',
               valueColor: Colors.blueGrey[700]!,
-            ),
-            const SizedBox(height: 12),
-            
-            // 使用制限
-            _buildDetailRow(
-              icon: Icons.people,
-              label: '使用制限',
-              value: '${widget.coupon.usageLimit}枚まで',
-              valueColor: Colors.grey[700]!,
             ),
             const SizedBox(height: 12),
             

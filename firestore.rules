@@ -18,6 +18,44 @@ service cloud.firestore {
       return request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId != null;
     }
+    function isCouponUserViewIncrement() {
+      return request.auth != null
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['viewCount','updatedAt'])
+        && request.resource.data.viewCount == resource.data.viewCount + 1;
+    }
+    function isCouponUserUseIncrement() {
+      return request.auth != null
+        && !(resource.data.isActive == false)
+        && (resource.data.usageLimit is int || resource.data.usageLimit is float)
+        && (resource.data.usedCount is int || resource.data.usedCount is float)
+        && resource.data.usageLimit > 0
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['usedCount','isActive','updatedAt'])
+        && request.resource.data.usedCount == resource.data.usedCount + 1
+        && request.resource.data.usedCount <= resource.data.usageLimit
+        && (
+          (request.resource.data.usedCount < resource.data.usageLimit
+            && request.resource.data.isActive == resource.data.isActive) ||
+          (request.resource.data.usedCount == resource.data.usageLimit
+            && request.resource.data.isActive == false)
+        );
+    }
+    function isCouponUserUseIncrementLegacy() {
+      return request.auth != null
+        && !(resource.data.isActive == false)
+        && !(resource.data.usedCount is int || resource.data.usedCount is float)
+        && request.resource.data.diff(resource.data).changedKeys()
+          .hasOnly(['usedCount','isActive','updatedAt'])
+        && (request.resource.data.usedCount is int || request.resource.data.usedCount is float)
+        && request.resource.data.usedCount >= 1
+        && request.resource.data.isActive is bool
+        && (
+          (request.resource.data.usageLimit is int || request.resource.data.usageLimit is float)
+            ? request.resource.data.usedCount <= request.resource.data.usageLimit
+            : true
+        );
+    }
     // ユーザーコレクションのルール
     match /users/{userId} {
       // 認証されたユーザーは自分のドキュメントを読み書き可能
@@ -115,7 +153,11 @@ service cloud.firestore {
       allow read: if true;
       // オーナー/店舗オーナーのみ作成・更新・削除可能
       allow create: if isOwner() || isStoreOwner(storeId);
-      allow update, delete: if isOwner() || isStoreOwner(storeId);
+      allow update: if isOwner() || isStoreOwner(storeId)
+        || isCouponUserViewIncrement()
+        || isCouponUserUseIncrement()
+        || isCouponUserUseIncrementLegacy();
+      allow delete: if isOwner() || isStoreOwner(storeId);
 
       // クーポン使用履歴: coupons/{storeId}/coupons/{couponId}/usedBy/{userId}
       match /usedBy/{userId} {
@@ -331,7 +373,11 @@ service cloud.firestore {
     match /public_coupons/{couponId} {
       allow read: if true;
       allow create: if isOwner() || isStoreOwner(request.resource.data.storeId);
-      allow update, delete: if isOwner() || isStoreOwner(resource.data.storeId);
+      allow update: if isOwner() || isStoreOwner(resource.data.storeId)
+        || isCouponUserViewIncrement()
+        || isCouponUserUseIncrement()
+        || isCouponUserUseIncrementLegacy();
+      allow delete: if isOwner() || isStoreOwner(resource.data.storeId);
     }
     
     // その他のコレクションは認証されたユーザーのみ読み取り可能
