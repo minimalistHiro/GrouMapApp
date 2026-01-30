@@ -1684,10 +1684,14 @@ export const punchStamp = onCall(
       throw new HttpsError('unauthenticated', 'Store must be authenticated');
     }
 
-    const { userId, storeId } = request.data || {};
+    const { userId, storeId, selectedCouponIds: rawSelectedCouponIds } = request.data || {};
     if (!userId || !storeId) {
       throw new HttpsError('invalid-argument', 'Missing required parameters: userId and storeId');
     }
+    const selectedCouponIds = Array.isArray(rawSelectedCouponIds)
+      ? rawSelectedCouponIds.filter((id) => typeof id === 'string' && id.trim().length > 0)
+      : [];
+    console.log('[punchStamp] selectedCouponIds:', selectedCouponIds);
 
     const storeUserId = request.auth.uid;
     const storeUserRef = db.collection(USERS_COLLECTION).doc(storeUserId);
@@ -1725,13 +1729,56 @@ export const punchStamp = onCall(
       const storeName = (storeSnap.data()?.name ?? '').toString();
 
       const targetStoreSnap = await txn.get(targetStoreRef);
+      const storeUserStatsSnap = await txn.get(storeUserStatsRef);
       const currentStamps = asInt(targetStoreSnap.data()?.['stamps'], 0);
       const canAddStamp = currentStamps < MAX_STAMPS;
       const stampsAdded = canAddStamp ? 1 : 0;
       const nextStamps = canAddStamp ? currentStamps + 1 : currentStamps;
       const cardCompleted = canAddStamp && nextStamps >= MAX_STAMPS && currentStamps < MAX_STAMPS;
 
-      const storeUserStatsSnap = await txn.get(storeUserStatsRef);
+      const couponReads: Array<{
+        couponId: string;
+        couponRef: FirebaseFirestore.DocumentReference;
+        publicCouponRef: FirebaseFirestore.DocumentReference;
+        usedByRef: FirebaseFirestore.DocumentReference;
+        userUsedRef: FirebaseFirestore.DocumentReference;
+        couponSnap: FirebaseFirestore.DocumentSnapshot;
+        usedBySnap: FirebaseFirestore.DocumentSnapshot;
+        userUsedSnap: FirebaseFirestore.DocumentSnapshot;
+        publicSnap: FirebaseFirestore.DocumentSnapshot;
+      }> = [];
+
+      if (selectedCouponIds.length > 0) {
+        for (const couponId of selectedCouponIds) {
+          const couponRef = db
+            .collection('coupons')
+            .doc(storeId)
+            .collection('coupons')
+            .doc(couponId);
+          const publicCouponRef = db.collection('public_coupons').doc(couponId);
+          const usedByRef = couponRef.collection('usedBy').doc(userId);
+          const userUsedRef = targetUserRef.collection('used_coupons').doc(couponId);
+
+          const [couponSnap, usedBySnap, userUsedSnap, publicSnap] = await Promise.all([
+            txn.get(couponRef),
+            txn.get(usedByRef),
+            txn.get(userUsedRef),
+            txn.get(publicCouponRef),
+          ]);
+
+          couponReads.push({
+            couponId,
+            couponRef,
+            publicCouponRef,
+            usedByRef,
+            userUsedRef,
+            couponSnap,
+            usedBySnap,
+            userUsedSnap,
+            publicSnap,
+          });
+        }
+      }
 
       if (stampsAdded > 0) {
         txn.set(
@@ -1768,6 +1815,75 @@ export const punchStamp = onCall(
         });
       }
 
+      if (couponReads.length > 0) {
+        const now = new Date();
+        for (const entry of couponReads) {
+          const { couponId, couponRef, publicCouponRef, usedByRef, userUsedRef, couponSnap, usedBySnap, userUsedSnap, publicSnap } =
+            entry;
+
+          if (!couponSnap.exists) {
+            throw new HttpsError('not-found', `Coupon not found: ${couponId}`);
+          }
+          const couponData = couponSnap.data() ?? {};
+          const isActive = couponData['isActive'] !== false;
+          const usageLimit = asInt(couponData['usageLimit'], 0);
+          const usedCount = asInt(couponData['usedCount'], 0);
+          const noExpiry = couponData['noExpiry'] === true;
+          const validUntilValue = couponData['validUntil'];
+          const validUntil =
+            validUntilValue instanceof Timestamp ? validUntilValue.toDate() : undefined;
+          const isNoExpiry = noExpiry || (validUntil && validUntil.getFullYear() >= 2100);
+
+          if (!isActive) {
+            throw new HttpsError('failed-precondition', `Coupon inactive: ${couponId}`);
+          }
+          if (!isNoExpiry && (!validUntil || validUntil.getTime() <= now.getTime())) {
+            throw new HttpsError('failed-precondition', `Coupon expired: ${couponId}`);
+          }
+          if (usageLimit <= 0) {
+            throw new HttpsError('failed-precondition', `Coupon usage limit invalid: ${couponId}`);
+          }
+          if (usedCount >= usageLimit) {
+            throw new HttpsError('failed-precondition', `Coupon usage limit reached: ${couponId}`);
+          }
+          if (usedBySnap.exists) {
+            throw new HttpsError('already-exists', `Coupon already used: ${couponId}`);
+          }
+          if (userUsedSnap.exists) {
+            throw new HttpsError('already-exists', `Coupon already used: ${couponId}`);
+          }
+
+          txn.set(usedByRef, {
+            userId,
+            usedAt: FieldValue.serverTimestamp(),
+            couponId,
+            storeId,
+          });
+          txn.set(userUsedRef, {
+            userId,
+            usedAt: FieldValue.serverTimestamp(),
+            couponId,
+            storeId,
+          });
+
+          const nextUsedCount = usedCount + 1;
+          const shouldDeactivate = usageLimit > 0 && nextUsedCount === usageLimit;
+          txn.update(couponRef, {
+            usedCount: nextUsedCount,
+            ...(shouldDeactivate ? { isActive: false } : {}),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+
+          if (publicSnap.exists) {
+            txn.update(publicCouponRef, {
+              usedCount: nextUsedCount,
+              ...(shouldDeactivate ? { isActive: false } : {}),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          }
+        }
+      }
+
       return {
         userId,
         storeId,
@@ -1791,6 +1907,7 @@ export const punchStamp = onCall(
         userPoints: 0,
         amount: 0,
         usedPoints: 0,
+        ...(selectedCouponIds.length > 0 ? { selectedCouponIds } : {}),
         storeId,
         storeName: result.storeName ?? '',
         userId,

@@ -437,17 +437,19 @@ class CouponService {
   // クーポンを使用
   Future<void> useCoupon(String userCouponId, String orderId) async {
     try {
-      await _firestore.collection('user_coupons').doc(userCouponId).update({
-        'isUsed': true,
-        'usedAt': FieldValue.serverTimestamp(),
-        'orderId': orderId,
-      });
+      final userCouponRef =
+          _firestore.collection('user_coupons').doc(userCouponId);
+      await _firestore.runTransaction((txn) async {
+        final userCouponSnap = await txn.get(userCouponRef);
+        if (!userCouponSnap.exists) {
+          throw Exception('クーポン情報が見つかりません');
+        }
+        final userCoupon =
+            UserCoupon.fromFirestore(userCouponSnap.data()!, userCouponSnap.id);
+        if (userCoupon.isUsed) {
+          throw Exception('このクーポンは既に使用済みです');
+        }
 
-      // クーポンの使用回数を更新（トップレベル）
-      final userCouponDoc = await _firestore.collection('user_coupons').doc(userCouponId).get();
-      if (userCouponDoc.exists) {
-        final userCoupon = UserCoupon.fromFirestore(userCouponDoc.data()!, userCouponDoc.id);
-        
         final storeId = userCoupon.storeId;
         if (storeId == null || storeId.isEmpty) {
           throw Exception('クーポンの店舗情報が見つかりません');
@@ -458,24 +460,66 @@ class CouponService {
             .doc(storeId)
             .collection('coupons')
             .doc(userCoupon.couponId);
-        
-        // usedByサブコレクションにユーザー情報を追加
-        await couponRef
-            .collection('usedBy')
-            .doc(userCoupon.userId)
-            .set({
+        final publicCouponRef =
+            _firestore.collection('public_coupons').doc(userCoupon.couponId);
+        final usedByRef =
+            couponRef.collection('usedBy').doc(userCoupon.userId);
+
+        final couponSnap = await txn.get(couponRef);
+        if (!couponSnap.exists) {
+          throw Exception('クーポンが見つかりません');
+        }
+        final data = couponSnap.data() ?? {};
+        final isActive = data['isActive'] as bool? ?? true;
+        final validUntil = (data['validUntil'] as Timestamp?)?.toDate();
+        final usageLimit = (data['usageLimit'] as num?)?.toInt() ?? 0;
+        final usedCount = (data['usedCount'] as num?)?.toInt() ?? 0;
+
+        if (!isActive) {
+          throw Exception('クーポンが無効です');
+        }
+        if (validUntil == null || !validUntil.isAfter(DateTime.now())) {
+          throw Exception('クーポンの有効期限が切れています');
+        }
+        if (usedCount >= usageLimit) {
+          throw Exception('クーポンの上限に達しています');
+        }
+
+        final usedBySnap = await txn.get(usedByRef);
+        if (usedBySnap.exists) {
+          throw Exception('このクーポンは既に使用済みです');
+        }
+
+        txn.update(userCouponRef, {
+          'isUsed': true,
+          'usedAt': FieldValue.serverTimestamp(),
+          'orderId': orderId,
+        });
+        txn.set(usedByRef, {
           'userId': userCoupon.userId,
           'usedAt': FieldValue.serverTimestamp(),
           'couponId': userCoupon.couponId,
           'storeId': userCoupon.storeId,
           'orderId': orderId,
         });
-        
-        // 使用回数をインクリメント
-        await couponRef.update({
-          'usedCount': FieldValue.increment(1),
+
+        final nextUsedCount = usedCount + 1;
+        final shouldDeactivate = usageLimit > 0 && nextUsedCount == usageLimit;
+        txn.update(couponRef, {
+          'usedCount': nextUsedCount,
+          if (shouldDeactivate) 'isActive': false,
+          'updatedAt': FieldValue.serverTimestamp(),
         });
-      }
+
+        final publicSnap = await txn.get(publicCouponRef);
+        if (publicSnap.exists) {
+          txn.update(publicCouponRef, {
+            'usedCount': nextUsedCount,
+            if (shouldDeactivate) 'isActive': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      });
     } catch (e) {
       debugPrint('Error using coupon: $e');
       throw Exception('クーポンの使用に失敗しました: $e');

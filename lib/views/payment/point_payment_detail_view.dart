@@ -277,7 +277,7 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text('お支払いの詳細'),
+        title: const Text('スタンプ押印画面'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
@@ -287,6 +287,8 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
         child: Column(
           children: [
             const Spacer(),
+            _buildUsedCouponsSection(),
+            const SizedBox(height: 12),
             _buildStampCard(),
             const Spacer(),
             SizedBox(
@@ -354,6 +356,67 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildUsedCouponsSection() {
+    if (widget.usedCouponIds.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Center(
+            child: Text(
+              '今回使用したクーポン',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_isLoadingCoupons)
+            const Text(
+              '読み込み中...',
+              style: TextStyle(color: Colors.grey),
+            )
+          else
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _usedCouponTitles.isNotEmpty
+                  ? _usedCouponTitles
+                      .map((title) => _buildCouponChip(title))
+                      .toList()
+                  : widget.usedCouponIds
+                      .map((id) => _buildCouponChip(id))
+                      .toList(),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCouponChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF2EC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFF6B35), width: 1),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 12, color: Color(0xFFFF6B35)),
+      ),
     );
   }
 
