@@ -31,6 +31,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   List<String> _cities = [];
   bool _isLoadingCities = false;
   bool _showBirthDateError = false;
+  bool _isSubmitting = false;
   
   // プロフィール画像関連
   XFile? _selectedImage;
@@ -418,8 +419,9 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                 // 次へボタン
                 CustomButton(
                   text: '設定を完了',
-                  onPressed: _handleNext,
+                  onPressed: _isSubmitting ? null : _handleNext,
                   borderRadius: 999,
+                  isLoading: _isSubmitting,
                 ),
               ],
             ),
@@ -873,6 +875,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   }
 
   void _handleNext() async {
+    if (_isSubmitting) return;
     // 生年月日のバリデーション
     if (_selectedDate == null) {
       setState(() {
@@ -888,6 +891,9 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
     }
     
     if (_formKey.currentState!.validate()) {
+      setState(() {
+        _isSubmitting = true;
+      });
       try {
         final authService = ref.read(authServiceProvider);
         final currentUser = authService.currentUser;
@@ -899,6 +905,11 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
               backgroundColor: Colors.red,
             ),
           );
+          if (mounted) {
+            setState(() {
+              _isSubmitting = false;
+            });
+          }
           return;
         }
 
@@ -942,6 +953,9 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
             backgroundColor: Colors.red,
           ),
         );
+        setState(() {
+          _isSubmitting = false;
+        });
       }
     }
   }
