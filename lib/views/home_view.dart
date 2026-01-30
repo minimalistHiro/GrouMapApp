@@ -58,6 +58,13 @@ int _parseStampCount(dynamic value) {
   return 0;
 }
 
+int _parseIntValue(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) return int.tryParse(value) ?? 0;
+  return 0;
+}
+
 // ユーザーが所持しているスタンプ合計数
 final userTotalStampsProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
   try {
@@ -963,9 +970,50 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 final dynamic paidRaw = userData['paid'];
                 final num paidNum = paidRaw is num ? paidRaw : num.tryParse('$paidRaw') ?? 0;
                 final String paidFormatted = NumberFormat.currency(locale: 'ja_JP', symbol: '¥', decimalDigits: 0).format(paidNum);
+                final totalPoints = _parseIntValue(userData['points']) + _parseIntValue(userData['specialPoints']);
+                final showPoints = totalPoints >= 1;
+                Widget buildDivider() => Container(width: 1, height: 40, color: Colors.grey[300]);
                 
                 return Row(
                   children: [
+                    if (showPoints) ...[
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Image.asset(
+                              'assets/images/point_icon.png',
+                              width: 20,
+                              height: 20,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const Icon(Icons.loyalty, size: 20, color: Colors.orange),
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  '$totalPoints',
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                const Text(
+                                  'ポイント',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      buildDivider(),
+                    ],
                     // 中：バッジ（少し小さく）
                     Expanded(
                       child: Row(
@@ -1022,7 +1070,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     ),
                     
                     // 仕切り
-                    Container(width: 1, height: 40, color: Colors.grey[300]),
+                    buildDivider(),
                     
                     // 右：総支払額（少し小さく）
                     Expanded(
