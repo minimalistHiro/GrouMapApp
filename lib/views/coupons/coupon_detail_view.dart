@@ -21,12 +21,16 @@ class CouponDetailView extends ConsumerStatefulWidget {
 class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   bool _isUsing = false;
   bool _isUsed = false;
+  bool _isStampInfoLoading = true;
+  int _requiredStampCount = 0;
+  int _userStampCount = 0;
 
   @override
   void initState() {
     super.initState();
     _checkIfUsed();
     _incrementViewCount();
+    _loadStampInfo();
   }
 
   // クーポンを既に使用しているかチェック
@@ -85,6 +89,56 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       });
     } catch (e) {
       debugPrint('Failed to increment coupon viewCount: $e');
+    }
+  }
+
+  Future<void> _loadStampInfo() async {
+    try {
+      final storeId = widget.coupon.storeId;
+      final couponId = widget.coupon.id;
+      if (storeId.isEmpty || couponId.isEmpty) {
+        setState(() {
+          _isStampInfoLoading = false;
+        });
+        return;
+      }
+
+      final couponDoc = await FirebaseFirestore.instance
+          .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
+          .doc(couponId)
+          .get();
+      final couponData = couponDoc.data();
+      final requiredStampCount =
+          (couponData?['requiredStampCount'] as num?)?.toInt() ?? 0;
+
+      int userStamps = 0;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userStoreDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('stores')
+            .doc(storeId)
+            .get();
+        final userStoreData = userStoreDoc.data();
+        userStamps = (userStoreData?['stamps'] as num?)?.toInt() ?? 0;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _requiredStampCount = requiredStampCount;
+        _userStampCount = userStamps;
+        _isStampInfoLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _requiredStampCount = 0;
+        _userStampCount = 0;
+        _isStampInfoLoading = false;
+      });
     }
   }
 
@@ -290,6 +344,9 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   // 有効期限の表示用フォーマット
   String _formatValidUntil() {
     try {
+      if (widget.coupon.validUntil.year >= 2100) {
+        return '無期限';
+      }
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final tomorrow = today.add(const Duration(days: 1));
@@ -490,8 +547,38 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             ),
             const SizedBox(height: 16),
             
+            // 必要スタンプ数（目立つ表示）
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.withOpacity(0.35)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.stars, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Text(
+                    _isStampInfoLoading
+                        ? '必要スタンプ: 読み込み中...'
+                        : '必要スタンプ: $_requiredStampCount',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.orange,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
             // 割引情報とタイプ
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 // 割引情報
                 Container(
@@ -512,7 +599,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
                 
                 // クーポンタイプ
                 Container(
@@ -577,6 +663,24 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               label: '有効期限',
               value: _formatValidUntil(),
               valueColor: Colors.red[700]!,
+            ),
+            const SizedBox(height: 12),
+
+            // 必要スタンプ数
+            _buildDetailRow(
+              icon: Icons.stars,
+              label: '必要スタンプ',
+              value: _isStampInfoLoading ? '読み込み中...' : '$_requiredStampCount',
+              valueColor: Colors.orange[700]!,
+            ),
+            const SizedBox(height: 12),
+
+            // 現在のスタンプ数
+            _buildDetailRow(
+              icon: Icons.verified,
+              label: '現在のスタンプ',
+              value: _isStampInfoLoading ? '読み込み中...' : '$_userStampCount',
+              valueColor: Colors.blueGrey[700]!,
             ),
             const SizedBox(height: 12),
             
@@ -658,6 +762,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
 
   Widget _buildUseButtonContent() {
     final user = FirebaseAuth.instance.currentUser;
+    final remainingStamps = (_requiredStampCount - _userStampCount).clamp(0, 999);
+    final canUseByStamp = !_isStampInfoLoading && _userStampCount >= _requiredStampCount;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -722,10 +828,33 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         ] else ...[
           CustomButton(
             text: _isUsing ? '使用中...' : 'クーポンを使用',
-            onPressed: _isUsing ? null : _useCoupon,
+            onPressed: (_isUsing || !canUseByStamp) ? null : _useCoupon,
             backgroundColor: const Color(0xFFFF6B35),
             textColor: Colors.white,
           ),
+          if (_isStampInfoLoading)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'スタンプ数を確認中...',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                ),
+              ),
+            )
+          else if (!canUseByStamp)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                'あと$remainingStampsスタンプ必要です',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.red[700],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
         ],
       ],
     );

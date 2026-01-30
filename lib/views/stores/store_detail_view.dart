@@ -1940,6 +1940,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       
       try {
         final date = endDate is DateTime ? endDate : endDate.toDate();
+        if (date.year >= 2100) {
+          return '無期限';
+        }
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         final tomorrow = today.add(const Duration(days: 1));
