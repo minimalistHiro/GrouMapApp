@@ -5,9 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/coupon_model.dart' as model;
 import '../../providers/store_provider.dart';
-import '../../widgets/custom_button.dart';
 import '../../widgets/common_header.dart';
-import '../../widgets/error_dialog.dart';
 
 class CouponDetailView extends ConsumerStatefulWidget {
   final model.Coupon coupon;
@@ -19,8 +17,6 @@ class CouponDetailView extends ConsumerStatefulWidget {
 }
 
 class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
-  bool _isUsing = false;
-  bool _isUsed = false;
   bool _isStampInfoLoading = true;
   int _requiredStampCount = 0;
   int _userStampCount = 0;
@@ -28,45 +24,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   @override
   void initState() {
     super.initState();
-    _checkIfUsed();
     _incrementViewCount();
     _loadStampInfo();
-  }
-
-  // クーポンを既に使用しているかチェック
-  Future<void> _checkIfUsed() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        debugPrint('User not logged in');
-        return;
-      }
-
-      debugPrint('Checking coupon usage: storeId=${widget.coupon.storeId}, couponId=${widget.coupon.id}');
-      
-      final storeId = widget.coupon.storeId;
-      if (storeId.isEmpty) {
-        return;
-      }
-
-      // usedByサブコレクションからユーザーのドキュメントを確認
-      final usedByDoc = await FirebaseFirestore.instance
-          .collection('coupons')
-          .doc(storeId)
-          .collection('coupons')
-          .doc(widget.coupon.id)
-          .collection('usedBy')
-          .doc(user.uid)
-          .get();
-
-      debugPrint('Coupon used by current user: ${usedByDoc.exists}');
-      
-      setState(() {
-        _isUsed = usedByDoc.exists;
-      });
-    } catch (e) {
-      debugPrint('クーポン使用状態確認エラー: $e');
-    }
   }
 
   // クーポン詳細を開いた際に閲覧数をインクリメント
@@ -142,253 +101,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     }
   }
 
-  // クーポンを使用する
-  Future<void> _useCoupon() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        debugPrint('User not logged in');
-        return;
-      }
-
-      setState(() {
-        _isUsing = true;
-      });
-
-      // クーポンの使用確認ポップアップを表示
-      final confirmed = await _showUseConfirmationDialog();
-      if (!confirmed) {
-        setState(() {
-          _isUsing = false;
-        });
-        return;
-      }
-
-      debugPrint('Using coupon: storeId=${widget.coupon.storeId}, couponId=${widget.coupon.id}, userId=${user.uid}');
-
-      final storeId = widget.coupon.storeId;
-      if (storeId.isEmpty) {
-        throw Exception('クーポンの店舗情報が見つかりません');
-      }
-
-      final firestore = FirebaseFirestore.instance;
-      final couponRef = firestore
-          .collection('coupons')
-          .doc(storeId)
-          .collection('coupons')
-          .doc(widget.coupon.id);
-      final publicCouponRef =
-          firestore.collection('public_coupons').doc(widget.coupon.id);
-      final usedByRef = couponRef.collection('usedBy').doc(user.uid);
-      final userUsedRef = firestore
-          .collection('users')
-          .doc(user.uid)
-          .collection('used_coupons')
-          .doc(widget.coupon.id);
-
-      await firestore.runTransaction((txn) async {
-        final couponSnap = await txn.get(couponRef);
-        if (!couponSnap.exists) {
-          throw Exception('クーポンが見つかりません');
-        }
-        final data = couponSnap.data() ?? {};
-        final isActive = data['isActive'] as bool? ?? true;
-        final validUntil = (data['validUntil'] as Timestamp?)?.toDate();
-        final usageLimit = (data['usageLimit'] as num?)?.toInt() ?? 0;
-        final usedCount = (data['usedCount'] as num?)?.toInt() ?? 0;
-
-        if (!isActive) {
-          throw Exception('クーポンが無効です');
-        }
-        if (validUntil == null || !validUntil.isAfter(DateTime.now())) {
-          throw Exception('クーポンの有効期限が切れています');
-        }
-        if (usedCount >= usageLimit) {
-          throw Exception('クーポンの上限に達しています');
-        }
-
-        final usedBySnap = await txn.get(usedByRef);
-        if (usedBySnap.exists) {
-          throw Exception('このクーポンは既に使用済みです');
-        }
-        final userUsedSnap = await txn.get(userUsedRef);
-        if (userUsedSnap.exists) {
-          throw Exception('このクーポンは既に使用済みです');
-        }
-
-        txn.set(usedByRef, {
-          'userId': user.uid,
-          'usedAt': FieldValue.serverTimestamp(),
-          'couponId': widget.coupon.id,
-          'storeId': widget.coupon.storeId,
-        });
-        txn.set(userUsedRef, {
-          'userId': user.uid,
-          'usedAt': FieldValue.serverTimestamp(),
-          'couponId': widget.coupon.id,
-          'storeId': widget.coupon.storeId,
-        });
-
-        final nextUsedCount = usedCount + 1;
-        final shouldDeactivate = usageLimit > 0 && nextUsedCount == usageLimit;
-        txn.update(couponRef, {
-          'usedCount': nextUsedCount,
-          if (shouldDeactivate) 'isActive': false,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        final publicSnap = await txn.get(publicCouponRef);
-        if (publicSnap.exists) {
-          txn.update(publicCouponRef, {
-            'usedCount': nextUsedCount,
-            if (shouldDeactivate) 'isActive': false,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-        }
-      });
-
-      debugPrint('Coupon used successfully');
-
-      setState(() {
-        _isUsed = true;
-        _isUsing = false;
-      });
-
-      if (mounted) {
-        await showDialog<void>(
-          context: context,
-          builder: (BuildContext dialogContext) {
-            return AlertDialog(
-              title: const Text('完了'),
-              content: const Text('クーポンを使用しました。'),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                  child: const Text('閉じる'),
-                ),
-              ],
-            );
-          },
-        );
-      }
-    } catch (e, st) {
-      debugPrint('クーポン使用エラー: $e');
-      debugPrint('クーポン使用エラー詳細: $st');
-
-      String? details;
-      if (e is FirebaseException) {
-        details = 'code=${e.code} message=${e.message ?? 'unknown'}';
-      } else {
-        details = e.toString();
-      }
-
-      setState(() {
-        _isUsing = false;
-      });
-
-      if (mounted) {
-        ErrorDialog.show(
-          context,
-          title: 'エラー',
-          message: 'クーポンを使用できませんでした。',
-          details: details,
-        );
-      }
-    }
-  }
-
-
-  // クーポン使用確認ダイアログを表示
-  Future<bool> _showUseConfirmationDialog() async {
-    return await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: Row(
-            children: [
-              Icon(
-                Icons.card_giftcard,
-                color: const Color(0xFFFF6B35),
-                size: 28,
-              ),
-              const SizedBox(width: 8),
-              const Text('クーポンを使用'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${widget.coupon.title}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'このクーポンを使用しますか？',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.orange.withOpacity(0.3),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.info_outline,
-                      color: Colors.orange[700],
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '使用後は取り消すことができません。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.orange[700],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('キャンセル'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B35),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('使用する'),
-            ),
-          ],
-        );
-      },
-    ) ?? false;
-  }
-
   // 有効期限の表示用フォーマット
   String _formatValidUntil() {
     try {
@@ -451,13 +163,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     return Scaffold(
       appBar: const CommonHeader(title: 'クーポン'),
       backgroundColor: Colors.grey[50],
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          color: Colors.white,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-          child: _buildUseButtonContent(),
-        ),
-      ),
       body: CustomScrollView(
         slivers: [
           // クーポン画像ヘッダー
@@ -799,106 +504,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     );
   }
 
-  Widget _buildUseButtonContent() {
-    final user = FirebaseAuth.instance.currentUser;
-    final remainingStamps = (_requiredStampCount - _userStampCount).clamp(0, 999);
-    final canUseByStamp = !_isStampInfoLoading && _userStampCount >= _requiredStampCount;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (user == null) ...[
-          Row(
-            children: [
-              Expanded(
-                child: CustomButton(
-                  text: 'ログイン',
-                  onPressed: () {
-                    Navigator.of(context).pushNamed('/signin');
-                  },
-                  backgroundColor: const Color(0xFFFF6B35),
-                  textColor: Colors.white,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: CustomButton(
-                  text: '新規アカウント作成',
-                  onPressed: () {
-                    Navigator.of(context).pushNamed('/signup');
-                  },
-                  backgroundColor: Colors.white,
-                  textColor: const Color(0xFFFF6B35),
-                  borderColor: const Color(0xFFFF6B35),
-                ),
-              ),
-            ],
-          ),
-        ] else if (_isUsed) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.green.withOpacity(0.3),
-              ),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
-                  size: 24,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'クーポン使用済み',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ] else ...[
-          CustomButton(
-            text: _isUsing ? '使用中...' : 'クーポンを使用',
-            onPressed: (_isUsing || !canUseByStamp) ? null : _useCoupon,
-            backgroundColor: const Color(0xFFFF6B35),
-            textColor: Colors.white,
-          ),
-          if (_isStampInfoLoading)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'スタンプ数を確認中...',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
-                ),
-              ),
-            )
-          else if (!canUseByStamp)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                'あと$remainingStampsスタンプ必要です',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.red[700],
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-        ],
-      ],
-    );
-  }
-
   Widget _buildNotice() {
     return SliverToBoxAdapter(
       child: Container(
@@ -925,7 +530,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'クーポンは店舗で提示してご利用ください。\n有効期限を過ぎたクーポンは使用できません。',
+                  'クーポンはQRコードをお店に読み取ってもらうことで利用できます。',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.orange,
