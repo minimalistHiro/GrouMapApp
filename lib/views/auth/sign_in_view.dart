@@ -6,6 +6,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import 'terms_privacy_consent_view.dart';
 import 'email_verification_pending_view.dart';
+import 'user_info_view.dart';
 import '../main_navigation_view.dart';
 
 class SignInView extends ConsumerStatefulWidget {
@@ -38,7 +39,7 @@ class _SignInViewState extends ConsumerState<SignInView> {
       if (next == SignInState.error) {
         _showErrorDialog(signInNotifier);
       } else if (next == SignInState.success) {
-        _navigateAfterSignIn();
+        _handleSignInSuccess(signInNotifier);
       }
     });
 
@@ -250,6 +251,29 @@ class _SignInViewState extends ConsumerState<SignInView> {
         (route) => false,
       );
     }
+  }
+
+  Future<void> _handleSignInSuccess(SignInStateNotifier notifier) async {
+    if (notifier.lastOperation == 'Googleサインイン' ||
+        notifier.lastOperation == 'Appleサインイン') {
+      if (notifier.lastIsNewUser == true) {
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (context) => const UserInfoView()),
+          (route) => false,
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const MainNavigationView()),
+        (route) => false,
+      );
+      return;
+    }
+
+    await _navigateAfterSignIn();
   }
 
   void _handleGoogleSignIn() {
