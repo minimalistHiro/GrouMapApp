@@ -28,6 +28,8 @@
   - `discountType`: 割引種別（割合/固定額/固定価格）
   - `discountValue`: 割引値
   - `validUntil`: 有効期限
+  - `requiredStampCount`: 必要スタンプ数（0-10）
+  - `noExpiry`: 無期限フラグ
   - `usageLimit`: 使用上限回数
   - `usedCount`: 使用済み回数
   - `viewCount`: 表示回数
@@ -197,6 +199,8 @@
   - `discountType`: 割引種別
   - `discountValue`: 割引値
   - `validUntil`: 有効期限
+  - `requiredStampCount`: 必要スタンプ数（0-10）
+  - `noExpiry`: 無期限フラグ
   - `usageLimit`: 使用上限回数
   - `usedCount`: 使用済み回数
   - `viewCount`: 表示回数

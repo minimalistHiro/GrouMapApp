@@ -823,7 +823,7 @@ class CouponsView extends ConsumerWidget {
                 Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
                 const SizedBox(width: 4),
                 Text(
-                  '有効期限: ${_formatDate(coupon.validUntil)}',
+                  '有効期限: ${_formatCouponExpiry(coupon.validUntil)}',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -899,7 +899,7 @@ class CouponsView extends ConsumerWidget {
                         Icon(Icons.access_time, size: 14, color: Colors.grey[600]),
                         const SizedBox(width: 4),
                         Text(
-                          '有効期限: ${_formatDate(coupon.validUntil)}',
+                          '有効期限: ${_formatCouponExpiry(coupon.validUntil)}',
                           style: TextStyle(
                             fontSize: 11,
                             color: Colors.grey[600],
@@ -1141,6 +1141,11 @@ class CouponsView extends ConsumerWidget {
 
   String _formatDate(DateTime date) {
     return '${date.year}/${date.month.toString().padLeft(2, '0')}/${date.day.toString().padLeft(2, '0')}';
+  }
+
+  String _formatCouponExpiry(DateTime date) {
+    if (date.year >= 2100) return '無期限';
+    return _formatDate(date);
   }
   
   void _obtainCoupon(BuildContext context, WidgetRef ref, String couponId, String storeId, String userId) async {
