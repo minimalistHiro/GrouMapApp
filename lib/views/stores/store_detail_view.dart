@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/posts_provider.dart';
 import '../../providers/coupon_provider.dart';
+import '../../widgets/common_header.dart';
+import '../../widgets/custom_top_tab_bar.dart';
 import '../posts/post_detail_view.dart';
 import '../coupons/coupon_detail_view.dart';
 
@@ -27,11 +29,12 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   bool _isFavorite = false;
   bool _isFavoriteLoading = true;
   bool _isUpdatingFavorite = false;
+  bool _isBusinessHoursExpanded = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _loadUserStamps();
     _loadFavoriteStatus();
   }
@@ -306,55 +309,26 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
   @override
   Widget build(BuildContext context) {
+    final storeName = _getStringValue(widget.store['name'], '店舗詳細');
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: CustomScrollView(
-        slivers: [
-          // 店舗背景画像
-          _buildStoreHeader(),
-          
-          // 店舗基本情報
-          _buildStoreInfo(),
-          
-          // スタンプカード
-          _buildStampCard(),
-          
-          // タブバー
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _SliverTabBarDelegate(
-              TabBar(
-                controller: _tabController,
-                labelColor: const Color(0xFFFF6B35),
-                unselectedLabelColor: Colors.grey,
-                indicatorColor: const Color(0xFFFF6B35),
-                tabs: const [
-                  Tab(text: '投稿'),
-                  Tab(text: 'クーポン'),
-                  Tab(text: 'メニュー'),
-                  Tab(text: '店舗詳細'),
-                ],
-              ),
-            ),
+      appBar: CommonHeader(title: storeName),
+      body: Column(
+        children: [
+          CustomTopTabBar(
+            tabs: const [
+              Tab(text: 'トップ'),
+              Tab(text: 'メニュー'),
+            ],
+            controller: _tabController,
           ),
-          
-          // タブコンテンツ
-          SliverToBoxAdapter(
-            child: AnimatedBuilder(
-              animation: _tabController,
-              builder: (context, _) {
-                switch (_tabController.index) {
-                  case 0:
-                    return _buildPostsTab();
-                  case 1:
-                    return _buildCouponsTab();
-                  case 2:
-                    return _buildMenuTab();
-                  case 3:
-                  default:
-                    return _buildStoreDetailsTab();
-                }
-              },
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildTopTab(),
+                _buildMenuTab(),
+              ],
             ),
           ),
         ],
@@ -362,18 +336,76 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     );
   }
 
-  Widget _buildStoreHeader() {
-    return SliverAppBar(
-      expandedHeight: 200,
-      pinned: true,
-      backgroundColor: const Color(0xFFFF6B35),
-      flexibleSpace: FlexibleSpaceBar(
-        background: _buildStoreBackground(),
+  Widget _buildTopTab() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStoreHeaderBanner(),
+          _buildStoreInfo(),
+          _buildTopDescription(),
+          _buildStampCard(),
+          _buildStoreDetailsContent(),
+        ],
       ),
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back, color: Colors.white),
-        onPressed: () => Navigator.of(context).pop(),
+    );
+  }
+
+  Widget _buildTopDescription() {
+    final description = _getStringValue(widget.store['description'], '');
+    if (description.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Align(
+      alignment: Alignment.center,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (description.isNotEmpty) ...[
+              const Text(
+                '店舗説明',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+                textAlign: TextAlign.left,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                description,
+                style: const TextStyle(fontSize: 14),
+                textAlign: TextAlign.left,
+              ),
+            ],
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildStoreHeaderBanner() {
+    return SizedBox(
+      height: 200,
+      width: double.infinity,
+      child: _buildStoreBackground(),
     );
   }
 
@@ -489,91 +521,120 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildStoreInfo() {
-    return SliverToBoxAdapter(
-      child: Container(
-        color: Colors.white,
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            // 店舗アイコン
-            Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')).withOpacity(0.1),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')).withOpacity(0.3),
-                  width: 2,
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          // 店舗アイコン
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')).withOpacity(0.1),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')).withOpacity(0.3),
+                width: 2,
+              ),
+            ),
+            child: _buildStoreIcon(),
+          ),
+          
+          const SizedBox(width: 16),
+          
+          // 店舗名とカテゴリ
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _getStringValue(widget.store['name'], '店舗名なし'),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
                 ),
-              ),
-              child: _buildStoreIcon(),
-            ),
-            
-            const SizedBox(width: 16),
-            
-            // 店舗名とカテゴリ
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _getStringValue(widget.store['name'], '店舗名なし'),
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: (_isFavoriteLoading || _isUpdatingFavorite)
+                          ? null
+                          : _toggleFavorite,
+                      icon: Icon(
+                        _isFavorite ? Icons.star : Icons.star_border,
+                        color: _isFavorite ? Colors.amber[700] : Colors.grey,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      tooltip: _isFavorite ? 'お気に入り解除' : 'お気に入り登録',
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: (_isFavoriteLoading || _isUpdatingFavorite)
-                            ? null
-                            : _toggleFavorite,
-                        icon: Icon(
-                          _isFavorite ? Icons.star : Icons.star_border,
-                          color: _isFavorite ? Colors.amber[700] : Colors.grey,
-                        ),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        tooltip: _isFavorite ? 'お気に入り解除' : 'お気に入り登録',
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _isFavorite ? 'お気に入り登録済み' : 'お気に入り',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: _isFavorite ? Colors.amber[700] : Colors.grey[700],
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')).withOpacity(0.3),
-                      ),
-                    ),
-                    child: Text(
-                      _getStringValue(widget.store['category'], 'その他'),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isFavorite ? 'お気に入り登録済み' : 'お気に入り',
                       style: TextStyle(
-                        fontSize: 14,
-                        color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')),
-                        fontWeight: FontWeight.w500,
+                        fontSize: 13,
+                        color: _isFavorite ? Colors.amber[700] : Colors.grey[700],
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    _buildBusinessStatusChip(),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        _getStringValue(widget.store['category'], 'その他'),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _getCategoryColor(_getStringValue(widget.store['category'], 'その他')),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBusinessStatusChip() {
+    final businessHours = widget.store['businessHours'] as Map<String, dynamic>?;
+    if (businessHours == null) {
+      return const SizedBox.shrink();
+    }
+
+    final statusInfo = _getBusinessStatus(businessHours);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: statusInfo.color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: statusInfo.color.withOpacity(0.4)),
+      ),
+      child: Text(
+        statusInfo.label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: statusInfo.color,
         ),
       ),
     );
@@ -581,13 +642,11 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
   Widget _buildStampCard() {
     if (_isLoadingStamps) {
-      return const SliverToBoxAdapter(
-        child: Padding(
-          padding: EdgeInsets.all(16),
-          child: Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFFFF6B35),
-            ),
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFF6B35),
           ),
         ),
       );
@@ -595,120 +654,104 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
     final stamps = _userStamps?['stamps'] ?? 0;
 
-    return SliverToBoxAdapter(
-      child: Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'スタンプカード',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'スタンプカード',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+          ),
+          const SizedBox(height: 16),
+          
+          // スタンプ表示（5x2のグリッド）
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 5,
+              childAspectRatio: 1,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
             ),
-            const SizedBox(height: 16),
-            
-            // スタンプ表示（5x2のグリッド）
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 5,
-                childAspectRatio: 1,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-              ),
-              itemCount: 10,
-              itemBuilder: (context, index) {
-                final hasStamp = index < stamps;
-                
-                return Container(
-                  decoration: BoxDecoration(
-                    color: hasStamp ? Colors.blue : Colors.grey[300],
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: hasStamp ? Colors.blue[700]! : Colors.grey[400]!,
-                      width: 2,
-                    ),
-                  ),
-                  child: Center(
-                    child: hasStamp
-                        ? const Icon(
-                            Icons.check,
-                            color: Colors.white,
-                            size: 20,
-                          )
-                        : const Icon(
-                            Icons.radio_button_unchecked,
-                            color: Colors.grey,
-                            size: 20,
-                          ),
-                  ),
-                );
-              },
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // スタンプ状況テキスト
-            Center(
-              child: Text(
-                'スタンプ: $stamps/10',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.blue[700],
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            
-            // スタンプカード完成通知
-            if (stamps >= 10)
-              Container(
-                margin: const EdgeInsets.only(top: 16),
-                padding: const EdgeInsets.all(12),
+            itemCount: 10,
+            itemBuilder: (context, index) {
+              final hasStamp = index < stamps;
+              
+              return Container(
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withOpacity(0.3)),
+                  color: hasStamp ? Colors.blue : Colors.grey[300],
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: hasStamp ? Colors.blue[700]! : Colors.grey[400]!,
+                    width: 2,
+                  ),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.celebration, color: Colors.green, size: 20),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'おめでとうございます！スタンプカードが完成しました！',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.green,
-                          fontWeight: FontWeight.w500,
+                child: Center(
+                  child: hasStamp
+                      ? const Icon(
+                          Icons.check,
+                          color: Colors.white,
+                          size: 20,
+                        )
+                      : const Icon(
+                          Icons.radio_button_unchecked,
+                          color: Colors.grey,
+                          size: 20,
                         ),
+                ),
+              );
+            },
+          ),
+          
+          // スタンプカード完成通知
+          if (stamps >= 10)
+            Container(
+              margin: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.celebration, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'おめでとうございます！スタンプカードが完成しました！',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.green,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            
-            const SizedBox(height: 16),
-          ],
-        ),
+            ),
+          
+          const SizedBox(height: 16),
+        ],
       ),
     );
   }
@@ -1007,45 +1050,29 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildMenuTab() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: const Center(
-        child: Text(
-          'メニュー機能は今後実装予定です',
-          style: TextStyle(
-            fontSize: 16,
-            color: Colors.grey,
+    return SingleChildScrollView(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: const Center(
+          child: Text(
+            'メニュー機能は今後実装予定です',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildStoreDetailsTab() {
+  Widget _buildStoreDetailsContent() {
     final displayAddress = _getDisplayAddress();
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 説明
-          if (_getStringValue(widget.store['description'], '').isNotEmpty) ...[
-            const Text(
-              '店舗説明',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _getStringValue(widget.store['description'], ''),
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-          ],
-          
           // 住所
           if (displayAddress.isNotEmpty) ...[
             const Text(
@@ -1098,15 +1125,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           
           // 営業時間
           if (widget.store['businessHours'] != null) ...[
-            const Text(
-              '営業時間',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
             _buildBusinessHoursDisplay(),
             const SizedBox(height: 16),
           ],
@@ -1163,70 +1181,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             _buildLocationDisplay(),
             const SizedBox(height: 16),
           ],
-          
-          // ステータス
-          const Text(
-            'ステータス',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _getBoolValue(widget.store['isActive'], false)
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.red.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _getBoolValue(widget.store['isActive'], false)
-                        ? Colors.green.withOpacity(0.3)
-                        : Colors.red.withOpacity(0.3),
-                  ),
-                ),
-                child: Text(
-                  _getBoolValue(widget.store['isActive'], false) ? '営業中' : '休業中',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _getBoolValue(widget.store['isActive'], false)
-                        ? Colors.green[700]
-                        : Colors.red[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _getBoolValue(widget.store['isApproved'], false)
-                      ? Colors.blue.withOpacity(0.1)
-                      : Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: _getBoolValue(widget.store['isApproved'], false)
-                        ? Colors.blue.withOpacity(0.3)
-                        : Colors.orange.withOpacity(0.3),
-                  ),
-                ),
-                child: Text(
-                  _getBoolValue(widget.store['isApproved'], false) ? '承認済み' : '承認待ち',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _getBoolValue(widget.store['isApproved'], false)
-                        ? Colors.blue[700]
-                        : Colors.orange[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -1402,6 +1356,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     final businessHours = widget.store['businessHours'] as Map<String, dynamic>?;
     if (businessHours == null) return const SizedBox.shrink();
 
+    final statusInfo = _getBusinessStatus(businessHours);
     final dayNames = {
       'monday': '月',
       'tuesday': '火',
@@ -1412,14 +1367,44 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       'sunday': '日',
     };
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Column(
-        children: dayNames.entries.map((entry) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                '営業時間',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: () {
+                setState(() {
+                  _isBusinessHoursExpanded = !_isBusinessHoursExpanded;
+                });
+              },
+              icon: Icon(
+                _isBusinessHoursExpanded ? Icons.expand_less : Icons.expand_more,
+                color: Colors.grey[700],
+              ),
+              tooltip: _isBusinessHoursExpanded ? '閉じる' : '開く',
+            ),
+          ],
+        ),
+        if (_isBusinessHoursExpanded)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Column(
+              children: dayNames.entries.map((entry) {
           final dayKey = entry.key;
           final dayName = entry.value;
           final dayData = businessHours[dayKey] as Map<String, dynamic>?;
@@ -1524,9 +1509,98 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               ],
             ),
           );
-        }).toList(),
-      ),
+              }).toList(),
+            ),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: statusInfo.color.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: statusInfo.color.withOpacity(0.4)),
+              ),
+              child: Text(
+                statusInfo.label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: statusInfo.color,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
+  }
+
+  ({String label, Color color}) _getBusinessStatus(
+    Map<String, dynamic> businessHours,
+  ) {
+    final dayKeys = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+    final now = DateTime.now();
+    final dayKey = dayKeys[now.weekday - 1];
+    final dayData = businessHours[dayKey] as Map<String, dynamic>?;
+    if (dayData == null) {
+      return (label: '営業時間外', color: Colors.red);
+    }
+
+    final isOpen = _getBoolValue(dayData['isOpen'], false);
+    if (!isOpen) {
+      return (label: '営業時間外', color: Colors.red);
+    }
+
+    final openTime = _getStringValue(dayData['open'], '');
+    final closeTime = _getStringValue(dayData['close'], '');
+    final openDateTime = _parseTimeForToday(openTime, now);
+    final closeDateTime = _parseTimeForToday(closeTime, now);
+    if (openDateTime == null || closeDateTime == null) {
+      return (label: '営業時間外', color: Colors.red);
+    }
+
+    var start = openDateTime;
+    var end = closeDateTime;
+    if (!end.isAfter(start)) {
+      end = end.add(const Duration(days: 1));
+    }
+
+    if (now.isAfter(start) && now.isBefore(end)) {
+      final remaining = end.difference(now);
+      if (remaining <= const Duration(hours: 1)) {
+        return (label: 'まもなく営業終了', color: Colors.amber[700]!);
+      }
+      return (label: '営業中', color: Colors.green[700]!);
+    }
+
+    if (now.isBefore(start)) {
+      final untilOpen = start.difference(now);
+      if (untilOpen <= const Duration(hours: 1)) {
+        return (label: 'まもなく営業開始', color: Colors.amber[700]!);
+      }
+      return (label: '営業時間外', color: Colors.red);
+    }
+
+    return (label: '営業時間外', color: Colors.red);
+  }
+
+  DateTime? _parseTimeForToday(String time, DateTime now) {
+    if (time.isEmpty) return null;
+    final parts = time.split(':');
+    if (parts.length != 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return DateTime(now.year, now.month, now.day, hour, minute);
   }
 
   // SNS・ウェブサイト表示を構築
@@ -2119,29 +2193,4 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   
-}
-
-class _SliverTabBarDelegate extends SliverPersistentHeaderDelegate {
-  final TabBar _tabBar;
-
-  _SliverTabBarDelegate(this._tabBar);
-
-  @override
-  double get minExtent => _tabBar.preferredSize.height;
-
-  @override
-  double get maxExtent => _tabBar.preferredSize.height;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: Colors.white,
-      child: _tabBar,
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant SliverPersistentHeaderDelegate oldDelegate) {
-    return false;
-  }
 }

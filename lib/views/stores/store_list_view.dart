@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/owner_settings_provider.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/custom_top_tab_bar.dart';
 import 'store_detail_view.dart';
 
 class StoreListView extends ConsumerStatefulWidget {
@@ -119,14 +120,23 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
   }
 
   Widget _buildStoreListScaffold({Set<String>? favoriteIds}) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('店舗一覧'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: Colors.grey[50],
+        appBar: AppBar(
+          title: const Text('店舗一覧'),
+          backgroundColor: const Color(0xFFFF6B35),
+          foregroundColor: Colors.white,
+          bottom: const CustomTopTabBar(
+            tabs: [
+              Tab(text: 'お気に入り'),
+              Tab(text: '店舗一覧'),
+            ],
+          ),
+        ),
+        body: _buildBody(favoriteIds: favoriteIds ?? {}),
       ),
-      body: _buildBody(favoriteIds: favoriteIds ?? {}),
     );
   }
 
@@ -170,46 +180,19 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       );
     }
 
-    if (_stores.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.store_outlined,
-              size: 64,
-              color: Colors.grey,
-            ),
-            SizedBox(height: 16),
-            Text(
-              '店舗が見つかりませんでした',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    final favoriteStores = _filterFavoriteStores(_stores, favoriteIds);
 
-    final sortedStores = _sortStoresByFavorites(_stores, favoriteIds);
-
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: GridView.builder(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 4, // 4列
-          childAspectRatio: 0.7, // 縦長の比率（カードの高さを少し上げる）
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
+    return TabBarView(
+      children: [
+        _buildStoresContent(
+          stores: favoriteStores,
+          emptyMessage: 'お気に入りの店舗がありません',
         ),
-        itemCount: sortedStores.length,
-        itemBuilder: (context, index) {
-          final store = sortedStores[index];
-          return _buildStoreCard(store);
-        },
-      ),
+        _buildStoresContent(
+          stores: _stores,
+          emptyMessage: '店舗が見つかりませんでした',
+        ),
+      ],
     );
   }
 
@@ -222,22 +205,62 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     return {};
   }
 
-  List<Map<String, dynamic>> _sortStoresByFavorites(
+  List<Map<String, dynamic>> _filterFavoriteStores(
     List<Map<String, dynamic>> stores,
     Set<String> favoriteIds,
   ) {
-    if (favoriteIds.isEmpty) return stores;
+    if (favoriteIds.isEmpty) return [];
     final favorites = <Map<String, dynamic>>[];
-    final others = <Map<String, dynamic>>[];
     for (final store in stores) {
       final storeId = store['id']?.toString();
-      if (storeId != null && favoriteIds.contains(storeId)) {
-        favorites.add(store);
-      } else {
-        others.add(store);
-      }
+      if (storeId != null && favoriteIds.contains(storeId)) favorites.add(store);
     }
-    return [...favorites, ...others];
+    return favorites;
+  }
+
+  Widget _buildStoresContent({
+    required List<Map<String, dynamic>> stores,
+    required String emptyMessage,
+  }) {
+    if (stores.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.store_outlined,
+              size: 64,
+              color: Colors.grey,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              emptyMessage,
+              style: const TextStyle(
+                fontSize: 18,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: GridView.builder(
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 4, // 4列
+          childAspectRatio: 0.7, // 縦長の比率（カードの高さを少し上げる）
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
+        itemCount: stores.length,
+        itemBuilder: (context, index) {
+          final store = stores[index];
+          return _buildStoreCard(store);
+        },
+      ),
+    );
   }
 
   Widget _buildStoreCard(Map<String, dynamic> store) {
