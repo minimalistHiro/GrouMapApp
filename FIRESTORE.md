@@ -300,6 +300,13 @@
     - `sortOrder`: 並び順
     - `createdAt`: 作成日時
     - `updatedAt`: 更新日時
+  - `interior_images/{imageId}`: 店内画像
+    - `imageUrl`: 画像URL
+    - `caption`: 説明テキスト（20文字以内）
+    - `sortOrder`: 並び順
+    - `isActive`: 表示フラグ
+    - `createdAt`: 作成日時
+    - `updatedAt`: 更新日時
 
 ### user_achievement_events
 - `user_achievement_events/{userId}/events/{eventId}`: 実績イベント
