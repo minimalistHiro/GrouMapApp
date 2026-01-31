@@ -34,7 +34,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadUserStamps();
     _loadFavoriteStatus();
   }
@@ -318,6 +318,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           CustomTopTabBar(
             tabs: const [
               Tab(text: 'トップ'),
+              Tab(text: '店内'),
               Tab(text: 'メニュー'),
             ],
             controller: _tabController,
@@ -327,6 +328,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               controller: _tabController,
               children: [
                 _buildTopTab(),
+                _buildInteriorTab(),
                 _buildMenuTab(),
               ],
             ),
@@ -349,6 +351,151 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         ],
       ),
     );
+  }
+
+  Widget _buildInteriorTab() {
+    final storeId = widget.store['id'];
+    if (storeId == null) {
+      return const Center(
+        child: Text('店舗情報が取得できませんでした。'),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .collection('interior_images')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return const Center(
+            child: Text('店内画像の取得に失敗しました。'),
+          );
+        }
+
+        final docs = snapshot.data?.docs ?? [];
+        final items = docs
+            .map((doc) => {
+                  'id': doc.id,
+                  ...doc.data(),
+                })
+            .toList();
+
+        items.sort((a, b) {
+          final aOrder = _parseSortOrder(a['sortOrder']);
+          final bOrder = _parseSortOrder(b['sortOrder']);
+          final aHasOrder = aOrder > 0;
+          final bHasOrder = bOrder > 0;
+
+          if (aHasOrder && bHasOrder) {
+            return aOrder.compareTo(bOrder);
+          }
+          if (aHasOrder != bHasOrder) {
+            return aHasOrder ? -1 : 1;
+          }
+
+          final aCreated = _parseCreatedAtMillis(a['createdAt']);
+          final bCreated = _parseCreatedAtMillis(b['createdAt']);
+          return aCreated.compareTo(bCreated);
+        });
+
+        if (items.isEmpty) {
+          return const Center(
+            child: Text('店内画像はまだありません。'),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final imageUrl = item['imageUrl'] as String? ?? '';
+            final caption = item['caption'] as String? ?? '';
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 5,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: imageUrl.isEmpty
+                        ? Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey[300]!),
+                            ),
+                            child: const Center(
+                              child: Icon(Icons.image, color: Colors.grey),
+                            ),
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                color: Colors.grey[100],
+                                child: const Center(
+                                  child: Icon(Icons.broken_image, color: Colors.grey),
+                                ),
+                              ),
+                            ),
+                          ),
+                  ),
+                  if (caption.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      caption,
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  int _parseSortOrder(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  int _parseCreatedAtMillis(dynamic value) {
+    if (value is Timestamp) {
+      return value.toDate().millisecondsSinceEpoch;
+    }
+    if (value is DateTime) {
+      return value.millisecondsSinceEpoch;
+    }
+    if (value is String) {
+      return DateTime.tryParse(value)?.millisecondsSinceEpoch ?? 0;
+    }
+    return 0;
   }
 
   Widget _buildTopDescription() {
