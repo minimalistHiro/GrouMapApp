@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/owner_settings_provider.dart';
 import '../../widgets/custom_button.dart';
 import 'store_detail_view.dart';
 
@@ -90,7 +91,12 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         if (user == null) {
           return _buildStoreListScaffold();
         }
-        return _buildStoreListScaffold();
+        final userData = ref.watch(userDataProvider(user.uid)).maybeWhen(
+              data: (data) => data,
+              orElse: () => null,
+            );
+        final favoriteIds = _extractFavoriteIds(userData);
+        return _buildStoreListScaffold(favoriteIds: favoriteIds);
       },
       loading: () => const Scaffold(
         backgroundColor: Colors.grey,
@@ -112,7 +118,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     );
   }
 
-  Widget _buildStoreListScaffold() {
+  Widget _buildStoreListScaffold({Set<String>? favoriteIds}) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -120,11 +126,11 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
       ),
-      body: _buildBody(),
+      body: _buildBody(favoriteIds: favoriteIds ?? {}),
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody({required Set<String> favoriteIds}) {
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
@@ -187,22 +193,51 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       );
     }
 
+    final sortedStores = _sortStoresByFavorites(_stores, favoriteIds);
+
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: GridView.builder(
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 4, // 4列
-          childAspectRatio: 0.75, // 縦長の比率
+          childAspectRatio: 0.7, // 縦長の比率（カードの高さを少し上げる）
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
         ),
-        itemCount: _stores.length,
+        itemCount: sortedStores.length,
         itemBuilder: (context, index) {
-          final store = _stores[index];
+          final store = sortedStores[index];
           return _buildStoreCard(store);
         },
       ),
     );
+  }
+
+  Set<String> _extractFavoriteIds(Map<String, dynamic>? userData) {
+    if (userData == null) return {};
+    final raw = userData['favoriteStoreIds'];
+    if (raw is List) {
+      return raw.map((id) => id.toString()).toSet();
+    }
+    return {};
+  }
+
+  List<Map<String, dynamic>> _sortStoresByFavorites(
+    List<Map<String, dynamic>> stores,
+    Set<String> favoriteIds,
+  ) {
+    if (favoriteIds.isEmpty) return stores;
+    final favorites = <Map<String, dynamic>>[];
+    final others = <Map<String, dynamic>>[];
+    for (final store in stores) {
+      final storeId = store['id']?.toString();
+      if (storeId != null && favoriteIds.contains(storeId)) {
+        favorites.add(store);
+      } else {
+        others.add(store);
+      }
+    }
+    return [...favorites, ...others];
   }
 
   Widget _buildStoreCard(Map<String, dynamic> store) {

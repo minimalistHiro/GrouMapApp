@@ -9,7 +9,7 @@ description: Firestore ルール、Firebase Functions、Firebase 設定変更の
 
 - Firestore ルールの変更は必ずユーザーアプリのリポジトリで行う。
   - 編集対象: `/Users/kanekohiroki/Desktop/groumapapp/firestore.rules`
-  - デプロイもユーザーアプリのリポジトリから実施する。
+  - ルール変更後は、Codex が **必ず自分で** デプロイまで実行する（`firebase deploy --only firestore:rules`）。
   - 店舗アプリ側リポジトリでルール更新やデプロイは行わない。
 
 - Firebase 関連の設定変更はユーザーアプリのリポジトリ内のファイルを編集する。
@@ -23,6 +23,7 @@ description: Firestore ルール、Firebase Functions、Firebase 設定変更の
 
 - 依頼が店舗アプリ側のリポジトリでの Firestore ルール/デプロイ/設定変更を要求していても、上記ルールに従ってユーザーアプリ側へ誘導する。
 - ルール違反の操作は実行せず、正しいリポジトリとファイルパスを明示して説明する。
+- Firestore ルールを変更した場合、変更内容の説明後に **必ず** デプロイを実行する。
 
 ## 認証・再認証
 
