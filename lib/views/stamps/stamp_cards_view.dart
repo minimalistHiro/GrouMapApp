@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../widgets/custom_button.dart';
 
 class StampCardsView extends StatefulWidget {
   const StampCardsView({Key? key, this.showAppBar = true}) : super(key: key);
@@ -15,11 +18,32 @@ class _StampCardsViewState extends State<StampCardsView> {
   List<Map<String, dynamic>> _stampCards = [];
   bool _isLoading = true;
   String? _error;
+  bool _needsAuth = false;
+  StreamSubscription<User?>? _authSub;
 
   @override
   void initState() {
     super.initState();
-    _loadStampCards();
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (!mounted) return;
+      if (user == null) {
+        setState(() {
+          _needsAuth = true;
+          _stampCards = [];
+          _error = null;
+          _isLoading = false;
+        });
+        return;
+      }
+      _needsAuth = false;
+      _loadStampCards();
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
   }
 
   // スタンプカードデータを読み込む
@@ -28,13 +52,15 @@ class _StampCardsViewState extends State<StampCardsView> {
       setState(() {
         _isLoading = true;
         _error = null;
+        _needsAuth = false;
       });
 
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         setState(() {
-          _error = 'ログインが必要です';
+          _needsAuth = true;
           _isLoading = false;
+          _error = null;
         });
         return;
       }
@@ -106,6 +132,7 @@ class _StampCardsViewState extends State<StampCardsView> {
         setState(() {
           _stampCards = stampCards;
           _isLoading = false;
+          _needsAuth = false;
         });
       }
     } catch (e) {
@@ -114,6 +141,7 @@ class _StampCardsViewState extends State<StampCardsView> {
         setState(() {
           _error = e.toString();
           _isLoading = false;
+          _needsAuth = false;
         });
       }
     }
@@ -148,6 +176,10 @@ class _StampCardsViewState extends State<StampCardsView> {
   }
 
   Widget _buildBody() {
+    if (_needsAuth) {
+      return _buildAuthRequired(context);
+    }
+
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
@@ -228,6 +260,52 @@ class _StampCardsViewState extends State<StampCardsView> {
           final stampCard = _stampCards[index];
           return _buildStampCard(stampCard);
         },
+      ),
+    );
+  }
+
+  Widget _buildAuthRequired(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'ログインが必要です',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: 'ログイン',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signin');
+                },
+                backgroundColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: 240,
+              child: CustomButton(
+                text: '新規アカウント作成',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/signup');
+                },
+                backgroundColor: Colors.white,
+                textColor: const Color(0xFFFF6B35),
+                borderColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

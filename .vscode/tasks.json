@@ -4,11 +4,11 @@
     {
       "label": "Start Flutter Web (8080)",
       "type": "shell",
-      "command": "/usr/local/flutter/bin/flutter pub get && /usr/local/flutter/bin/flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080 --web-renderer html",
+      "command": "/Users/kanekohiroki/development/flutter/bin/flutter pub get && /Users/kanekohiroki/development/flutter/bin/flutter run -d web-server --web-hostname 0.0.0.0 --web-port 8080 --web-renderer html",
       "options": {
         "env": {
-          "PATH": "/usr/local/flutter/bin:${env:PATH}",
-          "FLUTTER_ROOT": "/usr/local/flutter"
+          "PATH": "/Users/kanekohiroki/development/flutter/bin:${env:PATH}",
+          "FLUTTER_ROOT": "/Users/kanekohiroki/development/flutter"
         }
       },
       "problemMatcher": []
