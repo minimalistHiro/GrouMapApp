@@ -7,6 +7,10 @@
             "request": "launch",
             "program": "lib/main.dart",
             "deviceId": "chrome",
+            "env": {
+                "PATH": "/Users/kanekohiroki/development/flutter/bin:${env:PATH}",
+                "FLUTTER_ROOT": "/Users/kanekohiroki/development/flutter"
+            },
             "args": [
                 "--web-port=3000",
                 "--web-hostname=localhost"
@@ -19,6 +23,10 @@
             "request": "launch",
             "program": "lib/main.dart",
             "deviceId": "chrome",
+            "env": {
+                "PATH": "/Users/kanekohiroki/development/flutter/bin:${env:PATH}",
+                "FLUTTER_ROOT": "/Users/kanekohiroki/development/flutter"
+            },
             "args": [
                 "--web-port=3000",
                 "--web-hostname=localhost",
@@ -33,6 +41,10 @@
             "request": "launch",
             "program": "lib/main.dart",
             "deviceId": "chrome",
+            "env": {
+                "PATH": "/Users/kanekohiroki/development/flutter/bin:${env:PATH}",
+                "FLUTTER_ROOT": "/Users/kanekohiroki/development/flutter"
+            },
             "args": [
                 "--web-port=3000",
                 "--web-hostname=localhost"

@@ -1348,7 +1348,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
   Widget _buildMenuGrid(BuildContext context, WidgetRef ref, bool isLoggedIn) {
     final menuItems = [
-      {'icon': Icons.local_activity, 'label': 'スタンプカード'},
+      {'icon': Icons.local_activity, 'label': 'スタンプ'},
       {'icon': Icons.military_tech, 'label': 'バッジ'},
       {'icon': Icons.store, 'label': '店舗一覧'},
       {'icon': Icons.emoji_events, 'label': 'ランキング'},
@@ -1999,7 +1999,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
           return;
         }
 
-        if (title == 'スタンプカード') {
+        if (title == 'スタンプ') {
           // スタンプカード画面に遷移
           Navigator.of(context).push(
             MaterialPageRoute(
