@@ -360,6 +360,7 @@
   - `displayName`: 表示名
   - `emailVerified`: メール認証フラグ
   - `emailVerifiedAt`: メール認証日時
+  - `emailOtpRequired`: ログイン時OTP必須フラグ
   - `authProvider`: 認証プロバイダ
   - `isOwner`: オーナー判定
   - `isStoreOwner`: 店舗アカウント判定
