@@ -25,6 +25,7 @@ class CommonHeader extends StatelessWidget implements PreferredSizeWidget {
       title: Text(title),
       backgroundColor: backgroundColor,
       foregroundColor: foregroundColor,
+      automaticallyImplyLeading: showBack,
       leading: showBack
           ? IconButton(
               icon: const Icon(Icons.arrow_back),
