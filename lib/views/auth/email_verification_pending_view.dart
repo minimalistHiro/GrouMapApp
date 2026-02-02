@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
 import '../home_view.dart';
 import '../main_navigation_view.dart';
@@ -45,6 +47,12 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+    final user = authState.maybeWhen(
+      data: (u) => u,
+      orElse: () => null,
+    );
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -70,15 +78,80 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 12),
-              const Text(
-                '6桁の認証コードをメールで送信しました。メールに記載されたコードを入力してください。',
-                style: TextStyle(
+              const SizedBox(height: 16),
+              Text(
+                '${user?.email ?? "登録したメールアドレス"}に6桁の認証コードを送信しました。\nメールに記載されたコードを入力してください。',
+                style: const TextStyle(
                   fontSize: 16,
                   color: Colors.grey,
                   height: 1.5,
                 ),
                 textAlign: TextAlign.center,
+              ),
+              if (user?.email?.contains('@rakumail.jp') == true ||
+                  user?.email?.contains('@yahoo.co.jp') == true)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.info, color: Colors.blue, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'ご利用のメールサービスでは、メールが届きにくい場合があります。迷惑メールフォルダもご確認ください。',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.black87,
+                              height: 1.3,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'ご注意',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 8),
+                    Text(
+                      '• メールが届かない場合は、迷惑メールフォルダをご確認ください\n• 認証コードの有効期限は10分です\n• 認証が完了するまで、一部の機能がご利用いただけません',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 24),
               TextField(
@@ -122,16 +195,17 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
                 ),
               ),
               const SizedBox(height: 32),
-              CustomButton(
-                text: 'トップに戻る',
-                onPressed: _deleteAccountAndGoHome,
-                isLoading: _isDeleting,
-                backgroundColor: Colors.white,
-                textColor: Colors.redAccent,
-                borderColor: Colors.redAccent,
-                textStyle: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+              TextButton(
+                onPressed: _isDeleting ? null : _deleteAccountAndGoHome,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
+                ),
+                child: const Text(
+                  'トップに戻る',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],
@@ -226,29 +300,130 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
     setState(() {
       _isDeleting = true;
     });
-    try {
-      await ref.read(authServiceProvider).deleteAccount();
+    final authService = ref.read(authServiceProvider);
+    final deleted = await _deleteAccountWithReauth(authService);
+    if (!mounted) return;
+
+    if (deleted == true) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const MainNavigationView()),
+        (route) => false,
+      );
+      return;
+    }
+
+    if (deleted == false) {
+      setState(() {
+        _isDeleting = false;
+      });
+      return;
+    }
+
+    final password = await _promptPassword();
+    if (!mounted || password == null || password.isEmpty) {
+      setState(() {
+        _isDeleting = false;
+      });
+      return;
+    }
+
+    final email = FirebaseAuth.instance.currentUser?.email;
+    if (email == null) {
+      await _showErrorDialog('再認証に必要なメールアドレスを取得できませんでした');
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const MainNavigationView()),
-          (route) => false,
-        );
+        setState(() {
+          _isDeleting = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      await authService.reauthenticateWithPassword(email: email, password: password);
+      await authService.deleteAccount();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const MainNavigationView()),
+        (route) => false,
+      );
+    } on FirebaseAuthException catch (e) {
+      await _showErrorDialog('再認証に失敗しました: ${e.message ?? e.code}');
+      if (mounted) {
+        setState(() {
+          _isDeleting = false;
+        });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('アカウント削除に失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
+      await _showErrorDialog('再認証に失敗しました: ${e.toString()}');
       if (mounted) {
         setState(() {
           _isDeleting = false;
         });
       }
     }
+  }
+
+  Future<bool?> _deleteAccountWithReauth(AuthService authService) async {
+    try {
+      await authService.deleteAccount();
+      return true;
+    } on FirebaseAuthException catch (e) {
+      if (e.code != 'requires-recent-login') {
+        await _showErrorDialog('アカウント削除に失敗しました: ${e.message ?? e.code}');
+        return false;
+      }
+      return null;
+    } catch (e) {
+      await _showErrorDialog('アカウント削除に失敗しました: ${e.toString()}');
+      return false;
+    }
+  }
+
+  Future<String?> _promptPassword() async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('再認証が必要です'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(
+            labelText: 'パスワード',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('キャンセル'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(controller.text.trim()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF6B35),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('再認証'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showErrorDialog(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('エラー'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('閉じる'),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -275,6 +275,7 @@
   - `location`: 位置（`latitude`, `longitude`）
   - `iconImageUrl`: アイコン画像
   - `storeImageUrl`: 店舗画像
+  - `createdBy`: 作成者UID
   - `updatedAt`: 更新日時
   - `transactions/{transactionId}`: 店舗取引履歴
     - `type`: `award`/`use`

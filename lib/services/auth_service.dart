@@ -327,6 +327,22 @@ class AuthService {
     });
   }
 
+  // 再認証（メール/パスワード）
+  Future<void> reauthenticateWithPassword({
+    required String email,
+    required String password,
+  }) async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      throw Exception('ユーザーがログインしていません');
+    }
+    final credential = EmailAuthProvider.credential(
+      email: email,
+      password: password,
+    );
+    await user.reauthenticateWithCredential(credential);
+  }
+
   Future<void> _deleteProfileImageIfNeeded(String? imageUrl) async {
     if (imageUrl == null || imageUrl.isEmpty) return;
     if (!_isFirebaseStorageUrl(imageUrl)) return;
