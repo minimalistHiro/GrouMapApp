@@ -337,8 +337,8 @@ service cloud.firestore {
       allow read: if true;
       // 新規作成は未ログインユーザーも許可
       allow create: if true;
-      // 更新はオーナーのみ可能
-      allow update: if isOwner();
+      // 更新はオーナー or 店舗メンバーのみ可能
+      allow update: if isOwner() || isStoreMember(storeId);
       // 削除はオーナー、または作成者本人のみ可能
       allow delete: if isOwner() || (request.auth != null && request.auth.uid == resource.data.createdBy);
 

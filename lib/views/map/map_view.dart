@@ -16,11 +16,13 @@ class _MarkerVisual {
   final Color color;
   final IconData iconData;
   final bool useImage;
+  final Color? iconColor;
 
   const _MarkerVisual({
     required this.color,
     required this.iconData,
     required this.useImage,
+    this.iconColor,
   });
 }
 
@@ -158,6 +160,7 @@ class _MapViewState extends ConsumerState<MapView> {
                 data['location']['longitude'].toDouble(),
               ),
               'category': data['category'] ?? 'その他',
+              'subCategory': data['subCategory'] ?? '',
               'description': data['description'] ?? '',
               'address': data['address'] ?? '',
               'iconImageUrl': data['iconImageUrl'],
@@ -196,7 +199,8 @@ class _MapViewState extends ConsumerState<MapView> {
             'id': 'sample_store_1',
             'name': 'サンプル店舗1',
             'position': const LatLng(35.6812, 139.7671), // 東京駅
-            'category': 'レストラン',
+              'category': 'レストラン',
+              'subCategory': '',
             'description': 'テスト用のサンプル店舗です',
             'address': '東京都千代田区丸の内1-1-1',
             'iconImageUrl': null,
@@ -231,6 +235,7 @@ class _MapViewState extends ConsumerState<MapView> {
             'name': 'サンプル店舗2',
             'position': const LatLng(35.6762, 139.6503), // 渋谷駅
             'category': 'カフェ',
+            'subCategory': '',
             'description': 'テスト用のサンプル店舗です',
             'address': '東京都渋谷区道玄坂1-1-1',
             'iconImageUrl': null,
@@ -265,6 +270,7 @@ class _MapViewState extends ConsumerState<MapView> {
             'name': 'サンプル店舗3',
             'position': const LatLng(35.6581, 139.7016), // 新宿駅
             'category': 'ショップ',
+            'subCategory': '',
             'description': 'テスト用のサンプル店舗です',
             'address': '東京都新宿区新宿3-1-1',
             'iconImageUrl': null,
@@ -528,6 +534,224 @@ class _MapViewState extends ConsumerState<MapView> {
     }
   }
 
+  Color _getDefaultStoreColor(String category) {
+    switch (category) {
+      case 'カフェ・喫茶店':
+        return const Color(0xFF6F4E37);
+      case 'レストラン':
+        return const Color(0xFFD32F2F);
+      case '居酒屋':
+        return const Color(0xFF6D4C41);
+      case '和食':
+        return const Color(0xFFB71C1C);
+      case '日本料理':
+        return const Color(0xFF8E0000);
+      case '海鮮':
+        return const Color(0xFF00695C);
+      case '寿司':
+        return const Color(0xFF00897B);
+      case 'そば':
+        return const Color(0xFF5D4037);
+      case 'うどん':
+        return const Color(0xFF795548);
+      case 'うなぎ':
+        return const Color(0xFF3E2723);
+      case '焼き鳥':
+        return const Color(0xFFBF360C);
+      case 'とんかつ':
+        return const Color(0xFFEF6C00);
+      case '串揚げ':
+        return const Color(0xFFF57C00);
+      case '天ぷら':
+        return const Color(0xFFFF8F00);
+      case 'お好み焼き':
+        return const Color(0xFF9E9D24);
+      case 'もんじゃ焼き':
+        return const Color(0xFF827717);
+      case 'しゃぶしゃぶ':
+        return const Color(0xFFAD1457);
+      case '鍋':
+        return const Color(0xFFC2185B);
+      case '焼肉':
+        return const Color(0xFFD84315);
+      case 'ホルモン':
+        return const Color(0xFFBF360C);
+      case 'ラーメン':
+        return const Color(0xFF7B1FA2);
+      case '中華料理':
+        return const Color(0xFFB71C1C);
+      case '餃子':
+        return const Color(0xFF9C27B0);
+      case '韓国料理':
+        return const Color(0xFF5E35B1);
+      case 'タイ料理':
+        return const Color(0xFF00838F);
+      case 'カレー':
+        return const Color(0xFFF9A825);
+      case '洋食':
+        return const Color(0xFF1976D2);
+      case 'フレンチ':
+        return const Color(0xFF3F51B5);
+      case 'スペイン料理':
+        return const Color(0xFFE65100);
+      case 'ビストロ':
+        return const Color(0xFF5C6BC0);
+      case 'パスタ':
+        return const Color(0xFF4CAF50);
+      case 'ピザ':
+        return const Color(0xFF388E3C);
+      case 'ステーキ':
+        return const Color(0xFFB71C1C);
+      case 'ハンバーグ':
+        return const Color(0xFF8D6E63);
+      case 'ハンバーガー':
+        return const Color(0xFF6D4C41);
+      case 'ビュッフェ':
+        return const Color(0xFF0097A7);
+      case '食堂':
+        return const Color(0xFF607D8B);
+      case 'パン・サンドイッチ':
+        return const Color(0xFF8D6E63);
+      case 'スイーツ':
+        return const Color(0xFFFF80AB);
+      case 'ケーキ':
+        return const Color(0xFFFF4081);
+      case 'タピオカ':
+        return const Color(0xFF7E57C2);
+      case 'バー・お酒':
+        return const Color(0xFF455A64);
+      case 'スナック':
+        return const Color(0xFF546E7A);
+      case '料理旅館':
+        return const Color(0xFF4E342E);
+      case '沖縄料理':
+        return const Color(0xFF00ACC1);
+      case 'ショップ':
+        return const Color(0xFF1565C0);
+      case '美容院':
+        return const Color(0xFFEC407A);
+      case '薬局':
+        return const Color(0xFF43A047);
+      case 'コンビニ':
+        return const Color(0xFFFF8A65);
+      case 'スーパー':
+        return const Color(0xFF8BC34A);
+      case '書店':
+        return const Color(0xFF7E57C2);
+      default:
+        return const Color(0xFF9E9E9E);
+    }
+  }
+
+  IconData _getDefaultStoreIcon(String category) {
+    switch (category) {
+      case 'カフェ・喫茶店':
+        return Icons.local_cafe;
+      case 'レストラン':
+        return Icons.restaurant;
+      case '居酒屋':
+        return Icons.sports_bar;
+      case '和食':
+        return Icons.ramen_dining;
+      case '日本料理':
+        return Icons.set_meal;
+      case '海鮮':
+        return Icons.set_meal;
+      case '寿司':
+        return Icons.set_meal;
+      case 'そば':
+        return Icons.ramen_dining;
+      case 'うどん':
+        return Icons.ramen_dining;
+      case 'うなぎ':
+        return Icons.set_meal;
+      case '焼き鳥':
+        return Icons.outdoor_grill;
+      case 'とんかつ':
+        return Icons.set_meal;
+      case '串揚げ':
+        return Icons.outdoor_grill;
+      case '天ぷら':
+        return Icons.set_meal;
+      case 'お好み焼き':
+        return Icons.local_dining;
+      case 'もんじゃ焼き':
+        return Icons.local_dining;
+      case 'しゃぶしゃぶ':
+        return Icons.soup_kitchen;
+      case '鍋':
+        return Icons.soup_kitchen;
+      case '焼肉':
+        return Icons.local_fire_department;
+      case 'ホルモン':
+        return Icons.local_fire_department;
+      case 'ラーメン':
+        return Icons.ramen_dining;
+      case '中華料理':
+        return Icons.restaurant_menu;
+      case '餃子':
+        return Icons.restaurant_menu;
+      case '韓国料理':
+        return Icons.restaurant_menu;
+      case 'タイ料理':
+        return Icons.restaurant_menu;
+      case 'カレー':
+        return Icons.rice_bowl;
+      case '洋食':
+        return Icons.dinner_dining;
+      case 'フレンチ':
+        return Icons.wine_bar;
+      case 'スペイン料理':
+        return Icons.wine_bar;
+      case 'ビストロ':
+        return Icons.wine_bar;
+      case 'パスタ':
+        return Icons.dinner_dining;
+      case 'ピザ':
+        return Icons.local_pizza;
+      case 'ステーキ':
+        return Icons.local_fire_department;
+      case 'ハンバーグ':
+        return Icons.dinner_dining;
+      case 'ハンバーガー':
+        return Icons.fastfood;
+      case 'ビュッフェ':
+        return Icons.restaurant;
+      case '食堂':
+        return Icons.restaurant;
+      case 'パン・サンドイッチ':
+        return Icons.bakery_dining;
+      case 'スイーツ':
+        return Icons.icecream;
+      case 'ケーキ':
+        return Icons.cake;
+      case 'タピオカ':
+        return Icons.local_drink;
+      case 'バー・お酒':
+        return Icons.local_bar;
+      case 'スナック':
+        return Icons.local_bar;
+      case '料理旅館':
+        return Icons.house;
+      case '沖縄料理':
+        return Icons.beach_access;
+      case 'ショップ':
+        return Icons.shopping_bag;
+      case '美容院':
+        return Icons.content_cut;
+      case '薬局':
+        return Icons.local_pharmacy;
+      case 'コンビニ':
+        return Icons.store;
+      case 'スーパー':
+        return Icons.shopping_cart;
+      case '書店':
+        return Icons.menu_book;
+      default:
+        return Icons.store;
+    }
+  }
+
   _MarkerVisual _resolveMarkerVisual({
     required String flowerType,
     required String category,
@@ -537,87 +761,51 @@ class _MapViewState extends ConsumerState<MapView> {
       switch (flowerType) {
         case 'unvisited':
           return const _MarkerVisual(
-            color: Color(0xFFBDBDBD),
+            color: Colors.white,
             iconData: Icons.radio_button_unchecked,
             useImage: false,
+            iconColor: Color(0xFFBDBDBD),
           );
         case 'visited':
           return const _MarkerVisual(
-            color: Color(0xFFFB8C00),
+            color: Colors.white,
             iconData: Icons.radio_button_checked,
             useImage: false,
+            iconColor: Color(0xFFFB8C00),
           );
         case 'regular':
           return const _MarkerVisual(
-            color: Color(0xFFFFB300),
+            color: Colors.white,
             iconData: Icons.star,
             useImage: false,
+            iconColor: Color(0xFFFFB300),
           );
         default:
           return const _MarkerVisual(
-            color: Color(0xFFBDBDBD),
+            color: Colors.white,
             iconData: Icons.help_outline,
             useImage: false,
+            iconColor: Color(0xFFBDBDBD),
           );
       }
     }
 
     if (_categoryMode) {
-      final String cat = category;
-      if (cat.contains('カフェ')) {
-        return const _MarkerVisual(
-          color: Color(0xFF8D6E63),
-          iconData: Icons.local_cafe,
-          useImage: false,
-        );
-      }
-      if (cat.contains('レストラン') || cat.contains('食') || cat.contains('グルメ')) {
-        return const _MarkerVisual(
-          color: Color(0xFFFF5252),
-          iconData: Icons.restaurant,
-          useImage: false,
-        );
-      }
-      if (cat.contains('ショップ') || cat.contains('買') || cat.contains('物')) {
-        return const _MarkerVisual(
-          color: Color(0xFF7E57C2),
-          iconData: Icons.shopping_bag,
-          useImage: false,
-        );
-      }
-      if (cat.contains('バー') || cat.contains('酒')) {
-        return const _MarkerVisual(
-          color: Color(0xFF5E35B1),
-          iconData: Icons.wine_bar,
-          useImage: false,
-        );
-      }
-      if (cat.contains('本') || cat.contains('書店') || cat.contains('ブック')) {
-        return const _MarkerVisual(
-          color: Color(0xFF3F51B5),
-          iconData: Icons.menu_book,
-          useImage: false,
-        );
-      }
-      if (cat.contains('サービス')) {
-        return const _MarkerVisual(
-          color: Color(0xFF26A69A),
-          iconData: Icons.build_circle,
-          useImage: false,
-        );
-      }
-      return const _MarkerVisual(
-        color: Color(0xFF607D8B),
-        iconData: Icons.place,
+      final Color baseColor = _getDefaultStoreColor(category);
+      return _MarkerVisual(
+        color: Colors.white,
+        iconData: _getDefaultStoreIcon(category),
         useImage: false,
+        iconColor: baseColor,
       );
     }
 
     final bool canUseImage = storeIconUrl.isNotEmpty;
     return _MarkerVisual(
       color: Colors.white,
-      iconData: Icons.store,
+      iconData: _getDefaultStoreIcon(category),
       useImage: canUseImage,
+      iconColor: canUseImage ? null : _getDefaultStoreColor(category),
     );
   }
 
@@ -836,7 +1024,8 @@ class _MapViewState extends ConsumerState<MapView> {
       final double size = isExpanded ? 80.0 : 40.0;
       final double borderWidth = isExpanded ? 2.4 : 1.2;
       final Color borderColor = visual.useImage ? Colors.black : Colors.white70;
-      final Color iconColor = visual.useImage ? Colors.grey[700]! : Colors.white;
+      final Color iconColor =
+          visual.iconColor ?? (visual.useImage ? Colors.grey[700]! : Colors.white);
       final String cacheKey =
           '${_selectedMode}|$flowerType|$category|$isExpanded|$storeIconUrl';
       final BitmapDescriptor markerIcon = await _getMarkerIcon(
@@ -1042,7 +1231,15 @@ class _MapViewState extends ConsumerState<MapView> {
     final userStamp = _userStamps[_selectedStoreUid];
     final stamps = userStamp?['stamps'] ?? 0;
     final bool isOpenNow = _isStoreOpenNow(selectedStore);
+    final String category = (selectedStore['category'] ?? 'その他').toString();
+    final Color defaultColor = _getDefaultStoreColor(category);
     
+    final String categoryText = (selectedStore['category'] ?? 'その他').toString();
+    final String subCategoryText = (selectedStore['subCategory'] ?? '').toString();
+    final String categoryDisplay = (subCategoryText.isNotEmpty && subCategoryText != categoryText)
+        ? '$categoryText / $subCategoryText'
+        : categoryText;
+
     return Positioned(
       bottom: 20,
       left: 20,
@@ -1069,11 +1266,11 @@ class _MapViewState extends ConsumerState<MapView> {
                   width: 50,
                   height: 50,
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
+                    color: defaultColor.withOpacity(0.1),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.black,
-                      width: 0.3,
+                      color: defaultColor.withOpacity(0.3),
+                      width: 1,
                     ),
                   ),
                   child: ClipOval(
@@ -1085,25 +1282,19 @@ class _MapViewState extends ConsumerState<MapView> {
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               return Center(
-                                child: Text(
-                                  selectedStore['name']?.substring(0, 1) ?? '?',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
+                                child: Icon(
+                                  _getDefaultStoreIcon(category),
+                                  color: defaultColor,
+                                  size: 24,
                                 ),
                               );
                             },
                           )
                         : Center(
-                            child: Text(
-                              selectedStore['name']?.substring(0, 1) ?? '?',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
+                            child: Icon(
+                              _getDefaultStoreIcon(category),
+                              color: defaultColor,
+                              size: 24,
                             ),
                           ),
                   ),
@@ -1123,7 +1314,7 @@ class _MapViewState extends ConsumerState<MapView> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${selectedStore['category'] ?? 'その他'}',
+                        categoryDisplay,
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[600],
