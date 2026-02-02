@@ -43,25 +43,27 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         final data = doc.data() as Map<String, dynamic>;
         print('店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
         
-        // 実際のデータベースから店舗を取得
-        stores.add({
-          'id': doc.id,
-          'name': data['name'] ?? '店舗名なし',
-          'category': data['category'] ?? 'その他',
-          'description': data['description'] ?? '',
-          'address': data['address'] ?? '',
-          'iconImageUrl': data['iconImageUrl'],
-          'storeImageUrl': data['storeImageUrl'], // 店舗詳細画面で使用
-          'backgroundImageUrl': data['backgroundImageUrl'], // 店舗一覧画面で使用
-          'phoneNumber': data['phoneNumber'] ?? '',
-          'businessHours': data['businessHours'] ?? '',
-          'isActive': data['isActive'] ?? false,
-          'isApproved': data['isApproved'] ?? false,
-          'createdAt': data['createdAt'],
-          'updatedAt': data['updatedAt'],
-          'isVisited': false,
-        });
-        print('店舗を追加: ${data['name']}');
+        // マップ画面と同様に、アクティブかつ承認済みのみ表示
+        if (data['isActive'] == true && data['isApproved'] == true) {
+          stores.add({
+            'id': doc.id,
+            'name': data['name'] ?? '店舗名なし',
+            'category': data['category'] ?? 'その他',
+            'description': data['description'] ?? '',
+            'address': data['address'] ?? '',
+            'iconImageUrl': data['iconImageUrl'],
+            'storeImageUrl': data['storeImageUrl'], // 店舗詳細画面で使用
+            'backgroundImageUrl': data['backgroundImageUrl'], // 店舗一覧画面で使用
+            'phoneNumber': data['phoneNumber'] ?? '',
+            'businessHours': data['businessHours'] ?? '',
+            'isActive': data['isActive'] ?? false,
+            'isApproved': data['isApproved'] ?? false,
+            'createdAt': data['createdAt'],
+            'updatedAt': data['updatedAt'],
+            'isVisited': false,
+          });
+          print('店舗を追加: ${data['name']}');
+        }
       }
       
       print('読み込んだ店舗数: ${stores.length}');

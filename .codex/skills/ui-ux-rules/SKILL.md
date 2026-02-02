@@ -21,8 +21,9 @@ GrouMapの画面作成・編集時に、既定のUI/UXルールを必ず適用�
 - 上部タブの配色はオレンジ背景 `#FF6B35`（`Color(0xFFFF6B35)`）＋白テキストで統一する。
 - 青色のテキストボタンは `Colors.blue`（`Color(0xFF2196F3)` 相当）を使用し、文字は **ボールド** にする。
 - 入力不備がある場合は、ボタンの下に赤文字（`Colors.red`）・フォントサイズ12のテキストを表示する（ボールドにしない）。
-- 店舗アイコン未設定時のデフォルト表示は、店舗詳細画面の既定仕様に合わせる（アイコンと背景色はカテゴリ依存）。
+- 店舗アイコン未設定時のデフォルト表示は、店舗詳細画面の既定仕様に合わせる（アイコンと背景色はカテゴリ依存、背景色はアイコン色の `withOpacity(0.1)` を使用）。
   - アイコン: レストラン `Icons.restaurant` / カフェ `Icons.local_cafe` / ショップ `Icons.shopping_bag` / 美容院 `Icons.content_cut` / 薬局 `Icons.local_pharmacy` / コンビニ `Icons.store` / スーパー `Icons.shopping_cart` / 書店 `Icons.menu_book` / その他 `Icons.store`
   - 背景色: レストラン `Colors.red` / カフェ `Colors.brown` / ショップ `Colors.blue` / 美容院 `Colors.pink` / 薬局 `Colors.green` / コンビニ `Colors.orange` / スーパー `Colors.lightGreen` / 書店 `Colors.purple` / その他 `Colors.grey`
+- ユーザーのデフォルトアイコンは、背景色をアイコン色の `withOpacity(0.1)` にし、アイコンはホーム画面と同じ人型（`Icons.person`）を使用する。
 - 成功時の通知は表示しない（緑のスナックバーは使わない）。
 - エラー時は赤いスナックバーを使わず、デフォルトのダイアログで日本語メッセージを表示する。
