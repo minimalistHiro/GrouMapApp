@@ -266,9 +266,11 @@
   - `storeId`: 店舗ID
   - `name`: 店舗名
   - `category`: カテゴリ
+  - `subCategory`: サブカテゴリ（任意）
   - `address`: 住所
   - `phone`: 電話番号
   - `description`: 店舗説明
+  - `isRegularHoliday`: 不定休フラグ（true/false）
   - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）
   - `socialMedia`: SNSリンク（`instagram`, `x`, `facebook`, `website`）
   - `tags`: タグ
