@@ -479,6 +479,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   final resolvedImageUrl = (profileImageUrl != null && profileImageUrl.isNotEmpty)
                       ? profileImageUrl
                       : (authPhotoUrl != null && authPhotoUrl.isNotEmpty ? authPhotoUrl : null);
+                  final Color defaultAvatarColor = Colors.grey.withOpacity(0.1);
                   
                   // 現在のレベルの経験値計算
                   final levelBaseExp = levelService.totalExperienceToReachLevel(level);
@@ -530,7 +531,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                                         return Container(
                                           width: 50,
                                           height: 50,
-                                          color: Colors.grey[300],
+                                          color: defaultAvatarColor,
                                           child: const Icon(
                                             Icons.person,
                                             size: 30,
@@ -545,11 +546,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
                                   child: Container(
                                     width: 50,
                                     height: 50,
-                                    color: Colors.grey[300],
+                                    color: defaultAvatarColor,
                                     child: const Icon(
                                       Icons.person,
                                       size: 30,
-                                      color: Colors.grey,
+                                    color: Colors.grey,
                                     ),
                                   ),
                                 ),

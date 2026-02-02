@@ -244,41 +244,24 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                // ユーザー情報カード
-                SizedBox(
-                  width: double.infinity,
-                  child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        children: [
-                          _buildUserAvatar(user, _userData),
-                          const SizedBox(height: 16),
-                          Text(
-                            (_userData?['displayName'] is String &&
-                                    (_userData?['displayName'] as String).trim().isNotEmpty)
-                                ? (_userData?['displayName'] as String).trim()
-                                : (user.displayName?.trim().isNotEmpty == true
-                                    ? user.displayName!.trim()
-                                    : 'ユーザー'),
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            user.email ?? '',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
+                // ユーザー情報（カードなし）
+                Column(
+                  children: [
+                    _buildUserAvatar(user, _userData),
+                    const SizedBox(height: 16),
+                    Text(
+                      (_userData?['displayName'] is String &&
+                              (_userData?['displayName'] as String).trim().isNotEmpty)
+                          ? (_userData?['displayName'] as String).trim()
+                          : (user.displayName?.trim().isNotEmpty == true
+                              ? user.displayName!.trim()
+                              : 'ユーザー'),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
+                  ],
                 ),
                 
                 const SizedBox(height: 24),
@@ -387,6 +370,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   }
 
   Widget _buildUserAvatar(user, Map<String, dynamic>? userData) {
+    final Color defaultAvatarColor = Colors.grey.withOpacity(0.1);
     // Firestoreから取得したprofileImageUrlを優先し、なければFirebase AuthのphotoURLを使用
     String? imageUrl;
     if (userData != null && userData['profileImageUrl'] != null && userData['profileImageUrl'].toString().isNotEmpty) {
@@ -397,7 +381,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
     return CircleAvatar(
       radius: 40,
-      backgroundColor: Colors.grey[300],
+      backgroundColor: defaultAvatarColor,
       child: imageUrl != null
           ? ClipOval(
               child: _buildImageWidget(imageUrl),
@@ -409,6 +393,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             ),
     );
   }
+
 
   Widget _buildImageWidget(String imageUrl) {
     // CORS制限を回避する画像表示方法
