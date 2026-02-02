@@ -120,6 +120,22 @@ class SignInStateNotifier extends StateNotifier<SignInState> {
         email: email,
         password: password,
       );
+      final userDoc = await _authService.getUserInfo();
+      final data = userDoc?.data() as Map<String, dynamic>?;
+      final isStoreOwner = data?['isStoreOwner'] == true;
+      if (isStoreOwner) {
+        try {
+          await _authService.signOut();
+        } catch (e) {
+          debugPrint('SignInStateNotifier: Sign out failed after store account check - $e');
+        }
+        _setError(
+          'このアカウントは店舗用アカウントのためログインできません。ユーザー用アカウントでログインしてください。',
+          'store_account_not_allowed',
+          'メールアドレス・パスワードサインイン',
+        );
+        return;
+      }
       state = SignInState.success;
       debugPrint('SignInStateNotifier: Sign in successful');
     } catch (e) {
