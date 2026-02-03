@@ -1792,6 +1792,21 @@ export const punchStamp = onCall(
           }),
           { merge: true },
         );
+
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+          now.getDate(),
+        ).padStart(2, '0')}`;
+        const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayStr);
+        txn.set(
+          statsRef,
+          {
+            date: todayStr,
+            visitorCount: FieldValue.increment(1),
+            lastUpdated: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
       }
       if (storeUserStatsSnap.exists) {
         txn.set(
