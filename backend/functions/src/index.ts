@@ -1117,6 +1117,78 @@ export const sendUserNotificationOnCreate = onDocumentCreated(
   },
 );
 
+export const notifyPendingStoreRequest = onDocumentCreated(
+  {
+    document: 'stores/{storeId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    if (!event.data?.exists) return;
+
+    const storeId = event.params.storeId as string;
+    const data = event.data.data() as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const isApproved = data['isApproved'] === true;
+    const approvalStatus = (data['approvalStatus'] ?? 'pending').toString();
+    const alreadyNotified = Boolean(data['pendingRequestNotifiedAt']);
+    if (isApproved || approvalStatus != 'pending' || alreadyNotified) {
+      return;
+    }
+
+    const storeName = (data['name'] ?? '店舗名未設定').toString();
+    const createdBy = (data['createdBy'] ?? '').toString();
+
+    const ownersSnapshot = await db
+      .collection(USERS_COLLECTION)
+      .where('isOwner', '==', true)
+      .where('isStoreOwner', '==', true)
+      .get();
+
+    if (ownersSnapshot.empty) {
+      await event.data.ref.update({
+        pendingRequestNotifiedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    const notificationId = `store_request_${storeId}`;
+    const now = FieldValue.serverTimestamp();
+
+    const ownerDocs = ownersSnapshot.docs;
+    const batchSize = 400;
+    for (let i = 0; i < ownerDocs.length; i += batchSize) {
+      const batch = db.batch();
+      const slice = ownerDocs.slice(i, i + batchSize);
+      slice.forEach((ownerDoc) => {
+        const notificationRef = ownerDoc.ref.collection('notifications').doc(notificationId);
+        batch.set(notificationRef, {
+          id: notificationId,
+          userId: ownerDoc.id,
+          title: '未承認店舗の新規申請',
+          body: '新しい店舗申請が届きました',
+          type: 'store_announcement',
+          createdAt: now,
+          isRead: false,
+          isDelivered: false,
+          data: {
+            source: 'store_request',
+            storeId,
+            storeName,
+            createdBy,
+          },
+          tags: ['store_request', 'pending_store'],
+        });
+      });
+      await batch.commit();
+    }
+
+    await event.data.ref.update({
+      pendingRequestNotifiedAt: FieldValue.serverTimestamp(),
+    });
+  },
+);
+
 export const requestEmailOtp = onCall(
   {
     region: 'asia-northeast1',

@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
@@ -964,6 +964,69 @@ exports.sendUserNotificationOnCreate = (0, firestore_1.onDocumentCreated)({
     await event.data.ref.update({
         isDelivered: true,
         deliveredAt: new Date(),
+    });
+});
+exports.notifyPendingStoreRequest = (0, firestore_1.onDocumentCreated)({
+    document: 'stores/{storeId}',
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d;
+    if (!((_a = event.data) === null || _a === void 0 ? void 0 : _a.exists))
+        return;
+    const storeId = event.params.storeId;
+    const data = event.data.data();
+    if (!data)
+        return;
+    const isApproved = data['isApproved'] === true;
+    const approvalStatus = ((_b = data['approvalStatus']) !== null && _b !== void 0 ? _b : 'pending').toString();
+    const alreadyNotified = Boolean(data['pendingRequestNotifiedAt']);
+    if (isApproved || approvalStatus != 'pending' || alreadyNotified) {
+        return;
+    }
+    const storeName = ((_c = data['name']) !== null && _c !== void 0 ? _c : '店舗名未設定').toString();
+    const createdBy = ((_d = data['createdBy']) !== null && _d !== void 0 ? _d : '').toString();
+    const ownersSnapshot = await db
+        .collection(USERS_COLLECTION)
+        .where('isOwner', '==', true)
+        .where('isStoreOwner', '==', true)
+        .get();
+    if (ownersSnapshot.empty) {
+        await event.data.ref.update({
+            pendingRequestNotifiedAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        return;
+    }
+    const notificationId = `store_request_${storeId}`;
+    const now = firestore_2.FieldValue.serverTimestamp();
+    const ownerDocs = ownersSnapshot.docs;
+    const batchSize = 400;
+    for (let i = 0; i < ownerDocs.length; i += batchSize) {
+        const batch = db.batch();
+        const slice = ownerDocs.slice(i, i + batchSize);
+        slice.forEach((ownerDoc) => {
+            const notificationRef = ownerDoc.ref.collection('notifications').doc(notificationId);
+            batch.set(notificationRef, {
+                id: notificationId,
+                userId: ownerDoc.id,
+                title: '未承認店舗の新規申請',
+                body: '新しい店舗申請が届きました',
+                type: 'store_announcement',
+                createdAt: now,
+                isRead: false,
+                isDelivered: false,
+                data: {
+                    source: 'store_request',
+                    storeId,
+                    storeName,
+                    createdBy,
+                },
+                tags: ['store_request', 'pending_store'],
+            });
+        });
+        await batch.commit();
+    }
+    await event.data.ref.update({
+        pendingRequestNotifiedAt: firestore_2.FieldValue.serverTimestamp(),
     });
 });
 exports.requestEmailOtp = (0, https_1.onCall)({
