@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/custom_switch_tile.dart';
 
 class PushNotificationSettingsView extends ConsumerStatefulWidget {
   const PushNotificationSettingsView({Key? key}) : super(key: key);
@@ -27,7 +28,7 @@ class _PushNotificationSettingsViewState extends ConsumerState<PushNotificationS
         padding: const EdgeInsets.all(16),
         children: [
           _buildCard([
-            SwitchListTile(
+            CustomSwitchListTile(
               title: const Text('プッシュ通知を有効にする'),
               value: _enabled,
               onChanged: (v) => setState(() => _enabled = v),
@@ -35,19 +36,19 @@ class _PushNotificationSettingsViewState extends ConsumerState<PushNotificationS
           ]),
           const SizedBox(height: 16),
           _buildCard([
-            SwitchListTile(
+            CustomSwitchListTile(
               title: const Text('サウンド'),
               value: _sound,
               onChanged: _enabled ? (v) => setState(() => _sound = v) : null,
             ),
             const Divider(height: 0),
-            SwitchListTile(
+            CustomSwitchListTile(
               title: const Text('バッジ'),
               value: _badge,
               onChanged: _enabled ? (v) => setState(() => _badge = v) : null,
             ),
             const Divider(height: 0),
-            SwitchListTile(
+            CustomSwitchListTile(
               title: const Text('プレビューを表示'),
               value: _showPreviews,
               onChanged: _enabled ? (v) => setState(() => _showPreviews = v) : null,
@@ -92,4 +93,3 @@ class _PushNotificationSettingsViewState extends ConsumerState<PushNotificationS
     );
   }
 }
-

@@ -29,3 +29,5 @@ GrouMapの画面作成・編集時に、既定のUI/UXルールを必ず適用�
 - エラー時は赤いスナックバーを使わず、デフォルトのダイアログで日本語メッセージを表示する。
 - リストに表示する数値バッジは共通仕様とし、`padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2)`、`borderRadius: 10`、テキストは `fontSize: 11`（白・太字）を使用する。
 - 下部タブに付けるバッジは共通仕様とし、数値表示ではなく赤丸のみ、サイズは `width: 10`、`height: 10`、`shape: BoxShape.circle` を使用する。
+- カードUIは共通仕様として、角丸16・背景色は白（`Colors.white`）・影無し（`boxShadow` は空 or なし）で統一する。
+- トグルは共通仕様として、`custom_switch_tile.dart` のカスタムトグル（`CustomSwitchListTile`）を使用する。
