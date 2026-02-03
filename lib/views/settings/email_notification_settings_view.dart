@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/custom_switch_tile.dart';
 
 class EmailNotificationSettingsView extends ConsumerStatefulWidget {
   const EmailNotificationSettingsView({Key? key}) : super(key: key);
@@ -26,21 +27,21 @@ class _EmailNotificationSettingsViewState extends ConsumerState<EmailNotificatio
         padding: const EdgeInsets.all(16),
         children: [
           _buildCard([
-            SwitchListTile(
+            CustomSwitchListTile(
               title: const Text('お知らせメール'),
               subtitle: const Text('重要なお知らせやアップデート情報'),
               value: _announcements,
               onChanged: (v) => setState(() => _announcements = v),
             ),
             const Divider(height: 0),
-            SwitchListTile(
+            CustomSwitchListTile(
               title: const Text('ニュースレター'),
               subtitle: const Text('新機能やおすすめ情報'),
               value: _newsletters,
               onChanged: (v) => setState(() => _newsletters = v),
             ),
             const Divider(height: 0),
-            SwitchListTile(
+            CustomSwitchListTile(
               title: const Text('キャンペーン・プロモーション'),
               value: _promotions,
               onChanged: (v) => setState(() => _promotions = v),
@@ -85,4 +86,3 @@ class _EmailNotificationSettingsViewState extends ConsumerState<EmailNotificatio
     );
   }
 }
-
