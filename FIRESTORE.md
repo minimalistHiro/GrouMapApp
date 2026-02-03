@@ -271,6 +271,14 @@
   - `phone`: 電話番号
   - `description`: 店舗説明
   - `isRegularHoliday`: 不定休フラグ（true/false）
+  - `isActive`: 店舗公開フラグ（店舗設定画面のトグルで切り替え）
+  - `isApproved`: 承認フラグ（承認ボタンでtrue）
+  - `approvalStatus`: 承認ステータス（`pending`/`approved`/`rejected`）
+  - `approvedAt`: 承認日時
+  - `approvedBy`: 承認者UID
+  - `rejectedAt`: 拒否日時
+  - `rejectedBy`: 拒否者UID
+  - `pendingRequestNotifiedAt`: 未承認店舗通知送信済み日時
   - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）
   - `socialMedia`: SNSリンク（`instagram`, `x`, `facebook`, `website`）
   - `tags`: タグ
