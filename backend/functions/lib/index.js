@@ -1526,6 +1526,14 @@ exports.punchStamp = (0, https_1.onCall)({
                 lastVisited: firestore_2.FieldValue.serverTimestamp(),
                 updatedAt: firestore_2.FieldValue.serverTimestamp(),
             }), { merge: true });
+            const now = new Date();
+            const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayStr);
+            txn.set(statsRef, {
+                date: todayStr,
+                visitorCount: firestore_2.FieldValue.increment(1),
+                lastUpdated: firestore_2.FieldValue.serverTimestamp(),
+            }, { merge: true });
         }
         if (storeUserStatsSnap.exists) {
             txn.set(storeUserStatsRef, {
