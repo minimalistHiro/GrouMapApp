@@ -74,6 +74,17 @@ class _AccountDeletionProcessingViewState extends ConsumerState<AccountDeletionP
           content: Text('退会処理に失敗しました: $e'),
           actions: [
             TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                await _logoutAndGoHome();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.blue,
+                textStyle: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              child: const Text('ログアウトする'),
+            ),
+            TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('閉じる'),
             ),
@@ -141,6 +152,17 @@ class _AccountDeletionProcessingViewState extends ConsumerState<AccountDeletionP
         content: Text(message),
         actions: [
           TextButton(
+            onPressed: () async {
+              Navigator.of(context).pop();
+              await _logoutAndGoHome();
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.blue,
+              textStyle: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            child: const Text('ログアウトする'),
+          ),
+          TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('閉じる'),
           ),
@@ -175,6 +197,23 @@ class _AccountDeletionProcessingViewState extends ConsumerState<AccountDeletionP
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _logoutAndGoHome() async {
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {
+      // 失敗しても遷移は行う
+    }
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (context) => const MainNavigationView(
+          key: ValueKey('guest'),
+        ),
+      ),
+      (route) => false,
     );
   }
 }
