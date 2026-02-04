@@ -25,6 +25,10 @@ GrouMapの画面作成・編集時に、既定のUI/UXルールを必ず適用�
   - アイコン: レストラン `Icons.restaurant` / カフェ `Icons.local_cafe` / ショップ `Icons.shopping_bag` / 美容院 `Icons.content_cut` / 薬局 `Icons.local_pharmacy` / コンビニ `Icons.store` / スーパー `Icons.shopping_cart` / 書店 `Icons.menu_book` / その他 `Icons.store`
   - 背景色: レストラン `Colors.red` / カフェ `Colors.brown` / ショップ `Colors.blue` / 美容院 `Colors.pink` / 薬局 `Colors.green` / コンビニ `Colors.orange` / スーパー `Colors.lightGreen` / 書店 `Colors.purple` / その他 `Colors.grey`
 - ユーザーのデフォルトアイコンは、背景色をアイコン色の `withOpacity(0.1)` にし、アイコンはホーム画面と同じ人型（`Icons.person`）を使用する。
+- プロフィール画像の作成/更新は、店舗用・ユーザー用ともに共通のカスタムアイコンUIを使用する（`IconImagePickerField`）。タップで画像選択→位置調整画面へ遷移し、右上のマイナスボタンで画像削除を行う。
+- アイコン以外の画像を作成/更新する際は、共通の `ImagePickerField` を使用する。
+- 画像比率は `/Users/kanekohiroki/Desktop/groumapapp/IMAGE_RATIOS.md` を参照する。記載がない・不明な場合は独断で決めずにユーザーへ確認する。
+- 新たに決定した画像比率は、このスキル（`/Users/kanekohiroki/Desktop/groumapapp/.codex/skills/ui-ux-rules/SKILL.md`）に追記する。
 - 成功時の通知は表示しない（緑のスナックバーは使わない）。
 - エラー時は赤いスナックバーを使わず、デフォルトのダイアログで日本語メッセージを表示する。
 - リストに表示する数値バッジは共通仕様とし、`padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2)`、`borderRadius: 10`、テキストは `fontSize: 11`（白・太字）を使用する。

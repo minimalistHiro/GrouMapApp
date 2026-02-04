@@ -6,8 +6,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../widgets/icon_image_picker_field.dart';
+import '../../utils/icon_image_flow.dart';
 import '../../providers/auth_provider.dart';
 import '../main_navigation_view.dart';
+import '../settings/user_icon_crop_view.dart';
 
 class UserInfoView extends ConsumerStatefulWidget {
   const UserInfoView({Key? key}) : super(key: key);
@@ -34,7 +37,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   bool _isSubmitting = false;
   
   // プロフィール画像関連
-  XFile? _selectedImage;
+  Uint8List? _selectedImageBytes;
   String? _profileImageUrl;
   bool _isUploadingImage = false;
   final ImagePicker _picker = ImagePicker();
@@ -368,49 +371,26 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                   
                   // プロフィール画像表示・選択エリア
                   Center(
-                    child: GestureDetector(
-                      onTap: _isUploadingImage ? null : _selectProfileImage,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          border: Border.all(
-                            color: Colors.grey.shade300,
-                            width: 2,
+                    child: _isUploadingImage
+                        ? const SizedBox(
+                            width: 120,
+                            height: 120,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: Color(0xFFE75B41),
+                              ),
+                            ),
+                          )
+                        : IconImagePickerField(
+                            size: 120,
+                            onTap: _selectProfileImage,
+                            onRemove: _removeProfileImage,
+                            showRemove: (_selectedImageBytes != null) || (_profileImageUrl?.isNotEmpty ?? false),
+                            backgroundColor: Colors.white,
+                            borderColor: Colors.grey.shade300,
+                            borderWidth: 2,
+                            child: _buildProfileImage(),
                           ),
-                        ),
-                        child: _isUploadingImage
-                            ? const Center(
-                                child: CircularProgressIndicator(
-                                  color: Color(0xFFE75B41),
-                                ),
-                              )
-                            : (_selectedImage != null || _profileImageUrl != null)
-                                ? ClipOval(
-                                    child: _buildProfileImage(),
-                                  )
-                                : Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.camera_alt,
-                                        size: 40,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        '画像を選択',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                      ),
-                    ),
                   ),
                   
                   const SizedBox(height: 32),
@@ -461,15 +441,16 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
       );
     } 
     // 選択した画像がある場合はそれを表示
-    else if (_selectedImage != null) {
+    else if (_selectedImageBytes != null) {
       return _buildSelectedImage();
     } 
     // どちらもない場合はデフォルトアイコン
     else {
+      final iconColor = Colors.grey;
       return Container(
         width: 120,
         height: 120,
-        color: Colors.grey[300],
+        color: iconColor.withOpacity(0.1),
         child: const Icon(
           Icons.person,
           size: 60,
@@ -481,11 +462,12 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
 
   // 選択した画像を表示するヘルパーメソッド
   Widget _buildSelectedImage() {
-    if (_selectedImage == null) {
+    if (_selectedImageBytes == null) {
+      final iconColor = Colors.grey;
       return Container(
         width: 120,
         height: 120,
-        color: Colors.grey[300],
+        color: iconColor.withOpacity(0.1),
         child: const Icon(
           Icons.person,
           size: 60,
@@ -494,51 +476,24 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
       );
     }
 
-    return FutureBuilder<Uint8List>(
-      future: _selectedImage!.readAsBytes(),
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          return Image.memory(
-            snapshot.data!,
-            width: 120,
-            height: 120,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              debugPrint('Error displaying selected image: $error');
-              return Container(
-                width: 120,
-                height: 120,
-                color: Colors.grey[300],
-                child: const Icon(
-                  Icons.person,
-                  size: 60,
-                  color: Colors.grey,
-                ),
-              );
-            },
-          );
-        } else if (snapshot.hasError) {
-          debugPrint('Error reading image bytes: ${snapshot.error}');
-          return Container(
-            width: 120,
-            height: 120,
-            color: Colors.grey[300],
-            child: const Icon(
-              Icons.person,
-              size: 60,
-              color: Colors.grey,
-            ),
-          );
-        } else {
-          return Container(
-            width: 120,
-            height: 120,
-            color: Colors.grey[300],
-            child: const CircularProgressIndicator(
-              color: Color(0xFFE75B41),
-            ),
-          );
-        }
+    return Image.memory(
+      _selectedImageBytes!,
+      width: 120,
+      height: 120,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        debugPrint('Error displaying selected image: $error');
+        final iconColor = Colors.grey;
+        return Container(
+          width: 120,
+          height: 120,
+          color: iconColor.withOpacity(0.1),
+          child: const Icon(
+            Icons.person,
+            size: 60,
+            color: Colors.grey,
+          ),
+        );
       },
     );
   }
@@ -546,26 +501,20 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   // プロフィール画像を選択
   Future<void> _selectProfileImage() async {
     try {
-      debugPrint('Starting image selection...');
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+      final Uint8List? cropped = await pickAndCropIconImage(
+        context: context,
+        picker: _picker,
+        buildCropView: (bytes) => UserIconCropView(imageBytes: bytes),
+        maxWidth: 1024,
+        maxHeight: 1024,
       );
-      
-      if (image != null) {
-        debugPrint('Image selected: ${image.name}, path: ${image.path}');
+      if (!mounted) return;
+      if (cropped != null) {
         setState(() {
-          _selectedImage = image;
-          _profileImageUrl = null; // 新しい画像を選択したらURLをリセット
+          _selectedImageBytes = cropped;
+          _profileImageUrl = null;
         });
-        debugPrint('Image state updated, rebuilding widget...');
-        
-        // Firebase Storageにアップロード（Web対応）
-        await _uploadImageToFirebase(image);
-      } else {
-        debugPrint('No image selected');
+        await _uploadImageBytesToFirebase(cropped);
       }
     } catch (e) {
       debugPrint('Error picking image: $e');
@@ -579,7 +528,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   }
 
   // Firebase Storageに画像をアップロード（Web対応）
-  Future<void> _uploadImageToFirebase(XFile imageFile) async {
+  Future<void> _uploadImageBytesToFirebase(Uint8List bytes) async {
     try {
       setState(() {
         _isUploadingImage = true;
@@ -590,8 +539,6 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
           .child('profile_images')
           .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
 
-      // Web対応：XFileからUint8Listを取得
-      final bytes = await imageFile.readAsBytes();
       final uploadTask = storageRef.putData(bytes);
       final snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
@@ -620,6 +567,13 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
         ),
       );
     }
+  }
+
+  void _removeProfileImage() {
+    setState(() {
+      _selectedImageBytes = null;
+      _profileImageUrl = null;
+    });
   }
 
   List<int> get _yearOptions {
