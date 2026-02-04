@@ -7,6 +7,9 @@ import 'dart:typed_data';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/common_header.dart';
+import '../../widgets/icon_image_picker_field.dart';
+import '../../utils/icon_image_flow.dart';
+import 'user_icon_crop_view.dart';
 
 class ProfileEditView extends ConsumerStatefulWidget {
   const ProfileEditView({Key? key}) : super(key: key);
@@ -22,7 +25,7 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
   bool _isUploadingImage = false;
 
   // 画像関連
-  XFile? _selectedImage;
+  Uint8List? _selectedImageBytes;
   String? _profileImageUrl;
   final ImagePicker _picker = ImagePicker();
 
@@ -160,57 +163,39 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
   }
 
   Widget _buildSelectedImageWidget() {
-    if (_selectedImage == null) {
+    if (_selectedImageBytes == null) {
+      final iconColor = Colors.grey;
       return Container(
         width: 120,
         height: 120,
-        color: Colors.grey[300],
+        color: iconColor.withOpacity(0.1),
         child: const Icon(Icons.person, size: 60, color: Colors.grey),
       );
     }
-    return FutureBuilder<Uint8List>(
-      future: _selectedImage!.readAsBytes(),
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          return Image.memory(
-            snapshot.data!,
-            width: 120,
-            height: 120,
-            fit: BoxFit.cover,
-          );
-        }
-        if (snapshot.hasError) {
-          return Container(
-            width: 120,
-            height: 120,
-            color: Colors.grey[300],
-            child: const Icon(Icons.person, size: 60, color: Colors.grey),
-          );
-        }
-        return Container(
-          width: 120,
-          height: 120,
-          color: Colors.grey[300],
-          child: const CircularProgressIndicator(color: Color(0xFFFF6B35)),
-        );
-      },
+    return Image.memory(
+      _selectedImageBytes!,
+      width: 120,
+      height: 120,
+      fit: BoxFit.cover,
     );
   }
 
   // 画像選択/アップロード
   Future<void> _selectProfileImage() async {
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+      final Uint8List? cropped = await pickAndCropIconImage(
+        context: context,
+        picker: _picker,
+        buildCropView: (bytes) => UserIconCropView(imageBytes: bytes),
+        maxWidth: 1024,
+        maxHeight: 1024,
       );
-      if (image != null) {
+      if (!mounted) return;
+      if (cropped != null) {
         setState(() {
-          _selectedImage = image;
+          _selectedImageBytes = cropped;
         });
-        await _uploadImageToFirebase(image);
+        await _uploadImageBytesToFirebase(cropped);
       }
     } catch (e) {
       if (!mounted) return;
@@ -220,7 +205,7 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
     }
   }
 
-  Future<void> _uploadImageToFirebase(XFile imageFile) async {
+  Future<void> _uploadImageBytesToFirebase(Uint8List bytes) async {
     try {
       setState(() {
         _isUploadingImage = true;
@@ -229,7 +214,6 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
           .ref()
           .child('profile_images')
           .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
-      final bytes = await imageFile.readAsBytes();
       final snapshot = await storageRef.putData(bytes);
       final downloadUrl = await snapshot.ref.getDownloadURL();
       setState(() {
@@ -245,6 +229,13 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
         SnackBar(content: Text('画像のアップロードに失敗しました: $e'), backgroundColor: Colors.red),
       );
     }
+  }
+
+  void _removeProfileImage() {
+    setState(() {
+      _selectedImageBytes = null;
+      _profileImageUrl = null;
+    });
   }
 
   bool _isGoogleUser() {
@@ -650,21 +641,22 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                   const Text('プロフィール画像（任意）', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   Center(
-                    child: GestureDetector(
-                      onTap: _isUploadingImage ? null : _selectProfileImage,
-                      child: Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white,
-                          border: Border.all(color: Colors.grey.shade300, width: 2),
-                        ),
-                        child: _isUploadingImage
-                            ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B35)))
-                            : ClipOval(child: _buildProfileImageWidget()),
-                      ),
-                    ),
+                    child: _isUploadingImage
+                        ? const SizedBox(
+                            width: 120,
+                            height: 120,
+                            child: Center(child: CircularProgressIndicator(color: Color(0xFFFF6B35))),
+                          )
+                        : IconImagePickerField(
+                            size: 120,
+                            onTap: _selectProfileImage,
+                            child: _buildProfileImageWidget(),
+                            showRemove: (_selectedImageBytes != null) || (_profileImageUrl?.isNotEmpty ?? false),
+                            onRemove: _removeProfileImage,
+                            backgroundColor: Colors.white,
+                            borderColor: Colors.grey,
+                            borderWidth: 2,
+                          ),
                   ),
                   const SizedBox(height: 16),
                 ],
