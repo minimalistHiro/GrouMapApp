@@ -1361,7 +1361,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
         clipBehavior: Clip.none,
         children: [
           Container(
-            height: 90,
+            height: 80,
             width: double.infinity,
             decoration: BoxDecoration(
               color: const Color(0xFFFF6B35),
@@ -1379,8 +1379,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     item['label'] as String,
                     item['icon'] as IconData,
                     true,
-                    iconSize: 32.0,
-                    fontSize: 12.0,
+                    iconSize: 26.0,
+                    fontSize: 10.0,
                   ),
                 );
               }).toList(),

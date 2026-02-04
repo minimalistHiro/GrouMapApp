@@ -41,6 +41,7 @@ class CustomTextField extends StatelessWidget {
       readOnly: readOnly,
       maxLines: maxLines,
       maxLength: maxLength,
+      style: const TextStyle(height: 1.5),
       decoration: InputDecoration(
         labelText: labelText,
         hintText: hintText,
