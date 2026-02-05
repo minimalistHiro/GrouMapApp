@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,9 +20,24 @@ class _LiveChatViewState extends State<LiveChatView> {
   bool _isSending = false;
   bool _didMarkRead = false;
   bool _isMarkingMessageRead = false;
+  bool _isNearBottom = true;
+  bool _forceScrollOnSend = false;
+  String? _lastSeenMessageId;
+  Timer? _markReadTimer;
+  bool _hasAutoScrolledToBottom = true;
+
+  static const double _autoScrollThreshold = 120;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
 
   @override
   void dispose() {
+    _markReadTimer?.cancel();
+    _scrollController.removeListener(_handleScroll);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -72,6 +88,7 @@ class _LiveChatViewState extends State<LiveChatView> {
       });
 
       _messageController.clear();
+      _forceScrollOnSend = true;
       _scrollToBottom();
     } finally {
       if (mounted) {
@@ -86,12 +103,18 @@ class _LiveChatViewState extends State<LiveChatView> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          0,
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
       }
     });
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    _isNearBottom = position.pixels <= _autoScrollThreshold;
   }
 
   Future<void> _markAsRead(String roomId) async {
@@ -133,6 +156,31 @@ class _LiveChatViewState extends State<LiveChatView> {
     }
   }
 
+  void _scheduleMarkRead(String roomId, List<QueryDocumentSnapshot> docs) {
+    _markReadTimer?.cancel();
+    _markReadTimer = Timer(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      _markAsRead(roomId);
+      _markMessagesAsRead(docs);
+    });
+  }
+
+  void _handleNewSnapshot(String roomId, List<QueryDocumentSnapshot> docs) {
+    if (docs.isEmpty) return;
+    final latestId = docs.last.id;
+    if (latestId == _lastSeenMessageId) return;
+    _lastSeenMessageId = latestId;
+
+    final shouldScroll = _forceScrollOnSend || _isNearBottom;
+    if (shouldScroll) {
+      _forceScrollOnSend = false;
+      _scrollToBottom();
+    }
+    if (shouldScroll) {
+      _scheduleMarkRead(roomId, docs);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -162,13 +210,17 @@ class _LiveChatViewState extends State<LiveChatView> {
     if (_currentRoomId != roomId) {
       _currentRoomId = roomId;
       _didMarkRead = false;
+      _markReadTimer?.cancel();
+      _lastSeenMessageId = null;
+      _forceScrollOnSend = false;
+      _hasAutoScrolledToBottom = true;
     }
 
     final messagesStream = FirebaseFirestore.instance
         .collection('service_chat_rooms')
         .doc(roomId)
         .collection('messages')
-        .orderBy('createdAt')
+        .orderBy('createdAt', descending: true)
         .snapshots();
 
     return Column(
@@ -190,14 +242,11 @@ class _LiveChatViewState extends State<LiveChatView> {
                 );
               }
 
-              _markAsRead(roomId);
-              _markMessagesAsRead(docs);
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _scrollToBottom();
-              });
+              _handleNewSnapshot(roomId, docs);
 
               return ListView.separated(
                 controller: _scrollController,
+                reverse: true,
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                 itemCount: docs.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
