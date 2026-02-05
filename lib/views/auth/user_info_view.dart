@@ -22,7 +22,6 @@ class UserInfoView extends ConsumerStatefulWidget {
 class _UserInfoViewState extends ConsumerState<UserInfoView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _friendCodeController = TextEditingController();
   
   DateTime? _selectedDate;
   int? _selectedYear;
@@ -68,7 +67,6 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   @override
   void dispose() {
     _nameController.dispose();
-    _friendCodeController.dispose();
     super.dispose();
   }
 
@@ -344,15 +342,6 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                       return null;
                     },
                   ),
-                
-                const SizedBox(height: 16),
-                
-                // 友達紹介コード入力
-                CustomTextField(
-                  controller: _friendCodeController,
-                  labelText: '友達紹介コード（任意）',
-                  hintText: '友達から紹介コードをもらった場合は入力してください',
-                ),
                 
                 const SizedBox(height: 24),
                 
@@ -881,10 +870,6 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
           'prefecture': _selectedPrefecture,
           'city': _selectedCity,
         };
-        final friendCode = _friendCodeController.text.trim();
-        if (friendCode.isNotEmpty) {
-          userInfo['friendCode'] = friendCode;
-        }
         if (profileImageUrl != null && profileImageUrl.isNotEmpty) {
           userInfo['profileImageUrl'] = profileImageUrl;
         }

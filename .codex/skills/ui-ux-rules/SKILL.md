@@ -37,3 +37,4 @@ GrouMapの画面作成・編集時に、既定のUI/UXルールを必ず適用�
 - トグルは共通仕様として、`custom_switch_tile.dart` のカスタムトグル（`CustomSwitchListTile`）を使用する。
 - キーボードのタップ外閉じは共通化する。原則として画面の body を `DismissKeyboard` でラップする（`lib/widgets/dismiss_keyboard.dart` / `groumapapp_store/lib/widgets/dismiss_keyboard.dart`）。
   - 例外: ユーザー用アプリのマップ画面は対象外（タップ操作が多いため適用しない）。
+- スクロール可能な画面では、最下部に `SizedBox(height: 16)` 相当の余白を入れる。
