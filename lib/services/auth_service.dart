@@ -441,6 +441,17 @@ class AuthService {
         'storeReferralCount': 0, // 紹介した店舗数
         'storeReferralEarnings': 0, // 店舗紹介で獲得したポイント数
         'favoriteStoreIds': <String>[], // お気に入り店舗IDリスト
+        'notificationSettings': {
+          'couponIssued': true,
+          'post': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        'emailNotificationSettings': {
+          'announcements': true,
+          'newsletters': true,
+          'promotions': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
