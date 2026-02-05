@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/common_header.dart';
+import '../../widgets/custom_button.dart';
+import '../../widgets/dismiss_keyboard.dart';
+import '../../widgets/error_dialog.dart';
 
 class EmailSupportView extends ConsumerStatefulWidget {
   const EmailSupportView({Key? key}) : super(key: key);
@@ -50,8 +54,11 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
     final user = authState.value;
     
     if (user != null) {
+      if ((user.email ?? '').isNotEmpty) {
+        _emailController.text = user.email!;
+      }
       final userDoc = await FirebaseFirestore.instance
-          .collection('store_users')
+          .collection('users')
           .doc(user.uid)
           .get();
       
@@ -130,11 +137,11 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('送信に失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorDialog.show(
+          context,
+          title: '送信に失敗しました',
+          message: '時間をおいて再度お試しください。',
+          details: e.toString(),
         );
       }
     } finally {
@@ -173,39 +180,47 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(authStateProvider, (previous, next) {
+      if (next.value != null && previous?.value?.uid != next.value?.uid) {
+        _loadUserEmail();
+      }
+    });
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('メールサポート'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
+      appBar: const CommonHeader(
+        title: 'メールサポート',
       ),
+      backgroundColor: Colors.grey[50],
       body: Stack(
         children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ヘッダー情報
-                  _buildHeaderCard(),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // お問い合わせフォーム
-                  _buildFormCard(),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // 送信ボタン
-                  _buildSubmitButton(),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // 注意事項
-                  _buildNoticeCard(),
-                ],
+          DismissKeyboard(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ヘッダー情報
+                    _buildHeaderCard(),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // お問い合わせフォーム
+                    _buildFormCard(),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // 送信ボタン
+                    _buildSubmitButton(),
+                    
+                    const SizedBox(height: 16),
+                    
+                    // 注意事項
+                    _buildNoticeCard(),
+                    
+                    const SizedBox(height: 16),
+                  ],
+                ),
               ),
             ),
           ),
@@ -224,49 +239,55 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
   Widget _buildHeaderCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFF6B35), Color(0xFFFF8A65)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.orange.withOpacity(0.3),
-            spreadRadius: 1,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
-      child: Column(
-        children: [
-          const Icon(
-            Icons.email_outlined,
-            size: 48,
-            color: Colors.white,
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'お問い合わせフォーム',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6B35).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.email_outlined,
+                size: 26,
+                color: Color(0xFFFF6B35),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'ご質問やご要望をお寄せください\n24時間以内に返信いたします',
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.white70,
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'お問い合わせフォーム',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    'ご質問やご要望をお寄せください\n24時間以内に返信いたします',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.black54,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -277,14 +298,6 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,34 +475,15 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
   }
 
   Widget _buildSubmitButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 50,
-      child: ElevatedButton(
-        onPressed: _isLoading ? null : _submitSupport,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFFF6B35),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 4,
-          shadowColor: Colors.orange.withOpacity(0.5),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.send),
-            const SizedBox(width: 8),
-            const Text(
-              '送信する',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
+    return CustomButton(
+      text: '送信する',
+      height: 48,
+      borderRadius: 999,
+      isLoading: _isLoading,
+      onPressed: _submitSupport,
+      textStyle: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
       ),
     );
   }
@@ -498,9 +492,9 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue.shade200),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -509,28 +503,28 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
             children: [
               Icon(
                 Icons.info_outline,
-                color: Colors.blue.shade700,
+                color: const Color(0xFFFF6B35),
                 size: 20,
               ),
               const SizedBox(width: 8),
-              Text(
+              const Text(
                 'ご注意',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.blue.shade700,
+                  color: Colors.black87,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          Text(
+          const Text(
             '• 回答には最大24時間かかる場合があります\n'
             '• 緊急のご用件は電話サポートをご利用ください\n'
             '• セキュリティ上、パスワード等の情報は記載しないでください',
             style: TextStyle(
               fontSize: 12,
-              color: Colors.blue.shade900,
+              color: Colors.black54,
               height: 1.5,
             ),
           ),
@@ -539,4 +533,3 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
     );
   }
 }
-
