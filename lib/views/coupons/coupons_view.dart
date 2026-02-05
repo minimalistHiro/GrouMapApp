@@ -15,11 +15,13 @@ import 'coupon_detail_view.dart';
 class CouponsView extends ConsumerWidget {
   final int initialTopTabIndex;
   final int initialCouponTabIndex;
+  final bool hideTopTabs;
 
   const CouponsView({
     Key? key,
     this.initialTopTabIndex = 0,
     this.initialCouponTabIndex = 0,
+    this.hideTopTabs = false,
   }) : super(key: key);
 
   int _coerceIndex(int index, int length) {
@@ -89,6 +91,10 @@ class CouponsView extends ConsumerWidget {
   }
 
   Widget _buildCouponsContent(BuildContext context, WidgetRef ref, String? userId) {
+    if (hideTopTabs) {
+      return _buildCoupons(context, ref, userId);
+    }
+
     return DefaultTabController(
       length: 2,
       initialIndex: _coerceIndex(initialTopTabIndex, 2),
@@ -209,12 +215,10 @@ class CouponsView extends ConsumerWidget {
     final tabs = <Tab>[
       const Tab(text: '利用可能', icon: Icon(Icons.card_giftcard)),
       if (isLoggedIn) const Tab(text: '使用済み', icon: Icon(Icons.check_circle)),
-      const Tab(text: 'プロモーション', icon: Icon(Icons.campaign)),
     ];
     final views = <Widget>[
       _buildAvailableCoupons(context, ref, userId ?? 'guest'),
       if (isLoggedIn) _buildUsedCoupons(context, ref, userId!),
-      _buildPromotions(context, ref),
     ];
 
     return DefaultTabController(

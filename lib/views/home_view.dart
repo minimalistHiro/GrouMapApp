@@ -17,7 +17,6 @@ import '../providers/level_provider.dart';
 import '../models/coupon_model.dart' as model;
 import '../widgets/custom_button.dart';
 import 'notifications/notifications_view.dart' hide userDataProvider;
-import 'ranking/leaderboard_view.dart';
 import 'stores/store_list_view.dart';
 import 'referral/friend_referral_view.dart';
 import 'referral/store_referral_view.dart' hide userDataProvider;
@@ -65,6 +64,16 @@ int _parseIntValue(dynamic value) {
   return 0;
 }
 
+class UserStoreProgress {
+  const UserStoreProgress({
+    required this.newPioneerCount,
+    required this.stamp10StoreCount,
+  });
+
+  final int newPioneerCount;
+  final int stamp10StoreCount;
+}
+
 // ユーザーが所持しているスタンプ合計数
 final userTotalStampsProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
   try {
@@ -90,6 +99,79 @@ final userTotalStampsProvider = StreamProvider.autoDispose.family<int, String>((
         });
   } catch (e) {
     debugPrint('Error creating user total stamps stream: $e');
+    return Stream.value(0);
+  }
+});
+
+// ユーザーの新規開拓数・スタンプ10個店舗数
+final userStoreProgressProvider = StreamProvider.autoDispose.family<UserStoreProgress, String>((ref, userId) {
+  try {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      return Stream.value(const UserStoreProgress(
+        newPioneerCount: 0,
+        stamp10StoreCount: 0,
+      ));
+    }
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('stores')
+        .snapshots()
+        .map((snapshot) {
+          var newPioneerCount = 0;
+          var stamp10StoreCount = 0;
+          for (final doc in snapshot.docs) {
+            final stamps = _parseStampCount(doc.data()['stamps']);
+            if (stamps >= 1 && stamps <= 9) {
+              newPioneerCount++;
+            } else if (stamps >= 10) {
+              stamp10StoreCount++;
+            }
+          }
+          return UserStoreProgress(
+            newPioneerCount: newPioneerCount,
+            stamp10StoreCount: stamp10StoreCount,
+          );
+        })
+        .handleError((error) {
+          debugPrint('Error fetching user store stats: $error');
+          return const UserStoreProgress(
+            newPioneerCount: 0,
+            stamp10StoreCount: 0,
+          );
+        });
+  } catch (e) {
+    debugPrint('Error creating user store stats stream: $e');
+    return Stream.value(const UserStoreProgress(
+      newPioneerCount: 0,
+      stamp10StoreCount: 0,
+    ));
+  }
+});
+
+// 全店舗数
+final totalStoreCountProvider = StreamProvider<int>((ref) {
+  try {
+    return FirebaseFirestore.instance
+        .collection('stores')
+        .snapshots()
+        .map((snapshot) {
+          var activeCount = 0;
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            if (data['isActive'] == true) {
+              activeCount++;
+            }
+          }
+          return activeCount;
+        })
+        .handleError((error) {
+          debugPrint('Error fetching total store count: $error');
+          return 0;
+        });
+  } catch (e) {
+    debugPrint('Error creating total store count stream: $e');
     return Stream.value(0);
   }
 });
@@ -307,6 +389,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 
                 // その他のコンテンツ
                 _buildAdditionalContent(context, ref, isLoggedIn, userId),
+
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -964,155 +1048,48 @@ class _HomeViewState extends ConsumerState<HomeView> {
           
           const SizedBox(height: 16),
           
-          // ポイント、バッジ、総支払額のカード
-          ref.watch(userDataProvider(userId)).when(
-            data: (userData) {
-              if (userData != null) {
-                final dynamic paidRaw = userData['paid'];
-                final num paidNum = paidRaw is num ? paidRaw : num.tryParse('$paidRaw') ?? 0;
-                final String paidFormatted = NumberFormat.currency(locale: 'ja_JP', symbol: '¥', decimalDigits: 0).format(paidNum);
-                final totalPoints = _parseIntValue(userData['points']) + _parseIntValue(userData['specialPoints']);
-                final showPoints = totalPoints >= 1;
-                Widget buildDivider() => Container(width: 1, height: 40, color: Colors.grey[300]);
-                
-                return Row(
-                  children: [
-                    if (showPoints) ...[
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Image.asset(
-                              'assets/images/point_icon.png',
-                              width: 20,
-                              height: 20,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const Icon(Icons.loyalty, size: 20, color: Colors.orange),
-                            ),
-                            const SizedBox(width: 10),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '$totalPoints',
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                const Text(
-                                  'ポイント',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+          // 開拓済み・スタンプ10個店舗数
+          ref.watch(userStoreProgressProvider(userId)).when(
+            data: (stats) {
+              final totalStoreCount = ref.watch(totalStoreCountProvider).maybeWhen(
+                    data: (count) => count,
+                    orElse: () => 0,
+                  );
+              Widget buildDivider() => Container(width: 1, height: 40, color: Colors.grey[300]);
+              Widget buildFractionItem(String label, int value, int total) {
+                final totalText = total > 0 ? total : 0;
+                return Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        '$value/$totalText',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
                       ),
-                      buildDivider(),
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ],
-                    // 中：バッジ（少し小さく）
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Image.asset(
-                            'assets/images/badge_icon.PNG',
-                            width: 20,
-                            height: 20,
-                            errorBuilder: (context, error, stackTrace) => 
-                                const Icon(Icons.military_tech, color: Colors.amber, size: 20),
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              ref.watch(userBadgeCountProvider(userId)).when(
-                                data: (badgeCount) => Text(
-                                  '$badgeCount',
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                                loading: () => const Text(
-                                  '-',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                                error: (_, __) => const Text(
-                                  '-',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                              ),
-                              const Text(
-                                'バッジ',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    // 仕切り
-                    buildDivider(),
-                    
-                    // 右：総支払額（少し小さく）
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Image.asset(
-                            'assets/images/bills_icon.png',
-                            width: 20,
-                            height: 20,
-                            errorBuilder: (context, error, stackTrace) => 
-                                const Icon(Icons.receipt_long, size: 20, color: Colors.green),
-                          ),
-                          const SizedBox(width: 10),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Text(
-                                paidFormatted,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              const Text(
-                                '総支払額',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 );
               }
-              return const SizedBox.shrink();
+
+              return Row(
+                children: [
+                  buildFractionItem('開拓済み', stats.newPioneerCount, totalStoreCount),
+                  buildDivider(),
+                  buildFractionItem('スタンプ10個\n店舗数', stats.stamp10StoreCount, totalStoreCount),
+                ],
+              );
             },
             loading: () => const SizedBox.shrink(),
             error: (_, __) => const SizedBox.shrink(),
@@ -1352,7 +1329,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
       {'icon': Icons.local_activity, 'label': 'スタンプ'},
       {'icon': Icons.military_tech, 'label': 'バッジ'},
       {'icon': Icons.store, 'label': '店舗一覧'},
-      {'icon': Icons.emoji_events, 'label': 'ランキング'},
+      {'icon': Icons.card_giftcard, 'label': 'クーポン'},
     ];
 
     return Container(
@@ -2021,11 +1998,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
               builder: (context) => const StoreListView(),
             ),
           );
-        } else if (title == 'ランキング') {
-          // ランキング画面に遷移
+        } else if (title == 'クーポン') {
+          // クーポン画面に遷移（上部タブ「クーポン」を選択した状態）
           Navigator.of(context).push(
             MaterialPageRoute(
-              builder: (context) => const LeaderboardView(),
+              builder: (context) => const CouponsView(
+                initialTopTabIndex: 1,
+                hideTopTabs: true,
+              ),
             ),
           );
         } else if (title == '友達紹介') {
