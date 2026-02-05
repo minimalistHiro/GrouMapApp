@@ -332,9 +332,13 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
   List<BottomNavigationBarItem> _bottomNavItemsWithPlaceholder(
     List<_MainTab> bottomTabs,
-    bool showPlaceholder,
-  ) {
-    final items = _navItemsForTabs(bottomTabs);
+    bool showPlaceholder, {
+    int profileBadgeCount = 0,
+  }) {
+    final items = _navItemsForTabs(
+      bottomTabs,
+      profileBadgeCount: profileBadgeCount,
+    );
     final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
     if (placeholderIndex >= 0 && placeholderIndex <= items.length) {
       items.insert(
@@ -365,7 +369,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }).toList();
   }
 
-  List<BottomNavigationBarItem> _navItemsForTabs(List<_MainTab> tabs) {
+  List<BottomNavigationBarItem> _navItemsForTabs(
+    List<_MainTab> tabs, {
+    int profileBadgeCount = 0,
+  }) {
     return tabs.map((tab) {
       switch (tab) {
         case _MainTab.home:
@@ -389,8 +396,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
             label: 'クーポン',
           );
         case _MainTab.profile:
-          return const BottomNavigationBarItem(
-            icon: Icon(Icons.person),
+          return BottomNavigationBarItem(
+            icon: _buildProfileNavIcon(profileBadgeCount),
             label: 'アカウント',
           );
       }
@@ -635,7 +642,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         final pages = _pagesForTabs(tabs);
         final bottomTabs = _bottomTabsFor(tabs);
         final showPlaceholder = tabs.contains(_MainTab.qr);
-        final items = _bottomNavItemsWithPlaceholder(bottomTabs, showPlaceholder);
         final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
         final safeIndex = _coerceIndex(pages.length);
 
@@ -658,45 +664,44 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
                     placeholderIndex,
                   );
 
-        return Scaffold(
-          body: pages[safeIndex],
-          floatingActionButton: tabs.contains(_MainTab.qr)
-              ? FloatingActionButton(
-                  onPressed: () => _onQrFabPressed(tabs),
-                  backgroundColor: const Color(0xFFFF6B35),
-                  shape: const CircleBorder(),
-                  child: const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.qr_code, color: Colors.white, size: _fabIconSize),
-                      SizedBox(height: 2),
-                      Text(
-                        'QRコード',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: _fabLabelSize,
-                          height: 1,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : null,
-          floatingActionButtonLocation: tabs.contains(_MainTab.qr)
-              ? const _LoweredFabLocation(_fabVerticalOffset)
-              : null,
-          bottomNavigationBar: BottomNavigationBar(
-            type: BottomNavigationBarType.fixed,
-            currentIndex: bottomIndex,
-            onTap: (index) => _onBottomTabChanged(index, tabs),
-            selectedItemColor: const Color(0xFFFF6B35),
-            unselectedItemColor: Colors.grey,
-            selectedLabelStyle: const TextStyle(fontSize: 10),
-            unselectedLabelStyle: const TextStyle(fontSize: 10),
-            backgroundColor: Colors.white,
-            elevation: 8,
+        if (user == null) {
+          final items = _bottomNavItemsWithPlaceholder(
+            bottomTabs,
+            showPlaceholder,
+          );
+          return _buildBottomScaffold(
+            tabs: tabs,
+            pages: pages,
+            pageIndex: safeIndex,
+            bottomIndex: bottomIndex,
             items: items,
-          ),
+          );
+        }
+
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collectionGroup('messages')
+              .where('userId', isEqualTo: user.uid)
+              .where('senderRole', isEqualTo: 'owner')
+              .where('readByUserAt', isNull: true)
+              .snapshots(),
+          builder: (context, unreadSnapshot) {
+            final unreadCount = unreadSnapshot.hasError
+                ? 0
+                : (unreadSnapshot.data?.docs.length ?? 0);
+            final items = _bottomNavItemsWithPlaceholder(
+              bottomTabs,
+              showPlaceholder,
+              profileBadgeCount: unreadCount,
+            );
+            return _buildBottomScaffold(
+              tabs: tabs,
+              pages: pages,
+              pageIndex: safeIndex,
+              bottomIndex: bottomIndex,
+              items: items,
+            );
+          },
         );
       },
       loading: () => const Scaffold(
@@ -705,6 +710,79 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       error: (error, _) => Scaffold(
         body: Center(child: Text('エラー: $error')),
       ),
+    );
+  }
+
+  Widget _buildBottomScaffold({
+    required List<_MainTab> tabs,
+    required List<Widget> pages,
+    required int pageIndex,
+    required int bottomIndex,
+    required List<BottomNavigationBarItem> items,
+  }) {
+    return Scaffold(
+      body: pages[pageIndex.clamp(0, pages.length - 1)],
+      floatingActionButton: tabs.contains(_MainTab.qr)
+          ? FloatingActionButton(
+              onPressed: () => _onQrFabPressed(tabs),
+              backgroundColor: const Color(0xFFFF6B35),
+              shape: const CircleBorder(),
+              child: const Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.qr_code, color: Colors.white, size: _fabIconSize),
+                  SizedBox(height: 2),
+                  Text(
+                    'QRコード',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: _fabLabelSize,
+                      height: 1,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : null,
+      floatingActionButtonLocation: tabs.contains(_MainTab.qr)
+          ? const _LoweredFabLocation(_fabVerticalOffset)
+          : null,
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: bottomIndex,
+        onTap: (index) => _onBottomTabChanged(index, tabs),
+        selectedItemColor: const Color(0xFFFF6B35),
+        unselectedItemColor: Colors.grey,
+        selectedLabelStyle: const TextStyle(fontSize: 10),
+        unselectedLabelStyle: const TextStyle(fontSize: 10),
+        backgroundColor: Colors.white,
+        elevation: 8,
+        items: items,
+      ),
+    );
+  }
+
+  Widget _buildProfileNavIcon(int badgeCount) {
+    if (badgeCount <= 0) {
+      return const Icon(Icons.person);
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.person),
+        Positioned(
+          right: -4,
+          top: -2,
+          child: Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ),
+      ],
     );
   }
 

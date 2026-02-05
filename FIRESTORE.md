@@ -64,6 +64,30 @@
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時
 
+### service_chat_rooms
+- `service_chat_rooms/{roomId}`: サービス全体のライブチャット（ユーザーごと）
+  - `roomId`: ルームID（推奨: `userId`）
+  - `userId`: ユーザーUID
+  - `lastMessage`: 最終メッセージ本文
+  - `lastMessageAt`: 最終メッセージ日時
+  - `lastSenderRole`: 最終送信者（`user`/`owner`）
+  - `userUnreadCount`: ユーザー未読数
+  - `ownerUnreadCount`: オーナー未読数（全オーナー共通）
+  - `userLastReadAt`: ユーザー既読最終日時
+  - `ownerLastReadAt`: オーナー既読最終日時（全オーナー共通）
+  - `createdAt`: 作成日時
+  - `updatedAt`: 更新日時
+  - `messages/{messageId}`: ライブチャットメッセージ
+    - `messageId`: メッセージID
+    - `roomId`: ルームID
+    - `userId`: ユーザーUID
+    - `senderId`: 送信者UID
+    - `senderRole`: 送信者（`user`/`owner`）
+    - `text`: メッセージ本文
+    - `createdAt`: 作成日時
+    - `readByUserAt`: ユーザー既読日時
+    - `readByOwnerAt`: オーナー既読日時
+
 ### notifications
 - `notifications/{notificationId}`: 全体お知らせ
   - `notificationId`: お知らせID
@@ -270,6 +294,7 @@
   - `address`: 住所
   - `phone`: 電話番号
   - `description`: 店舗説明
+  - `ownerId`: オーナーUID
   - `isRegularHoliday`: 不定休フラグ（true/false）
   - `isActive`: 店舗公開フラグ（店舗設定画面のトグルで切り替え）
   - `isApproved`: 承認フラグ（承認ボタンでtrue）

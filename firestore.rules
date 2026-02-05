@@ -18,6 +18,15 @@ service cloud.firestore {
       return request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId != null;
     }
+    function serviceChatRoom(roomId) {
+      return get(/databases/$(database)/documents/service_chat_rooms/$(roomId));
+    }
+    function isServiceChatUser(roomId) {
+      return request.auth != null && serviceChatRoom(roomId).data.userId == request.auth.uid;
+    }
+    function isServiceChatOwner() {
+      return request.auth != null && isOwner();
+    }
     function isCouponUserViewIncrement() {
       return request.auth != null
         && request.resource.data.diff(resource.data).changedKeys()
@@ -206,6 +215,66 @@ service cloud.firestore {
       allow read: if request.auth != null;
       // 管理者のみ書き込み可能（必要に応じて調整）
       allow write: if request.auth != null;
+    }
+
+    // サービス全体ライブチャット
+    match /service_chat_rooms/{roomId} {
+      allow read: if request.auth != null &&
+        (resource.data.userId == request.auth.uid || isServiceChatOwner());
+      allow create: if request.auth != null &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null &&
+        (
+          (
+            isServiceChatUser(roomId) &&
+            request.resource.data.diff(resource.data).changedKeys()
+              .hasOnly(['userLastReadAt','userUnreadCount','updatedAt']) &&
+            request.resource.data.userUnreadCount == 0
+          ) ||
+          (
+            isServiceChatOwner() &&
+            request.resource.data.diff(resource.data).changedKeys()
+              .hasOnly(['ownerLastReadAt','ownerUnreadCount','updatedAt']) &&
+            request.resource.data.ownerUnreadCount == 0
+          )
+        );
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if request.auth != null &&
+          (serviceChatRoom(roomId).data.userId == request.auth.uid ||
+           isServiceChatOwner());
+        allow create: if request.auth != null &&
+          exists(/databases/$(database)/documents/service_chat_rooms/$(roomId)) &&
+          (
+            (
+              request.resource.data.senderRole == 'user' &&
+              request.resource.data.senderId == request.auth.uid &&
+              request.auth.uid == serviceChatRoom(roomId).data.userId
+            ) ||
+            (
+              request.resource.data.senderRole == 'owner' &&
+              request.resource.data.senderId == request.auth.uid &&
+              isServiceChatOwner()
+            )
+          );
+        allow update: if request.auth != null &&
+          (
+            (
+              serviceChatRoom(roomId).data.userId == request.auth.uid &&
+              request.resource.data.diff(resource.data).changedKeys()
+                .hasOnly(['readByUserAt']) &&
+              request.resource.data.readByUserAt is timestamp
+            ) ||
+            (
+              isServiceChatOwner() &&
+              request.resource.data.diff(resource.data).changedKeys()
+                .hasOnly(['readByOwnerAt']) &&
+              request.resource.data.readByOwnerAt is timestamp
+            )
+          );
+        allow delete: if false;
+      }
     }
     
     // ランキングコレクションのルール

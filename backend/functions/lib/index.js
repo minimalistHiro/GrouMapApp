@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
@@ -27,6 +27,7 @@ console.log('Cloud Functions initialized with updated permissions');
 const NOTIFICATIONS_COLLECTION = 'notifications';
 const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
 const USERS_COLLECTION = 'users';
+const SERVICE_CHAT_ROOMS_COLLECTION = 'service_chat_rooms';
 const EMAIL_OTP_COLLECTION = 'email_otp';
 const ANNOUNCEMENT_TOPIC = 'announcements';
 const OWNER_SETTINGS_COLLECTION = 'owner_settings';
@@ -500,6 +501,44 @@ function buildNotificationPayload(notificationId, data) {
         data: payloadData,
     };
 }
+function resolveTimestamp(value) {
+    if (value instanceof firestore_2.Timestamp)
+        return value;
+    if (value instanceof Date)
+        return firestore_2.Timestamp.fromDate(value);
+    if (typeof value === 'string') {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) {
+            return firestore_2.Timestamp.fromDate(parsed);
+        }
+    }
+    return null;
+}
+async function resolveUserName(userId) {
+    var _a;
+    const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+    const data = userDoc.data();
+    return (_a = data === null || data === void 0 ? void 0 : data.displayName) !== null && _a !== void 0 ? _a : 'ユーザー';
+}
+async function createUserNotification({ userId, title, body, data, }) {
+    const notificationRef = db
+        .collection(USERS_COLLECTION)
+        .doc(userId)
+        .collection('notifications')
+        .doc();
+    await notificationRef.set({
+        id: notificationRef.id,
+        userId,
+        title,
+        body,
+        type: 'system',
+        createdAt: new Date().toISOString(),
+        isRead: false,
+        isDelivered: false,
+        data: Object.assign({ source: 'user' }, stripUndefined(data !== null && data !== void 0 ? data : {})),
+        tags: ['live_chat'],
+    });
+}
 function createOtp() {
     const value = (0, crypto_1.randomInt)(0, 1000000);
     return value.toString().padStart(6, '0');
@@ -965,6 +1004,110 @@ exports.sendUserNotificationOnCreate = (0, firestore_1.onDocumentCreated)({
         isDelivered: true,
         deliveredAt: new Date(),
     });
+});
+exports.sendLiveChatNotificationOnCreate = (0, firestore_1.onDocumentCreated)({
+    document: `${SERVICE_CHAT_ROOMS_COLLECTION}/{roomId}/messages/{messageId}`,
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d, _e, _f, _g;
+    if (!((_a = event.data) === null || _a === void 0 ? void 0 : _a.exists))
+        return;
+    const roomId = event.params.roomId;
+    const messageId = event.params.messageId;
+    const message = event.data.data();
+    if (!message)
+        return;
+    const roomRef = db.collection(SERVICE_CHAT_ROOMS_COLLECTION).doc(roomId);
+    const roomSnap = await roomRef.get();
+    const roomData = roomSnap.data();
+    const userId = ((_c = (_b = message.userId) !== null && _b !== void 0 ? _b : roomData === null || roomData === void 0 ? void 0 : roomData.userId) !== null && _c !== void 0 ? _c : '').toString();
+    if (!userId)
+        return;
+    const senderRole = ((_d = message.senderRole) !== null && _d !== void 0 ? _d : '').toString();
+    const senderId = ((_e = message.senderId) !== null && _e !== void 0 ? _e : '').toString();
+    const messageText = ((_f = message.text) !== null && _f !== void 0 ? _f : '').toString();
+    const createdAt = (_g = resolveTimestamp(message.createdAt)) !== null && _g !== void 0 ? _g : firestore_2.Timestamp.now();
+    await db.runTransaction(async (transaction) => {
+        const snap = await transaction.get(roomRef);
+        const data = snap.data();
+        const ownerUnread = asInt(data === null || data === void 0 ? void 0 : data.ownerUnreadCount, 0);
+        const userUnread = asInt(data === null || data === void 0 ? void 0 : data.userUnreadCount, 0);
+        transaction.set(roomRef, stripUndefined({
+            roomId,
+            userId,
+            lastMessage: messageText,
+            lastMessageAt: createdAt,
+            lastSenderRole: senderRole,
+            ownerUnreadCount: senderRole === 'user' ? ownerUnread + 1 : ownerUnread,
+            userUnreadCount: senderRole === 'owner' ? userUnread + 1 : userUnread,
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        }), { merge: true });
+    });
+    if (senderRole == 'user') {
+        const userName = await resolveUserName(userId);
+        const ownersSnap = await db
+            .collection(USERS_COLLECTION)
+            .where('isOwner', '==', true)
+            .get();
+        for (const doc of ownersSnap.docs) {
+            await createUserNotification({
+                userId: doc.id,
+                title: 'ライブチャット',
+                body: `${userName}さんからライブチャットでメッセージが届いています`,
+                data: {
+                    type: 'service_live_chat',
+                    roomId,
+                    userId,
+                    messageId,
+                    senderRole,
+                    senderId,
+                },
+            });
+        }
+        return;
+    }
+    if (senderRole == 'owner') {
+        await createUserNotification({
+            userId,
+            title: 'ライブチャット',
+            body: 'サポートからメッセージが届いています',
+            data: {
+                type: 'service_live_chat',
+                roomId,
+                userId,
+                messageId,
+                senderRole,
+                senderId,
+            },
+        });
+    }
+});
+exports.resetLiveChatUnreadOnRead = (0, firestore_1.onDocumentUpdated)({
+    document: `${SERVICE_CHAT_ROOMS_COLLECTION}/{roomId}`,
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d, _e;
+    if (!((_a = event.data) === null || _a === void 0 ? void 0 : _a.after.exists))
+        return;
+    const before = event.data.before.data();
+    const after = event.data.after.data();
+    if (!after)
+        return;
+    const userReadChanged = ((_b = before === null || before === void 0 ? void 0 : before.userLastReadAt) !== null && _b !== void 0 ? _b : null) != ((_c = after.userLastReadAt) !== null && _c !== void 0 ? _c : null);
+    const ownerReadChanged = ((_d = before === null || before === void 0 ? void 0 : before.ownerLastReadAt) !== null && _d !== void 0 ? _d : null) != ((_e = after.ownerLastReadAt) !== null && _e !== void 0 ? _e : null);
+    if (!userReadChanged && !ownerReadChanged)
+        return;
+    const updates = {};
+    if (userReadChanged && asInt(after.userUnreadCount, 0) > 0) {
+        updates.userUnreadCount = 0;
+    }
+    if (ownerReadChanged && asInt(after.ownerUnreadCount, 0) > 0) {
+        updates.ownerUnreadCount = 0;
+    }
+    if (Object.keys(updates).length == 0)
+        return;
+    updates.updatedAt = firestore_2.FieldValue.serverTimestamp();
+    await event.data.after.ref.update(updates);
 });
 exports.notifyPendingStoreRequest = (0, firestore_1.onDocumentCreated)({
     document: 'stores/{storeId}',
