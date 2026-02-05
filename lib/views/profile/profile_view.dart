@@ -317,6 +317,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   _buildMenuItem(
                     icon: Icons.help,
                     title: 'ヘルプ・サポート',
+                    trailing: _buildLiveChatUnreadTrailing(),
                     onTap: () => _showHelp(context),
                   ),
                   _buildMenuItem(
@@ -763,6 +764,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    Widget? trailing,
     bool isDestructive = false,
   }) {
     return ListTile(
@@ -775,8 +777,61 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           color: isDestructive ? Colors.red : null,
         ),
       ),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+      trailing: trailing ?? const Icon(Icons.arrow_forward_ios, size: 16),
       onTap: onTap,
+    );
+  }
+
+  Widget _buildLiveChatUnreadTrailing() {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnapshot) {
+        final userId = authSnapshot.data?.uid;
+        if (userId == null) {
+          return const Icon(Icons.arrow_forward_ios, size: 16);
+        }
+        return StreamBuilder<QuerySnapshot>(
+          stream: FirebaseFirestore.instance
+              .collectionGroup('messages')
+              .where('userId', isEqualTo: userId)
+              .where('senderRole', isEqualTo: 'owner')
+              .where('readByUserAt', isNull: true)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return const Icon(Icons.arrow_forward_ios, size: 16);
+            }
+            final totalUnread = snapshot.data?.docs.length ?? 0;
+            if (totalUnread <= 0) {
+              return const Icon(Icons.arrow_forward_ios, size: 16);
+            }
+            final badgeText = totalUnread > 99 ? '99+' : totalUnread.toString();
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_ios, size: 16),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

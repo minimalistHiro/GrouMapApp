@@ -1,5 +1,5 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onDocumentCreated, onDocumentUpdated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
@@ -25,6 +25,7 @@ console.log('Cloud Functions initialized with updated permissions');
 const NOTIFICATIONS_COLLECTION = 'notifications';
 const NOTIFICATION_SETTINGS_COLLECTION = 'notification_settings';
 const USERS_COLLECTION = 'users';
+const SERVICE_CHAT_ROOMS_COLLECTION = 'service_chat_rooms';
 const EMAIL_OTP_COLLECTION = 'email_otp';
 const ANNOUNCEMENT_TOPIC = 'announcements';
 const OWNER_SETTINGS_COLLECTION = 'owner_settings';
@@ -500,6 +501,28 @@ type NotificationData = {
   isDelivered?: boolean;
 };
 
+type LiveChatRoomData = {
+  roomId?: string;
+  userId?: string;
+  lastMessage?: string;
+  lastMessageAt?: Timestamp | Date | string;
+  lastSenderRole?: string;
+  userUnreadCount?: number;
+  ownerUnreadCount?: number;
+  userLastReadAt?: Timestamp | Date | string;
+  ownerLastReadAt?: Timestamp | Date | string;
+};
+
+type LiveChatMessageData = {
+  messageId?: string;
+  roomId?: string;
+  userId?: string;
+  senderId?: string;
+  senderRole?: string;
+  text?: string;
+  createdAt?: Timestamp | Date | string;
+};
+
 type EmailOtpRecord = {
   codeHash?: string;
   expiresAt?: Timestamp;
@@ -561,6 +584,58 @@ function buildNotificationPayload(notificationId: string, data: NotificationData
     body,
     data: payloadData,
   };
+}
+
+function resolveTimestamp(value: Timestamp | Date | string | undefined) {
+  if (value instanceof Timestamp) return value;
+  if (value instanceof Date) return Timestamp.fromDate(value);
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return Timestamp.fromDate(parsed);
+    }
+  }
+  return null;
+}
+
+async function resolveUserName(userId: string): Promise<string> {
+  const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+  const data = userDoc.data() as { displayName?: string } | undefined;
+  return data?.displayName ?? 'ユーザー';
+}
+
+async function createUserNotification({
+  userId,
+  title,
+  body,
+  data,
+}: {
+  userId: string;
+  title: string;
+  body: string;
+  data?: Record<string, unknown>;
+}) {
+  const notificationRef = db
+    .collection(USERS_COLLECTION)
+    .doc(userId)
+    .collection('notifications')
+    .doc();
+
+  await notificationRef.set({
+    id: notificationRef.id,
+    userId,
+    title,
+    body,
+    type: 'system',
+    createdAt: new Date().toISOString(),
+    isRead: false,
+    isDelivered: false,
+    data: {
+      source: 'user',
+      ...stripUndefined(data ?? {}),
+    },
+    tags: ['live_chat'],
+  });
 }
 
 function createOtp(): string {
@@ -1114,6 +1189,129 @@ export const sendUserNotificationOnCreate = onDocumentCreated(
       isDelivered: true,
       deliveredAt: new Date(),
     });
+  },
+);
+
+export const sendLiveChatNotificationOnCreate = onDocumentCreated(
+  {
+    document: `${SERVICE_CHAT_ROOMS_COLLECTION}/{roomId}/messages/{messageId}`,
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    if (!event.data?.exists) return;
+
+    const roomId = event.params.roomId as string;
+    const messageId = event.params.messageId as string;
+    const message = event.data.data() as LiveChatMessageData | undefined;
+    if (!message) return;
+
+    const roomRef = db.collection(SERVICE_CHAT_ROOMS_COLLECTION).doc(roomId);
+    const roomSnap = await roomRef.get();
+    const roomData = roomSnap.data() as LiveChatRoomData | undefined;
+
+    const userId = (message.userId ?? roomData?.userId ?? '').toString();
+    if (!userId) return;
+
+    const senderRole = (message.senderRole ?? '').toString();
+    const senderId = (message.senderId ?? '').toString();
+    const messageText = (message.text ?? '').toString();
+    const createdAt = resolveTimestamp(message.createdAt) ?? Timestamp.now();
+
+    await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(roomRef);
+      const data = snap.data() as LiveChatRoomData | undefined;
+      const ownerUnread = asInt(data?.ownerUnreadCount, 0);
+      const userUnread = asInt(data?.userUnreadCount, 0);
+
+      transaction.set(
+        roomRef,
+        stripUndefined({
+          roomId,
+          userId,
+          lastMessage: messageText,
+          lastMessageAt: createdAt,
+          lastSenderRole: senderRole,
+          ownerUnreadCount: senderRole === 'user' ? ownerUnread + 1 : ownerUnread,
+          userUnreadCount: senderRole === 'owner' ? userUnread + 1 : userUnread,
+          updatedAt: FieldValue.serverTimestamp(),
+        }),
+        { merge: true }
+      );
+    });
+
+    if (senderRole == 'user') {
+      const userName = await resolveUserName(userId);
+      const ownersSnap = await db
+        .collection(USERS_COLLECTION)
+        .where('isOwner', '==', true)
+        .get();
+
+      for (const doc of ownersSnap.docs) {
+        await createUserNotification({
+          userId: doc.id,
+          title: 'ライブチャット',
+          body: `${userName}さんからライブチャットでメッセージが届いています`,
+          data: {
+            type: 'service_live_chat',
+            roomId,
+            userId,
+            messageId,
+            senderRole,
+            senderId,
+          },
+        });
+      }
+      return;
+    }
+
+    if (senderRole == 'owner') {
+      await createUserNotification({
+        userId,
+        title: 'ライブチャット',
+        body: 'サポートからメッセージが届いています',
+        data: {
+          type: 'service_live_chat',
+          roomId,
+          userId,
+          messageId,
+          senderRole,
+          senderId,
+        },
+      });
+    }
+  },
+);
+
+export const resetLiveChatUnreadOnRead = onDocumentUpdated(
+  {
+    document: `${SERVICE_CHAT_ROOMS_COLLECTION}/{roomId}`,
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    if (!event.data?.after.exists) return;
+
+    const before = event.data.before.data() as LiveChatRoomData | undefined;
+    const after = event.data.after.data() as LiveChatRoomData | undefined;
+    if (!after) return;
+
+    const userReadChanged =
+      (before?.userLastReadAt ?? null) != (after.userLastReadAt ?? null);
+    const ownerReadChanged =
+      (before?.ownerLastReadAt ?? null) != (after.ownerLastReadAt ?? null);
+
+    if (!userReadChanged && !ownerReadChanged) return;
+
+    const updates: Record<string, unknown> = {};
+    if (userReadChanged && asInt(after.userUnreadCount, 0) > 0) {
+      updates.userUnreadCount = 0;
+    }
+    if (ownerReadChanged && asInt(after.ownerUnreadCount, 0) > 0) {
+      updates.ownerUnreadCount = 0;
+    }
+    if (Object.keys(updates).length == 0) return;
+
+    updates.updatedAt = FieldValue.serverTimestamp();
+    await event.data.after.ref.update(updates);
   },
 );
 
