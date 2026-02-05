@@ -402,6 +402,16 @@
   - `friendReferralPopup`: 紹介通知データ
   - `friendReferralPopupReferrerShown`: 紹介者側通知表示済み
   - `friendReferralPopupReferrer`: 紹介者側通知データ
+  - `notificationSettings`: 通知設定
+    - `pushEnabled`: プッシュ通知の有効フラグ
+    - `couponIssued`: クーポン発行通知の有効フラグ
+    - `post`: 投稿通知の有効フラグ
+    - `updatedAt`: 更新日時
+  - `emailNotificationSettings`: メール通知設定
+    - `announcements`: お知らせメールの有効フラグ
+    - `newsletters`: ニュースレターの有効フラグ
+    - `promotions`: キャンペーン・プロモーションの有効フラグ
+    - `updatedAt`: 更新日時
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時
   - `lastLoginAt`: 最終ログイン
