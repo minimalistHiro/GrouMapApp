@@ -1205,8 +1205,6 @@ class _MapViewState extends ConsumerState<MapView> {
           
           // 検索バー
           _buildSearchBar(),
-          // フィルタチップ
-          _buildFilterChips(),
           
           // 拡大されたマーカーオーバーレイ
           if (_isShowStoreInfo) _buildStoreInfoCard(),
@@ -1466,26 +1464,21 @@ class _MapViewState extends ConsumerState<MapView> {
             ),
           ],
         ),
-        child: Row(
-          children: [
-            const SizedBox(width: 15),
-            const Icon(
+        child: TextField(
+          decoration: InputDecoration(
+            hintText: '店舗名を入力してください',
+            hintStyle: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 16,
+            ),
+            prefixIcon: const Icon(
               Icons.search,
               color: Colors.grey,
               size: 24,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '店舗名を入力してください',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 16,
-                ),
-              ),
-            ),
-            const SizedBox(width: 15),
-          ],
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          ),
         ),
       ),
     );
