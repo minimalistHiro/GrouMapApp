@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import '../../providers/posts_provider.dart';
 import '../../providers/coupon_provider.dart';
 import '../../widgets/common_header.dart';
@@ -35,6 +36,14 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    if (kDebugMode) {
+      debugPrint(
+        'StoreDetailView: storeId=${widget.store['id']} '
+        'iconImageUrl=${widget.store['iconImageUrl']} '
+        'storeImageUrl=${widget.store['storeImageUrl']} '
+        'backgroundImageUrl=${widget.store['backgroundImageUrl']}',
+      );
+    }
     _loadUserStamps();
     _loadFavoriteStatus();
   }
@@ -1544,12 +1553,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           width: 80,
           height: 80,
           fit: BoxFit.cover,
-          // CORSエラーを回避する設定
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET',
-            'Access-Control-Allow-Headers': 'Content-Type',
-          },
           // 画像読み込みの設定
           isAntiAlias: true,
           filterQuality: FilterQuality.high,
@@ -1566,7 +1569,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             );
           },
           errorBuilder: (context, error, stackTrace) {
-            print('店舗アイコン画像の読み込みエラー: $error');
+            print('店舗アイコン画像の読み込みエラー: $error / url=$iconImageUrl');
             return Icon(
               _getCategoryIcon(category),
               color: _getCategoryColor(category),

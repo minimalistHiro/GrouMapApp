@@ -21,6 +21,14 @@ class MainNavigationView extends ConsumerStatefulWidget {
   final int initialIndex;
   const MainNavigationView({Key? key, this.initialIndex = 0}) : super(key: key);
 
+  static Future<void> switchToPostsTab(BuildContext context) async {
+    final state = context.findAncestorStateOfType<_MainNavigationViewState>();
+    if (state == null) {
+      return;
+    }
+    await state._switchToTab(_MainTab.coupons);
+  }
+
   @override
   ConsumerState<MainNavigationView> createState() => _MainNavigationViewState();
 }
@@ -177,6 +185,20 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
     // タブに応じて必要なデータを読み込み
     await _loadTabSpecificData(nextTab);
+  }
+
+  Future<void> _switchToTab(_MainTab tab) async {
+    final authState = ref.read(authStateProvider);
+    final user = authState.maybeWhen(data: (user) => user, orElse: () => null);
+    final tabs = _tabsForUser(user);
+    if (!tabs.contains(tab)) {
+      return;
+    }
+    final nextIndex = tabs.indexOf(tab);
+    setState(() {
+      _setCurrentTab(nextIndex, tabs);
+    });
+    await _loadTabSpecificData(tab);
   }
 
   // タブ固有のデータ読み込み
