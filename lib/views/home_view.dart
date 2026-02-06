@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import '../providers/auth_provider.dart';
 import '../providers/owner_settings_provider.dart';
@@ -27,6 +28,7 @@ import 'posts/posts_view.dart';
 import 'badges/badges_view.dart';
 import 'stamps/experience_gained_view.dart';
 import 'stamps/stamp_cards_view.dart';
+import '../services/location_service.dart';
 
 // ユーザーが所持しているバッジ数
 final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
@@ -194,6 +196,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
   String? _lastAchievementUserId;
   DateTime? _lastAchievementCheckAt;
   static const bool _showDebugLoadingLabels = false;
+  bool _isRecommendedStoresLoading = false;
+  String? _recommendedStoresError;
+  String? _recommendedStoresUserId;
+  List<Map<String, dynamic>> _recommendedStores = [];
 
   Widget _buildLoadingIndicatorWithLabel(
     String label, {
@@ -286,6 +292,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
         curve: Curves.easeInOut,
       );
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadRecommendedStores(FirebaseAuth.instance.currentUser);
+    });
   }
 
   @override
@@ -348,6 +357,12 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
     final isLoggedIn = user != null;
     final userId = user?.uid ?? 'guest';
+    if (_recommendedStoresUserId != userId && !_isRecommendedStoresLoading) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _loadRecommendedStores(user);
+      });
+    }
     if (isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -355,7 +370,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
       });
     }
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFBF6F2),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
@@ -367,6 +382,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ref.invalidate(userDataProvider(userId));
               ref.invalidate(userBadgeCountProvider(userId));
             }
+            await _loadRecommendedStores(user);
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -1312,11 +1328,16 @@ class _HomeViewState extends ConsumerState<HomeView> {
           _buildMenuGrid(context, ref, isLoggedIn),
           
           const SizedBox(height: 20),
+
+          // おすすめ店舗セクション
+          _buildRecommendedStoresSection(context),
+
+          const SizedBox(height: 12),
           
           // クーポンセクション
           _buildCouponSection(context, ref, userId),
           
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
           
           // 投稿セクション
           _buildPostSection(context, ref, userId),
@@ -1362,6 +1383,355 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   ),
                 );
               }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _loadRecommendedStores(User? user) async {
+    if (!mounted) return;
+    setState(() {
+      _isRecommendedStoresLoading = true;
+      _recommendedStoresError = null;
+      _recommendedStoresUserId = user?.uid ?? 'guest';
+    });
+
+    try {
+      final currentPosition = await _tryGetCurrentPosition();
+      final visitedStoreIds = user == null ? <String>{} : await _loadVisitedStoreIds(user.uid);
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('stores')
+          .where('isActive', isEqualTo: true)
+          .where('isApproved', isEqualTo: true)
+          .limit(50)
+          .get();
+
+      final List<Map<String, dynamic>> stores = [];
+      for (final doc in snapshot.docs) {
+        if (visitedStoreIds.contains(doc.id)) {
+          continue;
+        }
+        final data = doc.data();
+        final location = data['location'];
+        final distanceMeters = _calculateDistanceMeters(currentPosition, location);
+        stores.add({
+          'id': doc.id,
+          'name': data['name'] ?? '店舗名なし',
+          'genre': data['category'] ?? 'その他',
+          'description': data['description'] ?? '',
+          'storeImageUrl': data['storeImageUrl'],
+          'distanceMeters': distanceMeters,
+          'distance': _formatDistance(distanceMeters),
+          'stampTotal': 10,
+          'stampCurrent': 0,
+        });
+      }
+
+      stores.sort((a, b) {
+        final distanceA = a['distanceMeters'] as double?;
+        final distanceB = b['distanceMeters'] as double?;
+        if (distanceA != null && distanceB != null) {
+          return distanceA.compareTo(distanceB);
+        }
+        if (distanceA != null) return -1;
+        if (distanceB != null) return 1;
+        return 0;
+      });
+
+      if (!mounted) return;
+      setState(() {
+        _recommendedStores = stores.take(7).toList();
+        _isRecommendedStoresLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isRecommendedStoresLoading = false;
+        _recommendedStoresError = e.toString();
+      });
+    }
+  }
+
+  Future<Set<String>> _loadVisitedStoreIds(String userId) async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('stores')
+          .get();
+      return snapshot.docs.map((doc) => doc.id).toSet();
+    } catch (e) {
+      debugPrint('Failed to load visited stores: $e');
+      return <String>{};
+    }
+  }
+
+  Future<Position?> _tryGetCurrentPosition() async {
+    try {
+      return await LocationService.getCurrentPosition();
+    } catch (e) {
+      debugPrint('Failed to get current position: $e');
+      return null;
+    }
+  }
+
+  double? _calculateDistanceMeters(Position? current, dynamic location) {
+    if (current == null || location == null) return null;
+    if (location is GeoPoint) {
+      return LocationService.calculateDistance(
+        current.latitude,
+        current.longitude,
+        location.latitude,
+        location.longitude,
+      );
+    }
+    if (location is Map) {
+      final latValue = location['latitude'];
+      final lngValue = location['longitude'];
+      if (latValue is num && lngValue is num) {
+        return LocationService.calculateDistance(
+          current.latitude,
+          current.longitude,
+          latValue.toDouble(),
+          lngValue.toDouble(),
+        );
+      }
+    }
+    return null;
+  }
+
+  String _formatDistance(double? distanceMeters) {
+    if (distanceMeters == null) return '';
+    if (distanceMeters < 1000) {
+      return '${distanceMeters.round()}m';
+    }
+    return '${(distanceMeters / 1000).toStringAsFixed(1)}km';
+  }
+
+  Widget _buildRecommendedStoresSection(BuildContext context) {
+    final visibleStores = _recommendedStores;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 30),
+          child: Row(
+            children: [
+              const Text(
+                'おすすめ店舗',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: () {},
+                child: const Text(
+                  '全て見る＞',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 250,
+          child: _isRecommendedStoresLoading
+              ? Center(
+                  child: _buildLoadingIndicatorWithLabel(
+                    'HOME: recommended stores loading',
+                    color: const Color(0xFFFF6B35),
+                  ),
+                )
+              : _recommendedStoresError != null
+                  ? const Center(
+                      child: Text(
+                        'おすすめ店舗の取得に失敗しました',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.red,
+                        ),
+                      ),
+                    )
+                  : visibleStores.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'おすすめ店舗がありません',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: visibleStores.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 12),
+                          itemBuilder: (context, index) {
+                            return _buildRecommendedStoreCard(
+                              context,
+                              visibleStores[index],
+                            );
+                          },
+                        ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecommendedStoreCard(
+    BuildContext context,
+    Map<String, dynamic> store,
+  ) {
+    final stampTotal = store['stampTotal'] as int? ?? 10;
+    final stampCurrent = store['stampCurrent'] as int? ?? 0;
+    return Container(
+      width: 240,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(16),
+            ),
+            child: Stack(
+              children: [
+                Container(
+                  height: 120,
+                  width: double.infinity,
+                  color: Colors.grey[300],
+                  child: store['storeImageUrl'] != null &&
+                          (store['storeImageUrl'] as String).isNotEmpty
+                      ? Image.network(
+                          store['storeImageUrl'] as String,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return const Center(
+                              child: Icon(
+                                Icons.store,
+                                size: 40,
+                                color: Colors.grey,
+                              ),
+                            );
+                          },
+                        )
+                      : const Center(
+                          child: Icon(
+                            Icons.store,
+                            size: 40,
+                            color: Colors.grey,
+                          ),
+                        ),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      store['genre'] as String? ?? 'ジャンル',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFF6B35),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        store['name'] as String? ?? '店舗名',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      store['distance'] as String? ?? '',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  store['description'] as String? ?? '',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 14,
+                  child: Row(
+                    children: List.generate(stampTotal, (index) {
+                      final isActive = index < stampCurrent;
+                      return Container(
+                        width: 10,
+                        height: 10,
+                        margin: EdgeInsets.only(right: index == stampTotal - 1 ? 0 : 4),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isActive
+                              ? const Color(0xFFFF6B35).withOpacity(0.2)
+                              : Colors.grey[200],
+                          border: Border.all(
+                            color: isActive
+                                ? const Color(0xFFFF6B35)
+                                : Colors.grey[300]!,
+                          ),
+                        ),
+                        child: isActive
+                            ? const Icon(
+                                Icons.check,
+                                size: 7,
+                                color: Color(0xFFFF6B35),
+                              )
+                            : null,
+                      );
+                    }),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
