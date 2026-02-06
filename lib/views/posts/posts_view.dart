@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/posts_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/common_header.dart';
+import '../../widgets/custom_top_tab_bar.dart';
 import '../posts/post_detail_view.dart';
 
 class PostsView extends ConsumerWidget {
@@ -10,50 +11,80 @@ class PostsView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFBF6F2),
-      appBar: const CommonHeader(
-        title: '投稿',
-        showBack: false,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFBF6F2),
+        appBar: const CommonHeader(
+          title: '投稿',
+          showBack: false,
+        ),
+        body: Column(
+          children: [
+            const CustomTopTabBar(
+              tabs: [
+                Tab(text: 'フィード'),
+                Tab(text: '検索'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildFeedTab(),
+                  _buildSearchTab(context, ref),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      body: _buildPosts(context, ref),
     );
   }
 
-  Widget _buildPosts(BuildContext context, WidgetRef ref) {
+  Widget _buildFeedTab() {
+    return const SizedBox.expand();
+  }
+
+  Widget _buildSearchTab(BuildContext context, WidgetRef ref) {
     final posts = ref.watch(allPostsProvider);
 
     return posts.when(
       data: (posts) {
-        if (posts.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.article, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('投稿がありません'),
-                SizedBox(height: 8),
-                Text('新しい投稿をお待ちください！'),
-              ],
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+              child: _buildSearchBar(),
             ),
-          );
-        }
-
-        final itemCount = posts.length > 60 ? 60 : posts.length;
-
-        return GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 0,
-            mainAxisSpacing: 0,
-            childAspectRatio: 1,
-          ),
-          itemCount: itemCount,
-          itemBuilder: (context, index) {
-            final post = posts[index];
-            return _buildPostCard(context, ref, post);
-          },
+            Expanded(
+              child: posts.isEmpty
+                  ? const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.article, size: 64, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text('投稿がありません'),
+                          SizedBox(height: 8),
+                          Text('新しい投稿をお待ちください！'),
+                        ],
+                      ),
+                    )
+                  : GridView.builder(
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        crossAxisSpacing: 0,
+                        mainAxisSpacing: 0,
+                        childAspectRatio: 1,
+                      ),
+                      itemCount: posts.length > 60 ? 60 : posts.length,
+                      itemBuilder: (context, index) {
+                        final post = posts[index];
+                        return _buildPostCard(context, ref, post);
+                      },
+                    ),
+            ),
+          ],
         );
       },
       loading: () => const Center(
@@ -106,6 +137,39 @@ class PostsView extends ConsumerWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: '投稿を検索',
+          hintStyle: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 16,
+          ),
+          prefixIcon: const Icon(
+            Icons.search,
+            color: Colors.grey,
+            size: 24,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
         ),
       ),
     );
