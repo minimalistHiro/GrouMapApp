@@ -494,7 +494,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
             );
           },
           errorBuilder: (context, error, stackTrace) {
-            print('店舗アイコン画像の読み込みエラー: $error');
+            print('店舗アイコン画像の読み込みエラー: $error / url=$iconImageUrl');
             return Icon(
               _getCategoryIcon(category),
               color: _getCategoryColor(category),

@@ -18,6 +18,7 @@ import '../support/help_view.dart';
 import '../feedback/feedback_view.dart';
 import '../main_navigation_view.dart';
 import '../auth/account_deletion_views.dart';
+import '../../widgets/user_stats_card.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({Key? key}) : super(key: key);
@@ -261,6 +262,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    UserStatsCard(userId: user.uid),
                   ],
                 ),
                 

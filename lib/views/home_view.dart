@@ -14,7 +14,6 @@ import '../providers/announcement_provider.dart';
 import '../providers/notification_provider.dart';
 import '../providers/posts_provider.dart';
 import '../providers/store_provider.dart';
-import '../providers/level_provider.dart';
 import '../models/coupon_model.dart' as model;
 import '../widgets/custom_button.dart';
 import 'notifications/notifications_view.dart' hide userDataProvider;
@@ -24,11 +23,12 @@ import 'referral/store_referral_view.dart' hide userDataProvider;
 import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
 import 'coupons/coupons_view.dart';
-import 'posts/posts_view.dart';
 import 'badges/badges_view.dart';
 import 'stamps/experience_gained_view.dart';
 import 'stamps/stamp_cards_view.dart';
 import '../services/location_service.dart';
+import 'main_navigation_view.dart';
+import 'stores/store_detail_view.dart';
 
 // ユーザーが所持しているバッジ数
 final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
@@ -49,132 +49,6 @@ final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((r
     });
   } catch (e) {
     debugPrint('Error creating user badge count stream: $e');
-    return Stream.value(0);
-  }
-});
-
-int _parseStampCount(dynamic value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  if (value is String) return int.tryParse(value) ?? 0;
-  return 0;
-}
-
-int _parseIntValue(dynamic value) {
-  if (value is int) return value;
-  if (value is num) return value.toInt();
-  if (value is String) return int.tryParse(value) ?? 0;
-  return 0;
-}
-
-class UserStoreProgress {
-  const UserStoreProgress({
-    required this.newPioneerCount,
-    required this.stamp10StoreCount,
-  });
-
-  final int newPioneerCount;
-  final int stamp10StoreCount;
-}
-
-// ユーザーが所持しているスタンプ合計数
-final userTotalStampsProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
-  try {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null || currentUser.uid != userId) {
-      return Stream.value(0);
-    }
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('stores')
-        .snapshots()
-        .map((snapshot) {
-          var total = 0;
-          for (final doc in snapshot.docs) {
-            total += _parseStampCount(doc.data()['stamps']);
-          }
-          return total;
-        })
-        .handleError((error) {
-          debugPrint('Error fetching user total stamps: $error');
-          return 0;
-        });
-  } catch (e) {
-    debugPrint('Error creating user total stamps stream: $e');
-    return Stream.value(0);
-  }
-});
-
-// ユーザーの新規開拓数・スタンプ10個店舗数
-final userStoreProgressProvider = StreamProvider.autoDispose.family<UserStoreProgress, String>((ref, userId) {
-  try {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null || currentUser.uid != userId) {
-      return Stream.value(const UserStoreProgress(
-        newPioneerCount: 0,
-        stamp10StoreCount: 0,
-      ));
-    }
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('stores')
-        .snapshots()
-        .map((snapshot) {
-          var newPioneerCount = 0;
-          var stamp10StoreCount = 0;
-          for (final doc in snapshot.docs) {
-            final stamps = _parseStampCount(doc.data()['stamps']);
-            if (stamps >= 1 && stamps <= 9) {
-              newPioneerCount++;
-            } else if (stamps >= 10) {
-              stamp10StoreCount++;
-            }
-          }
-          return UserStoreProgress(
-            newPioneerCount: newPioneerCount,
-            stamp10StoreCount: stamp10StoreCount,
-          );
-        })
-        .handleError((error) {
-          debugPrint('Error fetching user store stats: $error');
-          return const UserStoreProgress(
-            newPioneerCount: 0,
-            stamp10StoreCount: 0,
-          );
-        });
-  } catch (e) {
-    debugPrint('Error creating user store stats stream: $e');
-    return Stream.value(const UserStoreProgress(
-      newPioneerCount: 0,
-      stamp10StoreCount: 0,
-    ));
-  }
-});
-
-// 全店舗数
-final totalStoreCountProvider = StreamProvider<int>((ref) {
-  try {
-    return FirebaseFirestore.instance
-        .collection('stores')
-        .snapshots()
-        .map((snapshot) {
-          var activeCount = 0;
-          for (final doc in snapshot.docs) {
-            final data = doc.data();
-            if (data['isActive'] == true) {
-              activeCount++;
-            }
-          }
-          return activeCount;
-        })
-        .handleError((error) {
-          debugPrint('Error fetching total store count: $error');
-          return 0;
-        });
-  } catch (e) {
-    debugPrint('Error creating total store count stream: $e');
     return Stream.value(0);
   }
 });
@@ -396,12 +270,16 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 _buildMaintenanceNoticeBar(context, ref),
                 
                 const SizedBox(height: 24),
-                
-                // カード部分
-                isLoggedIn
-                    ? _buildStatsCard(context, ref, userId)
-                    : _buildGuestStatsCard(context),
-                
+
+                if (!isLoggedIn) ...[
+                  _buildGuestLoginCard(context),
+                  const SizedBox(height: 12),
+                ],
+
+                _buildRecommendedStoresSection(context),
+
+                const SizedBox(height: 12),
+
                 _buildReferralSection(context, ref),
                 
                 // その他のコンテンツ
@@ -471,7 +349,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _buildGuestStatsCard(BuildContext context) {
+  Widget _buildGuestLoginCard(BuildContext context) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       padding: const EdgeInsets.all(20.0),
@@ -521,6 +399,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
       ),
     );
   }
+
   Widget _buildHeader(BuildContext context, WidgetRef ref, User user) {
     final userId = user.uid;
     return Container(
@@ -850,130 +729,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
     return start.year == end.year && start.month == end.month && start.day == end.day;
   }
 
-  Widget _buildStatsCard(BuildContext context, WidgetRef ref, String userId) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      padding: const EdgeInsets.all(20.0),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 全店舗合計スタンプに対する保有スタンプの進捗
-          ref.watch(userTotalStampsProvider(userId)).when(
-            data: (totalStamps) {
-              final totalStoreCount = ref.watch(totalStoreCountProvider).maybeWhen(
-                    data: (count) => count,
-                    orElse: () => 0,
-                  );
-              final totalStampCapacity = totalStoreCount * 10;
-              final progressValue = totalStampCapacity > 0
-                  ? (totalStamps / totalStampCapacity).clamp(0.0, 1.0)
-                  : 0.0;
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '全店舗スタンプ進捗',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      Text(
-                        '$totalStamps/$totalStampCapacity',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFFFF6B35),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(999),
-                    child: LinearProgressIndicator(
-                      value: progressValue,
-                      minHeight: 14,
-                      backgroundColor: const Color(0xFFEAEAEA),
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFFFF6B35)),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '全店舗合計スタンプ数のうち、保有スタンプ数',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              );
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // 開拓済み・スタンプ10個店舗数（下部UIを画像寄せ）
-          ref.watch(userStoreProgressProvider(userId)).when(
-            data: (stats) {
-              final totalStoreCount = ref.watch(totalStoreCountProvider).maybeWhen(
-                    data: (count) => count,
-                    orElse: () => 0,
-                  );
-              Widget buildDivider() => Container(width: 1, height: 36, color: Colors.grey[300]);
-              Widget buildStatItem(String label, int value) {
-                return Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        '$value',
-                        style: const TextStyle(
-                          fontSize: 30,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black54,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                );
-              }
-
-              return Row(
-                children: [
-                  buildStatItem('開拓済み', stats.newPioneerCount),
-                  buildDivider(),
-                  buildStatItem('スタンプ満了', stats.stamp10StoreCount),
-                ],
-              );
-            },
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildReferralSection(BuildContext context, WidgetRef ref) {
     return ref.watch(ownerSettingsProvider).when(
       data: (ownerSettings) {
@@ -1187,11 +942,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
           
           const SizedBox(height: 20),
 
-          // おすすめ店舗セクション
-          _buildRecommendedStoresSection(context),
-
-          const SizedBox(height: 12),
-          
           // クーポンセクション
           _buildCouponSection(context, ref, userId),
           
@@ -1279,8 +1029,23 @@ class _HomeViewState extends ConsumerState<HomeView> {
           'id': doc.id,
           'name': data['name'] ?? '店舗名なし',
           'genre': data['category'] ?? 'その他',
+          'category': data['category'] ?? 'その他',
+          'subCategory': data['subCategory'] ?? '',
           'description': data['description'] ?? '',
+          'address': data['address'] ?? '',
+          'iconImageUrl': data['iconImageUrl'],
           'storeImageUrl': data['storeImageUrl'],
+          'backgroundImageUrl': data['backgroundImageUrl'],
+          'phoneNumber': data['phoneNumber'] ?? '',
+          'phone': data['phone'] ?? '',
+          'businessHours': data['businessHours'],
+          'location': data['location'],
+          'tags': data['tags'],
+          'socialMedia': data['socialMedia'],
+          'isActive': data['isActive'] ?? false,
+          'isApproved': data['isApproved'] ?? false,
+          'createdAt': data['createdAt'],
+          'updatedAt': data['updatedAt'],
           'distanceMeters': distanceMeters,
           'distance': _formatDistance(distanceMeters),
           'stampTotal': 10,
@@ -1372,77 +1137,47 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Widget _buildRecommendedStoresSection(BuildContext context) {
     final visibleStores = _recommendedStores;
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
-          child: Row(
-            children: [
-              const Text(
-                'おすすめ店舗',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+    return SizedBox(
+      height: 250,
+      child: _isRecommendedStoresLoading
+          ? Center(
+              child: _buildLoadingIndicatorWithLabel(
+                'HOME: recommended stores loading',
+                color: const Color(0xFFFF6B35),
               ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {},
-                child: const Text(
-                  '全て見る＞',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 250,
-          child: _isRecommendedStoresLoading
-              ? Center(
-                  child: _buildLoadingIndicatorWithLabel(
-                    'HOME: recommended stores loading',
-                    color: const Color(0xFFFF6B35),
+            )
+          : _recommendedStoresError != null
+              ? const Center(
+                  child: Text(
+                    'おすすめ店舗の取得に失敗しました',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.red,
+                    ),
                   ),
                 )
-              : _recommendedStoresError != null
+              : visibleStores.isEmpty
                   ? const Center(
                       child: Text(
-                        'おすすめ店舗の取得に失敗しました',
+                        'おすすめ店舗がありません',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.red,
+                          color: Colors.grey,
                         ),
                       ),
                     )
-                  : visibleStores.isEmpty
-                      ? const Center(
-                          child: Text(
-                            'おすすめ店舗がありません',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        )
-                      : ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: visibleStores.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 12),
-                          itemBuilder: (context, index) {
-                            return _buildRecommendedStoreCard(
-                              context,
-                              visibleStores[index],
-                            );
-                          },
-                        ),
-        ),
-      ],
+                  : ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: visibleStores.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        return _buildRecommendedStoreCard(
+                          context,
+                          visibleStores[index],
+                        );
+                      },
+                    ),
     );
   }
 
@@ -1452,147 +1187,160 @@ class _HomeViewState extends ConsumerState<HomeView> {
   ) {
     final stampTotal = store['stampTotal'] as int? ?? 10;
     final stampCurrent = store['stampCurrent'] as int? ?? 0;
-    return Container(
-      width: 240,
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(16),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => StoreDetailView(store: store),
             ),
-            child: Stack(
-              children: [
-                Container(
-                  height: 120,
-                  width: double.infinity,
-                  color: Colors.grey[300],
-                  child: store['storeImageUrl'] != null &&
-                          (store['storeImageUrl'] as String).isNotEmpty
-                      ? Image.network(
-                          store['storeImageUrl'] as String,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return const Center(
+          );
+        },
+        child: Container(
+          width: 240,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(16),
+                ),
+                child: Stack(
+                  children: [
+                    Container(
+                      height: 120,
+                      width: double.infinity,
+                      color: Colors.grey[300],
+                      child: store['storeImageUrl'] != null &&
+                              (store['storeImageUrl'] as String).isNotEmpty
+                          ? Image.network(
+                              store['storeImageUrl'] as String,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Center(
+                                  child: Icon(
+                                    Icons.store,
+                                    size: 40,
+                                    color: Colors.grey,
+                                  ),
+                                );
+                              },
+                            )
+                          : const Center(
                               child: Icon(
                                 Icons.store,
                                 size: 40,
                                 color: Colors.grey,
                               ),
-                            );
-                          },
-                        )
-                      : const Center(
-                          child: Icon(
-                            Icons.store,
-                            size: 40,
-                            color: Colors.grey,
+                            ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          store['genre'] as String? ?? 'ジャンル',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF6B35),
                           ),
                         ),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      store['genre'] as String? ?? 'ジャンル',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF6B35),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        store['name'] as String? ?? '店舗名',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      store['distance'] as String? ?? '',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  store['description'] as String? ?? '',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 14,
-                  child: Row(
-                    children: List.generate(stampTotal, (index) {
-                      final isActive = index < stampCurrent;
-                      return Container(
-                        width: 10,
-                        height: 10,
-                        margin: EdgeInsets.only(right: index == stampTotal - 1 ? 0 : 4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isActive
-                              ? const Color(0xFFFF6B35).withOpacity(0.2)
-                              : Colors.grey[200],
-                          border: Border.all(
-                            color: isActive
-                                ? const Color(0xFFFF6B35)
-                                : Colors.grey[300]!,
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            store['name'] as String? ?? '店舗名',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        child: isActive
-                            ? const Icon(
-                                Icons.check,
-                                size: 7,
-                                color: Color(0xFFFF6B35),
-                              )
-                            : null,
-                      );
-                    }),
-                  ),
+                        const SizedBox(width: 8),
+                        Text(
+                          store['distance'] as String? ?? '',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      store['description'] as String? ?? '',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      height: 14,
+                      child: Row(
+                        children: List.generate(stampTotal, (index) {
+                          final isActive = index < stampCurrent;
+                          return Container(
+                            width: 10,
+                            height: 10,
+                            margin: EdgeInsets.only(right: index == stampTotal - 1 ? 0 : 4),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isActive
+                                  ? const Color(0xFFFF6B35).withOpacity(0.2)
+                                  : Colors.grey[200],
+                              border: Border.all(
+                                color: isActive
+                                    ? const Color(0xFFFF6B35)
+                                    : Colors.grey[300]!,
+                              ),
+                            ),
+                            child: isActive
+                                ? const Icon(
+                                    Icons.check,
+                                    size: 7,
+                                    color: Color(0xFFFF6B35),
+                                  )
+                                : null,
+                          );
+                        }),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1628,6 +1376,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
+                    color: Colors.blue,
                   ),
                 ),
               ),
@@ -1697,18 +1446,15 @@ class _HomeViewState extends ConsumerState<HomeView> {
               const Spacer(),
               GestureDetector(
                 onTap: () {
-                  // 投稿一覧画面に遷移
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const PostsView(),
-                    ),
-                  );
+                  // 下部タブを「投稿」に切り替え
+                  MainNavigationView.switchToPostsTab(context);
                 },
                 child: const Text(
                   '全て見る＞',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
+                    color: Colors.blue,
                   ),
                 ),
               ),
