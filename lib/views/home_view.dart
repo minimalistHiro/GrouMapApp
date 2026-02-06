@@ -23,6 +23,7 @@ import 'referral/store_referral_view.dart' hide userDataProvider;
 import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
 import 'coupons/coupons_view.dart';
+import 'posts/posts_view.dart';
 import 'badges/badges_view.dart';
 import 'stamps/experience_gained_view.dart';
 import 'stamps/stamp_cards_view.dart';
@@ -1389,7 +1390,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (context) => const CouponsView(
-                        initialTopTabIndex: 1,
                         initialCouponTabIndex: 0,
                       ),
                     ),
@@ -1472,10 +1472,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   // 投稿一覧画面に遷移
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => const CouponsView(
-                        initialTopTabIndex: 0,
-                        initialCouponTabIndex: 0,
-                      ),
+                      builder: (context) => const PostsView(),
                     ),
                   );
                 },
@@ -1617,151 +1614,263 @@ class _HomeViewState extends ConsumerState<HomeView> {
       return '特典あり';
     }
 
-    return GestureDetector(
-      onTap: () => _openCouponDetail(context, coupon),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Container(
-          height: 270,
-          width: 170,
-          margin: const EdgeInsets.symmetric(horizontal: 5),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                spreadRadius: 1,
-                blurRadius: 3,
-                offset: const Offset(0, 1),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-            // 画像
-            Container(
-              width: 150,
-              height: 150,
-              margin: const EdgeInsets.only(top: 7, bottom: 7),
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(7),
-              ),
-              child: coupon.imageUrl != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(7),
-                      child: Image.network(
-                        coupon.imageUrl,
+    return FutureBuilder<List<int>>(
+      future: _fetchHomeCouponStampStatus(coupon),
+      builder: (context, snapshot) {
+        final requiredStamps = snapshot.data?[0] ?? 0;
+        final userStamps = snapshot.data?[1] ?? 0;
+        final remaining = requiredStamps - userStamps;
+        final isInsufficient = requiredStamps > 0 && remaining > 0;
+
+        return GestureDetector(
+          onTap: () => _openCouponDetail(context, coupon),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: Stack(
+              children: [
+                Container(
+                  height: 270,
+                  width: 170,
+                  margin: const EdgeInsets.symmetric(horizontal: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        spreadRadius: 1,
+                        blurRadius: 3,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // 画像
+                      Container(
                         width: 150,
                         height: 150,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(
-                            Icons.image,
-                            size: 50,
-                            color: Colors.grey,
-                          );
-                        },
+                        margin: const EdgeInsets.only(top: 7, bottom: 7),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: coupon.imageUrl != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(7),
+                                child: Image.network(
+                                  coupon.imageUrl,
+                                  width: 150,
+                                  height: 150,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return const Icon(
+                                      Icons.image,
+                                      size: 50,
+                                      color: Colors.grey,
+                                    );
+                                  },
+                                ),
+                              )
+                            : const Icon(
+                                Icons.image,
+                                size: 50,
+                                color: Colors.grey,
+                              ),
                       ),
-                    )
-                  : const Icon(
-                      Icons.image,
-                      size: 50,
-                      color: Colors.grey,
+
+                      // 期限
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(
+                          formatEndDate(),
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+
+                      const SizedBox(height: 6),
+
+                      // タイトル
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Text(
+                          coupon.title ?? 'タイトルなし',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 2,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      // 割引情報
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        margin: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6B35).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFFFF6B35).withOpacity(0.3),
+                          ),
+                        ),
+                        child: Text(
+                          getDiscountText(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF6B35),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+                      const Divider(height: 1),
+
+                      // 店舗名
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: ref.watch(storeNameProvider(coupon.storeId)).when(
+                              data: (storeName) => Text(
+                                storeName ?? '店舗名なし',
+                                style: const TextStyle(fontSize: 9),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              loading: () => const Text(
+                                '読み込み中...',
+                                style: TextStyle(fontSize: 9),
+                                textAlign: TextAlign.center,
+                              ),
+                              error: (_, __) => Text(
+                                coupon.storeId ?? '店舗名なし',
+                                style: const TextStyle(fontSize: 9),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                      ),
+
+                      const SizedBox(height: 3),
+                    ],
+                  ),
+                ),
+                if (isInsufficient)
+                  Positioned.fill(
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 5),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                        child: _buildOutlinedWarningText('あと$remainingスタンプ'),
+                      ),
                     ),
+                  ),
+              ],
             ),
-            
-            // 期限
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text(
-                formatEndDate(),
-                style: const TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            
-            const SizedBox(height: 6),
-            
-            // タイトル
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text(
-                coupon.title ?? 'タイトルなし',
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            
-            const SizedBox(height: 4),
-            
-            // 割引情報
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-              margin: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFFF6B35).withOpacity(0.3),
-                ),
-              ),
-              child: Text(
-                getDiscountText(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF6B35),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-            
-            const SizedBox(height: 4),
-            const Divider(height: 1),
-            
-            // 店舗名
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: ref.watch(storeNameProvider(coupon.storeId)).when(
-                data: (storeName) => Text(
-                  storeName ?? '店舗名なし',
-                  style: const TextStyle(fontSize: 9),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                loading: () => const Text(
-                  '読み込み中...',
-                  style: TextStyle(fontSize: 9),
-                  textAlign: TextAlign.center,
-                ),
-                error: (_, __) => Text(
-                  coupon.storeId ?? '店舗名なし',
-                  style: const TextStyle(fontSize: 9),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-            
-              const SizedBox(height: 3),
-            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOutlinedWarningText(String text) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3
+              ..color = Colors.white,
           ),
         ),
-      ),
+        const SizedBox(height: 2),
+        Text(
+          text,
+          style: const TextStyle(
+            color: Colors.red,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
+  }
+
+  Future<List<int>> _fetchHomeCouponStampStatus(dynamic coupon) async {
+    final storeId = coupon.storeId as String?;
+    final couponId = coupon.id as String?;
+    final requiredStamps = await _fetchHomeRequiredStampCount(storeId, couponId, coupon);
+    final userStamps = await _fetchHomeUserStampCount(storeId);
+    return [requiredStamps, userStamps];
+  }
+
+  Future<int> _fetchHomeRequiredStampCount(String? storeId, String? couponId, dynamic coupon) async {
+    try {
+      final conditions = coupon.conditions;
+      if (conditions is Map && conditions['requiredStampCount'] is num) {
+        return (conditions['requiredStampCount'] as num).toInt();
+      }
+    } catch (_) {}
+
+    if (storeId == null || storeId.isEmpty || couponId == null || couponId.isEmpty) {
+      return 0;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
+          .doc(couponId)
+          .get();
+      final data = doc.data();
+      return (data?['requiredStampCount'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<int> _fetchHomeUserStampCount(String? storeId) async {
+    if (storeId == null || storeId.isEmpty) {
+      return 0;
+    }
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return 0;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('stores')
+          .doc(storeId)
+          .get();
+      final data = doc.data();
+      return (data?['stamps'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   Widget _buildPostCard(BuildContext context, PostModel post) {
@@ -2003,8 +2112,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
           Navigator.of(context).push(
             MaterialPageRoute(
               builder: (context) => const CouponsView(
-                initialTopTabIndex: 1,
-                hideTopTabs: true,
+                initialCouponTabIndex: 0,
               ),
             ),
           );
