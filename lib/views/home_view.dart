@@ -478,14 +478,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -544,7 +536,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   'assets/images/groumap_icon.png',
                   width: 30,
                   height: 30,
-                  errorBuilder: (context, error, stackTrace) => 
+                  errorBuilder: (context, error, stackTrace) =>
                       const Icon(Icons.location_on, size: 30, color: Colors.blue),
                 ),
                 const SizedBox(width: 8),
@@ -564,134 +556,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
           ),
           
           // 中央：ユーザーアイコンと円形経験値バー
-          Expanded(
-            child: Center(
-              child: ref.watch(userDataProvider(userId)).when(
-                data: (userData) {
-                  if (userData == null) {
-                    return const SizedBox.shrink();
-                  }
-                  
-                  final levelService = LevelService();
-                  final level = (userData['level'] is num) ? (userData['level'] as num).toInt() : 1;
-                  final experience = (userData['experience'] is num) ? (userData['experience'] as num).toInt() : 0;
-                  final profileImageUrl = userData['profileImageUrl'] as String?;
-                  final authPhotoUrl = user.photoURL;
-                  final resolvedImageUrl = (profileImageUrl != null && profileImageUrl.isNotEmpty)
-                      ? profileImageUrl
-                      : (authPhotoUrl != null && authPhotoUrl.isNotEmpty ? authPhotoUrl : null);
-                  final Color defaultAvatarColor = Colors.grey.withOpacity(0.1);
-                  
-                  // 現在のレベルの経験値計算
-                  final levelBaseExp = levelService.totalExperienceToReachLevel(level);
-                  final currentLevelRequiredExp = levelService.requiredExperienceForLevel(level);
-                  final progressValue = currentLevelRequiredExp == 0
-                      ? 1.0
-                      : ((experience - levelBaseExp) / currentLevelRequiredExp).clamp(0.0, 1.0);
-                  
-                  return Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      alignment: Alignment.center,
-                      children: [
-                        // 円形の経験値バー（周囲に余白を確保）
-                        SizedBox(
-                          width: 64,
-                          height: 64,
-                          child: CircularProgressIndicator(
-                            value: progressValue.clamp(0.0, 1.0),
-                            strokeWidth: 4,
-                            backgroundColor: Colors.grey[300],
-                            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
-                          ),
-                        ),
-                        // ユーザーアイコン
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFFFF6B35),
-                              width: 2,
-                            ),
-                          ),
-                          child: resolvedImageUrl != null
-                              ? ClipOval(
-                                  child: Container(
-                                    width: 50,
-                                    height: 50,
-                                    color: Colors.grey[200],
-                                    child: Image.network(
-                                      resolvedImageUrl,
-                                      width: 50,
-                                      height: 50,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(
-                                          width: 50,
-                                          height: 50,
-                                          color: defaultAvatarColor,
-                                          child: const Icon(
-                                            Icons.person,
-                                            size: 30,
-                                            color: Colors.grey,
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                )
-                              : ClipOval(
-                                  child: Container(
-                                    width: 50,
-                                    height: 50,
-                                    color: defaultAvatarColor,
-                                    child: const Icon(
-                                      Icons.person,
-                                      size: 30,
-                                    color: Colors.grey,
-                                    ),
-                                  ),
-                                ),
-                        ),
-                        // レベル表示（はみ出しを許容してクリップしない）
-                        Positioned(
-                          bottom: -6,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF6B35),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              'Lv.$level',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                loading: () => SizedBox(
-                  width: 60,
-                  height: 60,
-                  child: _buildLoadingIndicatorWithLabel(
-                    'HOME: userData header loading',
-                    color: const Color(0xFFFF6B35),
-                    strokeWidth: 2,
-                  ),
-                ),
-                error: (_, __) => const SizedBox.shrink(),
-              ),
-            ),
-          ),
+          const Spacer(),
           
           // 右側：お知らせのベルボタン（固定幅）
           SizedBox(
@@ -992,67 +857,60 @@ class _HomeViewState extends ConsumerState<HomeView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 保有スタンプ合計（画像のような表記に変更）
+          // 全店舗合計スタンプに対する保有スタンプの進捗
           ref.watch(userTotalStampsProvider(userId)).when(
             data: (totalStamps) {
+              final totalStoreCount = ref.watch(totalStoreCountProvider).maybeWhen(
+                    data: (count) => count,
+                    orElse: () => 0,
+                  );
+              final totalStampCapacity = totalStoreCount * 10;
+              final progressValue = totalStampCapacity > 0
+                  ? (totalStamps / totalStampCapacity).clamp(0.0, 1.0)
+                  : 0.0;
               return Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    '保有スタンプ',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 15),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(
-                        child: Center(
-                          child: RichText(
-                            text: TextSpan(
-                              text: '$totalStamps',
-                              style: const TextStyle(
-                                fontSize: 44,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                                height: 1.0,
-                              ),
-                              children: const [
-                                TextSpan(
-                                  text: '  スタンプ',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                      const Text(
+                        '全店舗スタンプ進捗',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      Text(
+                        '$totalStamps/$totalStampCapacity',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFFFF6B35),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: progressValue,
+                      minHeight: 14,
+                      backgroundColor: const Color(0xFFEAEAEA),
+                      valueColor: const AlwaysStoppedAnimation(Color(0xFFFF6B35)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                   Text(
-                    '全店舗合計',
+                    '全店舗合計スタンプ数のうち、保有スタンプ数',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 11,
                       color: Colors.grey[600],
                     ),
                   ),
@@ -1065,33 +923,33 @@ class _HomeViewState extends ConsumerState<HomeView> {
           
           const SizedBox(height: 16),
           
-          // 開拓済み・スタンプ10個店舗数
+          // 開拓済み・スタンプ10個店舗数（下部UIを画像寄せ）
           ref.watch(userStoreProgressProvider(userId)).when(
             data: (stats) {
               final totalStoreCount = ref.watch(totalStoreCountProvider).maybeWhen(
                     data: (count) => count,
                     orElse: () => 0,
                   );
-              Widget buildDivider() => Container(width: 1, height: 40, color: Colors.grey[300]);
-              Widget buildFractionItem(String label, int value, int total) {
-                final totalText = total > 0 ? total : 0;
+              Widget buildDivider() => Container(width: 1, height: 36, color: Colors.grey[300]);
+              Widget buildStatItem(String label, int value) {
                 return Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Text(
-                        '$value/$totalText',
+                        '$value',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 30,
                           fontWeight: FontWeight.bold,
                           color: Colors.black87,
                         ),
                       ),
+                      const SizedBox(height: 4),
                       Text(
                         label,
                         style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey,
+                          fontSize: 12,
+                          color: Colors.black54,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -1102,9 +960,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
               return Row(
                 children: [
-                  buildFractionItem('開拓済み', stats.newPioneerCount, totalStoreCount),
+                  buildStatItem('開拓済み', stats.newPioneerCount),
                   buildDivider(),
-                  buildFractionItem('スタンプ10個\n店舗数', stats.stamp10StoreCount, totalStoreCount),
+                  buildStatItem('スタンプ満了', stats.stamp10StoreCount),
                 ],
               );
             },
