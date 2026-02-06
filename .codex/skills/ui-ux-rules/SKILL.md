@@ -16,7 +16,7 @@ GrouMapの画面作成・編集時に、既定のUI/UXルールを必ず適用�
 - ヘッダーは `common_header.dart` を使用する。
 - ボタンは `custom_button.dart` を使用する。
 - テキストフィールドは `error_dialog.dart` を使用する。
-- 画面背景はホーム画面の `Colors.grey[50]` を基準に、他画面も同系統で統一する。
+- 画面背景は `Color(0xFFFBF6F2)`（`#FBF6F2`）を基準に、他画面も同系統で統一する。
 - 上部タブは `custom_top_tab_bar.dart` を使用する。
 - 上部タブの配色はオレンジ背景 `#FF6B35`（`Color(0xFFFF6B35)`）＋白テキストで統一する。
 - 青色のテキストボタンは `Colors.blue`（`Color(0xFF2196F3)` 相当）を使用し、文字は **ボールド** にする。

@@ -8,12 +8,13 @@ import '../providers/owner_settings_provider.dart';
 import '../providers/store_provider.dart';
 import '../providers/coupon_provider.dart';
 import '../providers/badge_provider.dart';
+import '../providers/posts_provider.dart';
 import '../services/push_notification_service.dart';
 import 'home_view.dart';
 import 'map/map_view.dart';
 import 'qr/qr_generator_view.dart';
 import 'profile/profile_view.dart';
-import 'coupons/coupons_view.dart';
+import 'posts/posts_view.dart';
 import 'payment/point_payment_detail_view.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
@@ -198,7 +199,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
             }
             break;
           case _MainTab.coupons:
-            await _loadCouponData(user?.uid);
+            await _loadPostsData();
             break;
           case _MainTab.profile:
             if (user != null) {
@@ -229,6 +230,13 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     // QRコード画面は主にスキャン機能のため、特別なデータ読み込みは不要
   }
 
+  Future<void> _loadPostsData() async {
+    try {
+      ref.invalidate(allPostsProvider);
+    } catch (e) {
+      debugPrint('投稿データ読み込みエラー: $e');
+    }
+  }
 
   Future<void> _loadCouponData(String? userId) async {
     // クーポン画面のデータ読み込み
@@ -362,7 +370,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         case _MainTab.qr:
           return const QRGeneratorView();
         case _MainTab.coupons:
-          return const CouponsView();
+          return const PostsView();
         case _MainTab.profile:
           return const ProfileView();
       }
@@ -393,7 +401,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         case _MainTab.coupons:
           return const BottomNavigationBarItem(
             icon: Icon(Icons.article),
-            label: 'クーポン',
+            label: '投稿',
           );
         case _MainTab.profile:
           return BottomNavigationBarItem(

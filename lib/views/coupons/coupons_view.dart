@@ -4,24 +4,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import '../../providers/coupon_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/posts_provider.dart';
 import '../../providers/store_provider.dart';
 import '../../models/coupon_model.dart' as model;
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_top_tab_bar.dart';
-import '../posts/post_detail_view.dart';
+import '../../widgets/common_header.dart';
 import 'coupon_detail_view.dart';
 
 class CouponsView extends ConsumerWidget {
-  final int initialTopTabIndex;
   final int initialCouponTabIndex;
-  final bool hideTopTabs;
 
   const CouponsView({
     Key? key,
-    this.initialTopTabIndex = 0,
     this.initialCouponTabIndex = 0,
-    this.hideTopTabs = false,
   }) : super(key: key);
 
   int _coerceIndex(int index, int length) {
@@ -69,16 +64,9 @@ class CouponsView extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('クーポン'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () => _showSearchDialog(context),
-          ),
-        ],
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: const CommonHeader(
+        title: 'クーポン',
       ),
       body: authState.when(
         data: (user) {
@@ -91,123 +79,7 @@ class CouponsView extends ConsumerWidget {
   }
 
   Widget _buildCouponsContent(BuildContext context, WidgetRef ref, String? userId) {
-    if (hideTopTabs) {
-      return _buildCoupons(context, ref, userId);
-    }
-
-    return DefaultTabController(
-      length: 2,
-      initialIndex: _coerceIndex(initialTopTabIndex, 2),
-      child: Column(
-        children: [
-          const CustomTopTabBar(
-            tabs: [
-              Tab(text: '投稿', icon: Icon(Icons.article)),
-              Tab(text: 'クーポン', icon: Icon(Icons.card_giftcard)),
-            ],
-          ),
-          Expanded(
-            child: TabBarView(
-              children: [
-                _buildPosts(context, ref),
-                _buildCoupons(context, ref, userId),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPosts(BuildContext context, WidgetRef ref) {
-    final posts = ref.watch(allPostsProvider);
-
-    return posts.when(
-      data: (posts) {
-        if (posts.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.article, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('投稿がありません'),
-                SizedBox(height: 8),
-                Text('新しい投稿をお待ちください！'),
-              ],
-            ),
-          );
-        }
-
-        final itemCount = posts.length > 60 ? 60 : posts.length;
-
-        return GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 0,
-            mainAxisSpacing: 0,
-            childAspectRatio: 1,
-          ),
-          itemCount: itemCount,
-          itemBuilder: (context, index) {
-            final post = posts[index];
-            return _buildPostCard(context, ref, post);
-          },
-        );
-      },
-      loading: () => const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(
-              color: Color(0xFFFF6B35),
-            ),
-            SizedBox(height: 8),
-            Text(
-              '投稿を読み込み中...',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
-            ),
-          ],
-        ),
-      ),
-      error: (error, _) => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-            const SizedBox(height: 8),
-            const Text(
-              '投稿の取得に失敗しました',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'データが存在しない可能性があります',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: CustomButton(
-                text: '再試行',
-                onPressed: () {
-                  ref.invalidate(allPostsProvider);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+    return _buildCoupons(context, ref, userId);
   }
 
   Widget _buildCoupons(BuildContext context, WidgetRef ref, String? userId) {
@@ -237,85 +109,6 @@ class CouponsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildPostCard(BuildContext context, WidgetRef ref, PostModel post) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => PostDetailView(post: post),
-          ),
-        );
-      },
-      child: Container(
-        color: Colors.grey[200],
-        child: post.imageUrls.isNotEmpty
-            ? Stack(
-                children: [
-                  Positioned.fill(
-                    child: Image.network(
-                      post.imageUrls[0],
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: Colors.grey[300],
-                          child: const Center(
-                            child: Icon(
-                              Icons.image,
-                              size: 30,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  if (post.imageUrls.length > 1)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.grid_on,
-                              size: 12,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 2),
-                            Text(
-                              '${post.imageUrls.length}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              )
-            : Container(
-                color: Colors.grey[300],
-                child: const Center(
-                  child: Icon(
-                    Icons.image,
-                    size: 30,
-                    color: Colors.grey,
-                  ),
-                ),
-              ),
-      ),
-    );
-  }
-
   Widget _buildAvailableCoupons(BuildContext context, WidgetRef ref, String userId) {
     final availableCoupons = ref.watch(availableCouponsProvider(userId));
 
@@ -336,21 +129,14 @@ class CouponsView extends ConsumerWidget {
           );
         }
 
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final gridDelegate = _buildCouponGridDelegate(constraints.maxWidth);
-              return GridView.builder(
-                gridDelegate: gridDelegate,
-                itemCount: coupons.length,
-                itemBuilder: (context, index) {
-                  final coupon = coupons[index];
-                  return _buildCouponCardGrid(context, ref, coupon);
-                },
-              );
-            },
-          ),
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          itemCount: coupons.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final coupon = coupons[index];
+            return _buildCouponListCard(context, ref, coupon, userId, isUsed: false);
+          },
         );
       },
       loading: () => const Center(
@@ -429,21 +215,14 @@ class CouponsView extends ConsumerWidget {
           );
         }
 
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final gridDelegate = _buildCouponGridDelegate(constraints.maxWidth);
-              return GridView.builder(
-                gridDelegate: gridDelegate,
-                itemCount: coupons.length,
-                itemBuilder: (context, index) {
-                  final coupon = coupons[index];
-                  return _buildUsedCouponCardGrid(context, ref, coupon);
-                },
-              );
-            },
-          ),
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          itemCount: coupons.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final coupon = coupons[index];
+            return _buildCouponListCard(context, ref, coupon, userId, isUsed: true);
+          },
         );
       },
       loading: () {
@@ -578,6 +357,277 @@ class CouponsView extends ConsumerWidget {
 
   Widget _buildCouponCardGrid(BuildContext context, WidgetRef ref, model.Coupon coupon) {
     return _buildHomeStyleCouponCard(context, ref, coupon);
+  }
+
+  Widget _buildCouponListCard(
+    BuildContext context,
+    WidgetRef ref,
+    model.Coupon coupon,
+    String userId, {
+    required bool isUsed,
+  }) {
+    String getDiscountLabel() {
+      final discountType = coupon.discountType;
+      final discountValue = coupon.discountValue;
+      if (discountType == 'percentage') {
+        return '${discountValue.toInt()}% OFF';
+      } else if (discountType == 'fixed_amount') {
+        return '¥${discountValue.toInt()} OFF';
+      } else if (discountType == 'fixed_price') {
+        return '¥${discountValue.toInt()}';
+      }
+      return '特典あり';
+    }
+
+    return FutureBuilder<List<int>>(
+      future: _fetchStampStatus(coupon, userId),
+      builder: (context, snapshot) {
+        final requiredStamps = snapshot.data?[0] ?? 0;
+        final userStamps = snapshot.data?[1] ?? 0;
+        final remaining = requiredStamps - userStamps;
+        final isInsufficient = requiredStamps > 0 && remaining > 0;
+
+        return InkWell(
+          onTap: () => _openCouponDetail(context, coupon),
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 86,
+                      height: 86,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6B35).withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: coupon.imageUrl != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                coupon.imageUrl!,
+                                fit: BoxFit.cover,
+                                width: 86,
+                                height: 86,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.image,
+                                    size: 32,
+                                    color: Colors.white,
+                                  );
+                                },
+                              ),
+                            )
+                          : const Icon(
+                              Icons.image,
+                              size: 32,
+                              color: Colors.white,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            coupon.title,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          ref.watch(storeNameProvider(coupon.storeId)).when(
+                                data: (storeName) => Text(
+                                  storeName ?? '店舗名なし',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                loading: () => Text(
+                                  '読み込み中...',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                                error: (_, __) => Text(
+                                  coupon.storeId,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          const SizedBox(height: 6),
+                          Text(
+                            getDiscountLabel(),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFFF6B35),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '有効期限: ${_formatCouponExpiry(coupon.validUntil)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(minWidth: 80, maxWidth: 96),
+                      child: _buildStampCountBadge(requiredStamps, isUsed),
+                    ),
+                  ],
+                ),
+              ),
+              if (isInsufficient)
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Center(
+                      child: _buildOutlinedWarningText('あと$remainingスタンプ'),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStampCountBadge(int stampCount, bool isUsed) {
+    final labelColor = isUsed ? Colors.grey[400] : const Color(0xFFFF6B35);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: labelColor,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            '必要スタンプ',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '$stampCount',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<List<int>> _fetchStampStatus(model.Coupon coupon, String userId) async {
+    final requiredStamps = await _fetchRequiredStampCount(coupon);
+    final userStamps = await _fetchUserStampCount(userId, coupon.storeId);
+    return [requiredStamps, userStamps];
+  }
+
+  Future<int> _fetchUserStampCount(String userId, String storeId) async {
+    if (userId.isEmpty || userId == 'guest' || storeId.isEmpty) {
+      return 0;
+    }
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('stores')
+          .doc(storeId)
+          .get();
+      final data = doc.data();
+      return (data?['stamps'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Widget _buildOutlinedWarningText(String text) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            foreground: Paint()
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 3
+              ..color = Colors.white,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          text,
+          style: const TextStyle(
+            color: Colors.red,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<int> _fetchRequiredStampCount(model.Coupon coupon) async {
+    final localValue = coupon.conditions?['requiredStampCount'];
+    if (localValue is num) {
+      return localValue.toInt();
+    }
+
+    if (coupon.storeId.isEmpty || coupon.id.isEmpty) {
+      return 0;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('coupons')
+          .doc(coupon.storeId)
+          .collection('coupons')
+          .doc(coupon.id)
+          .get();
+      final data = doc.data();
+      return (data?['requiredStampCount'] as num?)?.toInt() ?? 0;
+    } catch (_) {
+      return 0;
+    }
   }
 
   Widget _buildHomeStyleCouponCard(BuildContext context, WidgetRef ref, model.Coupon coupon) {
