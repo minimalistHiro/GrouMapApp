@@ -1,7 +1,7 @@
 # ユーザー用アプリ 画面一覧（構成と説明）
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
-※ 2026-02-08更新: ユーザー用画面の変更はありません（店舗用Instagram同期画面のみ更新）。
+※ 2026-02-08更新: ユーザー用画面の遷移元差分を解消（`StoreListView` / `MapView` / `RecommendationAfterBadgeView` から `StoreDetailView` へ渡す店舗データを正規化）。
 
 ## 起動・ナビゲーション
 

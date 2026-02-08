@@ -60,6 +60,15 @@ type InstagramMediaItem = {
   thumbnail_url?: string;
   permalink?: string;
   timestamp?: string;
+  children?: {
+    data?: InstagramMediaChild[];
+  };
+};
+
+type InstagramMediaChild = {
+  media_type?: string;
+  media_url?: string;
+  thumbnail_url?: string;
 };
 
 type InstagramAuth = {
@@ -120,6 +129,32 @@ function parseInstagramTimestamp(value: string | undefined): Date {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return new Date();
   return parsed;
+}
+
+function extractInstagramImageUrls(item: InstagramMediaItem): string[] {
+  const childItems = item.children?.data ?? [];
+  if (childItems.length > 0) {
+    const childUrls = childItems
+      .map((child) => {
+        const childType = normalizeMediaType(toStringValue(child.media_type));
+        if (childType === 'VIDEO') {
+          return toStringValue(child.thumbnail_url).trim();
+        }
+        return toStringValue(child.media_url).trim();
+      })
+      .filter((url) => url.length > 0);
+    if (childUrls.length > 0) {
+      return childUrls;
+    }
+  }
+
+  const mediaType = normalizeMediaType(toStringValue(item.media_type));
+  if (mediaType === 'VIDEO') {
+    const thumbnail = toStringValue(item.thumbnail_url).trim();
+    return thumbnail ? [thumbnail] : [];
+  }
+  const mediaUrl = toStringValue(item.media_url).trim();
+  return mediaUrl ? [mediaUrl] : [];
 }
 
 function httpsGetJson<T>(url: string): Promise<T> {
@@ -231,7 +266,10 @@ async function fetchInstagramMedia(params: {
 }): Promise<InstagramMediaItem[]> {
   const { instagramUserId, accessToken, limit = 50 } = params;
   const url = new URL(`${INSTAGRAM_API_BASE}/${instagramUserId}/media`);
-  url.searchParams.set('fields', 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp');
+  url.searchParams.set(
+    'fields',
+    'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,children{media_type,media_url,thumbnail_url}',
+  );
   url.searchParams.set('limit', String(limit));
   url.searchParams.set('access_token', accessToken);
   const response = await httpsGetJson<{ data?: InstagramMediaItem[] }>(url.toString());
@@ -258,6 +296,7 @@ async function upsertInstagramPosts(params: {
     const mediaType = normalizeMediaType(toStringValue(item.media_type));
     const isVideo = mediaType === 'VIDEO';
     const timestamp = parseInstagramTimestamp(item.timestamp);
+    const imageUrls = extractInstagramImageUrls(item);
 
     const baseData = stripUndefined({
       instagramPostId: item.id,
@@ -268,6 +307,7 @@ async function upsertInstagramPosts(params: {
       mediaType,
       mediaUrl: toStringValue(item.media_url),
       thumbnailUrl: toStringValue(item.thumbnail_url),
+      imageUrls,
       caption: toStringValue(item.caption),
       permalink: toStringValue(item.permalink),
       timestamp: Timestamp.fromDate(timestamp),

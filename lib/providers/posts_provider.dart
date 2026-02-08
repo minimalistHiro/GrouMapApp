@@ -2,6 +2,28 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 
+Stream<List<PostModel>> _instagramPostsStream({
+  required Query<Map<String, dynamic>> query,
+  required String logLabel,
+}) async* {
+  try {
+    await for (final snapshot in query.snapshots()) {
+      final posts = snapshot.docs
+          .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
+          .where((p) => p.isActive == true)
+          .toList();
+      yield posts;
+    }
+  } on FirebaseException catch (error) {
+    debugPrint('Error fetching $logLabel instagram posts: $error');
+    if (error.code == 'permission-denied') {
+      yield <PostModel>[];
+      return;
+    }
+    rethrow;
+  }
+}
+
 // 投稿モデル
 class PostModel {
   final String id;
@@ -53,13 +75,26 @@ class PostModel {
     final mediaType = (data['mediaType'] ?? '').toString();
     final mediaUrl = (data['mediaUrl'] ?? '').toString();
     final thumbnailUrl = (data['thumbnailUrl'] ?? '').toString();
+    final rawImageUrls = data['imageUrls'];
     final imageUrls = <String>[];
-    if (mediaType == 'VIDEO') {
-      if (thumbnailUrl.isNotEmpty) {
-        imageUrls.add(thumbnailUrl);
+
+    if (rawImageUrls is List) {
+      for (final url in rawImageUrls) {
+        final parsed = url?.toString() ?? '';
+        if (parsed.isNotEmpty) {
+          imageUrls.add(parsed);
+        }
       }
-    } else if (mediaUrl.isNotEmpty) {
-      imageUrls.add(mediaUrl);
+    }
+
+    if (imageUrls.isEmpty) {
+      if (mediaType == 'VIDEO') {
+        if (thumbnailUrl.isNotEmpty) {
+          imageUrls.add(thumbnailUrl);
+        }
+      } else if (mediaUrl.isNotEmpty) {
+        imageUrls.add(mediaUrl);
+      }
     }
     return PostModel(
       id: id,
@@ -117,48 +152,36 @@ final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
 
 // Instagram公開投稿（ホーム用）
 final publicInstagramPostsProvider = StreamProvider<List<PostModel>>((ref) {
-  return FirebaseFirestore.instance
+  final query = FirebaseFirestore.instance
       .collection('public_instagram_posts')
       .where('isVideo', isEqualTo: false)
       .orderBy('timestamp', descending: true)
-      .limit(15)
-      .snapshots()
-      .map((snapshot) {
-    final posts = snapshot.docs
-        .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
-        .where((p) => p.isActive == true)
-        .toList();
-    return posts;
-  }).handleError((error) {
-    debugPrint('Error fetching public instagram posts: $error');
-    return <PostModel>[];
-  });
+      .limit(10);
+  return _instagramPostsStream(
+    query: query,
+    logLabel: 'public',
+  );
 });
 
 // 店舗のInstagram投稿（店舗詳細用）
-final storeInstagramPostsProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
-  return FirebaseFirestore.instance
+final storeInstagramPostsProvider =
+    StreamProvider.family<List<PostModel>, String>((ref, storeId) {
+  final query = FirebaseFirestore.instance
       .collection('stores')
       .doc(storeId)
       .collection('instagram_posts')
       .where('isVideo', isEqualTo: false)
       .orderBy('timestamp', descending: true)
-      .limit(15)
-      .snapshots()
-      .map((snapshot) {
-    final posts = snapshot.docs
-        .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
-        .where((p) => p.isActive == true)
-        .toList();
-    return posts;
-  }).handleError((error) {
-    debugPrint('Error fetching store instagram posts: $error');
-    return <PostModel>[];
-  });
+      .limit(15);
+  return _instagramPostsStream(
+    query: query,
+    logLabel: 'store',
+  );
 });
 
 // 特定の店舗の投稿プロバイダー
-final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
+final storePostsProvider =
+    StreamProvider.family<List<PostModel>, String>((ref, storeId) {
   try {
     return FirebaseFirestore.instance
         .collection('public_posts')
@@ -174,16 +197,14 @@ final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, 
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       debugPrint('Store posts (collectionGroup) loaded: ${posts.length} posts');
       return posts;
-    })
-        .timeout(
-          const Duration(seconds: 3),
-          onTimeout: (eventSink) {
-            debugPrint('Store posts query timed out, returning empty list');
-            eventSink.add(<PostModel>[]);
-            eventSink.close();
-          },
-        )
-        .handleError((error) {
+    }).timeout(
+      const Duration(seconds: 3),
+      onTimeout: (eventSink) {
+        debugPrint('Store posts query timed out, returning empty list');
+        eventSink.add(<PostModel>[]);
+        eventSink.close();
+      },
+    ).handleError((error) {
       debugPrint('Error fetching store posts (collectionGroup): $error');
       return <PostModel>[];
     });
@@ -194,7 +215,8 @@ final storePostsProvider = StreamProvider.family<List<PostModel>, String>((ref, 
 });
 
 // 店舗配下の投稿プロバイダー（posts/{storeId}/posts）
-final storePostsNestedProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
+final storePostsNestedProvider =
+    StreamProvider.family<List<PostModel>, String>((ref, storeId) {
   try {
     return FirebaseFirestore.instance
         .collection('posts')
@@ -222,30 +244,28 @@ final storePostsNestedProvider = StreamProvider.family<List<PostModel>, String>(
 });
 
 // フォールバック用の投稿プロバイダー（インデックスエラーを完全に回避）
-final storePostsFallbackProvider = FutureProvider.family<List<PostModel>, String>((ref, storeId) async {
+final storePostsFallbackProvider =
+    FutureProvider.family<List<PostModel>, String>((ref, storeId) async {
   try {
     debugPrint('Using fallback provider for store: $storeId');
-    
+
     // より単純なクエリで投稿を取得
     final snapshot = await FirebaseFirestore.instance
         .collection('public_posts')
         .where('storeId', isEqualTo: storeId)
         .get()
         .timeout(const Duration(seconds: 2));
-    
-    final posts = snapshot.docs
-        .where((doc) {
-          final data = doc.data();
-          return data['isActive'] == true;
-        })
-        .map((doc) {
-          return PostModel.fromMap(doc.data(), doc.id);
-        })
-        .toList();
-    
+
+    final posts = snapshot.docs.where((doc) {
+      final data = doc.data();
+      return data['isActive'] == true;
+    }).map((doc) {
+      return PostModel.fromMap(doc.data(), doc.id);
+    }).toList();
+
     // クライアント側でソート
     posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    
+
     debugPrint('Fallback provider loaded: ${posts.length} posts');
     return posts;
   } catch (e) {
@@ -261,19 +281,15 @@ class PostsService {
   // 投稿を取得
   static Future<List<PostModel>> getPosts({int limit = 50}) async {
     try {
-      final snapshot = await _firestore
-          .collection('public_posts')
-          .limit(limit)
-          .get();
+      final snapshot =
+          await _firestore.collection('public_posts').limit(limit).get();
 
-      final items = snapshot.docs
-          .where((doc) {
-            final data = doc.data();
-            return data['isActive'] == true;
-          })
-          .map((doc) {
-            return PostModel.fromMap(doc.data(), doc.id);
-          }).toList();
+      final items = snapshot.docs.where((doc) {
+        final data = doc.data();
+        return data['isActive'] == true;
+      }).map((doc) {
+        return PostModel.fromMap(doc.data(), doc.id);
+      }).toList();
       items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return items;
     } catch (e) {
@@ -283,7 +299,8 @@ class PostsService {
   }
 
   // 特定の店舗の投稿を取得
-  static Future<List<PostModel>> getStorePosts(String storeId, {int limit = 20}) async {
+  static Future<List<PostModel>> getStorePosts(String storeId,
+      {int limit = 20}) async {
     try {
       final snapshot = await _firestore
           .collection('public_posts')
@@ -291,14 +308,12 @@ class PostsService {
           .limit(limit)
           .get();
 
-      final items = snapshot.docs
-          .where((doc) {
-            final data = doc.data();
-            return data['isActive'] == true;
-          })
-          .map((doc) {
-            return PostModel.fromMap(doc.data(), doc.id);
-          }).toList();
+      final items = snapshot.docs.where((doc) {
+        final data = doc.data();
+        return data['isActive'] == true;
+      }).map((doc) {
+        return PostModel.fromMap(doc.data(), doc.id);
+      }).toList();
       items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       return items;
     } catch (e) {
