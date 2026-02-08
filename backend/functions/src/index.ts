@@ -153,6 +153,8 @@ function buildInstagramAuthUrl(): string {
   const scope = [
     'instagram_basic',
     'pages_show_list',
+    'pages_read_engagement',
+    'business_management',
     'instagram_manage_insights',
   ].join(',');
   const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
@@ -2566,6 +2568,7 @@ async function updateUserPoints(userId: string, points: number, storeId: string)
 export const startInstagramAuth = onCall(
   {
     region: 'asia-northeast1',
+    invoker: 'public',
     secrets: [INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_REDIRECT_URI],
   },
   async (request) => {
@@ -2598,6 +2601,7 @@ export const startInstagramAuth = onCall(
 export const exchangeInstagramAuthCode = onCall(
   {
     region: 'asia-northeast1',
+    invoker: 'public',
     secrets: [INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_REDIRECT_URI],
   },
   async (request) => {
@@ -2628,18 +2632,26 @@ export const exchangeInstagramAuthCode = onCall(
       const longToken = await exchangeLongLivedToken({ accessToken });
       const { instagramUserId, username } = await resolveInstagramUserId(longToken);
 
+      const instagramAuth = stripUndefined({
+        instagramUserId,
+        accessToken: longToken,
+        username,
+      });
+
       await storeDoc.ref.set(
         {
-          instagramAuth: stripUndefined({
-            instagramUserId,
-            accessToken: longToken,
-            username,
-          }),
+          instagramAuth,
         },
         { merge: true },
       );
 
-      const count = await syncInstagramPostsForStore({ storeId, storeData });
+      const count = await syncInstagramPostsForStore({
+        storeId,
+        storeData: {
+          ...storeData,
+          instagramAuth,
+        },
+      });
       return { success: true, count };
     } catch (error) {
       console.error('Instagram auth exchange failed:', error);
@@ -2651,6 +2663,7 @@ export const exchangeInstagramAuthCode = onCall(
 export const syncInstagramPosts = onCall(
   {
     region: 'asia-northeast1',
+    invoker: 'public',
   },
   async (request) => {
     if (!request.auth?.uid) {
@@ -2682,6 +2695,7 @@ export const syncInstagramPosts = onCall(
 export const unlinkInstagramAuth = onCall(
   {
     region: 'asia-northeast1',
+    invoker: 'public',
   },
   async (request) => {
     if (!request.auth?.uid) {
