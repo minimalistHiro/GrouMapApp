@@ -249,7 +249,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
         child: RefreshIndicator(
           onRefresh: () async {
             ref.invalidate(announcementsProvider);
-            ref.invalidate(allPostsProvider);
+            ref.invalidate(publicInstagramPostsProvider);
             ref.invalidate(ownerSettingsProvider);
             ref.invalidate(availableCouponsProvider(userId));
             if (isLoggedIn) {
@@ -1464,7 +1464,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
         const SizedBox(height: 10),
         SizedBox(
           height: 300,
-          child: ref.watch(allPostsProvider).when(
+          child: ref.watch(publicInstagramPostsProvider).when(
             data: (posts) {
               if (posts.isEmpty) {
                 return const Center(
@@ -1867,6 +1867,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
     return GestureDetector(
       onTap: () async {
+        if (post.source == 'instagram') {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => PostDetailView(post: post),
+            ),
+          );
+          return;
+        }
         final storeId = post.storeId;
         if (storeId != null && storeId.isNotEmpty) {
           try {

@@ -35,7 +35,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     if (kDebugMode) {
       debugPrint(
         'StoreDetailView: storeId=${widget.store['id']} '
@@ -329,6 +329,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               Tab(text: 'トップ'),
               Tab(text: '店内'),
               Tab(text: 'メニュー'),
+              Tab(text: '投稿'),
             ],
             controller: _tabController,
           ),
@@ -339,6 +340,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 _buildTopTab(),
                 _buildInteriorTab(),
                 _buildMenuTab(),
+                _buildInstagramPostsTab(),
               ],
             ),
           ),
@@ -937,16 +939,18 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     );
   }
 
-  Widget _buildPostsTab() {
+  Widget _buildInstagramPostsTab() {
     final storeId = widget.store['id'];
-    
-    // まずメインプロバイダーを試す
-    final posts = ref.watch(storePostsNestedProvider(storeId));
-    
+    if (storeId == null || storeId.toString().isEmpty) {
+      return const Center(
+        child: Text('店舗情報が取得できませんでした。'),
+      );
+    }
+
+    final posts = ref.watch(storeInstagramPostsProvider(storeId));
+
     return posts.when(
       data: (posts) {
-        print('投稿データ取得成功: ${posts.length}件');
-        
         if (posts.isEmpty) {
           return const Center(
             child: Column(
@@ -994,141 +998,41 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           ),
         );
       },
-      loading: () {
-        print('投稿データ読み込み中...');
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
-              ),
-              SizedBox(height: 8),
-              Text(
-                '投稿を読み込み中...',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-      error: (error, stackTrace) {
-        print('メインプロバイダーエラー: $error');
-        
-        // エラーが発生した場合はフォールバックプロバイダーを使用
-        return _buildFallbackPostsTab(storeId);
-      },
-    );
-  }
-
-  Widget _buildFallbackPostsTab(String storeId) {
-    final fallbackPosts = ref.watch(storePostsFallbackProvider(storeId));
-    
-    return fallbackPosts.when(
-      data: (posts) {
-        print('フォールバック投稿データ取得成功: ${posts.length}件');
-        
-        if (posts.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.article, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text(
-                  '投稿がありません',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'この店舗からの投稿をお待ちください！',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
+      loading: () => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: Color(0xFFFF6B35),
             ),
-          );
-        }
-
-        return Padding(
-          padding: const EdgeInsets.all(2),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 2,
-              mainAxisSpacing: 2,
-              childAspectRatio: 1,
+            SizedBox(height: 8),
+            Text(
+              '投稿を読み込み中...',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+              ),
             ),
-            itemCount: posts.length,
-            itemBuilder: (context, index) {
-              final post = posts[index];
-              return _buildInstagramPostCard(context, post);
-            },
-          ),
-        );
-      },
-      loading: () {
-        print('フォールバック投稿データ読み込み中...');
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
+          ],
+        ),
+      ),
+      error: (error, _) => const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.article, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              '投稿の取得に失敗しました',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
               ),
-              SizedBox(height: 8),
-              Text(
-                '投稿を読み込み中...',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-      error: (error, stackTrace) {
-        print('フォールバックプロバイダーエラー: $error');
-        
-        // フォールバックも失敗した場合は投稿なしとして表示
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.article, size: 64, color: Colors.grey),
-              SizedBox(height: 16),
-              Text(
-                '投稿がありません',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'この店舗からの投稿をお待ちください！',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -2058,6 +1962,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
   // Instagram風の投稿カードを構築
   Widget _buildInstagramPostCard(BuildContext context, PostModel post) {
+    final isInstagram = post.source == 'instagram';
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -2127,45 +2032,46 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                     ),
                   
                   // いいね数オーバーレイ（いいねがある場合）
-                  FutureBuilder<int>(
-                    future: _getLikeCount(post.id),
-                    builder: (context, snapshot) {
-                      final likeCount = snapshot.data ?? 0;
-                      if (likeCount > 0) {
-                        return Positioned(
-                          bottom: 8,
-                          left: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(
-                                  Icons.favorite,
-                                  size: 12,
-                                  color: Colors.red,
-                                ),
-                                const SizedBox(width: 2),
-                                Text(
-                                  '$likeCount',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+                  if (!isInstagram)
+                    FutureBuilder<int>(
+                      future: _getLikeCount(post.id),
+                      builder: (context, snapshot) {
+                        final likeCount = snapshot.data ?? 0;
+                        if (likeCount > 0) {
+                          return Positioned(
+                            bottom: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.7),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.favorite,
+                                    size: 12,
+                                    color: Colors.red,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    '$likeCount',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
                 ],
               )
             : Container(

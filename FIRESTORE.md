@@ -212,6 +212,23 @@
   - `imageUrls`: 画像URL配列
   - `imageCount`: 画像数
 
+### instagram_posts
+- `stores/{storeId}/instagram_posts/{instagramPostId}`: 店舗別Instagram投稿（ユーザー表示用）
+  - `instagramPostId`: Instagram投稿ID
+  - `storeId`: 店舗ID
+  - `storeName`: 店舗名
+  - `storeIconImageUrl`: 店舗アイコン
+  - `mediaType`: 種別（IMAGE/VIDEO/CAROUSEL）
+  - `mediaUrl`: 画像/動画URL
+  - `thumbnailUrl`: 動画サムネURL
+  - `caption`: キャプション
+  - `permalink`: Instagram投稿URL
+  - `timestamp`: 投稿日時
+  - `isVideo`: 動画判定
+  - `isActive`: 有効フラグ
+  - `createdAt`: 作成日時
+  - `updatedAt`: 更新日時
+
 ### public_coupons
 - `public_coupons/{couponId}`: ユーザー向け公開クーポン
   - `key`: `storeId::couponId`
@@ -254,6 +271,24 @@
   - `comments`: コメント配列
   - `imageUrls`: 画像URL配列
   - `imageCount`: 画像数
+
+### public_instagram_posts
+- `public_instagram_posts/{instagramPostId}`: ユーザー向け公開Instagram投稿
+  - `key`: `storeId::instagramPostId`
+  - `instagramPostId`: Instagram投稿ID
+  - `storeId`: 店舗ID
+  - `storeName`: 店舗名
+  - `storeIconImageUrl`: 店舗アイコン
+  - `mediaType`: 種別（IMAGE/VIDEO/CAROUSEL）
+  - `mediaUrl`: 画像/動画URL
+  - `thumbnailUrl`: 動画サムネURL
+  - `caption`: キャプション
+  - `permalink`: Instagram投稿URL
+  - `timestamp`: 投稿日時
+  - `isVideo`: 動画判定
+  - `isActive`: 有効フラグ
+  - `createdAt`: 作成日時
+  - `updatedAt`: 更新日時
 
 ### sales
 - `sales/{saleId}`: 売上記録（ポイント付与リクエスト作成時）
@@ -306,6 +341,14 @@
   - `pendingRequestNotifiedAt`: 未承認店舗通知送信済み日時
   - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）
   - `socialMedia`: SNSリンク（`instagram`, `x`, `facebook`, `website`）
+  - `instagramAuth`: Instagram連携情報（Functions用）
+    - `instagramUserId`: InstagramビジネスアカウントID
+    - `accessToken`: アクセストークン（長期）
+    - `username`: Instagramユーザー名（任意）
+    - `tokenExpiresAt`: 有効期限（任意）
+  - `instagramSync`: Instagram同期情報
+    - `lastSyncAt`: 最終同期日時
+    - `lastSyncCount`: 最終同期取得件数
   - `tags`: タグ
   - `location`: 位置（`latitude`, `longitude`）
   - `iconImageUrl`: アイコン画像

@@ -3,8 +3,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
+const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const app_1 = require("firebase-admin/app");
 const firestore_2 = require("firebase-admin/firestore");
@@ -12,6 +13,7 @@ const auth_1 = require("firebase-admin/auth");
 const messaging_1 = require("firebase-admin/messaging");
 const params_1 = require("firebase-functions/params");
 const nodemailer_1 = __importDefault(require("nodemailer"));
+const https_2 = __importDefault(require("https"));
 const crypto_1 = require("crypto");
 const jwt_1 = require("./utils/jwt");
 // Firebase Admin SDK初期化
@@ -37,9 +39,232 @@ const USER_ACHIEVEMENT_EVENTS_COLLECTION = 'user_achievement_events';
 const RECOMMENDATION_IMPRESSIONS_COLLECTION = 'recommendation_impressions';
 const RECOMMENDATION_VISITS_COLLECTION = 'recommendation_visits';
 const MAX_STAMPS = 10;
+const INSTAGRAM_API_BASE = 'https://graph.facebook.com/v19.0';
 function stripUndefined(value) {
     const entries = Object.entries(value).filter(([, v]) => v !== undefined);
     return Object.fromEntries(entries);
+}
+function toStringValue(value) {
+    if (typeof value === 'string')
+        return value;
+    if (value === null || value === undefined)
+        return '';
+    return String(value);
+}
+function parseInstagramUsername(value) {
+    var _a;
+    const raw = toStringValue(value).trim();
+    if (!raw)
+        return null;
+    const cleaned = raw.replace(/^@/, '');
+    if (cleaned.includes('instagram.com/')) {
+        try {
+            const url = new URL(cleaned.startsWith('http') ? cleaned : `https://${cleaned}`);
+            const parts = url.pathname.split('/').filter(Boolean);
+            return (_a = parts[0]) !== null && _a !== void 0 ? _a : null;
+        }
+        catch (_b) {
+            return null;
+        }
+    }
+    return cleaned;
+}
+function getInstagramAuth(storeData) {
+    var _a, _b;
+    const auth = storeData['instagramAuth'];
+    const accessToken = toStringValue((_a = auth === null || auth === void 0 ? void 0 : auth['accessToken']) !== null && _a !== void 0 ? _a : storeData['instagramAccessToken']).trim();
+    const instagramUserId = toStringValue((_b = auth === null || auth === void 0 ? void 0 : auth['instagramUserId']) !== null && _b !== void 0 ? _b : storeData['instagramUserId']).trim();
+    const socialMedia = storeData['socialMedia'];
+    const usernameFromSocial = parseInstagramUsername(socialMedia === null || socialMedia === void 0 ? void 0 : socialMedia['instagram']);
+    const username = toStringValue(auth === null || auth === void 0 ? void 0 : auth['username']).trim() || usernameFromSocial || undefined;
+    if (!accessToken || !instagramUserId) {
+        return null;
+    }
+    return { accessToken, instagramUserId, username };
+}
+function normalizeMediaType(value) {
+    if (value === 'CAROUSEL_ALBUM')
+        return 'CAROUSEL';
+    return value || 'IMAGE';
+}
+function parseInstagramTimestamp(value) {
+    if (!value)
+        return new Date();
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime()))
+        return new Date();
+    return parsed;
+}
+function httpsGetJson(url) {
+    return new Promise((resolve, reject) => {
+        const req = https_2.default.get(url, (res) => {
+            let body = '';
+            res.on('data', (chunk) => {
+                body += chunk;
+            });
+            res.on('end', () => {
+                var _a;
+                const status = (_a = res.statusCode) !== null && _a !== void 0 ? _a : 0;
+                if (status >= 400) {
+                    reject(new Error(`Instagram API error ${status}: ${body}`));
+                    return;
+                }
+                try {
+                    resolve(JSON.parse(body));
+                }
+                catch (error) {
+                    reject(error);
+                }
+            });
+        });
+        req.on('error', reject);
+        req.end();
+    });
+}
+function buildInstagramAuthUrl() {
+    const appId = INSTAGRAM_APP_ID.value();
+    const redirectUri = INSTAGRAM_REDIRECT_URI.value();
+    const scope = [
+        'instagram_basic',
+        'pages_show_list',
+        'instagram_manage_insights',
+    ].join(',');
+    const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
+    url.searchParams.set('client_id', appId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', scope);
+    return url.toString();
+}
+async function exchangeInstagramCode(params) {
+    const appId = INSTAGRAM_APP_ID.value();
+    const appSecret = INSTAGRAM_APP_SECRET.value();
+    const redirectUri = INSTAGRAM_REDIRECT_URI.value();
+    const url = new URL(`${INSTAGRAM_API_BASE}/oauth/access_token`);
+    url.searchParams.set('client_id', appId);
+    url.searchParams.set('client_secret', appSecret);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('code', params.code);
+    const response = await httpsGetJson(url.toString());
+    const accessToken = toStringValue(response.access_token).trim();
+    if (!accessToken) {
+        throw new Error('アクセストークンの取得に失敗しました');
+    }
+    return { accessToken };
+}
+async function exchangeLongLivedToken(params) {
+    const appId = INSTAGRAM_APP_ID.value();
+    const appSecret = INSTAGRAM_APP_SECRET.value();
+    const url = new URL(`${INSTAGRAM_API_BASE}/oauth/access_token`);
+    url.searchParams.set('grant_type', 'fb_exchange_token');
+    url.searchParams.set('client_id', appId);
+    url.searchParams.set('client_secret', appSecret);
+    url.searchParams.set('fb_exchange_token', params.accessToken);
+    const response = await httpsGetJson(url.toString());
+    const longToken = toStringValue(response.access_token).trim();
+    if (!longToken) {
+        throw new Error('長期アクセストークンの取得に失敗しました');
+    }
+    return longToken;
+}
+async function resolveInstagramUserId(accessToken) {
+    var _a, _b, _c;
+    const pagesUrl = new URL(`${INSTAGRAM_API_BASE}/me/accounts`);
+    pagesUrl.searchParams.set('access_token', accessToken);
+    const pages = await httpsGetJson(pagesUrl.toString());
+    const pageId = (_b = (_a = pages.data) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.id;
+    if (!pageId) {
+        throw new Error('Facebookページが取得できません');
+    }
+    const igUrl = new URL(`${INSTAGRAM_API_BASE}/${pageId}`);
+    igUrl.searchParams.set('fields', 'instagram_business_account');
+    igUrl.searchParams.set('access_token', accessToken);
+    const igResult = await httpsGetJson(igUrl.toString());
+    const instagramUserId = toStringValue((_c = igResult.instagram_business_account) === null || _c === void 0 ? void 0 : _c.id).trim();
+    if (!instagramUserId) {
+        throw new Error('Instagramビジネスアカウントが取得できません');
+    }
+    const userUrl = new URL(`${INSTAGRAM_API_BASE}/${instagramUserId}`);
+    userUrl.searchParams.set('fields', 'username');
+    userUrl.searchParams.set('access_token', accessToken);
+    const userInfo = await httpsGetJson(userUrl.toString());
+    return { instagramUserId, username: userInfo.username };
+}
+async function fetchInstagramMedia(params) {
+    var _a;
+    const { instagramUserId, accessToken, limit = 50 } = params;
+    const url = new URL(`${INSTAGRAM_API_BASE}/${instagramUserId}/media`);
+    url.searchParams.set('fields', 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp');
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('access_token', accessToken);
+    const response = await httpsGetJson(url.toString());
+    return (_a = response.data) !== null && _a !== void 0 ? _a : [];
+}
+async function upsertInstagramPosts(params) {
+    var _a;
+    const { storeId, storeData, mediaItems } = params;
+    if (!mediaItems.length)
+        return 0;
+    const storeName = toStringValue(storeData['name']) || '店舗名なし';
+    const storeIconImageUrl = toStringValue((_a = storeData['storeIconImageUrl']) !== null && _a !== void 0 ? _a : storeData['iconImageUrl']);
+    const category = toStringValue(storeData['category']) || undefined;
+    const batch = db.batch();
+    let count = 0;
+    for (const item of mediaItems) {
+        if (!item.id)
+            continue;
+        const mediaType = normalizeMediaType(toStringValue(item.media_type));
+        const isVideo = mediaType === 'VIDEO';
+        const timestamp = parseInstagramTimestamp(item.timestamp);
+        const baseData = stripUndefined({
+            instagramPostId: item.id,
+            storeId,
+            storeName,
+            storeIconImageUrl,
+            category,
+            mediaType,
+            mediaUrl: toStringValue(item.media_url),
+            thumbnailUrl: toStringValue(item.thumbnail_url),
+            caption: toStringValue(item.caption),
+            permalink: toStringValue(item.permalink),
+            timestamp: firestore_2.Timestamp.fromDate(timestamp),
+            isVideo,
+            isActive: true,
+            source: 'instagram',
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        const storeDocRef = db.collection('stores').doc(storeId).collection('instagram_posts').doc(item.id);
+        batch.set(storeDocRef, Object.assign(Object.assign({}, baseData), { createdAt: firestore_2.FieldValue.serverTimestamp() }), { merge: true });
+        const publicDocRef = db.collection('public_instagram_posts').doc(item.id);
+        batch.set(publicDocRef, Object.assign(Object.assign({}, baseData), { key: `${storeId}::${item.id}`, createdAt: firestore_2.FieldValue.serverTimestamp() }), { merge: true });
+        count += 1;
+    }
+    await batch.commit();
+    return count;
+}
+async function syncInstagramPostsForStore(params) {
+    const { storeId, storeData } = params;
+    const authInfo = getInstagramAuth(storeData);
+    if (!authInfo) {
+        console.log(`Instagram auth missing: storeId=${storeId}`);
+        return 0;
+    }
+    const mediaItems = await fetchInstagramMedia({
+        instagramUserId: authInfo.instagramUserId,
+        accessToken: authInfo.accessToken,
+    });
+    const count = await upsertInstagramPosts({
+        storeId,
+        storeData,
+        mediaItems,
+    });
+    await db.collection('stores').doc(storeId).set({
+        instagramSync: {
+            lastSyncAt: firestore_2.FieldValue.serverTimestamp(),
+            lastSyncCount: count,
+        },
+    }, { merge: true });
+    return count;
 }
 function asInt(value, fallback = 0) {
     if (typeof value === 'number')
@@ -361,6 +586,9 @@ const SMTP_USER = (0, params_1.defineSecret)('SMTP_USER');
 const SMTP_PASS = (0, params_1.defineSecret)('SMTP_PASS');
 const SMTP_FROM = (0, params_1.defineSecret)('SMTP_FROM');
 const SMTP_SECURE = (0, params_1.defineSecret)('SMTP_SECURE');
+const INSTAGRAM_APP_ID = (0, params_1.defineSecret)('INSTAGRAM_APP_ID');
+const INSTAGRAM_APP_SECRET = (0, params_1.defineSecret)('INSTAGRAM_APP_SECRET');
+const INSTAGRAM_REDIRECT_URI = (0, params_1.defineSecret)('INSTAGRAM_REDIRECT_URI');
 function getDateKey(date) {
     return new Intl.DateTimeFormat('en-CA', {
         timeZone: 'Asia/Tokyo',
@@ -1482,8 +1710,8 @@ exports.testFunction = (0, https_1.onCall)({
     return { message: 'Hello from test function!' };
 });
 // HTTP関数としてのテスト関数
-const https_2 = require("firebase-functions/v2/https");
-exports.testHttpFunction = (0, https_2.onRequest)({
+const https_3 = require("firebase-functions/v2/https");
+exports.testHttpFunction = (0, https_3.onRequest)({
     region: 'asia-northeast1',
 }, async (req, res) => {
     console.log('HTTP test function called');
@@ -1885,6 +2113,148 @@ async function updateUserPoints(userId, points, storeId) {
         throw error;
     }
 }
+exports.startInstagramAuth = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+    secrets: [INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_REDIRECT_URI],
+}, async (request) => {
+    var _a, _b, _c, _d;
+    if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new https_1.HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    const storeId = toStringValue((_b = request.data) === null || _b === void 0 ? void 0 : _b.storeId).trim();
+    if (!storeId) {
+        throw new https_1.HttpsError('invalid-argument', 'storeId が必要です');
+    }
+    const storeDoc = await db.collection('stores').doc(storeId).get();
+    if (!storeDoc.exists) {
+        throw new https_1.HttpsError('not-found', '店舗が見つかりません');
+    }
+    const storeData = storeDoc.data();
+    const ownerId = toStringValue((_c = storeData['ownerId']) !== null && _c !== void 0 ? _c : storeData['createdBy']);
+    const isAdmin = ((_d = request.auth.token) === null || _d === void 0 ? void 0 : _d.admin) === true;
+    if (ownerId && request.auth.uid !== ownerId && !isAdmin) {
+        throw new https_1.HttpsError('permission-denied', '権限がありません');
+    }
+    const authUrl = buildInstagramAuthUrl();
+    return { success: true, authUrl };
+});
+exports.exchangeInstagramAuthCode = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+    secrets: [INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_REDIRECT_URI],
+}, async (request) => {
+    var _a, _b, _c, _d, _e;
+    if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new https_1.HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    const storeId = toStringValue((_b = request.data) === null || _b === void 0 ? void 0 : _b.storeId).trim();
+    const code = toStringValue((_c = request.data) === null || _c === void 0 ? void 0 : _c.code).trim();
+    if (!storeId || !code) {
+        throw new https_1.HttpsError('invalid-argument', 'storeId と code が必要です');
+    }
+    const storeDoc = await db.collection('stores').doc(storeId).get();
+    if (!storeDoc.exists) {
+        throw new https_1.HttpsError('not-found', '店舗が見つかりません');
+    }
+    const storeData = storeDoc.data();
+    const ownerId = toStringValue((_d = storeData['ownerId']) !== null && _d !== void 0 ? _d : storeData['createdBy']);
+    const isAdmin = ((_e = request.auth.token) === null || _e === void 0 ? void 0 : _e.admin) === true;
+    if (ownerId && request.auth.uid !== ownerId && !isAdmin) {
+        throw new https_1.HttpsError('permission-denied', '権限がありません');
+    }
+    try {
+        const { accessToken } = await exchangeInstagramCode({ code });
+        const longToken = await exchangeLongLivedToken({ accessToken });
+        const { instagramUserId, username } = await resolveInstagramUserId(longToken);
+        await storeDoc.ref.set({
+            instagramAuth: stripUndefined({
+                instagramUserId,
+                accessToken: longToken,
+                username,
+            }),
+        }, { merge: true });
+        const count = await syncInstagramPostsForStore({ storeId, storeData });
+        return { success: true, count };
+    }
+    catch (error) {
+        console.error('Instagram auth exchange failed:', error);
+        throw new https_1.HttpsError('internal', 'Instagram連携に失敗しました');
+    }
+});
+exports.syncInstagramPosts = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+}, async (request) => {
+    var _a, _b, _c, _d;
+    if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new https_1.HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    const storeId = toStringValue((_b = request.data) === null || _b === void 0 ? void 0 : _b.storeId).trim();
+    if (!storeId) {
+        throw new https_1.HttpsError('invalid-argument', 'storeId が必要です');
+    }
+    const storeDoc = await db.collection('stores').doc(storeId).get();
+    if (!storeDoc.exists) {
+        throw new https_1.HttpsError('not-found', '店舗が見つかりません');
+    }
+    const storeData = storeDoc.data();
+    const ownerId = toStringValue((_c = storeData['ownerId']) !== null && _c !== void 0 ? _c : storeData['createdBy']);
+    const isAdmin = ((_d = request.auth.token) === null || _d === void 0 ? void 0 : _d.admin) === true;
+    if (ownerId && request.auth.uid !== ownerId && !isAdmin) {
+        throw new https_1.HttpsError('permission-denied', '権限がありません');
+    }
+    const count = await syncInstagramPostsForStore({ storeId, storeData });
+    return { success: true, count };
+});
+exports.unlinkInstagramAuth = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+}, async (request) => {
+    var _a, _b, _c, _d;
+    if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new https_1.HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    const storeId = toStringValue((_b = request.data) === null || _b === void 0 ? void 0 : _b.storeId).trim();
+    if (!storeId) {
+        throw new https_1.HttpsError('invalid-argument', 'storeId が必要です');
+    }
+    const storeDoc = await db.collection('stores').doc(storeId).get();
+    if (!storeDoc.exists) {
+        throw new https_1.HttpsError('not-found', '店舗が見つかりません');
+    }
+    const storeData = storeDoc.data();
+    const ownerId = toStringValue((_c = storeData['ownerId']) !== null && _c !== void 0 ? _c : storeData['createdBy']);
+    const isAdmin = ((_d = request.auth.token) === null || _d === void 0 ? void 0 : _d.admin) === true;
+    if (ownerId && request.auth.uid !== ownerId && !isAdmin) {
+        throw new https_1.HttpsError('permission-denied', '権限がありません');
+    }
+    await storeDoc.ref.set({
+        instagramAuth: firestore_2.FieldValue.delete(),
+        instagramSync: firestore_2.FieldValue.delete(),
+    }, { merge: true });
+    return { success: true };
+});
+exports.syncInstagramPostsScheduled = (0, scheduler_1.onSchedule)({
+    region: 'asia-northeast1',
+    schedule: 'every 6 hours',
+    timeZone: 'Asia/Tokyo',
+}, async () => {
+    const stores = await db.collection('stores').get();
+    let processed = 0;
+    let total = 0;
+    for (const doc of stores.docs) {
+        const storeData = doc.data();
+        const authInfo = getInstagramAuth(storeData);
+        if (!authInfo)
+            continue;
+        processed += 1;
+        try {
+            const count = await syncInstagramPostsForStore({ storeId: doc.id, storeData });
+            total += count;
+        }
+        catch (error) {
+            console.error(`Instagram sync failed: storeId=${doc.id}`, error);
+        }
+    }
+    console.log(`Instagram sync finished: stores=${processed}, posts=${total}`);
+});
 // チェックイン統計の更新（オプション）- 一時的に無効化
 // export const updateCheckInStats = onDocumentCreated(
 //   {

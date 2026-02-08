@@ -15,6 +15,7 @@ class PostModel {
   final DateTime updatedAt;
   final bool isActive;
   final int viewCount;
+  final String source;
 
   PostModel({
     required this.id,
@@ -28,6 +29,7 @@ class PostModel {
     required this.updatedAt,
     required this.isActive,
     required this.viewCount,
+    this.source = 'app',
   });
 
   factory PostModel.fromMap(Map<String, dynamic> data, String id) {
@@ -43,6 +45,35 @@ class PostModel {
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isActive: data['isActive'] ?? true,
       viewCount: data['viewCount'] ?? 0,
+      source: data['source'] ?? 'app',
+    );
+  }
+
+  factory PostModel.fromInstagramMap(Map<String, dynamic> data, String id) {
+    final mediaType = (data['mediaType'] ?? '').toString();
+    final mediaUrl = (data['mediaUrl'] ?? '').toString();
+    final thumbnailUrl = (data['thumbnailUrl'] ?? '').toString();
+    final imageUrls = <String>[];
+    if (mediaType == 'VIDEO') {
+      if (thumbnailUrl.isNotEmpty) {
+        imageUrls.add(thumbnailUrl);
+      }
+    } else if (mediaUrl.isNotEmpty) {
+      imageUrls.add(mediaUrl);
+    }
+    return PostModel(
+      id: id,
+      title: (data['storeName'] ?? 'Instagramの投稿').toString(),
+      content: (data['caption'] ?? '').toString(),
+      storeId: data['storeId']?.toString(),
+      storeName: data['storeName']?.toString(),
+      category: data['category']?.toString() ?? 'Instagram',
+      imageUrls: imageUrls,
+      createdAt: (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      isActive: data['isActive'] ?? true,
+      viewCount: data['viewCount'] ?? 0,
+      source: 'instagram',
     );
   }
 
@@ -58,6 +89,7 @@ class PostModel {
       'updatedAt': Timestamp.fromDate(updatedAt),
       'isActive': isActive,
       'viewCount': viewCount,
+      'source': source,
     };
   }
 }
@@ -79,6 +111,48 @@ final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
     return filtered;
   }).handleError((error) {
     debugPrint('Error fetching posts (collectionGroup): $error');
+    return <PostModel>[];
+  });
+});
+
+// Instagram公開投稿（ホーム用）
+final publicInstagramPostsProvider = StreamProvider<List<PostModel>>((ref) {
+  return FirebaseFirestore.instance
+      .collection('public_instagram_posts')
+      .where('isVideo', isEqualTo: false)
+      .orderBy('timestamp', descending: true)
+      .limit(15)
+      .snapshots()
+      .map((snapshot) {
+    final posts = snapshot.docs
+        .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
+        .where((p) => p.isActive == true)
+        .toList();
+    return posts;
+  }).handleError((error) {
+    debugPrint('Error fetching public instagram posts: $error');
+    return <PostModel>[];
+  });
+});
+
+// 店舗のInstagram投稿（店舗詳細用）
+final storeInstagramPostsProvider = StreamProvider.family<List<PostModel>, String>((ref, storeId) {
+  return FirebaseFirestore.instance
+      .collection('stores')
+      .doc(storeId)
+      .collection('instagram_posts')
+      .where('isVideo', isEqualTo: false)
+      .orderBy('timestamp', descending: true)
+      .limit(15)
+      .snapshots()
+      .map((snapshot) {
+    final posts = snapshot.docs
+        .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
+        .where((p) => p.isActive == true)
+        .toList();
+    return posts;
+  }).handleError((error) {
+    debugPrint('Error fetching store instagram posts: $error');
     return <PostModel>[];
   });
 });
