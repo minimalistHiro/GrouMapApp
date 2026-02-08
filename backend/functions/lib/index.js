@@ -95,6 +95,31 @@ function parseInstagramTimestamp(value) {
         return new Date();
     return parsed;
 }
+function extractInstagramImageUrls(item) {
+    var _a, _b;
+    const childItems = (_b = (_a = item.children) === null || _a === void 0 ? void 0 : _a.data) !== null && _b !== void 0 ? _b : [];
+    if (childItems.length > 0) {
+        const childUrls = childItems
+            .map((child) => {
+            const childType = normalizeMediaType(toStringValue(child.media_type));
+            if (childType === 'VIDEO') {
+                return toStringValue(child.thumbnail_url).trim();
+            }
+            return toStringValue(child.media_url).trim();
+        })
+            .filter((url) => url.length > 0);
+        if (childUrls.length > 0) {
+            return childUrls;
+        }
+    }
+    const mediaType = normalizeMediaType(toStringValue(item.media_type));
+    if (mediaType === 'VIDEO') {
+        const thumbnail = toStringValue(item.thumbnail_url).trim();
+        return thumbnail ? [thumbnail] : [];
+    }
+    const mediaUrl = toStringValue(item.media_url).trim();
+    return mediaUrl ? [mediaUrl] : [];
+}
 function httpsGetJson(url) {
     return new Promise((resolve, reject) => {
         const req = https_2.default.get(url, (res) => {
@@ -196,7 +221,7 @@ async function fetchInstagramMedia(params) {
     var _a;
     const { instagramUserId, accessToken, limit = 50 } = params;
     const url = new URL(`${INSTAGRAM_API_BASE}/${instagramUserId}/media`);
-    url.searchParams.set('fields', 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp');
+    url.searchParams.set('fields', 'id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,children{media_type,media_url,thumbnail_url}');
     url.searchParams.set('limit', String(limit));
     url.searchParams.set('access_token', accessToken);
     const response = await httpsGetJson(url.toString());
@@ -218,6 +243,7 @@ async function upsertInstagramPosts(params) {
         const mediaType = normalizeMediaType(toStringValue(item.media_type));
         const isVideo = mediaType === 'VIDEO';
         const timestamp = parseInstagramTimestamp(item.timestamp);
+        const imageUrls = extractInstagramImageUrls(item);
         const baseData = stripUndefined({
             instagramPostId: item.id,
             storeId,
@@ -227,6 +253,7 @@ async function upsertInstagramPosts(params) {
             mediaType,
             mediaUrl: toStringValue(item.media_url),
             thumbnailUrl: toStringValue(item.thumbnail_url),
+            imageUrls,
             caption: toStringValue(item.caption),
             permalink: toStringValue(item.permalink),
             timestamp: firestore_2.Timestamp.fromDate(timestamp),

@@ -221,6 +221,7 @@
   - `mediaType`: 種別（IMAGE/VIDEO/CAROUSEL）
   - `mediaUrl`: 画像/動画URL
   - `thumbnailUrl`: 動画サムネURL
+  - `imageUrls`: 表示用画像URL配列（カルーセル対応）
   - `caption`: キャプション
   - `permalink`: Instagram投稿URL
   - `timestamp`: 投稿日時
@@ -282,6 +283,7 @@
   - `mediaType`: 種別（IMAGE/VIDEO/CAROUSEL）
   - `mediaUrl`: 画像/動画URL
   - `thumbnailUrl`: 動画サムネURL
+  - `imageUrls`: 表示用画像URL配列（カルーセル対応）
   - `caption`: キャプション
   - `permalink`: Instagram投稿URL
   - `timestamp`: 投稿日時

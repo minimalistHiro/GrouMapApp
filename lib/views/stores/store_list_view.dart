@@ -25,6 +25,63 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     _loadStores();
   }
 
+  Map<String, dynamic> _toStoreDetailStore(
+    String id,
+    Map<String, dynamic> data,
+  ) {
+    final phone = (data['phone'] ?? data['phoneNumber'] ?? '').toString();
+    final phoneNumber = (data['phoneNumber'] ?? data['phone'] ?? '').toString();
+
+    final rawBusinessHours = data['businessHours'];
+    final businessHours = rawBusinessHours is Map
+        ? Map<String, dynamic>.from(rawBusinessHours)
+        : null;
+
+    final rawTags = data['tags'];
+    final tags = rawTags is List
+        ? rawTags.map((tag) => tag.toString()).toList()
+        : <String>[];
+
+    final rawSocialMedia = data['socialMedia'];
+    final socialMedia = rawSocialMedia is Map
+        ? Map<String, dynamic>.from(rawSocialMedia)
+        : <String, dynamic>{};
+
+    final rawLocation = data['location'];
+    Map<String, dynamic>? location;
+    if (rawLocation is GeoPoint) {
+      location = {
+        'latitude': rawLocation.latitude,
+        'longitude': rawLocation.longitude,
+      };
+    } else if (rawLocation is Map) {
+      location = Map<String, dynamic>.from(rawLocation);
+    }
+
+    return {
+      'id': id,
+      'name': data['name'] ?? '店舗名なし',
+      'category': data['category'] ?? 'その他',
+      'subCategory': data['subCategory'] ?? '',
+      'description': data['description'] ?? '',
+      'address': data['address'] ?? '',
+      'iconImageUrl': data['iconImageUrl'],
+      'storeImageUrl': data['storeImageUrl'],
+      'backgroundImageUrl': data['backgroundImageUrl'],
+      'phone': phone,
+      'phoneNumber': phoneNumber,
+      'businessHours': businessHours,
+      'location': location,
+      'tags': tags,
+      'socialMedia': socialMedia,
+      'isActive': data['isActive'] ?? false,
+      'isApproved': data['isApproved'] ?? false,
+      'createdAt': data['createdAt'],
+      'updatedAt': data['updatedAt'],
+      'isVisited': false,
+    };
+  }
+
   // データベースから店舗を読み込む
   Future<void> _loadStores() async {
     try {
@@ -34,40 +91,26 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       });
 
       print('店舗一覧の読み込みを開始...');
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('stores').get();
+      final QuerySnapshot snapshot =
+          await FirebaseFirestore.instance.collection('stores').get();
       print('取得したドキュメント数: ${snapshot.docs.length}');
-      
+
       final List<Map<String, dynamic>> stores = [];
-      
+
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        print('店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
-        
+        print(
+            '店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
+
         // マップ画面と同様に、アクティブかつ承認済みのみ表示
         if (data['isActive'] == true && data['isApproved'] == true) {
-          stores.add({
-            'id': doc.id,
-            'name': data['name'] ?? '店舗名なし',
-            'category': data['category'] ?? 'その他',
-            'description': data['description'] ?? '',
-            'address': data['address'] ?? '',
-            'iconImageUrl': data['iconImageUrl'],
-            'storeImageUrl': data['storeImageUrl'], // 店舗詳細画面で使用
-            'backgroundImageUrl': data['backgroundImageUrl'], // 店舗一覧画面で使用
-            'phoneNumber': data['phoneNumber'] ?? '',
-            'businessHours': data['businessHours'] ?? '',
-            'isActive': data['isActive'] ?? false,
-            'isApproved': data['isApproved'] ?? false,
-            'createdAt': data['createdAt'],
-            'updatedAt': data['updatedAt'],
-            'isVisited': false,
-          });
+          stores.add(_toStoreDetailStore(doc.id, data));
           print('店舗を追加: ${data['name']}');
         }
       }
-      
+
       print('読み込んだ店舗数: ${stores.length}');
-      
+
       if (mounted) {
         setState(() {
           _stores = stores;
@@ -215,7 +258,8 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     final favorites = <Map<String, dynamic>>[];
     for (final store in stores) {
       final storeId = store['id']?.toString();
-      if (storeId != null && favoriteIds.contains(storeId)) favorites.add(store);
+      if (storeId != null && favoriteIds.contains(storeId))
+        favorites.add(store);
     }
     return favorites;
   }
@@ -295,18 +339,22 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: _getCategoryColor(_getStringValue(store['category'], 'その他')).withOpacity(0.1),
+                color:
+                    _getCategoryColor(_getStringValue(store['category'], 'その他'))
+                        .withOpacity(0.1),
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: _getCategoryColor(_getStringValue(store['category'], 'その他')).withOpacity(0.3),
+                  color: _getCategoryColor(
+                          _getStringValue(store['category'], 'その他'))
+                      .withOpacity(0.3),
                   width: 2,
                 ),
               ),
               child: _buildStoreIcon(store),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             // 店舗名
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -322,24 +370,29 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            
+
             const SizedBox(height: 4),
-            
+
             // カテゴリ
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
-                color: _getCategoryColor(_getStringValue(store['category'], 'その他')).withOpacity(0.1),
+                color:
+                    _getCategoryColor(_getStringValue(store['category'], 'その他'))
+                        .withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: _getCategoryColor(_getStringValue(store['category'], 'その他')).withOpacity(0.3),
+                  color: _getCategoryColor(
+                          _getStringValue(store['category'], 'その他'))
+                      .withOpacity(0.3),
                 ),
               ),
               child: Text(
                 _getStringValue(store['category'], 'その他'),
                 style: TextStyle(
                   fontSize: 8,
-                  color: _getCategoryColor(_getStringValue(store['category'], 'その他')),
+                  color: _getCategoryColor(
+                      _getStringValue(store['category'], 'その他')),
                   fontWeight: FontWeight.w500,
                 ),
                 textAlign: TextAlign.center,
@@ -473,7 +526,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
   Widget _buildStoreIcon(Map<String, dynamic> store) {
     final iconImageUrl = _getStringValue(store['iconImageUrl'], '');
     final category = _getStringValue(store['category'], 'その他');
-    
+
     if (iconImageUrl.isNotEmpty) {
       return ClipOval(
         child: Image.network(
@@ -486,7 +539,8 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
             return Center(
               child: CircularProgressIndicator(
                 value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                    ? loadingProgress.cumulativeBytesLoaded /
+                        loadingProgress.expectedTotalBytes!
                     : null,
                 color: _getCategoryColor(category),
                 strokeWidth: 2,
@@ -621,5 +675,4 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         return Icons.store;
     }
   }
-
 }

@@ -37,6 +37,63 @@ class _RecommendationAfterBadgeViewState
     _loadRecommendedStores();
   }
 
+  Map<String, dynamic> _toStoreDetailStore(
+    String id,
+    Map<String, dynamic> data,
+  ) {
+    final phone = (data['phone'] ?? data['phoneNumber'] ?? '').toString();
+    final phoneNumber = (data['phoneNumber'] ?? data['phone'] ?? '').toString();
+
+    final rawBusinessHours = data['businessHours'];
+    final businessHours = rawBusinessHours is Map
+        ? Map<String, dynamic>.from(rawBusinessHours)
+        : null;
+
+    final rawTags = data['tags'];
+    final tags = rawTags is List
+        ? rawTags.map((tag) => tag.toString()).toList()
+        : <String>[];
+
+    final rawSocialMedia = data['socialMedia'];
+    final socialMedia = rawSocialMedia is Map
+        ? Map<String, dynamic>.from(rawSocialMedia)
+        : <String, dynamic>{};
+
+    final rawLocation = data['location'];
+    Map<String, dynamic>? location;
+    if (rawLocation is GeoPoint) {
+      location = {
+        'latitude': rawLocation.latitude,
+        'longitude': rawLocation.longitude,
+      };
+    } else if (rawLocation is Map) {
+      location = Map<String, dynamic>.from(rawLocation);
+    }
+
+    return {
+      'id': id,
+      'name': data['name'] ?? '店舗名なし',
+      'category': data['category'] ?? 'その他',
+      'subCategory': data['subCategory'] ?? '',
+      'description': data['description'] ?? '',
+      'address': data['address'] ?? '',
+      'iconImageUrl': data['iconImageUrl'],
+      'storeImageUrl': data['storeImageUrl'],
+      'backgroundImageUrl': data['backgroundImageUrl'],
+      'phone': phone,
+      'phoneNumber': phoneNumber,
+      'businessHours': businessHours,
+      'isActive': data['isActive'] ?? true,
+      'isApproved': data['isApproved'] ?? true,
+      'location': location,
+      'tags': tags,
+      'socialMedia': socialMedia,
+      'createdAt': data['createdAt'],
+      'updatedAt': data['updatedAt'],
+      'isVisited': false,
+    };
+  }
+
   Future<void> _loadRecommendedStores() async {
     try {
       setState(() {
@@ -45,16 +102,16 @@ class _RecommendationAfterBadgeViewState
       });
 
       final user = FirebaseAuth.instance.currentUser;
-      final userProfile = user == null ? null : await _loadUserProfile(user.uid);
+      final userProfile =
+          user == null ? null : await _loadUserProfile(user.uid);
       final preferredCategories = await _loadPreferredCategories(userProfile);
       final regionKeywords = _buildRegionKeywords(userProfile);
-      final visitedStoreIds = user == null ? <String>{} : await _loadVisitedStoreIds(user.uid);
+      final visitedStoreIds =
+          user == null ? <String>{} : await _loadVisitedStoreIds(user.uid);
       _currentPosition = await _tryGetCurrentPosition();
 
-      final snapshot = await FirebaseFirestore.instance
-          .collection('stores')
-          .limit(50)
-          .get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('stores').limit(50).get();
 
       final List<Map<String, dynamic>> stores = [];
       for (final doc in snapshot.docs) {
@@ -67,21 +124,7 @@ class _RecommendationAfterBadgeViewState
         if (isActive == false || isApproved == false) {
           continue;
         }
-        stores.add({
-          'id': doc.id,
-          'name': data['name'] ?? '店舗名なし',
-          'category': data['category'] ?? 'その他',
-          'description': data['description'] ?? '',
-          'address': data['address'] ?? '',
-          'iconImageUrl': data['iconImageUrl'],
-          'storeImageUrl': data['storeImageUrl'],
-          'backgroundImageUrl': data['backgroundImageUrl'],
-          'phone': data['phoneNumber'] ?? '',
-          'businessHours': data['businessHours'] ?? '',
-          'isActive': data['isActive'] ?? true,
-          'isApproved': data['isApproved'] ?? true,
-          'location': data['location'],
-        });
+        stores.add(_toStoreDetailStore(doc.id, data));
       }
 
       final selected = _selectRecommendedStores(
@@ -173,7 +216,8 @@ class _RecommendationAfterBadgeViewState
     }
   }
 
-  Future<List<String>> _loadPreferredCategories(Map<String, dynamic>? userProfile) async {
+  Future<List<String>> _loadPreferredCategories(
+      Map<String, dynamic>? userProfile) async {
     if (userProfile == null) return [];
     final favoriteRaw = userProfile['favoriteStoreIds'];
     if (favoriteRaw is! List) return [];
@@ -224,10 +268,12 @@ class _RecommendationAfterBadgeViewState
       final category = (store['category'] ?? '').toString();
       final address = (store['address'] ?? '').toString();
       final storeId = (store['id'] ?? '').toString();
-      final distance = _calculateDistanceMeters(currentPosition, store['location']);
+      final distance =
+          _calculateDistanceMeters(currentPosition, store['location']);
       final isNearby = distance != null && distance <= 3000;
       final isVeryNearby = distance != null && distance <= 1000;
-      final isUnvisited = storeId.isNotEmpty && !visitedStoreIds.contains(storeId);
+      final isUnvisited =
+          storeId.isNotEmpty && !visitedStoreIds.contains(storeId);
       final isCategoryMatch = preferredCategories.contains(category);
       final isRegionMatch = regionKeywords.isNotEmpty &&
           regionKeywords.any((keyword) => address.contains(keyword));
@@ -288,7 +334,8 @@ class _RecommendationAfterBadgeViewState
     final selected = scored.take(3).toList();
     if (selected.length < 3) {
       final existingIds = selected.map((e) => e['id']).toSet();
-      final fallback = stores.where((store) => !existingIds.contains(store['id'])).toList();
+      final fallback =
+          stores.where((store) => !existingIds.contains(store['id'])).toList();
       fallback.shuffle(random);
       selected.addAll(fallback.take(3 - selected.length));
     }
@@ -354,7 +401,9 @@ class _RecommendationAfterBadgeViewState
       final storeId = store['id']?.toString();
       if (storeId != null && storeId.isNotEmpty) {
         final distance = store['distanceMeters'];
-        await FirebaseFirestore.instance.collection('recommendation_clicks').add({
+        await FirebaseFirestore.instance
+            .collection('recommendation_clicks')
+            .add({
           'userId': user.uid,
           'sourceStoreId': widget.sourceStoreId,
           'targetStoreId': storeId,
@@ -389,7 +438,8 @@ class _RecommendationAfterBadgeViewState
   @override
   Widget build(BuildContext context) {
     final content = _isLoading
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF6B35)))
+        ? const Center(
+            child: CircularProgressIndicator(color: Color(0xFFFF6B35)))
         : _error != null
             ? Center(
                 child: Text(
@@ -412,11 +462,17 @@ class _RecommendationAfterBadgeViewState
                     itemBuilder: (context, index) {
                       final store = _stores[index];
                       final name = (store['name'] ?? '').toString();
-                      final description = (store['description'] ?? '').toString();
-                      final hours = _formatBusinessHours(store['businessHours']);
+                      final description =
+                          (store['description'] ?? '').toString();
+                      final hours =
+                          _formatBusinessHours(store['businessHours']);
                       final iconUrl = (store['iconImageUrl'] ?? '').toString();
-                      final imageUrl = (store['storeImageUrl'] ?? store['backgroundImageUrl'] ?? '').toString();
-                      final reason = (store['recommendReason'] ?? '').toString();
+                      final imageUrl = (store['storeImageUrl'] ??
+                              store['backgroundImageUrl'] ??
+                              '')
+                          .toString();
+                      final reason =
+                          (store['recommendReason'] ?? '').toString();
                       final distance = store['distanceMeters'];
                       final tags = _buildReasonTags(reason, distance);
                       return Card(
@@ -434,7 +490,8 @@ class _RecommendationAfterBadgeViewState
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
                                     children: [
                                       _buildStoreIcon(iconUrl),
                                       const SizedBox(width: 12),
@@ -476,7 +533,8 @@ class _RecommendationAfterBadgeViewState
                                     Wrap(
                                       spacing: 6,
                                       runSpacing: 6,
-                                      children: tags.map(_buildTagChip).toList(),
+                                      children:
+                                          tags.map(_buildTagChip).toList(),
                                     ),
                                   ],
                                   const SizedBox(height: 12),
@@ -513,7 +571,8 @@ class _RecommendationAfterBadgeViewState
               const SizedBox(height: 8),
               Text(
                 'バッジ獲得後に気になるお店をチェックできます',
-                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 12),
+                style: TextStyle(
+                    color: Colors.white.withOpacity(0.8), fontSize: 12),
               ),
               const SizedBox(height: 16),
               Expanded(
@@ -618,7 +677,10 @@ class _RecommendationAfterBadgeViewState
         closedDays.add(entry.value);
         continue;
       }
-      if (openTime == null && closeTime == null && dayOpen.isNotEmpty && dayClose.isNotEmpty) {
+      if (openTime == null &&
+          closeTime == null &&
+          dayOpen.isNotEmpty &&
+          dayClose.isNotEmpty) {
         openTime = dayOpen;
         closeTime = dayClose;
       }
@@ -628,7 +690,8 @@ class _RecommendationAfterBadgeViewState
       return '';
     }
 
-    final closedText = closedDays.isEmpty ? '定休日なし' : '${closedDays.join('、')}定休日';
+    final closedText =
+        closedDays.isEmpty ? '定休日なし' : '${closedDays.join('、')}定休日';
     return '$openTime〜$closeTime（$closedText）';
   }
 

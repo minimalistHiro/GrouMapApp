@@ -28,7 +28,7 @@ class _MarkerVisual {
 
 class MapView extends ConsumerStatefulWidget {
   final String? selectedStoreId;
-  
+
   const MapView({
     super.key,
     this.selectedStoreId,
@@ -49,31 +49,31 @@ class _MapViewState extends ConsumerState<MapView> {
   int _markerBuildToken = 0;
   final Map<String, Future<BitmapDescriptor>> _markerIconFutureCache = {};
   final Map<String, ui.Image> _markerImageCache = {};
-  
+
   // データベースから取得した店舗データ
   List<Map<String, dynamic>> _stores = [];
-  
+
   // ユーザーのスタンプ状況
   Map<String, Map<String, dynamic>> _userStamps = {};
-  
+
   // 拡大されたマーカーのID
   String _expandedMarkerId = '';
-  
+
   // 店舗情報表示フラグ
   bool _isShowStoreInfo = false;
   String _selectedStoreUid = '';
-  
+
   // フィルタ/表示モード
   bool _showOpenNowOnly = false; // 「営業中のみ」表示
-  bool _categoryMode = false;    // 「ジャンル別」表示（カテゴリーごとにアイコン）
-  bool _pioneerMode = false;     // 「開拓」表示（未開拓/開拓/常連 のスタンプ状況）
+  bool _categoryMode = false; // 「ジャンル別」表示（カテゴリーごとにアイコン）
+  bool _pioneerMode = false; // 「開拓」表示（未開拓/開拓/常連 のスタンプ状況）
   String _selectedMode = 'none'; // 'none' | 'category' | 'pioneer'
-  
+
   // デフォルトの座標（東京駅周辺）
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
   static const String _lastLocationLatKey = 'map_last_location_lat';
   static const String _lastLocationLngKey = 'map_last_location_lng';
-  
+
   // 位置情報取得の試行回数
   int _locationRetryCount = 0;
   static const int _maxLocationRetries = 3;
@@ -114,50 +114,85 @@ class _MapViewState extends ConsumerState<MapView> {
     await prefs.setDouble(_lastLocationLatKey, location.latitude);
     await prefs.setDouble(_lastLocationLngKey, location.longitude);
   }
-  
+
   // 初期データ読み込み
   Future<void> _initializeMapData() async {
     // 店舗データを先に読み込む
     await _loadStoresFromDatabase();
-    
+
     // 位置情報の取得を試行（失敗してもアプリは動作する）
     try {
       await _getCurrentLocation();
     } catch (e) {
       print('初期位置情報取得に失敗しましたが、アプリは継続します: $e');
     }
-    
+
     // 特定の店舗が選択されている場合、その店舗を選択状態にする
     if (widget.selectedStoreId != null) {
       await _selectStoreOnMap(widget.selectedStoreId!);
     }
   }
-  
+
   // データベースから店舗を読み込む
   Future<void> _loadStoresFromDatabase() async {
     try {
       print('店舗データの読み込みを開始...');
-      final QuerySnapshot snapshot = await FirebaseFirestore.instance.collection('stores').get();
+      final QuerySnapshot snapshot =
+          await FirebaseFirestore.instance.collection('stores').get();
       print('取得したドキュメント数: ${snapshot.docs.length}');
-      
+
       final List<Map<String, dynamic>> stores = [];
-      
+
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-        print('店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
-        
+        print(
+            '店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
+
         // 条件を緩和してテスト用の店舗も表示
         if (data['isActive'] == true && data['isApproved'] == true) {
+          final rawLocation = data['location'];
+          double? latitude;
+          double? longitude;
+          Map<String, dynamic>? normalizedLocation;
+          if (rawLocation is GeoPoint) {
+            latitude = rawLocation.latitude;
+            longitude = rawLocation.longitude;
+            normalizedLocation = {
+              'latitude': latitude,
+              'longitude': longitude,
+            };
+          } else if (rawLocation is Map) {
+            final locationMap = Map<String, dynamic>.from(rawLocation);
+            final latValue = locationMap['latitude'];
+            final lngValue = locationMap['longitude'];
+            if (latValue is num && lngValue is num) {
+              latitude = latValue.toDouble();
+              longitude = lngValue.toDouble();
+              normalizedLocation = locationMap;
+            }
+          }
+
+          final phone = (data['phone'] ?? data['phoneNumber'] ?? '').toString();
+          final phoneNumber =
+              (data['phoneNumber'] ?? data['phone'] ?? '').toString();
+          final businessHours = data['businessHours'] is Map
+              ? Map<String, dynamic>.from(data['businessHours'] as Map)
+              : null;
+          final socialMedia = data['socialMedia'] is Map
+              ? Map<String, dynamic>.from(data['socialMedia'] as Map)
+              : <String, dynamic>{};
+          final tags = data['tags'] is List
+              ? (data['tags'] as List).map((tag) => tag.toString()).toList()
+              : <String>[];
+
           // 位置情報がある場合のみ追加
-          if (data['location'] != null && 
-              data['location']['latitude'] != null && 
-              data['location']['longitude'] != null) {
+          if (latitude != null && longitude != null) {
             final storeData = {
               'id': doc.id,
               'name': data['name'] ?? '店舗名なし',
               'position': LatLng(
-                data['location']['latitude'].toDouble(),
-                data['location']['longitude'].toDouble(),
+                latitude,
+                longitude,
               ),
               'category': data['category'] ?? 'その他',
               'subCategory': data['subCategory'] ?? '',
@@ -166,12 +201,12 @@ class _MapViewState extends ConsumerState<MapView> {
               'iconImageUrl': data['iconImageUrl'],
               'storeImageUrl': data['storeImageUrl'], // 店舗詳細画面で使用
               'backgroundImageUrl': data['backgroundImageUrl'], // 店舗一覧画面で使用
-              'phoneNumber': data['phoneNumber'] ?? '',
-              'phone': data['phoneNumber'] ?? '', // store_detail_view.dartで使用
-              'businessHours': data['businessHours'] ?? {},
-              'location': data['location'], // 位置情報
-              'socialMedia': data['socialMedia'] ?? {},
-              'tags': data['tags'] ?? [],
+              'phoneNumber': phoneNumber,
+              'phone': phone, // store_detail_view.dartで使用
+              'businessHours': businessHours,
+              'location': normalizedLocation, // 位置情報
+              'socialMedia': socialMedia,
+              'tags': tags,
               'isActive': data['isActive'] ?? false,
               'isApproved': data['isApproved'] ?? false,
               'createdAt': data['createdAt'],
@@ -188,9 +223,9 @@ class _MapViewState extends ConsumerState<MapView> {
           print('条件に合わない: ${doc.id}');
         }
       }
-      
+
       print('読み込んだ店舗数: ${stores.length}');
-      
+
       // テスト用のサンプル店舗を追加（データベースに店舗がない場合）
       if (stores.isEmpty) {
         print('データベースに店舗がないため、テスト用のサンプル店舗を追加します');
@@ -199,8 +234,8 @@ class _MapViewState extends ConsumerState<MapView> {
             'id': 'sample_store_1',
             'name': 'サンプル店舗1',
             'position': const LatLng(35.6812, 139.7671), // 東京駅
-              'category': 'レストラン',
-              'subCategory': '',
+            'category': 'レストラン',
+            'subCategory': '',
             'description': 'テスト用のサンプル店舗です',
             'address': '東京都千代田区丸の内1-1-1',
             'iconImageUrl': null,
@@ -303,13 +338,13 @@ class _MapViewState extends ConsumerState<MapView> {
         ]);
         print('サンプル店舗を追加しました。総数: ${stores.length}');
       }
-      
+
       if (mounted) {
         setState(() {
           _stores = stores;
         });
       }
-      
+
       // 店舗データ読み込み後にユーザーのスタンプ状況を読み込む
       await _loadUserStamps();
       await _createMarkers();
@@ -332,7 +367,7 @@ class _MapViewState extends ConsumerState<MapView> {
           .get();
 
       final Map<String, Map<String, dynamic>> userStamps = {};
-      
+
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
         final storeId = doc.id; // ドキュメントIDがstoreId
@@ -348,7 +383,7 @@ class _MapViewState extends ConsumerState<MapView> {
           _userStamps = userStamps;
         });
       }
-      
+
       // 店舗の花アイコンの種類を更新
       _updateStoreFlowerTypes();
     } catch (e) {
@@ -361,10 +396,10 @@ class _MapViewState extends ConsumerState<MapView> {
     for (int i = 0; i < _stores.length; i++) {
       final storeId = _stores[i]['id'];
       final userStamp = _userStamps[storeId];
-      
+
       if (userStamp != null) {
         final stamps = userStamp['stamps'] ?? 0; // 新しい構造に合わせて'stamps'フィールドを使用
-        
+
         if (stamps == 0) {
           _stores[i]['flowerType'] = 'unvisited'; // 未開拓
           _stores[i]['isVisited'] = false;
@@ -394,7 +429,8 @@ class _MapViewState extends ConsumerState<MapView> {
         print('位置情報サービスが無効です');
         if (_locationRetryCount < _maxLocationRetries) {
           _locationRetryCount++;
-          print('位置情報サービスが無効です。リトライします ($_locationRetryCount/$_maxLocationRetries)');
+          print(
+              '位置情報サービスが無効です。リトライします ($_locationRetryCount/$_maxLocationRetries)');
           await Future.delayed(const Duration(seconds: 2));
           return _getCurrentLocation();
         } else {
@@ -406,17 +442,18 @@ class _MapViewState extends ConsumerState<MapView> {
       // 位置情報の権限を確認
       LocationPermission permission = await Geolocator.checkPermission();
       print('現在の位置情報権限: $permission');
-      
+
       if (permission == LocationPermission.denied) {
         print('位置情報権限が拒否されています。権限を要求します。');
         permission = await Geolocator.requestPermission();
         print('権限要求後の状態: $permission');
-        
+
         if (permission == LocationPermission.denied) {
           print('位置情報権限が拒否されました');
           if (_locationRetryCount < _maxLocationRetries) {
             _locationRetryCount++;
-            print('位置情報権限が拒否されました。リトライします ($_locationRetryCount/$_maxLocationRetries)');
+            print(
+                '位置情報権限が拒否されました。リトライします ($_locationRetryCount/$_maxLocationRetries)');
             await Future.delayed(const Duration(seconds: 2));
             return _getCurrentLocation();
           } else {
@@ -425,25 +462,26 @@ class _MapViewState extends ConsumerState<MapView> {
           }
         }
       }
-      
+
       if (permission == LocationPermission.deniedForever) {
         print('位置情報権限が永続的に拒否されています');
         _showLocationErrorDialog('位置情報の権限が永続的に拒否されています。設定アプリから手動で権限を許可してください。');
         return;
       }
-      
+
       print('位置情報権限が許可されました。現在地を取得します。');
-      
+
       // 現在地を取得（タイムアウトを設定）
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 10),
       );
-      
+
       print('現在地を取得しました: ${position.latitude}, ${position.longitude}');
-      
+
       if (mounted) {
-        final LatLng latestLocation = LatLng(position.latitude, position.longitude);
+        final LatLng latestLocation =
+            LatLng(position.latitude, position.longitude);
         setState(() {
           _currentLocation = latestLocation;
           _locationRetryCount = 0; // 成功したらリトライカウントをリセット
@@ -468,7 +506,8 @@ class _MapViewState extends ConsumerState<MapView> {
       print('現在地の取得に失敗しました: $e');
       if (_locationRetryCount < _maxLocationRetries) {
         _locationRetryCount++;
-        print('現在地取得に失敗しました。リトライします ($_locationRetryCount/$_maxLocationRetries)');
+        print(
+            '現在地取得に失敗しました。リトライします ($_locationRetryCount/$_maxLocationRetries)');
         await Future.delayed(const Duration(seconds: 2));
         return _getCurrentLocation();
       } else {
@@ -480,7 +519,7 @@ class _MapViewState extends ConsumerState<MapView> {
   // 位置情報エラーダイアログを表示
   void _showLocationErrorDialog(String message) {
     if (!mounted) return;
-    
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -829,7 +868,9 @@ class _MapViewState extends ConsumerState<MapView> {
 
     () async {
       try {
-        final ui.Image? image = storeIconUrl.isNotEmpty ? await _loadMarkerImage(storeIconUrl) : null;
+        final ui.Image? image = storeIconUrl.isNotEmpty
+            ? await _loadMarkerImage(storeIconUrl)
+            : null;
         final BitmapDescriptor icon = await _buildMarkerBitmap(
           size: size,
           fillColor: fillColor,
@@ -902,14 +943,15 @@ class _MapViewState extends ConsumerState<MapView> {
     final double radius = (scaledSize / 2) - inset;
     final Offset circleCenter = Offset(scaledSize / 2, inset + radius);
 
-    final Path circlePath =
-        Path()..addOval(Rect.fromCircle(center: circleCenter, radius: radius));
+    final Path circlePath = Path()
+      ..addOval(Rect.fromCircle(center: circleCenter, radius: radius));
     final double baseY = circleCenter.dy + radius * 0.45;
     final double baseHalfWidth = radius * 0.95;
     final Offset tip = Offset(circleCenter.dx, scaledHeight);
     final Offset leftBase = Offset(circleCenter.dx - baseHalfWidth, baseY);
     final Offset rightBase = Offset(circleCenter.dx + baseHalfWidth, baseY);
-    final Offset triCenter = Offset(circleCenter.dx, (scaledHeight + baseY) / 2);
+    final Offset triCenter =
+        Offset(circleCenter.dx, (scaledHeight + baseY) / 2);
     final Path trianglePath = Path()
       ..moveTo(tip.dx, tip.dy)
       ..quadraticBezierTo(
@@ -931,9 +973,11 @@ class _MapViewState extends ConsumerState<MapView> {
         tip.dy,
       )
       ..close();
-    final Path pinPath =
-        Path()..addPath(circlePath, Offset.zero)..addPath(trianglePath, Offset.zero);
-    canvas.drawShadow(pinPath, Colors.black.withOpacity(0.25), 4 * devicePixelRatio, true);
+    final Path pinPath = Path()
+      ..addPath(circlePath, Offset.zero)
+      ..addPath(trianglePath, Offset.zero);
+    canvas.drawShadow(
+        pinPath, Colors.black.withOpacity(0.25), 4 * devicePixelRatio, true);
 
     final Paint triangleFillPaint = Paint()..color = grouMapOrange;
     canvas.drawPath(trianglePath, triangleFillPaint);
@@ -958,7 +1002,8 @@ class _MapViewState extends ConsumerState<MapView> {
         radius * 2,
         radius * 2,
       );
-      final Rect srcRect = Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
+      final Rect srcRect =
+          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
       canvas.drawImageRect(image, srcRect, dstRect, Paint());
       canvas.restore();
     }
@@ -991,8 +1036,9 @@ class _MapViewState extends ConsumerState<MapView> {
       );
     }
 
-    final ui.Image renderedImage =
-        await recorder.endRecording().toImage(scaledSize.toInt(), scaledHeight.toInt());
+    final ui.Image renderedImage = await recorder
+        .endRecording()
+        .toImage(scaledSize.toInt(), scaledHeight.toInt());
     final ByteData? byteData =
         await renderedImage.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
@@ -1002,7 +1048,7 @@ class _MapViewState extends ConsumerState<MapView> {
   Future<void> _createMarkers() async {
     final int buildToken = ++_markerBuildToken;
     final Set<Marker> markers = {};
-    
+
     // 現在地は Google Map の標準の青丸表示を使うため、独自マーカーは追加しない
 
     // 店舗マーカー
@@ -1024,8 +1070,8 @@ class _MapViewState extends ConsumerState<MapView> {
       final double size = isExpanded ? 80.0 : 40.0;
       final double borderWidth = isExpanded ? 2.4 : 1.2;
       final Color borderColor = visual.useImage ? Colors.black : Colors.white70;
-      final Color iconColor =
-          visual.iconColor ?? (visual.useImage ? Colors.grey[700]! : Colors.white);
+      final Color iconColor = visual.iconColor ??
+          (visual.useImage ? Colors.grey[700]! : Colors.white);
       final String cacheKey =
           '${_selectedMode}|$flowerType|$category|$isExpanded|$storeIconUrl';
       final BitmapDescriptor markerIcon = await _getMarkerIcon(
@@ -1038,7 +1084,7 @@ class _MapViewState extends ConsumerState<MapView> {
         iconColor: iconColor,
         storeIconUrl: visual.useImage ? storeIconUrl : '',
       );
-      
+
       markers.add(
         Marker(
           markerId: MarkerId(storeId),
@@ -1091,7 +1137,8 @@ class _MapViewState extends ConsumerState<MapView> {
       // Dartのweekdayは 1=Mon..7=Sun → 0=Mon..6=Sun に変換
       final int mondayFirstIndex = now.weekday == 7 ? 6 : now.weekday - 1;
       final String keyToday = days[mondayFirstIndex];
-      final Map<String, dynamic>? today = (businessHours[keyToday] as Map?)?.cast<String, dynamic>();
+      final Map<String, dynamic>? today =
+          (businessHours[keyToday] as Map?)?.cast<String, dynamic>();
       if (today == null) return false;
 
       final bool isOpenFlag = today['isOpen'] == true;
@@ -1132,14 +1179,14 @@ class _MapViewState extends ConsumerState<MapView> {
       (store) => store['id'] == storeId,
       orElse: () => {},
     );
-    
+
     if (store.isNotEmpty) {
       setState(() {
         _selectedStoreUid = storeId;
         _isShowStoreInfo = true;
         _expandedMarkerId = storeId;
       });
-      
+
       // 地図をその店舗の位置に移動
       _currentCenter = store['position'];
       _currentZoom = 16.0;
@@ -1152,7 +1199,7 @@ class _MapViewState extends ConsumerState<MapView> {
           ),
         ),
       );
-      
+
       // マーカーを再作成してサイズを更新
       await _createMarkers();
     }
@@ -1202,13 +1249,13 @@ class _MapViewState extends ConsumerState<MapView> {
               _currentBearing = position.bearing;
             },
           ),
-          
+
           // 検索バー
           _buildSearchBar(),
-          
+
           // 拡大されたマーカーオーバーレイ
           if (_isShowStoreInfo) _buildStoreInfoCard(),
-          
+
           // 地図コントロールボタン
           _buildMapControls(),
         ],
@@ -1222,21 +1269,23 @@ class _MapViewState extends ConsumerState<MapView> {
       (store) => store['id'] == _selectedStoreUid,
       orElse: () => {},
     );
-    
+
     if (selectedStore.isEmpty) return const SizedBox.shrink();
-    
+
     // ユーザーのスタンプ状況を取得
     final userStamp = _userStamps[_selectedStoreUid];
     final stamps = userStamp?['stamps'] ?? 0;
     final bool isOpenNow = _isStoreOpenNow(selectedStore);
     final String category = (selectedStore['category'] ?? 'その他').toString();
     final Color defaultColor = _getDefaultStoreColor(category);
-    
+
     final String categoryText = (selectedStore['category'] ?? 'その他').toString();
-    final String subCategoryText = (selectedStore['subCategory'] ?? '').toString();
-    final String categoryDisplay = (subCategoryText.isNotEmpty && subCategoryText != categoryText)
-        ? '$categoryText / $subCategoryText'
-        : categoryText;
+    final String subCategoryText =
+        (selectedStore['subCategory'] ?? '').toString();
+    final String categoryDisplay =
+        (subCategoryText.isNotEmpty && subCategoryText != categoryText)
+            ? '$categoryText / $subCategoryText'
+            : categoryText;
 
     return Positioned(
       bottom: 20,
@@ -1320,11 +1369,14 @@ class _MapViewState extends ConsumerState<MapView> {
                       ),
                       const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: _getStampStatusColor(stamps).withOpacity(0.1),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: _getStampStatusColor(stamps).withOpacity(0.3)),
+                          border: Border.all(
+                              color: _getStampStatusColor(stamps)
+                                  .withOpacity(0.3)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -1352,25 +1404,39 @@ class _MapViewState extends ConsumerState<MapView> {
                         children: [
                           // 営業状況表示
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: (isOpenNow ? Colors.green[600]! : Colors.grey[600]!).withOpacity(0.1),
+                              color: (isOpenNow
+                                      ? Colors.green[600]!
+                                      : Colors.grey[600]!)
+                                  .withOpacity(0.1),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: (isOpenNow ? Colors.green[600]! : Colors.grey[600]!).withOpacity(0.3)),
+                              border: Border.all(
+                                  color: (isOpenNow
+                                          ? Colors.green[600]!
+                                          : Colors.grey[600]!)
+                                      .withOpacity(0.3)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
-                                  isOpenNow ? Icons.schedule : Icons.schedule_outlined,
-                                  color: isOpenNow ? Colors.green[600] : Colors.grey[600],
+                                  isOpenNow
+                                      ? Icons.schedule
+                                      : Icons.schedule_outlined,
+                                  color: isOpenNow
+                                      ? Colors.green[600]
+                                      : Colors.grey[600],
                                   size: 14,
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
                                   isOpenNow ? '営業中' : '営業時間外',
                                   style: TextStyle(
-                                    color: isOpenNow ? Colors.green[600] : Colors.grey[600],
+                                    color: isOpenNow
+                                        ? Colors.green[600]
+                                        : Colors.grey[600],
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -1385,12 +1451,14 @@ class _MapViewState extends ConsumerState<MapView> {
                               // 店舗詳細画面へ遷移
                               Navigator.of(context).push(
                                 MaterialPageRoute(
-                                  builder: (context) => StoreDetailView(store: selectedStore),
+                                  builder: (context) =>
+                                      StoreDetailView(store: selectedStore),
                                 ),
                               );
                             },
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
                                 color: Colors.blue,
                                 borderRadius: BorderRadius.circular(20),
@@ -1443,7 +1511,7 @@ class _MapViewState extends ConsumerState<MapView> {
       ),
     );
   }
-  
+
   Widget _buildSearchBar() {
     final double topPadding = MediaQuery.of(context).padding.top;
     const double searchTopOffset = 4;
@@ -1483,14 +1551,15 @@ class _MapViewState extends ConsumerState<MapView> {
       ),
     );
   }
-  
+
   // 検索バー下にフィルタ用のチップを表示
   Widget _buildFilterChips() {
     final double topPadding = MediaQuery.of(context).padding.top;
     const double searchTopOffset = 4;
     const double searchHeight = 50;
     const double chipsTopGap = 6;
-    final double topY = topPadding + searchTopOffset + searchHeight + chipsTopGap;
+    final double topY =
+        topPadding + searchTopOffset + searchHeight + chipsTopGap;
     return Positioned(
       top: topY,
       left: 20,
@@ -1552,8 +1621,7 @@ class _MapViewState extends ConsumerState<MapView> {
       ),
     );
   }
-  
-  
+
   Widget _buildMapControls() {
     final double topPadding = MediaQuery.of(context).padding.top;
     const double searchTopOffset = 4;

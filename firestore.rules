@@ -364,7 +364,7 @@ service cloud.firestore {
       // 認証されたユーザーは自分のポイント取引履歴のみ読み取り可能
       allow read: if request.auth != null && request.auth.uid == resource.data.userId;
       // 書き込みはサーバーサイドのみ
-      allow write: if falser;
+      allow write: if false;
     }
 
     // ポイント取引（ネスト構造）
@@ -430,6 +430,12 @@ service cloud.firestore {
         allow read: if true;
         allow create, update, delete: if request.auth != null && (isOwner() || isStoreMember(storeId));
       }
+
+      // 店舗ごとのInstagram投稿（ユーザー表示用）
+      match /instagram_posts/{instagramPostId} {
+        allow read: if true;
+        allow create, update, delete: if request.auth != null && (isOwner() || isStoreMember(storeId));
+      }
     }
 
     // ユーザーのポイント残高
@@ -482,6 +488,13 @@ service cloud.firestore {
         || isCouponUserUseIncrement()
         || isCouponUserUseIncrementLegacy();
       allow delete: if isOwner() || isStoreOwner(resource.data.storeId);
+    }
+
+    // 公開Instagram投稿（ユーザー表示用）
+    match /public_instagram_posts/{instagramPostId} {
+      allow read: if true;
+      allow create: if isOwner() || isStoreOwner(request.resource.data.storeId);
+      allow update, delete: if isOwner() || isStoreOwner(resource.data.storeId);
     }
     
     // その他のコレクションは認証されたユーザーのみ読み取り可能
