@@ -127,6 +127,8 @@ function buildInstagramAuthUrl() {
     const scope = [
         'instagram_basic',
         'pages_show_list',
+        'pages_read_engagement',
+        'business_management',
         'instagram_manage_insights',
     ].join(',');
     const url = new URL('https://www.facebook.com/v19.0/dialog/oauth');
@@ -2115,6 +2117,7 @@ async function updateUserPoints(userId, points, storeId) {
 }
 exports.startInstagramAuth = (0, https_1.onCall)({
     region: 'asia-northeast1',
+    invoker: 'public',
     secrets: [INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_REDIRECT_URI],
 }, async (request) => {
     var _a, _b, _c, _d;
@@ -2140,6 +2143,7 @@ exports.startInstagramAuth = (0, https_1.onCall)({
 });
 exports.exchangeInstagramAuthCode = (0, https_1.onCall)({
     region: 'asia-northeast1',
+    invoker: 'public',
     secrets: [INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_REDIRECT_URI],
 }, async (request) => {
     var _a, _b, _c, _d, _e;
@@ -2165,14 +2169,18 @@ exports.exchangeInstagramAuthCode = (0, https_1.onCall)({
         const { accessToken } = await exchangeInstagramCode({ code });
         const longToken = await exchangeLongLivedToken({ accessToken });
         const { instagramUserId, username } = await resolveInstagramUserId(longToken);
+        const instagramAuth = stripUndefined({
+            instagramUserId,
+            accessToken: longToken,
+            username,
+        });
         await storeDoc.ref.set({
-            instagramAuth: stripUndefined({
-                instagramUserId,
-                accessToken: longToken,
-                username,
-            }),
+            instagramAuth,
         }, { merge: true });
-        const count = await syncInstagramPostsForStore({ storeId, storeData });
+        const count = await syncInstagramPostsForStore({
+            storeId,
+            storeData: Object.assign(Object.assign({}, storeData), { instagramAuth }),
+        });
         return { success: true, count };
     }
     catch (error) {
@@ -2182,6 +2190,7 @@ exports.exchangeInstagramAuthCode = (0, https_1.onCall)({
 });
 exports.syncInstagramPosts = (0, https_1.onCall)({
     region: 'asia-northeast1',
+    invoker: 'public',
 }, async (request) => {
     var _a, _b, _c, _d;
     if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
@@ -2206,6 +2215,7 @@ exports.syncInstagramPosts = (0, https_1.onCall)({
 });
 exports.unlinkInstagramAuth = (0, https_1.onCall)({
     region: 'asia-northeast1',
+    invoker: 'public',
 }, async (request) => {
     var _a, _b, _c, _d;
     if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
