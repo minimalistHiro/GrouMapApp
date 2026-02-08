@@ -26,6 +26,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   List<Map<String, dynamic>> _comments = [];
   bool _isLoadingComments = true;
   bool _hasRecordedView = false; // 閲覧記録の重複を防ぐフラグ
+  late final bool _isInstagramPost;
 
   DocumentReference<Map<String, dynamic>> _postDocRef() {
     final storeId = widget.post.storeId;
@@ -43,17 +44,22 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   void initState() {
     super.initState();
     _pageController = PageController();
-    _loadComments();
-    _checkIfLiked();
-    _loadLikeCount();
-    _recordView(); // 閲覧履歴を記録
+    _isInstagramPost = widget.post.source == 'instagram';
+    if (!_isInstagramPost) {
+      _loadComments();
+      _checkIfLiked();
+      _loadLikeCount();
+      _recordView(); // 閲覧履歴を記録
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // 画面が表示された時にも閲覧を記録（より確実にするため）
-    _recordView();
+    if (!_isInstagramPost) {
+      _recordView();
+    }
   }
 
   @override
@@ -460,10 +466,10 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       child: Column(
         children: [
           // いいね・コメント・シェアボタン
-          if (isLoggedIn) _buildActionButtons(),
+          if (isLoggedIn && !_isInstagramPost) _buildActionButtons(),
 
           // いいね数
-          if (_likeCount > 0)
+          if (_likeCount > 0 && !_isInstagramPost)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -510,7 +516,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                 const SizedBox(height: 16),
 
                 // コメントセクション
-                _buildCommentsSection(isLoggedIn),
+                if (!_isInstagramPost) _buildCommentsSection(isLoggedIn),
               ],
             ),
           ),
