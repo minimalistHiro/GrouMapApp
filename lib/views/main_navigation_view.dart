@@ -254,7 +254,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
   Future<void> _loadPostsData() async {
     try {
-      ref.invalidate(allPostsProvider);
+      ref.invalidate(instagramSearchPostsProvider);
     } catch (e) {
       debugPrint('投稿データ読み込みエラー: $e');
     }

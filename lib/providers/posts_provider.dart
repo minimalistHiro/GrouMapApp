@@ -129,6 +129,179 @@ class PostModel {
   }
 }
 
+class InstagramSearchPostsState {
+  final List<PostModel> items;
+  final bool isInitialLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final String? errorMessage;
+
+  const InstagramSearchPostsState({
+    required this.items,
+    required this.isInitialLoading,
+    required this.isLoadingMore,
+    required this.hasMore,
+    required this.errorMessage,
+  });
+
+  factory InstagramSearchPostsState.initial() {
+    return const InstagramSearchPostsState(
+      items: <PostModel>[],
+      isInitialLoading: false,
+      isLoadingMore: false,
+      hasMore: true,
+      errorMessage: null,
+    );
+  }
+
+  InstagramSearchPostsState copyWith({
+    List<PostModel>? items,
+    bool? isInitialLoading,
+    bool? isLoadingMore,
+    bool? hasMore,
+    String? errorMessage,
+    bool clearError = false,
+  }) {
+    return InstagramSearchPostsState(
+      items: items ?? this.items,
+      isInitialLoading: isInitialLoading ?? this.isInitialLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      hasMore: hasMore ?? this.hasMore,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+    );
+  }
+}
+
+class InstagramSearchPostsNotifier
+    extends StateNotifier<InstagramSearchPostsState> {
+  static const int _pageSize = 50;
+  static const int _maxItems = 300;
+
+  final FirebaseFirestore _firestore;
+  DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
+
+  InstagramSearchPostsNotifier({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        super(InstagramSearchPostsState.initial());
+
+  Future<void> loadInitial() async {
+    if (state.isInitialLoading) return;
+
+    _lastDoc = null;
+    state = state.copyWith(
+      items: <PostModel>[],
+      isInitialLoading: true,
+      isLoadingMore: false,
+      hasMore: true,
+      clearError: true,
+    );
+
+    try {
+      final page = await _fetchPage();
+      state = state.copyWith(
+        items: page.items,
+        isInitialLoading: false,
+        isLoadingMore: false,
+        hasMore: page.hasMore,
+        clearError: true,
+      );
+    } catch (e) {
+      debugPrint('Error loading initial instagram search posts: $e');
+      state = state.copyWith(
+        isInitialLoading: false,
+        isLoadingMore: false,
+        hasMore: false,
+        errorMessage: '投稿の取得に失敗しました',
+      );
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (state.isInitialLoading || state.isLoadingMore || !state.hasMore) return;
+    if (state.items.length >= _maxItems) {
+      state = state.copyWith(hasMore: false);
+      return;
+    }
+
+    state = state.copyWith(isLoadingMore: true, clearError: true);
+
+    try {
+      final remaining = _maxItems - state.items.length;
+      final page = await _fetchPage(remaining: remaining);
+      final merged = <PostModel>[
+        ...state.items,
+        ...page.items,
+      ];
+      final clipped = merged.take(_maxItems).toList();
+      state = state.copyWith(
+        items: clipped,
+        isLoadingMore: false,
+        hasMore: page.hasMore && clipped.length < _maxItems,
+      );
+    } catch (e) {
+      debugPrint('Error loading more instagram search posts: $e');
+      state = state.copyWith(
+        isLoadingMore: false,
+        errorMessage: '投稿の取得に失敗しました',
+      );
+    }
+  }
+
+  Future<void> refresh() async {
+    await loadInitial();
+  }
+
+  Future<_InstagramSearchPage> _fetchPage({int? remaining}) async {
+    final queryLimit = _resolveLimit(remaining);
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('public_instagram_posts')
+        .where('isVideo', isEqualTo: false)
+        .orderBy('timestamp', descending: true)
+        .limit(queryLimit);
+
+    if (_lastDoc != null) {
+      query = query.startAfterDocument(_lastDoc!);
+    }
+
+    final snapshot = await query.get();
+    if (snapshot.docs.isNotEmpty) {
+      _lastDoc = snapshot.docs.last;
+    }
+
+    final items = snapshot.docs
+        .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
+        .where((post) => post.isActive == true)
+        .toList();
+    final hasMore = snapshot.docs.length == queryLimit;
+
+    return _InstagramSearchPage(items: items, hasMore: hasMore);
+  }
+
+  int _resolveLimit(int? remaining) {
+    if (remaining == null || remaining >= _pageSize) {
+      return _pageSize;
+    }
+    return remaining <= 0 ? 1 : remaining;
+  }
+}
+
+class _InstagramSearchPage {
+  final List<PostModel> items;
+  final bool hasMore;
+
+  const _InstagramSearchPage({
+    required this.items,
+    required this.hasMore,
+  });
+}
+
+final instagramSearchPostsProvider = StateNotifierProvider<
+    InstagramSearchPostsNotifier, InstagramSearchPostsState>((ref) {
+  final notifier = InstagramSearchPostsNotifier();
+  notifier.loadInitial();
+  return notifier;
+});
+
 // 投稿プロバイダー
 final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
   return FirebaseFirestore.instance

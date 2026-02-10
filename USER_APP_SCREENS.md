@@ -54,7 +54,7 @@
 - 説明: 周辺店舗を地図で探す画面
 
 ### PostsView (`lib/views/posts/posts_view.dart`)
-- 構成: 上部タブ（フィード/検索）、検索窓、投稿グリッド、空/エラー/読み込み状態
+- 構成: 上部タブ（フィード/検索）、検索窓、投稿グリッド、空/エラー/読み込み状態（検索タブは `public_instagram_posts` から日付降順で取得し、50件ずつ追加読込・最大300件表示）
 - 説明: 投稿の検索・一覧をタブで切り替えて閲覧する画面
 
 ### PostDetailView (`lib/views/posts/post_detail_view.dart`)

@@ -6,11 +6,41 @@ import '../../widgets/common_header.dart';
 import '../../widgets/custom_top_tab_bar.dart';
 import '../posts/post_detail_view.dart';
 
-class PostsView extends ConsumerWidget {
+class PostsView extends ConsumerStatefulWidget {
   const PostsView({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PostsView> createState() => _PostsViewState();
+}
+
+class _PostsViewState extends ConsumerState<PostsView> {
+  static const double _loadMoreThreshold = 200;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final remain = _scrollController.position.maxScrollExtent -
+        _scrollController.position.pixels;
+    if (remain <= _loadMoreThreshold) {
+      ref.read(instagramSearchPostsProvider.notifier).loadMore();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
@@ -31,7 +61,7 @@ class PostsView extends ConsumerWidget {
               child: TabBarView(
                 children: [
                   _buildFeedTab(),
-                  _buildSearchTab(context, ref),
+                  _buildSearchTab(context),
                 ],
               ),
             ),
@@ -45,49 +75,28 @@ class PostsView extends ConsumerWidget {
     return const SizedBox.expand();
   }
 
-  Widget _buildSearchTab(BuildContext context, WidgetRef ref) {
-    final posts = ref.watch(allPostsProvider);
+  Widget _buildSearchTab(BuildContext context) {
+    final state = ref.watch(instagramSearchPostsProvider);
 
-    return posts.when(
-      data: (posts) {
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-              child: _buildSearchBar(),
-            ),
-            Expanded(
-              child: posts.isEmpty
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.article, size: 64, color: Colors.grey),
-                          SizedBox(height: 16),
-                          Text('投稿がありません'),
-                          SizedBox(height: 8),
-                          Text('新しい投稿をお待ちください！'),
-                        ],
-                      ),
-                    )
-                  : GridView.builder(
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 0,
-                        mainAxisSpacing: 0,
-                        childAspectRatio: 1,
-                      ),
-                      itemCount: posts.length > 60 ? 60 : posts.length,
-                      itemBuilder: (context, index) {
-                        final post = posts[index];
-                        return _buildPostCard(context, ref, post);
-                      },
-                    ),
-            ),
-          ],
-        );
-      },
-      loading: () => const Center(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+          child: _buildSearchBar(),
+        ),
+        Expanded(
+          child: _buildSearchBody(context, state),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSearchBody(
+    BuildContext context,
+    InstagramSearchPostsState state,
+  ) {
+    if (state.isInitialLoading) {
+      return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -104,8 +113,11 @@ class PostsView extends ConsumerWidget {
             ),
           ],
         ),
-      ),
-      error: (error, _) => Center(
+      );
+    }
+
+    if (state.errorMessage != null && state.items.isEmpty) {
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -132,13 +144,74 @@ class PostsView extends ConsumerWidget {
               child: CustomButton(
                 text: '再試行',
                 onPressed: () {
-                  ref.invalidate(allPostsProvider);
+                  ref.read(instagramSearchPostsProvider.notifier).refresh();
                 },
               ),
             ),
           ],
         ),
-      ),
+      );
+    }
+
+    if (state.items.isEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.article, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text('投稿がありません'),
+            SizedBox(height: 8),
+            Text('新しい投稿をお待ちください！'),
+          ],
+        ),
+      );
+    }
+
+    return CustomScrollView(
+      controller: _scrollController,
+      slivers: [
+        SliverGrid(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 0,
+            mainAxisSpacing: 0,
+            childAspectRatio: 1,
+          ),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) {
+              final post = state.items[index];
+              return _buildPostCard(context, post);
+            },
+            childCount: state.items.length,
+          ),
+        ),
+        if (state.isLoadingMore)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFFFF6B35),
+                ),
+              ),
+            ),
+          ),
+        if (!state.isLoadingMore && state.errorMessage != null)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+              child: Center(
+                child: CustomButton(
+                  text: '再読み込み',
+                  onPressed: () {
+                    ref.read(instagramSearchPostsProvider.notifier).refresh();
+                  },
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -175,7 +248,7 @@ class PostsView extends ConsumerWidget {
     );
   }
 
-  Widget _buildPostCard(BuildContext context, WidgetRef ref, PostModel post) {
+  Widget _buildPostCard(BuildContext context, PostModel post) {
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
@@ -212,7 +285,8 @@ class PostsView extends ConsumerWidget {
                       top: 8,
                       right: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.7),
                           borderRadius: BorderRadius.circular(10),
