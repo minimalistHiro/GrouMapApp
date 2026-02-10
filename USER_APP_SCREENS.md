@@ -74,7 +74,7 @@
 - 説明: 店舗の一覧とお気に入り表示
 
 ### StoreDetailView (`lib/views/stores/store_detail_view.dart`)
-- 構成: タブ表示（トップ/店内/メニュー/投稿）、お気に入り操作、スタンプ状況、投稿タブはInstagram投稿グリッド
+- 構成: タブ表示（トップ/店内/メニュー/投稿）、お気に入り操作、スタンプ状況、トップタブは店舗名/店舗アイコンと店舗説明を同一の白背景内に表示、投稿タブはInstagram投稿グリッド（動画除外・最新50件）
 - 説明: 店舗の詳細情報と関連コンテンツを表示
 
 ### QRGeneratorView (`lib/views/qr/qr_generator_view.dart`)

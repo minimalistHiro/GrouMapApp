@@ -356,7 +356,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         children: [
           _buildStoreHeaderBanner(),
           _buildStoreInfo(),
-          _buildTopDescription(),
           _buildStampCard(),
           _buildStoreDetailsContent(),
         ],
@@ -509,56 +508,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     return 0;
   }
 
-  Widget _buildTopDescription() {
-    final description = _getStringValue(widget.store['description'], '');
-    if (description.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Align(
-      alignment: Alignment.center,
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (description.isNotEmpty) ...[
-              const Text(
-                '店舗説明',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-                textAlign: TextAlign.left,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                description,
-                style: const TextStyle(fontSize: 14),
-                textAlign: TextAlign.left,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildStoreHeaderBanner() {
     return SizedBox(
       height: 200,
@@ -681,118 +630,140 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   Widget _buildStoreInfo() {
     final String category = _getStringValue(widget.store['category'], 'その他');
     final String subCategory = _getStringValue(widget.store['subCategory'], '');
+    final String description = _getStringValue(widget.store['description'], '');
     final bool hasSubCategory = subCategory.isNotEmpty && subCategory != category;
 
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.all(16),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 店舗アイコン
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: _getCategoryColor(category).withOpacity(0.1),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: _getCategoryColor(category).withOpacity(0.3),
-                width: 2,
-              ),
-            ),
-            child: _buildStoreIcon(),
-          ),
-          
-          const SizedBox(width: 16),
-          
-          // 店舗名とカテゴリ
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _getStringValue(widget.store['name'], '店舗名なし'),
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+          Row(
+            children: [
+              // 店舗アイコン
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: _getCategoryColor(category).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _getCategoryColor(category).withOpacity(0.3),
+                    width: 2,
                   ),
                 ),
-                const SizedBox(height: 8),
-                Row(
+                child: _buildStoreIcon(),
+              ),
+              const SizedBox(width: 16),
+              // 店舗名とカテゴリ
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    IconButton(
-                      onPressed: (_isFavoriteLoading || _isUpdatingFavorite)
-                          ? null
-                          : _toggleFavorite,
-                      icon: Icon(
-                        _isFavorite ? Icons.star : Icons.star_border,
-                        color: _isFavorite ? Colors.amber[700] : Colors.grey,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      tooltip: _isFavorite ? 'お気に入り解除' : 'お気に入り登録',
-                    ),
-                    const SizedBox(width: 8),
                     Text(
-                      _isFavorite ? 'お気に入り登録済み' : 'お気に入り',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _isFavorite ? Colors.amber[700] : Colors.grey[700],
-                        fontWeight: FontWeight.w600,
+                      _getStringValue(widget.store['name'], '店舗名なし'),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _buildBusinessStatusChip(),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _getCategoryColor(category).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _getCategoryColor(category).withOpacity(0.3),
-                        ),
-                      ),
-                      child: Text(
-                        category,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: _getCategoryColor(category),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    if (hasSubCategory) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: _getCategoryColor(category).withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: _getCategoryColor(category).withOpacity(0.2),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: (_isFavoriteLoading || _isUpdatingFavorite)
+                              ? null
+                              : _toggleFavorite,
+                          icon: Icon(
+                            _isFavorite ? Icons.star : Icons.star_border,
+                            color: _isFavorite ? Colors.amber[700] : Colors.grey,
                           ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: _isFavorite ? 'お気に入り解除' : 'お気に入り登録',
                         ),
-                        child: Text(
-                          subCategory,
+                        const SizedBox(width: 8),
+                        Text(
+                          _isFavorite ? 'お気に入り登録済み' : 'お気に入り',
                           style: TextStyle(
-                            fontSize: 14,
-                            color: _getCategoryColor(category),
-                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                            color: _isFavorite ? Colors.amber[700] : Colors.grey[700],
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        _buildBusinessStatusChip(),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _getCategoryColor(category).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _getCategoryColor(category).withOpacity(0.3),
+                            ),
+                          ),
+                          child: Text(
+                            category,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: _getCategoryColor(category),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (hasSubCategory) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: _getCategoryColor(category).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: _getCategoryColor(category).withOpacity(0.2),
+                              ),
+                            ),
+                            child: Text(
+                              subCategory,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _getCategoryColor(category),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              '店舗説明',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+              textAlign: TextAlign.left,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              style: const TextStyle(fontSize: 14),
+              textAlign: TextAlign.left,
+            ),
+          ],
         ],
       ),
     );
@@ -1248,20 +1219,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             const SizedBox(height: 16),
           ],
           
-          // 位置情報
-          if (widget.store['location'] != null) ...[
-            const Text(
-              '位置情報',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildLocationDisplay(),
-            const SizedBox(height: 16),
-          ],
         ],
       ),
     );
@@ -1900,45 +1857,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 位置情報表示を構築
-  Widget _buildLocationDisplay() {
-    final location = widget.store['location'] as Map<String, dynamic>?;
-    if (location == null) return const SizedBox.shrink();
-
-    final latitude = location['latitude'] as double? ?? 0.0;
-    final longitude = location['longitude'] as double? ?? 0.0;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blue.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.location_on, color: Colors.blue, size: 16),
-              SizedBox(width: 8),
-              Text('位置情報', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue)),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '緯度: ${latitude.toStringAsFixed(6)}',
-            style: const TextStyle(fontSize: 12, color: Colors.blue, fontFamily: 'monospace'),
-          ),
-          Text(
-            '経度: ${longitude.toStringAsFixed(6)}',
-            style: const TextStyle(fontSize: 12, color: Colors.blue, fontFamily: 'monospace'),
           ),
         ],
       ),

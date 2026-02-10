@@ -345,7 +345,7 @@ final storeInstagramPostsProvider =
       .collection('instagram_posts')
       .where('isVideo', isEqualTo: false)
       .orderBy('timestamp', descending: true)
-      .limit(15);
+      .limit(50);
   return _instagramPostsStream(
     query: query,
     logLabel: 'store',
