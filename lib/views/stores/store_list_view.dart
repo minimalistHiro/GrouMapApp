@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/owner_settings_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_top_tab_bar.dart';
+import '../../widgets/common_header.dart';
 import 'store_detail_view.dart';
 
 class StoreListView extends ConsumerStatefulWidget {
@@ -152,11 +153,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       ),
       error: (error, _) => Scaffold(
         backgroundColor: Colors.grey[50],
-        appBar: AppBar(
-          title: const Text('店舗一覧'),
-          backgroundColor: const Color(0xFFFF6B35),
-          foregroundColor: Colors.white,
-        ),
+        appBar: const CommonHeader(title: '店舗一覧'),
         body: Center(
           child: Text('エラー: $error'),
         ),
@@ -169,18 +166,20 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       length: 2,
       child: Scaffold(
         backgroundColor: Colors.grey[50],
-        appBar: AppBar(
-          title: const Text('店舗一覧'),
-          backgroundColor: const Color(0xFFFF6B35),
-          foregroundColor: Colors.white,
-          bottom: const CustomTopTabBar(
-            tabs: [
-              Tab(text: 'お気に入り'),
-              Tab(text: '店舗一覧'),
-            ],
-          ),
+        appBar: const CommonHeader(title: '店舗一覧'),
+        body: Column(
+          children: [
+            const CustomTopTabBar(
+              tabs: [
+                Tab(text: 'お気に入り'),
+                Tab(text: '店舗一覧'),
+              ],
+            ),
+            Expanded(
+              child: _buildBody(favoriteIds: favoriteIds ?? {}),
+            ),
+          ],
         ),
-        body: _buildBody(favoriteIds: favoriteIds ?? {}),
       ),
     );
   }
