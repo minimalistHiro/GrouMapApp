@@ -56,3 +56,19 @@ Firestoreのルールはユーザーアプリのリポジトリで管理しま�
 Firebase関連の設定変更は、このプロジェクト内のファイルを編集してください。
 - `/Users/kanekohiroki/Desktop/groumapapp/firebase.json`
 - `/Users/kanekohiroki/Desktop/groumapapp/firestore.indexes.json`
+
+## Claude Code Skills
+
+### スキルの配置
+
+このプロジェクトでは、プロジェクト固有のスキルを使用しています。スキルは以下の場所に配置されています：
+- **ユーザー用アプリ**: `/Users/kanekohiroki/Desktop/groumapapp/.claude/skills/`
+- **店舗用アプリ**: `/Users/kanekohiroki/Desktop/groumapapp_store/.claude/skills/`
+
+### スキル更新ルール
+
+**重要**: スキルに追記・修正を行う場合は、必ず両プロジェクト（ユーザー用・店舗用）の該当するスキルに同じ内容を反映してください。
+
+- スキルを更新する際は、ユーザー用アプリのスキルだけでなく、店舗用アプリの対応するスキルにも同じ内容を追記・修正する
+- 両プロジェクトのスキルは常に同期を保つ
+- 片方のみ更新すると、プロジェクト間で動作が不整合になるため注意
