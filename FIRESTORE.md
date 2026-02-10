@@ -326,6 +326,8 @@
 - `stores/{storeId}`: 店舗マスタ
   - `storeId`: 店舗ID
   - `name`: 店舗名
+  - `businessType`: 経営形態（`individual`/`corporate`）
+  - `businessName`: 法人名または代表者名
   - `category`: カテゴリ
   - `subCategory`: サブカテゴリ（任意）
   - `address`: 住所
