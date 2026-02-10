@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/posts_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/common_header.dart';
-import '../../widgets/custom_top_tab_bar.dart';
 import '../posts/post_detail_view.dart';
 
 class PostsView extends ConsumerStatefulWidget {
@@ -41,53 +40,15 @@ class _PostsViewState extends ConsumerState<PostsView> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFFBF6F2),
-        appBar: const CommonHeader(
-          title: '投稿',
-          showBack: false,
-        ),
-        body: Column(
-          children: [
-            const CustomTopTabBar(
-              tabs: [
-                Tab(text: 'フィード'),
-                Tab(text: '検索'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
-                children: [
-                  _buildFeedTab(),
-                  _buildSearchTab(context),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFeedTab() {
-    return const SizedBox.expand();
-  }
-
-  Widget _buildSearchTab(BuildContext context) {
     final state = ref.watch(instagramSearchPostsProvider);
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
-          child: _buildSearchBar(),
-        ),
-        Expanded(
-          child: _buildSearchBody(context, state),
-        ),
-      ],
+    return Scaffold(
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: const CommonHeader(
+        title: '投稿',
+        showBack: false,
+      ),
+      body: _buildSearchBody(context, state),
     );
   }
 
@@ -212,39 +173,6 @@ class _PostsViewState extends ConsumerState<PostsView> {
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      height: 50,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: '投稿を検索',
-          hintStyle: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 16,
-          ),
-          prefixIcon: const Icon(
-            Icons.search,
-            color: Colors.grey,
-            size: 24,
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14),
-        ),
-      ),
     );
   }
 
