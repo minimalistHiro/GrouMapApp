@@ -81,3 +81,14 @@ Firebase関連の設定変更は、このプロジェクト内のファイルを
 - スキルを更新する際は、ユーザー用アプリのスキルだけでなく、店舗用アプリの対応するスキルにも同じ内容を追記・修正する
 - 両プロジェクトのスキルは常に同期を保つ
 - 片方のみ更新すると、プロジェクト間で動作が不整合になるため注意
+
+## Screen Configuration Reference
+
+### 画面構成の参照
+
+実装やプラン作成時には、必ず以下のファイルを参照してフローや画面構成を確認してください：
+
+- **ユーザー用アプリ**: `/Users/kanekohiroki/Desktop/groumapapp/USER_APP_SCREENS.md`
+- **店舗用アプリ**: `/Users/kanekohiroki/Desktop/groumapapp_store/STORE_APP_SCREENS.md`
+
+画面の追加・変更・削除を行う際は、実装後に対応するドキュメントファイルも更新してください。
