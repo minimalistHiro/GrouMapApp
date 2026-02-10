@@ -1111,28 +1111,12 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Text(
-                '投稿',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: _openPostsTab,
-                child: const Text(
-                  '全て見る＞',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue,
-                  ),
-                ),
-              ),
-            ],
+          const Text(
+            '投稿',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 12),
           storePosts.when(
@@ -1163,21 +1147,39 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
               final previewPosts = latestPosts.take(15).toList();
 
-              return GridView.builder(
-                padding: EdgeInsets.zero,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 2,
-                  mainAxisSpacing: 2,
-                  childAspectRatio: 1,
-                ),
-                itemCount: previewPosts.length,
-                itemBuilder: (context, index) {
-                  final post = previewPosts[index];
-                  return _buildInstagramPostCard(context, post);
-                },
+              return Column(
+                children: [
+                  GridView.builder(
+                    padding: EdgeInsets.zero,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 2,
+                      mainAxisSpacing: 2,
+                      childAspectRatio: 1,
+                    ),
+                    itemCount: previewPosts.length,
+                    itemBuilder: (context, index) {
+                      final post = previewPosts[index];
+                      return _buildInstagramPostCard(context, post);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Center(
+                    child: GestureDetector(
+                      onTap: _openPostsTab,
+                      child: const Text(
+                        '全て見る＞',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               );
             },
             loading: () => const Center(
