@@ -1,6 +1,7 @@
 # ユーザー用アプリ 画面一覧（構成と説明）
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
+※ 2026-02-10更新: `StoreDetailView` のトップタブにクーポン一覧と投稿プレビュー（新着15件）を追加し、投稿の「全て見る＞」で上部タブ「投稿」へ遷移する導線を追加。`CouponsView` のクーポンリストカードUIを共通化し、`StoreListView` のヘッダーを `CommonHeader` + `CustomTopTabBar` 構成へ統一。
 ※ 2026-02-08更新: ユーザー用画面の遷移元差分を解消（`StoreListView` / `MapView` / `RecommendationAfterBadgeView` から `StoreDetailView` へ渡す店舗データを正規化）。
 
 ## 起動・ナビゲーション
@@ -62,7 +63,7 @@
 - 説明: 投稿の詳細表示・反応/コメント画面
 
 ### CouponsView (`lib/views/coupons/coupons_view.dart`)
-- 構成: タブ（利用可能/使用済み）、クーポンリスト
+- 構成: タブ（利用可能/使用済み）、クーポンリスト（共通 `CouponListCard` を使用）
 - 説明: クーポン一覧（状態別）画面
 
 ### CouponDetailView (`lib/views/coupons/coupon_detail_view.dart`)
@@ -70,11 +71,11 @@
 - 説明: クーポンの詳細表示画面
 
 ### StoreListView (`lib/views/stores/store_list_view.dart`)
-- 構成: タブ（お気に入り/店舗一覧）、店舗カードリスト
+- 構成: `CommonHeader` + 上部タブ（お気に入り/店舗一覧）、店舗カードリスト
 - 説明: 店舗の一覧とお気に入り表示
 
 ### StoreDetailView (`lib/views/stores/store_detail_view.dart`)
-- 構成: タブ表示（トップ/店内/メニュー/投稿）、お気に入り操作、スタンプ状況、トップタブは店舗名/店舗アイコンと店舗説明を同一の白背景内に表示、投稿タブはInstagram投稿グリッド（動画除外・最新50件）
+- 構成: タブ表示（トップ/店内/メニュー/投稿）、お気に入り操作、スタンプ状況、トップタブは店舗名/店舗アイコンと店舗説明を同一の白背景内に表示、クーポン一覧（利用可能のみ）と投稿プレビュー（新着15件）を表示、投稿の「全て見る＞」で上部タブ「投稿」へ遷移、投稿タブはInstagram投稿グリッド（動画除外・最新50件）
 - 説明: 店舗の詳細情報と関連コンテンツを表示
 
 ### QRGeneratorView (`lib/views/qr/qr_generator_view.dart`)
