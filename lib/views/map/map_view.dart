@@ -11,6 +11,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../stores/store_detail_view.dart';
+import '../../widgets/custom_button.dart';
 
 class _MarkerVisual {
   final Color color;
@@ -548,31 +549,6 @@ class _MapViewState extends ConsumerState<MapView> {
   }
 
   // スタンプ状況に応じた色を取得
-  Color _getStampStatusColor(int stamps) {
-    if (stamps == 0) {
-      return Colors.grey[400]!; // 未開拓
-    } else if (stamps >= 1 && stamps <= 9) {
-      return Colors.orange[600]!; // 開拓中
-    } else if (stamps >= 10) {
-      return Colors.amber[600]!; // 常連
-    } else {
-      return Colors.grey[400]!;
-    }
-  }
-
-  // スタンプ状況に応じたアイコンを取得
-  IconData _getStampStatusIcon(int stamps) {
-    if (stamps == 0) {
-      return Icons.radio_button_unchecked; // 未開拓
-    } else if (stamps >= 1 && stamps <= 9) {
-      return Icons.radio_button_checked; // 開拓中
-    } else if (stamps >= 10) {
-      return Icons.star; // 常連
-    } else {
-      return Icons.help_outline;
-    }
-  }
-
   Color _getDefaultStoreColor(String category) {
     switch (category) {
       case 'カフェ・喫茶店':
@@ -1277,7 +1253,6 @@ class _MapViewState extends ConsumerState<MapView> {
     final stamps = userStamp?['stamps'] ?? 0;
     final bool isOpenNow = _isStoreOpenNow(selectedStore);
     final String category = (selectedStore['category'] ?? 'その他').toString();
-    final Color defaultColor = _getDefaultStoreColor(category);
 
     final String categoryText = (selectedStore['category'] ?? 'その他').toString();
     final String subCategoryText =
@@ -1294,7 +1269,6 @@ class _MapViewState extends ConsumerState<MapView> {
       child: Stack(
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
@@ -1306,103 +1280,93 @@ class _MapViewState extends ConsumerState<MapView> {
                 ),
               ],
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // プロフィール画像
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: defaultColor.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: defaultColor.withOpacity(0.3),
-                      width: 1,
-                    ),
+                // 店舗イメージ画像セクション
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(12),
                   ),
-                  child: ClipOval(
-                    child: selectedStore['iconImageUrl']?.isNotEmpty == true
-                        ? Image.network(
-                            selectedStore['iconImageUrl'],
-                            width: 50,
-                            height: 50,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Icon(
-                                  _getDefaultStoreIcon(category),
-                                  color: defaultColor,
-                                  size: 24,
+                  child: AspectRatio(
+                    aspectRatio: 2.0,
+                    child: Stack(
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          color: Colors.grey[300],
+                          child: selectedStore['storeImageUrl'] != null &&
+                                  (selectedStore['storeImageUrl'] as String).isNotEmpty
+                              ? Image.network(
+                                  selectedStore['storeImageUrl'] as String,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Center(
+                                      child: Icon(
+                                        _getDefaultStoreIcon(category),
+                                        size: 40,
+                                        color: Colors.grey,
+                                      ),
+                                    );
+                                  },
+                                )
+                              : Center(
+                                  child: Icon(
+                                    _getDefaultStoreIcon(category),
+                                    size: 40,
+                                    color: Colors.grey,
+                                  ),
                                 ),
-                              );
-                            },
-                          )
-                        : Center(
-                            child: Icon(
-                              _getDefaultStoreIcon(category),
-                              color: defaultColor,
-                              size: 24,
+                        ),
+                        // ジャンルバッジ
+                        Positioned(
+                          top: 10,
+                          right: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              categoryDisplay,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFFFF6B35),
+                              ),
                             ),
                           ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 15),
-                // 店舗情報
-                Expanded(
+                // テキスト情報セクション
+                Padding(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 店舗名
                       Text(
                         selectedStore['name'] ?? '店舗名なし',
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        categoryDisplay,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _getStampStatusColor(stamps).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: _getStampStatusColor(stamps)
-                                  .withOpacity(0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _getStampStatusIcon(stamps),
-                              color: _getStampStatusColor(stamps),
-                              size: 14,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'スタンプ: $stamps/10',
-                              style: TextStyle(
-                                color: _getStampStatusColor(stamps),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // スタンプ状況表示と店舗詳細ボタンを同じ行に配置
+                      const SizedBox(height: 6),
+                      // 営業時間バッジ + カテゴリ/サブカテゴリ
                       Row(
                         children: [
-                          // 営業状況表示
+                          // 営業状況バッジ
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
@@ -1444,48 +1408,69 @@ class _MapViewState extends ConsumerState<MapView> {
                               ],
                             ),
                           ),
-                          const Spacer(),
-                          // 店舗詳細ボタン
-                          GestureDetector(
-                            onTap: () {
-                              // 店舗詳細画面へ遷移
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      StoreDetailView(store: selectedStore),
-                                ),
-                              );
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: Colors.blue,
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.blue.withOpacity(0.3),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
+                          const SizedBox(width: 8),
+                          // カテゴリ/サブカテゴリ
+                          Expanded(
+                            child: Text(
+                              categoryDisplay,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text(
-                                    '店舗詳細',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 8),
+                      // スタンプ進捗インジケータ
+                      SizedBox(
+                        height: 18,
+                        child: Row(
+                          children: List.generate(10, (index) {
+                            final isActive = index < stamps;
+                            return Container(
+                              width: 16,
+                              height: 16,
+                              margin: EdgeInsets.only(
+                                  right: index == 9 ? 0 : 6),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isActive
+                                    ? const Color(0xFFFF6B35)
+                                        .withOpacity(0.2)
+                                    : Colors.grey[200],
+                                border: Border.all(
+                                  color: isActive
+                                      ? const Color(0xFFFF6B35)
+                                      : Colors.grey[300]!,
+                                ),
+                              ),
+                              child: isActive
+                                  ? const Icon(
+                                      Icons.check,
+                                      size: 11,
+                                      color: Color(0xFFFF6B35),
+                                    )
+                                  : null,
+                            );
+                          }),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // 詳細を見るボタン
+                      CustomButton(
+                        text: '詳細を見る',
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  StoreDetailView(store: selectedStore),
+                            ),
+                          );
+                        },
+                        height: 44,
                       ),
                     ],
                   ),
@@ -1493,6 +1478,7 @@ class _MapViewState extends ConsumerState<MapView> {
               ],
             ),
           ),
+          // 閉じるボタン（視認性向上のため白背景追加）
           Positioned(
             top: 8,
             right: 8,
@@ -1504,7 +1490,24 @@ class _MapViewState extends ConsumerState<MapView> {
                 });
                 await _createMarkers();
               },
-              child: const Icon(Icons.close),
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.close,
+                  size: 20,
+                ),
+              ),
             ),
           ),
         ],

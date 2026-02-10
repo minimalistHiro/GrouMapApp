@@ -1305,14 +1305,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     ),
                     const SizedBox(height: 10),
                     SizedBox(
-                      height: 14,
+                      height: 18,
                       child: Row(
                         children: List.generate(stampTotal, (index) {
                           final isActive = index < stampCurrent;
                           return Container(
-                            width: 10,
-                            height: 10,
-                            margin: EdgeInsets.only(right: index == stampTotal - 1 ? 0 : 4),
+                            width: 16,
+                            height: 16,
+                            margin: EdgeInsets.only(right: index == stampTotal - 1 ? 0 : 6),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isActive
@@ -1327,7 +1327,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                             child: isActive
                                 ? const Icon(
                                     Icons.check,
-                                    size: 7,
+                                    size: 11,
                                     color: Color(0xFFFF6B35),
                                   )
                                 : null,
