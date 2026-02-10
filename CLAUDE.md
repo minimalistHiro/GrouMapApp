@@ -57,6 +57,15 @@ Firebase関連の設定変更は、このプロジェクト内のファイルを
 - `/Users/kanekohiroki/Desktop/groumapapp/firebase.json`
 - `/Users/kanekohiroki/Desktop/groumapapp/firestore.indexes.json`
 
+## Plan Mode
+
+### プランの保存先
+
+プランモードで作成したプランは、以下の場所に保存してください：
+- **プランファイル**: `/Users/kanekohiroki/Desktop/groumapapp/.claude/PLAN.md`
+
+プランモードに入った際は、必ずこのファイルにプランを書き込んでください。
+
 ## Claude Code Skills
 
 ### スキルの配置
