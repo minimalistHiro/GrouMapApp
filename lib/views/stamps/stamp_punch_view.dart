@@ -28,6 +28,10 @@ class _StampPunchViewState extends State<StampPunchView>
   int _stamps = 0;
   static const int _maxStamps = 10;
 
+  // Coupon data
+  List<Map<String, dynamic>> _availableCoupons = [];
+  bool _couponsLoading = true;
+
   // Animation
   // Shine effect for “スタンプコンプリート”
   late final AnimationController _shineController;
@@ -117,6 +121,7 @@ class _StampPunchViewState extends State<StampPunchView>
           _loading = false;
         });
       }
+      _loadCoupons();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -127,6 +132,92 @@ class _StampPunchViewState extends State<StampPunchView>
     }
   }
 
+  Future<void> _loadCoupons() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final now = DateTime.now();
+
+      final couponsSnapshot = await FirebaseFirestore.instance
+          .collection('public_coupons')
+          .where('storeId', isEqualTo: widget.storeId)
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      final usedSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('used_coupons')
+          .get();
+
+      final usedIds = <String>{};
+      for (final doc in usedSnapshot.docs) {
+        final data = doc.data();
+        final usedStoreId = data['storeId'] as String?;
+        if (usedStoreId != widget.storeId) continue;
+        final couponId = (data['couponId'] as String?) ?? doc.id;
+        if (couponId.isNotEmpty) {
+          usedIds.add(couponId);
+        }
+      }
+
+      final available = couponsSnapshot.docs.where((doc) {
+        final data = doc.data();
+        final couponId = doc.id;
+        if (couponId.isEmpty) return false;
+        if (usedIds.contains(couponId)) return false;
+
+        final validUntil = _parseValidUntil(data['validUntil']);
+        final noExpiry = data['noExpiry'] == true;
+        final isNoExpiry = noExpiry || (validUntil != null && validUntil.year >= 2100);
+        if (!isNoExpiry && (validUntil == null || !validUntil.isAfter(now))) {
+          return false;
+        }
+
+        final usedCount = _parseInt(data['usedCount']);
+        final usageLimit = _parseInt(data['usageLimit']);
+        if (usageLimit > 0 && usedCount >= usageLimit) return false;
+
+        return true;
+      }).map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        data['id'] = doc.id;
+        return data;
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _availableCoupons = available;
+          _couponsLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _couponsLoading = false;
+        });
+      }
+    }
+  }
+
+  int _parseInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+
+  DateTime? _parseValidUntil(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return null;
+  }
+
+  bool _isNoExpiryCoupon(Map<String, dynamic> coupon, DateTime? validUntil) {
+    if (coupon['noExpiry'] == true) return true;
+    return validUntil != null && validUntil.year >= 2100;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,8 +268,19 @@ class _StampPunchViewState extends State<StampPunchView>
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      child: Stack(
+      child: Column(
         children: [
+          const Text(
+            'スタンプ獲得',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFFF6B35),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Stack(
+            children: [
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -366,8 +468,194 @@ class _StampPunchViewState extends State<StampPunchView>
                 },
               ),
             ),
+          ],
+          ),
+          const SizedBox(height: 24),
+          _buildCouponSection(),
         ],
       ),
+    );
+  }
+
+  Widget _buildCouponSection() {
+    if (_couponsLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFFFF6B35),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_availableCoupons.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '使えるクーポン',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _availableCoupons.length,
+          itemBuilder: (context, index) {
+            return _buildCouponCard(_availableCoupons[index]);
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCouponCard(Map<String, dynamic> coupon) {
+    final title = (coupon['title'] as String?) ?? 'タイトルなし';
+    final description = (coupon['description'] as String?) ?? '';
+    final validUntil = _parseValidUntil(coupon['validUntil']);
+    final usageLimit = _parseInt(coupon['usageLimit']);
+    final usedCount = _parseInt(coupon['usedCount']);
+    final remaining = usageLimit - usedCount;
+    final requiredStampCount = _parseInt(coupon['requiredStampCount']);
+    final needsStamps = requiredStampCount > 0 && _stamps < requiredStampCount;
+    final remainingStamps = requiredStampCount - _stamps;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: needsStamps ? Colors.grey[100] : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                _buildCouponImage(coupon['imageUrl'] as String?),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: needsStamps ? Colors.grey[600] : Colors.black,
+                        ),
+                      ),
+                      if (description.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: needsStamps ? Colors.grey[500] : Colors.grey,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            '残り$remaining枚',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: needsStamps ? Colors.grey[500] : Colors.green,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          if (validUntil != null)
+                            Text(
+                              _isNoExpiryCoupon(coupon, validUntil)
+                                  ? '期限: 無期限'
+                                  : '期限: ${validUntil.month}/${validUntil.day} ${validUntil.hour.toString().padLeft(2, '0')}:${validUntil.minute.toString().padLeft(2, '0')}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: needsStamps ? Colors.grey[500] : Colors.grey,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (needsStamps)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Center(
+                  child: Text(
+                    'あと$remainingStampsスタンプ',
+                    style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCouponImage(String? imageUrl) {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF6B35).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: imageUrl != null && imageUrl.isNotEmpty
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(
+                imageUrl,
+                width: 64,
+                height: 64,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Center(
+                    child: Icon(
+                      Icons.local_offer,
+                      color: Color(0xFFFF6B35),
+                      size: 28,
+                    ),
+                  );
+                },
+              ),
+            )
+          : const Center(
+              child: Icon(
+                Icons.local_offer,
+                color: Color(0xFFFF6B35),
+                size: 28,
+              ),
+            ),
     );
   }
 

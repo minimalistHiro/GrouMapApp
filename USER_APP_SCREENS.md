@@ -131,8 +131,8 @@
 - 説明: ポイント付与リクエストの確認画面
 
 ### PointPaymentDetailView (`lib/views/payment/point_payment_detail_view.dart`)
-- 構成: 店舗情報、支払い/付与ポイント、スタンプ演出、使用クーポン
-- 説明: 支払い・ポイント付与後の詳細表示画面
+- 構成: 「スタンプ獲得」テキスト、店舗情報、スタンプ演出、使用クーポン、未使用クーポンリスト、完了ボタン
+- 説明: 支払い・ポイント付与後の詳細表示画面（スタンプカード下に店舗の未使用クーポンをリスト表示）
 
 ### PaymentSuccessView (`lib/views/payment/payment_success_view.dart`)
 - 構成: 成功メッセージ、店舗情報、支払い詳細、ホーム戻りボタン
@@ -145,8 +145,8 @@
 - 説明: ユーザーのスタンプカード一覧
 
 ### StampPunchView (`lib/views/stamps/stamp_punch_view.dart`)
-- 構成: スタンプカードUI、進捗表示、閉じるボタン
-- 説明: スタンプ押印の表示画面
+- 構成: 「スタンプ獲得」テキスト、スタンプカードUI、進捗表示、未使用クーポンリスト、閉じるボタン
+- 説明: スタンプ押印の表示画面（スタンプカード下に店舗の未使用クーポンをリスト表示）
 
 ### ExperienceGainedView (`lib/views/stamps/experience_gained_view.dart`)
 - 構成: 経験値/レベルアップ演出、内訳表示、継続ボタン
