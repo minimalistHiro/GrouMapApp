@@ -360,18 +360,20 @@
   - `createdBy`: 作成者UID
   - `updatedAt`: 更新日時
   - `transactions/{transactionId}`: 店舗取引履歴
-    - `type`: `award`/`use`
-    - `points`: 付与/使用ポイント
-    - `amountYen`: 会計金額
+    - `type`: `award`/`use`/`stamp`（stampはスタンプ押印来店記録）
+    - `points`: 付与/使用ポイント（stampの場合は0）
+    - `amountYen`: 会計金額（stampの場合は0）
     - `paymentMethod`: 決済手段
     - `status`: ステータス
-    - `source`: 記録元（`point_request`/`point_usage`）
+    - `source`: 記録元（`point_request`/`point_usage`/`stamp_punch`）
     - `approvedBy`: 承認者UID
     - `usedSpecialPoints`: 特別ポイント使用数
     - `usedNormalPoints`: 通常ポイント使用数
     - `totalUsedPoints`: 使用合計
     - `createdAt`: 作成日時
     - `createdAtClient`: 端末時刻
+    - `userGender`: ユーザー性別（トランザクション時点のスナップショット）
+    - `userAgeGroup`: ユーザー年代グループ（`~19`/`20s`/`30s`/`40s`/`50s`/`60+`）
   - `menu/{menuId}`: メニュー
     - `id`: メニューID
     - `name`: メニュー名
@@ -470,6 +472,10 @@
   - `fcmToken`: 端末FCMトークン
   - `fcmTokenUpdatedAt`: FCM更新日時
   - `profileImageUrl`: プロフィール画像
+  - `gender`: 性別（`男性`/`女性`/`その他`/`回答しない`）
+  - `birthDate`: 生年月日（DateTime）
+  - `prefecture`: 都道府県
+  - `city`: 市区町村
   - `friendReferralPopupShown`: 紹介通知表示済み
   - `friendReferralPopup`: 紹介通知データ
   - `friendReferralPopupReferrerShown`: 紹介者側通知表示済み
