@@ -1208,7 +1208,7 @@ class _MapViewState extends ConsumerState<MapView> {
               }
             },
             markers: _markers,
-            myLocationEnabled: true,
+            myLocationEnabled: false,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             onTap: (point) async {

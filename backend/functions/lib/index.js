@@ -2116,11 +2116,15 @@ exports.punchStamp = (0, https_1.onCall)({
     // フィルター時のクエリ対象となるため、userGender/userAgeGroup を含める
     let userGender = null;
     let userAgeGroup = null;
+    let userPrefecture = null;
+    let userCity = null;
     try {
         const targetUserSnap = await db.collection(USERS_COLLECTION).doc(userId).get();
         if (targetUserSnap.exists) {
             const userData = targetUserSnap.data();
             userGender = (typeof (userData === null || userData === void 0 ? void 0 : userData.gender) === 'string' ? userData.gender : null);
+            userPrefecture = (typeof (userData === null || userData === void 0 ? void 0 : userData.prefecture) === 'string' ? userData.prefecture : null);
+            userCity = (typeof (userData === null || userData === void 0 ? void 0 : userData.city) === 'string' ? userData.city : null);
             const birthDateVal = userData === null || userData === void 0 ? void 0 : userData.birthDate;
             if (birthDateVal) {
                 const bd = birthDateVal instanceof firestore_2.Timestamp
@@ -2148,6 +2152,8 @@ exports.punchStamp = (0, https_1.onCall)({
         source: 'stamp_punch',
         userGender,
         userAgeGroup,
+        userPrefecture,
+        userCity,
         createdAt: firestore_2.FieldValue.serverTimestamp(),
         createdAtClient: new Date(),
     });

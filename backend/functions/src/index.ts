@@ -2561,11 +2561,15 @@ export const punchStamp = onCall(
     // フィルター時のクエリ対象となるため、userGender/userAgeGroup を含める
     let userGender: string | null = null;
     let userAgeGroup: string | null = null;
+    let userPrefecture: string | null = null;
+    let userCity: string | null = null;
     try {
       const targetUserSnap = await db.collection(USERS_COLLECTION).doc(userId).get();
       if (targetUserSnap.exists) {
         const userData = targetUserSnap.data();
         userGender = (typeof userData?.gender === 'string' ? userData.gender : null);
+        userPrefecture = (typeof userData?.prefecture === 'string' ? userData.prefecture : null);
+        userCity = (typeof userData?.city === 'string' ? userData.city : null);
         const birthDateVal = userData?.birthDate;
         if (birthDateVal) {
           const bd = birthDateVal instanceof Timestamp
@@ -2593,6 +2597,8 @@ export const punchStamp = onCall(
       source: 'stamp_punch',
       userGender,
       userAgeGroup,
+      userPrefecture,
+      userCity,
       createdAt: FieldValue.serverTimestamp(),
       createdAtClient: new Date(),
     });
