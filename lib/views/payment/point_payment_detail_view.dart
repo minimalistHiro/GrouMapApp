@@ -12,6 +12,7 @@ class PointPaymentDetailView extends StatefulWidget {
   final List<String> usedCouponIds;
   final int? normalPointsAwarded;
   final int? specialPointsAwarded;
+  final bool popOnComplete;
 
   const PointPaymentDetailView({
     Key? key,
@@ -22,6 +23,7 @@ class PointPaymentDetailView extends StatefulWidget {
     this.normalPointsAwarded,
     this.specialPointsAwarded,
     this.usedCouponIds = const [],
+    this.popOnComplete = false,
   }) : super(key: key);
 
   @override
@@ -397,12 +399,16 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
               height: 56,
               child: ElevatedButton(
                 onPressed: () {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(
-                      builder: (_) => const MainNavigationView(),
-                    ),
-                    (route) => false,
-                  );
+                  if (widget.popOnComplete) {
+                    Navigator.of(context).pop();
+                  } else {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                        builder: (_) => const MainNavigationView(),
+                      ),
+                      (route) => false,
+                    );
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B35),

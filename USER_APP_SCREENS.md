@@ -132,7 +132,7 @@
 
 ### PointPaymentDetailView (`lib/views/payment/point_payment_detail_view.dart`)
 - 構成: 「スタンプ獲得」テキスト、店舗情報、スタンプ演出、使用クーポン、未使用クーポンリスト、完了ボタン
-- 説明: 支払い・ポイント付与後の詳細表示画面（スタンプカード下に店舗の未使用クーポンをリスト表示）
+- 説明: ポイント付与・スタンプ押印の結果表示画面。取引履歴からのスタンプ確認にも使用（スタンプカード下に店舗の未使用クーポンをリスト表示）
 
 ### PaymentSuccessView (`lib/views/payment/payment_success_view.dart`)
 - 構成: 成功メッセージ、店舗情報、支払い詳細、ホーム戻りボタン
@@ -143,10 +143,6 @@
 ### StampCardsView (`lib/views/stamps/stamp_cards_view.dart`)
 - 構成: スタンプカード一覧、更新ボタン、空/エラー状態
 - 説明: ユーザーのスタンプカード一覧
-
-### StampPunchView (`lib/views/stamps/stamp_punch_view.dart`)
-- 構成: 「スタンプ獲得」テキスト、スタンプカードUI、進捗表示、未使用クーポンリスト、閉じるボタン
-- 説明: スタンプ押印の表示画面（スタンプカード下に店舗の未使用クーポンをリスト表示）
 
 ### ExperienceGainedView (`lib/views/stamps/experience_gained_view.dart`)
 - 構成: 経験値/レベルアップ演出、内訳表示、継続ボタン
@@ -278,7 +274,6 @@
             │  ├─ 投稿一覧（PostsView）
             │  │  └─ 投稿詳細（PostDetailView）
             │  ├─ スタンプカード（StampCardsView）
-            │  │  └─ スタンプ押印（StampPunchView）
             │  ├─ バッジ一覧（BadgesView）
             │  ├─ ランキング（LeaderboardView）
             │  ├─ 友達紹介（FriendReferralView）
@@ -326,6 +321,7 @@
 ├─ ポイント利用入力（PointUsageRequestView）
 │  └─ 店舗側入力待ち（PointUsageWaitingView）
 └─ 取引履歴（TransactionHistoryView）
+   └─ スタンプ確認（PointPaymentDetailView）
 
 認証フロー（入り口）
 ├─ ウェルカム（WelcomeView）

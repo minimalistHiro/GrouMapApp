@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../stamps/stamp_punch_view.dart';
+import '../payment/point_payment_detail_view.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
 import '../../models/point_transaction_model.dart';
@@ -187,7 +187,13 @@ class TransactionHistoryView extends ConsumerWidget {
                 onPressed: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => StampPunchView(storeId: transaction.storeId),
+                      builder: (_) => PointPaymentDetailView(
+                        storeId: transaction.storeId,
+                        paid: 0,
+                        pointsAwarded: 0,
+                        pointsUsed: 0,
+                        popOnComplete: true,
+                      ),
                     ),
                   );
                 },
@@ -238,7 +244,13 @@ class TransactionHistoryView extends ConsumerWidget {
                 Navigator.of(context, rootNavigator: true).pop();
                 Navigator.of(context, rootNavigator: true).push(
                   MaterialPageRoute(
-                    builder: (_) => StampPunchView(storeId: transaction.storeId),
+                    builder: (_) => PointPaymentDetailView(
+                      storeId: transaction.storeId,
+                      paid: 0,
+                      pointsAwarded: 0,
+                      pointsUsed: 0,
+                      popOnComplete: true,
+                    ),
                   ),
                 );
               },

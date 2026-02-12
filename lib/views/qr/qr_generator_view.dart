@@ -10,7 +10,6 @@ import '../../providers/qr_token_provider.dart';
 import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
-import '../stamps/stamp_punch_view.dart';
 import '../payment/point_payment_detail_view.dart';
 import '../points/point_usage_approval_view.dart';
 
