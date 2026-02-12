@@ -738,6 +738,26 @@ function normalizeReferralCode(code?: string): string {
   return (code ?? '').trim().toUpperCase();
 }
 
+/**
+ * 生年月日から年代グループを算出
+ */
+function calculateAgeGroup(birthDate: Date | Timestamp): string | null {
+  const bd = birthDate instanceof Timestamp ? birthDate.toDate() : birthDate;
+  if (isNaN(bd.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - bd.getFullYear();
+  const monthDiff = now.getMonth() - bd.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < bd.getDate())) {
+    age--;
+  }
+  if (age < 20) return '~19';
+  if (age < 30) return '20s';
+  if (age < 40) return '30s';
+  if (age < 50) return '40s';
+  if (age < 60) return '50s';
+  return '60+';
+}
+
 function toDate(value: unknown): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
@@ -1993,6 +2013,11 @@ export const updateStoreDailyStats = onDocumentCreated(
     const data = event.data?.data() as Record<string, unknown> | undefined;
     if (!data) return;
 
+    const type = typeof data['type'] === 'string' ? (data['type'] as string) : '';
+
+    // stamp タイプは punchStamp が直接 store_stats/store_users を更新済みのためスキップ
+    if (type === 'stamp') return;
+
     const storeId = event.params.storeId as string;
     const createdAtValue = data['createdAt'];
     const createdAt =
@@ -2006,7 +2031,6 @@ export const updateStoreDailyStats = onDocumentCreated(
           : new Date(event.time);
 
     const dateKey = getDateKey(createdAt);
-    const type = typeof data['type'] === 'string' ? (data['type'] as string) : '';
     const amountYen = typeof data['amountYen'] === 'number' ? (data['amountYen'] as number) : 0;
     const points = typeof data['points'] === 'number' ? (data['points'] as number) : 0;
     const userId = typeof data['userId'] === 'string' ? (data['userId'] as string) : '';
@@ -2025,7 +2049,7 @@ export const updateStoreDailyStats = onDocumentCreated(
     } else if (points < 0) {
       updates['pointsUsed'] = FieldValue.increment(Math.abs(points));
     }
-    if (type === 'award') {
+    if (type === 'award' || type === 'use') {
       updates['visitorCount'] = FieldValue.increment(1);
     }
 
@@ -2036,7 +2060,7 @@ export const updateStoreDailyStats = onDocumentCreated(
       .doc(dateKey)
       .set(updates, { merge: true });
 
-    if (type === 'award' && userId) {
+    if ((type === 'award' || type === 'use') && userId) {
       const userRef = db
         .collection('store_users')
         .doc(storeId)
@@ -2532,6 +2556,46 @@ export const punchStamp = onCall(
       },
       { merge: true },
     );
+
+    // stores/{storeId}/transactions にスタンプ来店記録を作成
+    // フィルター時のクエリ対象となるため、userGender/userAgeGroup を含める
+    let userGender: string | null = null;
+    let userAgeGroup: string | null = null;
+    try {
+      const targetUserSnap = await db.collection(USERS_COLLECTION).doc(userId).get();
+      if (targetUserSnap.exists) {
+        const userData = targetUserSnap.data();
+        userGender = (typeof userData?.gender === 'string' ? userData.gender : null);
+        const birthDateVal = userData?.birthDate;
+        if (birthDateVal) {
+          const bd = birthDateVal instanceof Timestamp
+            ? birthDateVal
+            : (birthDateVal instanceof Date ? Timestamp.fromDate(birthDateVal) : null);
+          if (bd) {
+            userAgeGroup = calculateAgeGroup(bd);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[punchStamp] ユーザー属性取得エラー（続行）:', e);
+    }
+
+    const stampTxnRef = db.collection('stores').doc(storeId).collection('transactions').doc();
+    await stampTxnRef.set({
+      transactionId: stampTxnRef.id,
+      storeId,
+      storeName: result.storeName ?? '',
+      userId,
+      type: 'stamp',
+      amountYen: 0,
+      points: 0,
+      status: 'completed',
+      source: 'stamp_punch',
+      userGender,
+      userAgeGroup,
+      createdAt: FieldValue.serverTimestamp(),
+      createdAtClient: new Date(),
+    });
 
     return result;
   },

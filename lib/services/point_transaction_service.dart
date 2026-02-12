@@ -1,10 +1,42 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import '../models/point_transaction_model.dart';
 
 class PointTransactionService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static final FirebaseAuth _auth = FirebaseAuth.instance;
+
+  /// 生年月日から年代グループを算出
+  static String? _calculateAgeGroup(DateTime birthDate) {
+    final now = DateTime.now();
+    int age = now.year - birthDate.year;
+    if (now.month < birthDate.month ||
+        (now.month == birthDate.month && now.day < birthDate.day)) {
+      age--;
+    }
+    if (age < 20) return '~19';
+    if (age < 30) return '20s';
+    if (age < 40) return '30s';
+    if (age < 50) return '40s';
+    if (age < 60) return '50s';
+    return '60+';
+  }
+
+  /// birthDateフィールドをDateTimeに変換
+  static DateTime? _parseBirthDate(dynamic birthDate) {
+    if (birthDate == null) return null;
+    if (birthDate is DateTime) return birthDate;
+    if (birthDate is Timestamp) return birthDate.toDate();
+    if (birthDate is String) {
+      try {
+        return DateTime.parse(birthDate);
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
 
   /// ポイント支払い履歴を作成
   static Future<String> createTransaction({
@@ -56,6 +88,23 @@ class PointTransactionService {
           (resolvedType == 'use' ? 'point_usage' : 'point_request');
       final resolvedAmountYen = amountYen ?? paymentAmount ?? 0;
 
+      // ユーザープロフィールからgender/birthDateを取得し、属性情報をデノーマライズ保存
+      String? userGender;
+      String? userAgeGroup;
+      try {
+        final userDoc = await _firestore.collection('users').doc(user.uid).get();
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          userGender = userData['gender'] as String?;
+          final birthDate = _parseBirthDate(userData['birthDate']);
+          if (birthDate != null) {
+            userAgeGroup = _calculateAgeGroup(birthDate);
+          }
+        }
+      } catch (e) {
+        debugPrint('ユーザープロフィール取得エラー（続行）: $e');
+      }
+
       await _firestore
           .collection('stores')
           .doc(storeId)
@@ -72,37 +121,14 @@ class PointTransactionService {
         'paymentMethod': transaction.paymentMethod,
         'status': transaction.status,
         'source': resolvedSource,
+        'userGender': userGender,
+        'userAgeGroup': userAgeGroup,
         'createdAt': FieldValue.serverTimestamp(),
         'createdAtClient': now,
       });
 
-      if (resolvedType == 'use' || resolvedType == 'award') {
-        final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-        final statsRef = _firestore
-            .collection('store_stats')
-            .doc(storeId)
-            .collection('daily')
-            .doc(todayStr);
-
-        final Map<String, dynamic> updates = {
-          'date': todayStr,
-          'visitorCount': FieldValue.increment(1),
-          'lastUpdated': FieldValue.serverTimestamp(),
-        };
-
-        if (resolvedType == 'use') {
-          final usedPoints = amount < 0 ? -amount : amount;
-          updates['pointsUsed'] = FieldValue.increment(usedPoints);
-        } else {
-          final issuedPoints = amount < 0 ? -amount : amount;
-          updates['pointsIssued'] = FieldValue.increment(issuedPoints);
-          updates['totalPointsAwarded'] = FieldValue.increment(issuedPoints);
-          updates['totalSales'] = FieldValue.increment(resolvedAmountYen);
-          updates['totalTransactions'] = FieldValue.increment(1);
-        }
-
-        await statsRef.set(updates, SetOptions(merge: true));
-      }
+      // store_stats の更新は Cloud Function (updateStoreDailyStats) に一元化
+      // クライアント側での二重カウントを防止
 
       return transactionId;
     } catch (e) {
