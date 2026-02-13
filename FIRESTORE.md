@@ -354,6 +354,28 @@
     - `lastSyncAt`: 最終同期日時
     - `lastSyncCount`: 最終同期取得件数
   - `tags`: タグ
+  - `paymentMethods`: 利用可能な決済方法（カテゴリ別Map）
+    - `cash`: 現金カテゴリ
+      - `cash`: 現金（bool）
+    - `card`: クレジット/デビット/プリペイドカテゴリ
+      - `visa`, `mastercard`, `jcb`, `amex`, `diners`, `discover`: 各ブランド（bool）
+      - `unionpay_card`: UnionPay（銀聯）カード（bool）
+      - `debit`: デビットカード（bool）
+      - `prepaid`: プリペイドカード（bool）
+      - `contactless`: タッチ決済/NFC（bool）
+      - `apple_pay_touch`: Apple Pay タッチ決済（bool）
+      - `google_pay_touch`: Google Pay タッチ決済（bool）
+    - `emoney`: 電子マネーカテゴリ
+      - `transit_ic`: 交通系IC（bool）
+      - `id`: iD（bool）
+      - `quicpay`: QUICPay（bool）
+      - `rakuten_edy`: 楽天Edy（bool）
+      - `nanaco`: nanaco（bool）
+      - `waon`: WAON（bool）
+    - `qr`: QR/バーコード決済カテゴリ
+      - `paypay`, `d_barai`, `rakuten_pay`, `au_pay`, `merpay`: 各サービス（bool）
+      - `wechat_pay`, `alipay_plus`, `unionpay_qr`: 海外系（bool）
+      - `coin_plus`, `j_coin_pay`, `smart_code`, `bank_pay`, `yucho_pay`: その他（bool）
   - `location`: 位置（`latitude`, `longitude`）
   - `iconImageUrl`: アイコン画像
   - `storeImageUrl`: 店舗画像

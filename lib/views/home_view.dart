@@ -1042,6 +1042,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
           'location': data['location'],
           'tags': data['tags'],
           'socialMedia': data['socialMedia'],
+          'paymentMethods': data['paymentMethods'],
           'isActive': data['isActive'] ?? false,
           'isApproved': data['isApproved'] ?? false,
           'createdAt': data['createdAt'],

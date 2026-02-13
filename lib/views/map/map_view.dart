@@ -208,6 +208,7 @@ class _MapViewState extends ConsumerState<MapView> {
               'location': normalizedLocation, // 位置情報
               'socialMedia': socialMedia,
               'tags': tags,
+              'paymentMethods': data['paymentMethods'],
               'isActive': data['isActive'] ?? false,
               'isApproved': data['isApproved'] ?? false,
               'createdAt': data['createdAt'],

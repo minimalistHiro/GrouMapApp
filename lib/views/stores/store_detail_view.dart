@@ -12,6 +12,7 @@ import '../../widgets/coupon_list_card.dart';
 import '../../widgets/custom_top_tab_bar.dart';
 import '../posts/post_detail_view.dart';
 import '../coupons/coupon_detail_view.dart';
+import '../../constants/payment_methods_constants.dart';
 
 class StoreDetailView extends ConsumerStatefulWidget {
   final Map<String, dynamic> store;
@@ -1442,6 +1443,106 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             _buildSocialMediaDisplay(),
             const SizedBox(height: 16),
           ],
+
+          // 利用可能な決済方法
+          if (_hasPaymentMethods()) ...[
+            _buildPaymentMethodsSection(),
+            const SizedBox(height: 16),
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool _hasPaymentMethods() {
+    final paymentMethods = widget.store['paymentMethods'];
+    if (paymentMethods == null || paymentMethods is! Map) return false;
+
+    for (final category in paymentMethods.values) {
+      if (category is Map) {
+        for (final value in category.values) {
+          if (value == true) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Widget _buildPaymentMethodsSection() {
+    final paymentMethods =
+        widget.store['paymentMethods'] as Map<String, dynamic>;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '利用可能な決済方法',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ...paymentMethodCategories
+            .where((category) =>
+                _categoryHasEnabledItems(paymentMethods, category.key))
+            .map((category) =>
+                _buildPaymentCategoryDisplay(category, paymentMethods)),
+      ],
+    );
+  }
+
+  bool _categoryHasEnabledItems(
+      Map<String, dynamic> paymentMethods, String categoryKey) {
+    final categoryData = paymentMethods[categoryKey];
+    if (categoryData == null || categoryData is! Map) return false;
+    return categoryData.values.any((v) => v == true);
+  }
+
+  Widget _buildPaymentCategoryDisplay(
+      PaymentMethodCategory category, Map<String, dynamic> paymentMethods) {
+    final categoryData =
+        (paymentMethods[category.key] as Map?)?.cast<String, dynamic>() ?? {};
+
+    final enabledItems = category.items
+        .where((item) => categoryData[item.key] == true)
+        .toList();
+
+    if (enabledItems.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(category.icon, color: Colors.grey, size: 18),
+              const SizedBox(width: 6),
+              Text(
+                category.displayName,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black54,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: enabledItems
+                .map((item) => Chip(
+                      label: Text(item.displayName),
+                      backgroundColor:
+                          const Color(0xFFFF6B35).withOpacity(0.1),
+                      labelStyle: const TextStyle(fontSize: 12),
+                    ))
+                .toList(),
+          ),
         ],
       ),
     );

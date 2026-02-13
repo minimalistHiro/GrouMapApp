@@ -75,6 +75,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       'location': location,
       'tags': tags,
       'socialMedia': socialMedia,
+      'paymentMethods': data['paymentMethods'],
       'isActive': data['isActive'] ?? false,
       'isApproved': data['isApproved'] ?? false,
       'createdAt': data['createdAt'],
