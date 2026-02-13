@@ -97,14 +97,14 @@ class TermsPrivacyConsentView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('GrouMap 利用規約', style: _titleStyle),
+        const Text('ぐるまっぷ 利用規約', style: _titleStyle),
         const SizedBox(height: 4),
         const Text('制定日: 2025年3月1日', style: _metaStyle),
         const SizedBox(height: 12),
         _buildSection(
           title: '第1条（適用）',
           text:
-              '本規約は、GrouMap（以下「本サービス」）の提供条件および本サービスの利用に関する'
+              '本規約は、ぐるまっぷ（以下「本サービス」）の提供条件および本サービスの利用に関する'
               '当社（本サービス運営者）と利用者との間の権利義務関係を定めるものです。'
               '利用者は本規約に同意の上、本サービスを利用するものとします。',
         ),
@@ -202,13 +202,13 @@ class TermsPrivacyConsentView extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('GrouMap プライバシーポリシー', style: _titleStyle),
+        const Text('ぐるまっぷ プライバシーポリシー', style: _titleStyle),
         const SizedBox(height: 4),
         const Text('制定日: 2025年3月1日', style: _metaStyle),
         const SizedBox(height: 12),
         _buildSection(
           title: '1. 取得する情報',
-          text: '当社は、GrouMapの提供にあたり、以下の情報を取得する場合があります。',
+          text: '当社は、ぐるまっぷの提供にあたり、以下の情報を取得する場合があります。',
           bullets: const [
             '登録情報（氏名またはニックネーム、メールアドレス等）',
             'プロフィール情報（アイコン、自己紹介等）',

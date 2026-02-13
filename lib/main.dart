@@ -43,7 +43,7 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
-      title: 'GrouMap',
+      title: 'ぐるまっぷ',
       locale: const Locale('ja', 'JP'),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

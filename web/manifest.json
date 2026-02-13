@@ -1,6 +1,6 @@
 {
-    "name": "GrouMap",
-    "short_name": "GrouMap",
+    "name": "ぐるまっぷ",
+    "short_name": "ぐるまっぷ",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#E75B41",

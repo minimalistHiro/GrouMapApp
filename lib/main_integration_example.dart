@@ -19,7 +19,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'GrouMap',
+      title: 'ぐるまっぷ',
       theme: ThemeData(
         primarySwatch: Colors.orange,
         primaryColor: const Color(0xFFFF6B35),
@@ -36,7 +36,7 @@ class MainScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('GrouMap'),
+        title: const Text('ぐるまっぷ'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
       ),
@@ -45,7 +45,7 @@ class MainScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'GrouMap QR Token System',
+              'ぐるまっぷ QR Token System',
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 32),

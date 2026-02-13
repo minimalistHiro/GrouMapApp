@@ -313,7 +313,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'GrouMap',
+                    'ぐるまっぷ',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -421,7 +421,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
-                    'GrouMap',
+                    'ぐるまっぷ',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -2192,7 +2192,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
             
             // アプリ名
             const Text(
-              'GrouMap',
+              'ぐるまっぷ',
               style: TextStyle(
                 fontSize: 48,
                 fontWeight: FontWeight.bold,

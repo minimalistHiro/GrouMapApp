@@ -140,7 +140,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
   Future<void> _inviteFriend() async {
     if (_referralCode != null) {
       // 実際の実装では、SNSやメールでの招待機能を実装
-      await Clipboard.setData(ClipboardData(text: 'GrouMapアプリで友達紹介コード「$_referralCode」を使って登録してください！'));
+      await Clipboard.setData(ClipboardData(text: 'ぐるまっぷアプリで友達紹介コード「$_referralCode」を使って登録してください！'));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -616,7 +616,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
           _buildGuideStep(
             step: 2,
             title: '友達にアプリをダウンロードしてもらう',
-            description: '友達にGrouMapアプリをダウンロードしてもらいます',
+            description: '友達にぐるまっぷアプリをダウンロードしてもらいます',
             icon: Icons.download,
           ),
           

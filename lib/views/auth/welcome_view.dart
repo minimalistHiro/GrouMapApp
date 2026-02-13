@@ -71,7 +71,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE75B41), // GrouMap ブランドカラー
+      backgroundColor: const Color(0xFFE75B41), // ぐるまっぷ ブランドカラー
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -150,7 +150,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
               child: Opacity(
                 opacity: _logoAnimation.value,
                 child: const Text(
-                  'GrouMap',
+                  'ぐるまっぷ',
                   style: TextStyle(
                     fontSize: 48,
                     fontWeight: FontWeight.bold,
@@ -231,7 +231,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFFE75B41), // GrouMap ブランドカラー
+                    foregroundColor: const Color(0xFFE75B41), // ぐるまっぷ ブランドカラー
                     elevation: 8,
                     shadowColor: Colors.black.withOpacity(0.3),
                     shape: RoundedRectangleBorder(

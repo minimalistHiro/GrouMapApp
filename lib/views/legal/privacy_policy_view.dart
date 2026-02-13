@@ -37,13 +37,13 @@ class PrivacyPolicyView extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('GrouMap プライバシーポリシー', style: _titleStyle),
+            const Text('ぐるまっぷ プライバシーポリシー', style: _titleStyle),
             const SizedBox(height: 6),
             const Text('制定日: 2025年3月1日', style: _metaStyle),
             const SizedBox(height: 20),
             _buildSection(
               title: '1. 取得する情報',
-              text: '当社は、GrouMapの提供にあたり、以下の情報を取得する場合があります。',
+              text: '当社は、ぐるまっぷの提供にあたり、以下の情報を取得する場合があります。',
               bullets: const [
                 '登録情報（氏名またはニックネーム、メールアドレス等）',
                 'プロフィール情報（アイコン、自己紹介等）',

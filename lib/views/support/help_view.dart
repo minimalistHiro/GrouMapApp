@@ -107,7 +107,7 @@ class HelpView extends StatelessWidget {
     final faqs = [
       {
         'question': 'ポイントはどこで貯められますか？',
-        'answer': 'GrouMap加盟店でのお会計時にポイントが付与されます。店舗スタッフの案内に従ってください。',
+        'answer': 'ぐるまっぷ加盟店でのお会計時にポイントが付与されます。店舗スタッフの案内に従ってください。',
       },
       {
         'question': 'ポイントはどうやって使いますか？',
