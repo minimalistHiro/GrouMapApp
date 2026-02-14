@@ -141,7 +141,7 @@
 ## スタンプ・経験値・バッジ
 
 ### StampCardsView (`lib/views/stamps/stamp_cards_view.dart`)
-- 構成: スタンプカード一覧、更新ボタン、空/エラー状態
+- 構成: スタンプカード一覧、空/エラー状態
 - 説明: ユーザーのスタンプカード一覧
 
 ### ExperienceGainedView (`lib/views/stamps/experience_gained_view.dart`)

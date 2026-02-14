@@ -842,25 +842,45 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
                 itemCount: _maxStamps,
                 itemBuilder: (context, index) {
                   final hasStamp = index < _displayStamps;
-                  final base = Container(
-                    decoration: BoxDecoration(
-                      color: hasStamp
-                          ? _getCategoryColor(_storeCategory)
-                          : Colors.grey[300],
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: hasStamp
-                            ? _getCategoryColor(_storeCategory).withOpacity(0.7)
-                            : Colors.grey[400]!,
-                        width: 2,
+                  Widget stampContent = _iconImageUrl != null && _iconImageUrl!.isNotEmpty
+                      ? SizedBox.expand(
+                          child: Image.network(
+                            _iconImageUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Center(
+                              child: Icon(
+                                _getCategoryIcon(_storeCategory),
+                                color: _getCategoryColor(_storeCategory),
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            _getCategoryIcon(_storeCategory),
+                            color: _getCategoryColor(_storeCategory),
+                            size: 20,
+                          ),
+                        );
+                  if (!hasStamp) {
+                    stampContent = Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        shape: BoxShape.circle,
                       ),
-                    ),
-                    child: Center(
-                      child: hasStamp
-                          ? const Icon(Icons.check, color: Colors.white, size: 20)
-                          : const Icon(Icons.radio_button_unchecked, color: Colors.grey, size: 20),
-                    ),
-                  );
+                      child: Center(
+                        child: Icon(
+                          _getCategoryIcon(_storeCategory),
+                          color: Colors.grey,
+                          size: 20,
+                        ),
+                      ),
+                    );
+                  } else {
+                    stampContent = ClipOval(child: stampContent);
+                  }
+                  final base = stampContent;
                   final isPunched = _shouldAnimatePunch && _punchIndex == index;
                   if (isPunched) {
                     return ScaleTransition(scale: _scaleAnim, child: base);

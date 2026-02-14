@@ -164,12 +164,6 @@ class _StampCardsViewState extends State<StampCardsView> {
         title: const Text('スタンプカード'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadStampCards,
-          ),
-        ],
       ),
       body: body,
     );
@@ -313,7 +307,6 @@ class _StampCardsViewState extends State<StampCardsView> {
   Widget _buildStampCard(Map<String, dynamic> stampCard) {
     final stamps = stampCard['stamps'] as int;
     final maxStamps = 10; // 最大スタンプ数
-    final progress = stamps / maxStamps;
     
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -418,18 +411,6 @@ class _StampCardsViewState extends State<StampCardsView> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                // プログレスバー
-                LinearProgressIndicator(
-                  value: progress,
-                  backgroundColor: Colors.grey[300],
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    _getCategoryColor(stampCard['storeCategory']),
-                  ),
-                  minHeight: 8,
-                ),
-                
-                const SizedBox(height: 16),
-                
                 // スタンプグリッド（5x2）
                 GridView.builder(
                   shrinkWrap: true,
@@ -444,58 +425,46 @@ class _StampCardsViewState extends State<StampCardsView> {
                   itemBuilder: (context, index) {
                     final hasStamp = index < stamps;
                     
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: hasStamp 
-                            ? _getCategoryColor(stampCard['storeCategory'])
-                            : Colors.grey[300],
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: hasStamp 
-                              ? _getCategoryColor(stampCard['storeCategory']).withOpacity(0.7)
-                              : Colors.grey[400]!,
-                          width: 2,
-                        ),
-                      ),
-                      child: Center(
-                        child: hasStamp
-                            ? const Icon(
-                                Icons.check,
-                                color: Colors.white,
-                                size: 20,
-                              )
-                            : const Icon(
-                                Icons.radio_button_unchecked,
-                                color: Colors.grey,
-                                size: 20,
+                    final iconUrl = stampCard['iconImageUrl'] as String?;
+                    final category = stampCard['storeCategory'] as String;
+                    Widget stampContent = iconUrl != null && iconUrl.isNotEmpty
+                        ? SizedBox.expand(
+                            child: Image.network(
+                              iconUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) => Center(
+                                child: Icon(
+                                  _getCategoryIcon(category),
+                                  color: _getCategoryColor(category),
+                                  size: 20,
+                                ),
                               ),
-                      ),
-                    );
+                            ),
+                          )
+                        : Center(
+                            child: Icon(
+                              _getCategoryIcon(category),
+                              color: _getCategoryColor(category),
+                              size: 20,
+                            ),
+                          );
+                    if (!hasStamp) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: Icon(
+                            _getCategoryIcon(category),
+                            color: Colors.grey,
+                            size: 20,
+                          ),
+                        ),
+                      );
+                    }
+                    return ClipOval(child: stampContent);
                   },
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // 統計情報
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStatItem(
-                      icon: Icons.location_on,
-                      label: '訪問回数',
-                      value: '${_calculateVisitCount(stamps)}回',
-                    ),
-                    _buildStatItem(
-                      icon: Icons.monetization_on,
-                      label: '総支出',
-                      value: '¥${(stampCard['totalSpending'] as double?)?.toStringAsFixed(0) ?? '0'}',
-                    ),
-                    _buildStatItem(
-                      icon: Icons.schedule,
-                      label: '最終訪問',
-                      value: _formatLastVisited(stampCard['lastVisited']),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -531,63 +500,6 @@ class _StampCardsViewState extends State<StampCardsView> {
         color: _getCategoryColor(category),
         size: 25,
       );
-    }
-  }
-
-  Widget _buildStatItem({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Column(
-      children: [
-        Icon(
-          icon,
-          color: Colors.grey[600],
-          size: 20,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey[600],
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 訪問回数を計算（スタンプ数から推定）
-  int _calculateVisitCount(int stamps) {
-    // 1回の訪問で1スタンプ獲得と仮定
-    return stamps;
-  }
-
-  // 最終訪問日をフォーマット
-  String _formatLastVisited(dynamic lastVisited) {
-    if (lastVisited == null) return '未訪問';
-    
-    try {
-      final date = lastVisited.toDate();
-      final now = DateTime.now();
-      final difference = now.difference(date).inDays;
-      
-      if (difference == 0) return '今日';
-      if (difference == 1) return '昨日';
-      if (difference < 7) return '${difference}日前';
-      
-      return '${date.month}/${date.day}';
-    } catch (e) {
-      return '不明';
     }
   }
 

@@ -907,29 +907,45 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             itemBuilder: (context, index) {
               final hasStamp = index < stamps;
 
-              return Container(
-                decoration: BoxDecoration(
-                  color: hasStamp ? Colors.blue : Colors.grey[300],
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: hasStamp ? Colors.blue[700]! : Colors.grey[400]!,
-                    width: 2,
-                  ),
-                ),
-                child: Center(
-                  child: hasStamp
-                      ? const Icon(
-                          Icons.check,
-                          color: Colors.white,
-                          size: 20,
-                        )
-                      : const Icon(
-                          Icons.radio_button_unchecked,
-                          color: Colors.grey,
-                          size: 20,
+              final iconUrl = _getStringValue(widget.store['iconImageUrl'], '');
+              final category = _getStringValue(widget.store['category'], 'その他');
+              Widget stampContent = iconUrl.isNotEmpty
+                  ? SizedBox.expand(
+                      child: Image.network(
+                        iconUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Center(
+                          child: Icon(
+                            _getCategoryIcon(category),
+                            color: _getCategoryColor(category),
+                            size: 20,
+                          ),
                         ),
-                ),
-              );
+                      ),
+                    )
+                  : Center(
+                      child: Icon(
+                        _getCategoryIcon(category),
+                        color: _getCategoryColor(category),
+                        size: 20,
+                      ),
+                    );
+              if (!hasStamp) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      _getCategoryIcon(category),
+                      color: Colors.grey,
+                      size: 20,
+                    ),
+                  ),
+                );
+              }
+              return ClipOval(child: stampContent);
             },
           ),
 
