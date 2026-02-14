@@ -24,7 +24,8 @@ import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
 import 'coupons/coupons_view.dart';
 import 'badges/badges_view.dart';
-import 'stamps/experience_gained_view.dart';
+import 'stamps/badge_awarded_view.dart';
+import 'stamps/recommendation_after_badge_view.dart';
 import 'stamps/stamp_cards_view.dart';
 import '../services/location_service.dart';
 import 'main_navigation_view.dart';
@@ -2344,10 +2345,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
     if (snapshot.docs.isEmpty) return;
 
     final badgeMap = <String, Map<String, dynamic>>{};
-    int totalXp = 0;
-    int pointsXpTotal = 0;
-    int stampXpTotal = 0;
-    int cardXpTotal = 0;
     String? sourceStoreId;
     final batch = FirebaseFirestore.instance.batch();
 
@@ -2355,22 +2352,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
       final data = doc.data();
       if (data['seenAt'] != null) {
         continue;
-      }
-
-      final xpAdded = (data['xpAdded'] is num) ? (data['xpAdded'] as num).toInt() : 0;
-      totalXp += xpAdded;
-
-      final breakdownData = data['xpBreakdown'];
-      if (breakdownData is Map) {
-        pointsXpTotal += (breakdownData['points'] is num)
-            ? (breakdownData['points'] as num).toInt()
-            : 0;
-        stampXpTotal += (breakdownData['stampPunch'] is num)
-            ? (breakdownData['stampPunch'] as num).toInt()
-            : 0;
-        cardXpTotal += (breakdownData['cardComplete'] is num)
-            ? (breakdownData['cardComplete'] as num).toInt()
-            : 0;
       }
 
       final badgesRaw = data['badges'];
@@ -2392,35 +2373,27 @@ class _HomeViewState extends ConsumerState<HomeView> {
       batch.update(doc.reference, {'seenAt': Timestamp.now()});
     }
 
-    if (totalXp <= 0 && badgeMap.isEmpty) {
-      await batch.commit();
-      return;
-    }
-
-    final breakdown = <Map<String, dynamic>>[];
-    if (pointsXpTotal > 0) {
-      breakdown.add({'label': 'ポイント付与', 'xp': pointsXpTotal});
-    }
-    if (stampXpTotal > 0) {
-      breakdown.add({'label': 'スタンプ押印', 'xp': stampXpTotal});
-    }
-    if (cardXpTotal > 0) {
-      breakdown.add({'label': 'カードコンプリート', 'xp': cardXpTotal});
-    }
-
     _isShowingAchievement = true;
     try {
       await batch.commit();
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => ExperienceGainedView(
-            gainedExperience: totalXp,
-            badges: badgeMap.isNotEmpty ? badgeMap.values.toList() : null,
-            breakdown: breakdown.isNotEmpty ? breakdown : null,
-            sourceStoreId: sourceStoreId,
+      if (badgeMap.isNotEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => BadgeAwardedView(
+              badges: badgeMap.values.toList(),
+              sourceStoreId: sourceStoreId,
+            ),
           ),
-        ),
-      );
+        );
+      } else {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RecommendationAfterBadgeView(
+              sourceStoreId: sourceStoreId,
+            ),
+          ),
+        );
+      }
     } finally {
       _isShowingAchievement = false;
     }

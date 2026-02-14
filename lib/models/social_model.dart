@@ -11,7 +11,6 @@ class UserProfile with _$UserProfile {
     required String? photoURL,
     required String? bio,
     required int totalPoints,
-    required int currentLevel,
     required int badgeCount,
     required DateTime createdAt,
     required DateTime lastActiveAt,

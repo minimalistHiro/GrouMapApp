@@ -335,7 +335,7 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
           .collection('user_achievement_events')
           .doc(userId)
           .collection('events')
-          .where('type', isEqualTo: 'point_award')
+          .where('type', whereIn: ['point_award', 'stamp_punch'])
           .where('storeId', isEqualTo: widget.storeId)
           .orderBy('createdAt', descending: true)
           .limit(1)

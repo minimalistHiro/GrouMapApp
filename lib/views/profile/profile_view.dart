@@ -650,32 +650,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        // レベル情報（users.level を参照）
-        userDocAsync.when(
-          data: (snap) {
-            final data = snap?.data();
-            final lvl = (data != null && data['level'] is num) ? (data['level'] as num).toInt() : 1;
-            return _buildStatItem(
-              icon: Icons.trending_up,
-              label: 'レベル',
-              value: lvl.toString(),
-              color: Colors.blue,
-            );
-          },
-          loading: () => _buildStatItem(
-            icon: Icons.trending_up,
-            label: 'レベル',
-            value: '...',
-            color: Colors.blue,
-          ),
-          error: (_, __) => _buildStatItem(
-            icon: Icons.trending_up,
-            label: 'レベル',
-            value: '1',
-            color: Colors.blue,
-          ),
-        ),
-        
         // バッジ情報
         newBadgeCountAsync.when(
           data: (newBadgeCount) => _buildStatItem(

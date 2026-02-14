@@ -1932,7 +1932,7 @@ exports.punchStamp = (0, https_1.onCall)({
     region: 'asia-northeast1',
     enforceAppCheck: false,
 }, async (request) => {
-    var _a, _b;
+    var _a, _b, _c, _d, _e, _f;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Store must be authenticated');
     }
@@ -2157,6 +2157,31 @@ exports.punchStamp = (0, https_1.onCall)({
         createdAt: firestore_2.FieldValue.serverTimestamp(),
         createdAtClient: new Date(),
     });
+    // バッジ判定 & user_achievement_events 作成
+    try {
+        const badges = await checkAndAwardBadges({ userId, storeId });
+        const eventRef = db
+            .collection(USER_ACHIEVEMENT_EVENTS_COLLECTION)
+            .doc(userId)
+            .collection('events')
+            .doc(stampTxnRef.id);
+        await eventRef.set({
+            type: 'stamp_punch',
+            transactionId: stampTxnRef.id,
+            storeId,
+            storeName: (_c = result.storeName) !== null && _c !== void 0 ? _c : '',
+            pointsAwarded: 0,
+            stampsAdded: (_d = result.stampsAdded) !== null && _d !== void 0 ? _d : 0,
+            stampsAfter: (_e = result.stampsAfter) !== null && _e !== void 0 ? _e : 0,
+            cardCompleted: (_f = result.cardCompleted) !== null && _f !== void 0 ? _f : false,
+            badges,
+            createdAt: firestore_2.FieldValue.serverTimestamp(),
+            seenAt: null,
+        }, { merge: true });
+    }
+    catch (e) {
+        console.error('[punchStamp] achievement event creation error:', e);
+    }
     return result;
 });
 // チェックイン記録

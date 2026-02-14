@@ -2603,6 +2603,34 @@ export const punchStamp = onCall(
       createdAtClient: new Date(),
     });
 
+    // バッジ判定 & user_achievement_events 作成
+    try {
+      const badges = await checkAndAwardBadges({ userId, storeId });
+      const eventRef = db
+        .collection(USER_ACHIEVEMENT_EVENTS_COLLECTION)
+        .doc(userId)
+        .collection('events')
+        .doc(stampTxnRef.id);
+      await eventRef.set(
+        {
+          type: 'stamp_punch',
+          transactionId: stampTxnRef.id,
+          storeId,
+          storeName: result.storeName ?? '',
+          pointsAwarded: 0,
+          stampsAdded: result.stampsAdded ?? 0,
+          stampsAfter: result.stampsAfter ?? 0,
+          cardCompleted: result.cardCompleted ?? false,
+          badges,
+          createdAt: FieldValue.serverTimestamp(),
+          seenAt: null,
+        },
+        { merge: true },
+      );
+    } catch (e) {
+      console.error('[punchStamp] achievement event creation error:', e);
+    }
+
     return result;
   },
 );

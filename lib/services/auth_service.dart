@@ -54,8 +54,6 @@ class AuthService {
               displayName: userCredential.user?.displayName ?? '',
               authProvider: 'google',
               additionalInfo: {
-                'level': 1,
-                'experience': 0,
                 'createdAt': DateTime.now(),
               },
             );
@@ -98,8 +96,6 @@ class AuthService {
               displayName: userCredential.user?.displayName ?? '',
               authProvider: 'apple',
               additionalInfo: {
-                'level': 1,
-                'experience': 0,
                 'createdAt': DateTime.now(),
               },
             );
@@ -429,7 +425,6 @@ class AuthService {
         'pointReturnRate': 1.0, // ポイント還元率（初期値 1.0%）
         'paid': 0, // 初期支払額
         'rank': 'ブロンズ', // 初期ランク
-        'currentLevel': 1, // 現在のレベル
         'badgeCount': 0, // 獲得バッジ数
         'earnedBadges': <String>[], // 獲得したバッジIDのリスト
         'referralCode': referralCode, // 友達紹介コード

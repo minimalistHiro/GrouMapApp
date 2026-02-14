@@ -24,7 +24,6 @@ mixin _$RankingModel {
   String get displayName => throw _privateConstructorUsedError;
   String? get photoURL => throw _privateConstructorUsedError;
   int get totalPoints => throw _privateConstructorUsedError;
-  int get currentLevel => throw _privateConstructorUsedError;
   int get badgeCount => throw _privateConstructorUsedError;
   int get stampCount => throw _privateConstructorUsedError;
   int get totalPayment => throw _privateConstructorUsedError;
@@ -54,7 +53,6 @@ abstract class $RankingModelCopyWith<$Res> {
       String displayName,
       String? photoURL,
       int totalPoints,
-      int currentLevel,
       int badgeCount,
       int stampCount,
       int totalPayment,
@@ -83,7 +81,6 @@ class _$RankingModelCopyWithImpl<$Res, $Val extends RankingModel>
     Object? displayName = null,
     Object? photoURL = freezed,
     Object? totalPoints = null,
-    Object? currentLevel = null,
     Object? badgeCount = null,
     Object? stampCount = null,
     Object? totalPayment = null,
@@ -108,10 +105,6 @@ class _$RankingModelCopyWithImpl<$Res, $Val extends RankingModel>
       totalPoints: null == totalPoints
           ? _value.totalPoints
           : totalPoints // ignore: cast_nullable_to_non_nullable
-              as int,
-      currentLevel: null == currentLevel
-          ? _value.currentLevel
-          : currentLevel // ignore: cast_nullable_to_non_nullable
               as int,
       badgeCount: null == badgeCount
           ? _value.badgeCount
@@ -158,7 +151,6 @@ abstract class _$$RankingModelImplCopyWith<$Res>
       String displayName,
       String? photoURL,
       int totalPoints,
-      int currentLevel,
       int badgeCount,
       int stampCount,
       int totalPayment,
@@ -185,7 +177,6 @@ class __$$RankingModelImplCopyWithImpl<$Res>
     Object? displayName = null,
     Object? photoURL = freezed,
     Object? totalPoints = null,
-    Object? currentLevel = null,
     Object? badgeCount = null,
     Object? stampCount = null,
     Object? totalPayment = null,
@@ -210,10 +201,6 @@ class __$$RankingModelImplCopyWithImpl<$Res>
       totalPoints: null == totalPoints
           ? _value.totalPoints
           : totalPoints // ignore: cast_nullable_to_non_nullable
-              as int,
-      currentLevel: null == currentLevel
-          ? _value.currentLevel
-          : currentLevel // ignore: cast_nullable_to_non_nullable
               as int,
       badgeCount: null == badgeCount
           ? _value.badgeCount
@@ -255,7 +242,6 @@ class _$RankingModelImpl implements _RankingModel {
       required this.displayName,
       required this.photoURL,
       required this.totalPoints,
-      required this.currentLevel,
       required this.badgeCount,
       required this.stampCount,
       required this.totalPayment,
@@ -276,8 +262,6 @@ class _$RankingModelImpl implements _RankingModel {
   @override
   final int totalPoints;
   @override
-  final int currentLevel;
-  @override
   final int badgeCount;
   @override
   final int stampCount;
@@ -296,7 +280,7 @@ class _$RankingModelImpl implements _RankingModel {
 
   @override
   String toString() {
-    return 'RankingModel(userId: $userId, displayName: $displayName, photoURL: $photoURL, totalPoints: $totalPoints, currentLevel: $currentLevel, badgeCount: $badgeCount, stampCount: $stampCount, totalPayment: $totalPayment, lastUpdated: $lastUpdated, rank: $rank, previousRank: $previousRank, rankChange: $rankChange)';
+    return 'RankingModel(userId: $userId, displayName: $displayName, photoURL: $photoURL, totalPoints: $totalPoints, badgeCount: $badgeCount, stampCount: $stampCount, totalPayment: $totalPayment, lastUpdated: $lastUpdated, rank: $rank, previousRank: $previousRank, rankChange: $rankChange)';
   }
 
   @override
@@ -311,8 +295,6 @@ class _$RankingModelImpl implements _RankingModel {
                 other.photoURL == photoURL) &&
             (identical(other.totalPoints, totalPoints) ||
                 other.totalPoints == totalPoints) &&
-            (identical(other.currentLevel, currentLevel) ||
-                other.currentLevel == currentLevel) &&
             (identical(other.badgeCount, badgeCount) ||
                 other.badgeCount == badgeCount) &&
             (identical(other.stampCount, stampCount) ||
@@ -336,7 +318,6 @@ class _$RankingModelImpl implements _RankingModel {
       displayName,
       photoURL,
       totalPoints,
-      currentLevel,
       badgeCount,
       stampCount,
       totalPayment,
@@ -367,7 +348,6 @@ abstract class _RankingModel implements RankingModel {
       required final String displayName,
       required final String? photoURL,
       required final int totalPoints,
-      required final int currentLevel,
       required final int badgeCount,
       required final int stampCount,
       required final int totalPayment,
@@ -387,8 +367,6 @@ abstract class _RankingModel implements RankingModel {
   String? get photoURL;
   @override
   int get totalPoints;
-  @override
-  int get currentLevel;
   @override
   int get badgeCount;
   @override

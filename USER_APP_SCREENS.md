@@ -138,15 +138,11 @@
 - 構成: 成功メッセージ、店舗情報、支払い詳細、ホーム戻りボタン
 - 説明: 支払い完了画面
 
-## スタンプ・経験値・バッジ
+## スタンプ・バッジ
 
 ### StampCardsView (`lib/views/stamps/stamp_cards_view.dart`)
 - 構成: スタンプカード一覧、空/エラー状態
 - 説明: ユーザーのスタンプカード一覧
-
-### ExperienceGainedView (`lib/views/stamps/experience_gained_view.dart`)
-- 構成: 経験値/レベルアップ演出、内訳表示、継続ボタン
-- 説明: 経験値獲得の演出画面
 
 ### BadgeAwardedView (`lib/views/stamps/badge_awarded_view.dart`)
 - 構成: バッジ獲得アニメーション、バッジ情報、次へボタン
@@ -154,7 +150,7 @@
 
 ### RecommendationAfterBadgeView (`lib/views/stamps/recommendation_after_badge_view.dart`)
 - 構成: おすすめ店舗リスト、店舗カード、遷移導線
-- 説明: バッジ獲得後の店舗おすすめ画面
+- 説明: スタンプ押印後の店舗おすすめ画面
 
 ### BadgesView (`lib/views/badges/badges_view.dart`)
 - 構成: カテゴリフィルタ、バッジグリッド、取得状態表示
@@ -315,9 +311,8 @@
                   └─ 退会完了（AccountDeletionCompleteView）
 
 その他の単独遷移・演出系
-├─ 体験値獲得（ExperienceGainedView）
 ├─ バッジ獲得（BadgeAwardedView）
-│  └─ 獲得後おすすめ（RecommendationAfterBadgeView）
+├─ おすすめ店舗（RecommendationAfterBadgeView）
 ├─ ポイント利用入力（PointUsageRequestView）
 │  └─ 店舗側入力待ち（PointUsageWaitingView）
 └─ 取引履歴（TransactionHistoryView）

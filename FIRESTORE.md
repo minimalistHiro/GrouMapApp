@@ -419,7 +419,7 @@
 
 ### user_achievement_events
 - `user_achievement_events/{userId}/events/{eventId}`: 実績イベント
-  - `type`: 種別（例: `point_award`）
+  - `type`: 種別（`point_award` / `stamp_punch`）
   - `transactionId`: 取引ID
   - `storeId`: 店舗ID
   - `storeName`: 店舗名
@@ -427,8 +427,6 @@
   - `stampsAdded`: 追加スタンプ
   - `stampsAfter`: 付与後スタンプ
   - `cardCompleted`: カード完了フラグ
-  - `xpAdded`: 追加XP
-  - `xpBreakdown`: XP内訳（`points`, `stampPunch`, `cardComplete`）
   - `badges`: 付与バッジ配列
   - `createdAt`: 作成日時
   - `seenAt`: 既読日時
@@ -479,9 +477,9 @@
   - `pointReturnRate`: 還元率
   - `paid`: 支払累計
   - `rank`: ランク
-  - `currentLevel`: レベル（初期）
-  - `level`: レベル（運用中）
-  - `experience`: 経験値
+  - `currentLevel`: レベル（廃止済み・既存データのみ）
+  - `level`: レベル（廃止済み・既存データのみ）
+  - `experience`: 経験値（廃止済み・既存データのみ）
   - `badgeCount`: 獲得バッジ数
   - `earnedBadges`: 獲得バッジID配列
   - `referralCode`: 友達紹介コード

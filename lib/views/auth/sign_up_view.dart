@@ -272,8 +272,6 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
     if (_formKey.currentState!.validate()) {
       // 追加のユーザー情報を準備
       final additionalUserInfo = <String, dynamic>{
-        'level': 1, // 初期レベルを1に設定
-        'experience': 0, // 初期経験値を0に設定
         'createdAt': DateTime.now(), // アカウント作成日時
       };
       

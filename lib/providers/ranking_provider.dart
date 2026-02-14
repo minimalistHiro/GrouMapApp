@@ -194,7 +194,6 @@ class RankingService {
             displayName: data['displayName'] ?? 'Unknown User',
             photoURL: data['profileImageUrl'], // profileImageUrlから取得
             totalPoints: data['points'] ?? 0, // pointsフィールドから取得
-            currentLevel: data['level'] ?? 1, // levelフィールドから取得
             badgeCount: badgeCount, // 計算したバッジ数
             stampCount: totalStamps, // 計算した合計値
             totalPayment: (data['paid'] ?? 0).toDouble(), // paidフィールドから取得
@@ -215,15 +214,13 @@ class RankingService {
             return b.totalPoints.compareTo(a.totalPoints);
           case RankingType.badgeCount:
             return b.badgeCount.compareTo(a.badgeCount);
-          case RankingType.level:
-            return b.currentLevel.compareTo(a.currentLevel);
           case RankingType.stampCount:
             return b.stampCount.compareTo(a.stampCount);
           case RankingType.totalPayment:
             return b.totalPayment.compareTo(a.totalPayment);
         }
       });
-      
+
       // 期間フィルターを適用
       final filteredRankings = _applyPeriodFilterToList(rankings, query.period);
       debugPrint('RankingService: After period filter: ${filteredRankings.length} users');
@@ -284,7 +281,6 @@ class RankingService {
               displayName: data['displayName'] ?? 'Unknown User',
               photoURL: profileImageUrl, // profileImageUrlから取得
               totalPoints: data['points'] ?? 0, // pointsフィールドから取得
-              currentLevel: data['level'] ?? 1, // levelフィールドから取得
               badgeCount: 0, // Streamでは簡易的に0を設定（サブコレクションから計算が必要）
               stampCount: 0, // Streamでは簡易的に0を設定（サブコレクションから計算が必要）
               totalPayment: (data['paid'] ?? 0).toDouble(), // paidフィールドから取得
@@ -305,8 +301,6 @@ class RankingService {
               return b.totalPoints.compareTo(a.totalPoints);
             case RankingType.badgeCount:
               return b.badgeCount.compareTo(a.badgeCount);
-            case RankingType.level:
-              return b.currentLevel.compareTo(a.currentLevel);
             case RankingType.stampCount:
               return b.stampCount.compareTo(a.stampCount);
             case RankingType.totalPayment:
@@ -423,7 +417,6 @@ class RankingService {
     required String displayName,
     required String? photoURL,
     required int totalPoints,
-    required int currentLevel,
     required int badgeCount, // 互換性のために残すが使用しない
     String? periodId,
   }) async {
@@ -432,7 +425,6 @@ class RankingService {
         'displayName': displayName,
         'profileImageUrl': photoURL,
         'points': totalPoints,
-        'level': currentLevel,
         // badgeCountは含めない（サブコレクションから計算）
         'lastUpdated': FieldValue.serverTimestamp(),
       };
@@ -543,8 +535,6 @@ class RankingService {
         return 'points';
       case RankingType.badgeCount:
         return 'badgeCount';
-      case RankingType.level:
-        return 'level';
       case RankingType.stampCount:
         return 'stamps'; // 実際にはサブコレクションから計算
       case RankingType.totalPayment:

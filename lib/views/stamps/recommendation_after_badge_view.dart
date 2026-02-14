@@ -10,11 +10,11 @@ import '../../widgets/custom_button.dart';
 import '../../services/location_service.dart';
 
 class RecommendationAfterBadgeView extends ConsumerStatefulWidget {
-  final String sourceStoreId;
+  final String? sourceStoreId;
 
   const RecommendationAfterBadgeView({
     Key? key,
-    required this.sourceStoreId,
+    this.sourceStoreId,
   }) : super(key: key);
 
   @override
@@ -116,7 +116,7 @@ class _RecommendationAfterBadgeViewState
       final List<Map<String, dynamic>> stores = [];
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        if (doc.id == widget.sourceStoreId) {
+        if (widget.sourceStoreId != null && doc.id == widget.sourceStoreId) {
           continue;
         }
         final isActive = data['isActive'];
@@ -168,9 +168,9 @@ class _RecommendationAfterBadgeViewState
       _impressionIds[storeId] = docRef.id;
       batch.set(docRef, {
         'userId': user.uid,
-        'sourceStoreId': widget.sourceStoreId,
+        if (widget.sourceStoreId != null) 'sourceStoreId': widget.sourceStoreId,
         'targetStoreId': storeId,
-        'triggerType': 'badge_reward',
+        'triggerType': 'stamp_recommendation',
         'algorithmVersion': 'v1',
         'reason': reason,
         'shownAt': FieldValue.serverTimestamp(),
@@ -405,9 +405,9 @@ class _RecommendationAfterBadgeViewState
             .collection('recommendation_clicks')
             .add({
           'userId': user.uid,
-          'sourceStoreId': widget.sourceStoreId,
+          if (widget.sourceStoreId != null) 'sourceStoreId': widget.sourceStoreId,
           'targetStoreId': storeId,
-          'triggerType': 'badge_reward',
+          'triggerType': 'stamp_recommendation',
           'impressionId': _impressionIds[storeId],
           'clickedAt': FieldValue.serverTimestamp(),
           if (distance is num) 'distanceMeters': distance,
@@ -570,7 +570,7 @@ class _RecommendationAfterBadgeViewState
               ),
               const SizedBox(height: 8),
               Text(
-                'バッジ獲得後に気になるお店をチェックできます',
+                '気になるお店をチェックしてみましょう',
                 style: TextStyle(
                     color: Colors.white.withOpacity(0.8), fontSize: 12),
               ),

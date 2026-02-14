@@ -10,7 +10,6 @@ class RankingModel with _$RankingModel {
     required String displayName,
     required String? photoURL,
     required int totalPoints,
-    required int currentLevel,
     required int badgeCount,
     required int stampCount,
     required int totalPayment,
@@ -57,8 +56,6 @@ enum RankingType {
   totalPoints,
   @JsonValue('badge_count')
   badgeCount,
-  @JsonValue('level')
-  level,
   @JsonValue('stamp_count')
   stampCount,
   @JsonValue('total_payment')

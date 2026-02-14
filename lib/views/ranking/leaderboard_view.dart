@@ -330,8 +330,6 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
         return 'ポイント';
       case RankingType.badgeCount:
         return 'バッジ数';
-      case RankingType.level:
-        return 'レベル';
       case RankingType.stampCount:
         return 'スタンプ数';
       case RankingType.totalPayment:
@@ -362,8 +360,6 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
         return '${ranking.totalPoints} pt';
       case RankingType.badgeCount:
         return '${ranking.badgeCount} バッジ';
-      case RankingType.level:
-        return 'レベル ${ranking.currentLevel}';
       case RankingType.stampCount:
         return '${ranking.stampCount} スタンプ';
       case RankingType.totalPayment:

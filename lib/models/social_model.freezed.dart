@@ -25,7 +25,6 @@ mixin _$UserProfile {
   String? get photoURL => throw _privateConstructorUsedError;
   String? get bio => throw _privateConstructorUsedError;
   int get totalPoints => throw _privateConstructorUsedError;
-  int get currentLevel => throw _privateConstructorUsedError;
   int get badgeCount => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get lastActiveAt => throw _privateConstructorUsedError;
@@ -59,7 +58,6 @@ abstract class $UserProfileCopyWith<$Res> {
       String? photoURL,
       String? bio,
       int totalPoints,
-      int currentLevel,
       int badgeCount,
       DateTime createdAt,
       DateTime lastActiveAt,
@@ -92,7 +90,6 @@ class _$UserProfileCopyWithImpl<$Res, $Val extends UserProfile>
     Object? photoURL = freezed,
     Object? bio = freezed,
     Object? totalPoints = null,
-    Object? currentLevel = null,
     Object? badgeCount = null,
     Object? createdAt = null,
     Object? lastActiveAt = null,
@@ -124,10 +121,6 @@ class _$UserProfileCopyWithImpl<$Res, $Val extends UserProfile>
       totalPoints: null == totalPoints
           ? _value.totalPoints
           : totalPoints // ignore: cast_nullable_to_non_nullable
-              as int,
-      currentLevel: null == currentLevel
-          ? _value.currentLevel
-          : currentLevel // ignore: cast_nullable_to_non_nullable
               as int,
       badgeCount: null == badgeCount
           ? _value.badgeCount
@@ -187,7 +180,6 @@ abstract class _$$UserProfileImplCopyWith<$Res>
       String? photoURL,
       String? bio,
       int totalPoints,
-      int currentLevel,
       int badgeCount,
       DateTime createdAt,
       DateTime lastActiveAt,
@@ -218,7 +210,6 @@ class __$$UserProfileImplCopyWithImpl<$Res>
     Object? photoURL = freezed,
     Object? bio = freezed,
     Object? totalPoints = null,
-    Object? currentLevel = null,
     Object? badgeCount = null,
     Object? createdAt = null,
     Object? lastActiveAt = null,
@@ -250,10 +241,6 @@ class __$$UserProfileImplCopyWithImpl<$Res>
       totalPoints: null == totalPoints
           ? _value.totalPoints
           : totalPoints // ignore: cast_nullable_to_non_nullable
-              as int,
-      currentLevel: null == currentLevel
-          ? _value.currentLevel
-          : currentLevel // ignore: cast_nullable_to_non_nullable
               as int,
       badgeCount: null == badgeCount
           ? _value.badgeCount
@@ -308,7 +295,6 @@ class _$UserProfileImpl implements _UserProfile {
       required this.photoURL,
       required this.bio,
       required this.totalPoints,
-      required this.currentLevel,
       required this.badgeCount,
       required this.createdAt,
       required this.lastActiveAt,
@@ -338,8 +324,6 @@ class _$UserProfileImpl implements _UserProfile {
   final String? bio;
   @override
   final int totalPoints;
-  @override
-  final int currentLevel;
   @override
   final int badgeCount;
   @override
@@ -399,7 +383,7 @@ class _$UserProfileImpl implements _UserProfile {
 
   @override
   String toString() {
-    return 'UserProfile(userId: $userId, displayName: $displayName, photoURL: $photoURL, bio: $bio, totalPoints: $totalPoints, currentLevel: $currentLevel, badgeCount: $badgeCount, createdAt: $createdAt, lastActiveAt: $lastActiveAt, following: $following, followers: $followers, blockedUsers: $blockedUsers, isPrivate: $isPrivate, allowFollowRequests: $allowFollowRequests, interests: $interests, socialStats: $socialStats)';
+    return 'UserProfile(userId: $userId, displayName: $displayName, photoURL: $photoURL, bio: $bio, totalPoints: $totalPoints, badgeCount: $badgeCount, createdAt: $createdAt, lastActiveAt: $lastActiveAt, following: $following, followers: $followers, blockedUsers: $blockedUsers, isPrivate: $isPrivate, allowFollowRequests: $allowFollowRequests, interests: $interests, socialStats: $socialStats)';
   }
 
   @override
@@ -415,8 +399,6 @@ class _$UserProfileImpl implements _UserProfile {
             (identical(other.bio, bio) || other.bio == bio) &&
             (identical(other.totalPoints, totalPoints) ||
                 other.totalPoints == totalPoints) &&
-            (identical(other.currentLevel, currentLevel) ||
-                other.currentLevel == currentLevel) &&
             (identical(other.badgeCount, badgeCount) ||
                 other.badgeCount == badgeCount) &&
             (identical(other.createdAt, createdAt) ||
@@ -448,7 +430,6 @@ class _$UserProfileImpl implements _UserProfile {
       photoURL,
       bio,
       totalPoints,
-      currentLevel,
       badgeCount,
       createdAt,
       lastActiveAt,
@@ -483,7 +464,6 @@ abstract class _UserProfile implements UserProfile {
       required final String? photoURL,
       required final String? bio,
       required final int totalPoints,
-      required final int currentLevel,
       required final int badgeCount,
       required final DateTime createdAt,
       required final DateTime lastActiveAt,
@@ -508,8 +488,6 @@ abstract class _UserProfile implements UserProfile {
   String? get bio;
   @override
   int get totalPoints;
-  @override
-  int get currentLevel;
   @override
   int get badgeCount;
   @override

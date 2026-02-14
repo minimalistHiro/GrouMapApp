@@ -77,26 +77,13 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
         ..reset()
         ..forward();
     } else {
-      if (widget.sourceStoreId != null && widget.sourceStoreId!.isNotEmpty) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (_) => RecommendationAfterBadgeView(
-              sourceStoreId: widget.sourceStoreId!,
-            ),
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => RecommendationAfterBadgeView(
+            sourceStoreId: widget.sourceStoreId,
           ),
-        );
-      } else {
-        // ProviderScope を再作成して Riverpod のキャッシュをクリアした状態でホームへ
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (_) => ProviderScope(
-              key: UniqueKey(),
-              child: const MainNavigationView(initialIndex: 0),
-            ),
-          ),
-          (route) => false,
-        );
-      }
+        ),
+      );
     }
   }
 
@@ -145,17 +132,13 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
                 CustomButton(
                   text: '確認',
                   onPressed: () {
-                    if (widget.sourceStoreId != null && widget.sourceStoreId!.isNotEmpty) {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(
-                          builder: (_) => RecommendationAfterBadgeView(
-                            sourceStoreId: widget.sourceStoreId!,
-                          ),
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (_) => RecommendationAfterBadgeView(
+                          sourceStoreId: widget.sourceStoreId,
                         ),
-                      );
-                    } else {
-                      Navigator.of(context).popUntil((route) => route.isFirst);
-                    }
+                      ),
+                    );
                   },
                 ),
               ],
