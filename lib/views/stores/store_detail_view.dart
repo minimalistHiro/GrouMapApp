@@ -13,6 +13,7 @@ import '../../widgets/custom_top_tab_bar.dart';
 import '../posts/post_detail_view.dart';
 import '../coupons/coupon_detail_view.dart';
 import '../../constants/payment_methods_constants.dart';
+import '../../widgets/pill_tab_bar.dart';
 
 class StoreDetailView extends ConsumerStatefulWidget {
   final Map<String, dynamic> store;
@@ -35,6 +36,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   bool _isFavoriteLoading = true;
   bool _isUpdatingFavorite = false;
   bool _isBusinessHoursExpanded = false;
+  int _menuCategoryIndex = 0;
+  static const _menuCategories = ['コース', '料理', 'ドリンク', 'デザート'];
 
   @override
   void initState() {
@@ -1323,19 +1326,150 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildMenuTab() {
-    return SingleChildScrollView(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        child: const Center(
-          child: Text(
-            'メニュー機能は今後実装予定です',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
+    final storeId = widget.store['id'] as String?;
+    if (storeId == null) {
+      return const Center(child: Text('店舗情報が取得できません'));
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .collection('menu')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final allItems = (snapshot.data?.docs ?? [])
+            .map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>})
+            .toList();
+
+        // カテゴリごとのメニュー有無を判定
+        final disabledIndices = <int>{};
+        for (var i = 0; i < _menuCategories.length; i++) {
+          final hasItems = allItems.any((item) => item['category'] == _menuCategories[i]);
+          if (!hasItems) disabledIndices.add(i);
+        }
+
+        // 選択中カテゴリが非活性なら最初の活性カテゴリに自動切替
+        if (disabledIndices.contains(_menuCategoryIndex)) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            final firstEnabled = List.generate(_menuCategories.length, (i) => i)
+                .firstWhere((i) => !disabledIndices.contains(i), orElse: () => 0);
+            if (_menuCategoryIndex != firstEnabled) {
+              setState(() => _menuCategoryIndex = firstEnabled);
+            }
+          });
+        }
+
+        // 選択カテゴリのメニューを取得・ソート
+        final selectedCategory = _menuCategories[_menuCategoryIndex];
+        final filteredItems = allItems
+            .where((item) => item['category'] == selectedCategory)
+            .toList();
+        filteredItems.sort((a, b) {
+          final aOrder = _parseSortOrder(a['sortOrder']);
+          final bOrder = _parseSortOrder(b['sortOrder']);
+          final aHasOrder = aOrder > 0;
+          final bHasOrder = bOrder > 0;
+          if (aHasOrder && bHasOrder) return aOrder.compareTo(bOrder);
+          if (aHasOrder != bHasOrder) return aHasOrder ? -1 : 1;
+          return _parseCreatedAtMillis(b['createdAt'])
+              .compareTo(_parseCreatedAtMillis(a['createdAt']));
+        });
+
+        return Column(
+          children: [
+            // カテゴリバー
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: PillTabBar(
+                labels: _menuCategories,
+                selectedIndex: _menuCategoryIndex,
+                disabledIndices: disabledIndices,
+                onChanged: (index) {
+                  setState(() => _menuCategoryIndex = index);
+                },
+              ),
             ),
-          ),
-        ),
-      ),
+            // メニューリスト
+            Expanded(
+              child: allItems.isEmpty
+                  ? Center(
+                      child: Text(
+                        'メニューはありません',
+                        style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                      ),
+                    )
+                  : filteredItems.isEmpty
+                      ? Center(
+                          child: Text(
+                            'このカテゴリにメニューはありません',
+                            style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                          ),
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: filteredItems.length,
+                          separatorBuilder: (context, index) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final item = filteredItems[index];
+                            final imageUrl = item['imageUrl'] as String?;
+                            final hasImage =
+                                imageUrl != null && imageUrl.isNotEmpty;
+                            final price = item['price'];
+                            final priceText = price != null
+                                ? '¥${price is double ? price.toInt() : price}'
+                                : '';
+
+                            return Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                              child: Row(
+                                children: [
+                                  if (hasImage) ...[
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        imageUrl,
+                                        width: 60,
+                                        height: 60,
+                                        fit: BoxFit.cover,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                          return const SizedBox.shrink();
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                  ],
+                                  Expanded(
+                                    child: Text(
+                                      item['name'] ?? 'メニュー名なし',
+                                      style: const TextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                  Text(
+                                    priceText,
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+            ),
+          ],
+        );
+      },
     );
   }
 
