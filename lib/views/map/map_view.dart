@@ -79,6 +79,10 @@ class _MapViewState extends ConsumerState<MapView> {
   Map<String, List<Map<String, dynamic>>> _storeCoupons = {};
   bool _filterDataLoaded = false;
 
+  // 検索
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   // デフォルトの座標（東京駅周辺）
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
   static const String _lastLocationLatKey = 'map_last_location_lat';
@@ -94,6 +98,12 @@ class _MapViewState extends ConsumerState<MapView> {
     _currentCenter = _defaultLocation;
     _loadLastLocationFromPrefs();
     _initializeMapData();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadLastLocationFromPrefs() async {
@@ -303,6 +313,7 @@ class _MapViewState extends ConsumerState<MapView> {
               'socialMedia': socialMedia,
               'tags': tags,
               'paymentMethods': data['paymentMethods'],
+              'facilityInfo': data['facilityInfo'],
               'isActive': data['isActive'] ?? false,
               'isApproved': data['isApproved'] ?? false,
               'createdAt': data['createdAt'],
@@ -1411,6 +1422,9 @@ class _MapViewState extends ConsumerState<MapView> {
           // 検索バー
           _buildSearchBar(),
 
+          // 検索結果リスト
+          if (_searchQuery.isNotEmpty) _buildSearchResults(),
+
           // 拡大されたマーカーオーバーレイ
           if (_isShowStoreInfo) _buildStoreInfoCard(),
 
@@ -1769,6 +1783,12 @@ class _MapViewState extends ConsumerState<MapView> {
                 ],
               ),
               child: TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  setState(() {
+                    _searchQuery = value.trim();
+                  });
+                },
                 decoration: InputDecoration(
                   hintText: '店舗名を入力してください',
                   hintStyle: TextStyle(
@@ -1780,6 +1800,21 @@ class _MapViewState extends ConsumerState<MapView> {
                     color: Colors.grey,
                     size: 24,
                   ),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? GestureDetector(
+                          onTap: () {
+                            _searchController.clear();
+                            setState(() {
+                              _searchQuery = '';
+                            });
+                          },
+                          child: const Icon(
+                            Icons.close,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
+                        )
+                      : null,
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -1833,6 +1868,107 @@ class _MapViewState extends ConsumerState<MapView> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// ひらがなをカタカナに変換して検索用に正規化する
+  String _normalizeForSearch(String text) {
+    final buffer = StringBuffer();
+    for (final codeUnit in text.toLowerCase().runes) {
+      // ひらがな（U+3041〜U+3096）→ カタカナ（U+30A1〜U+30F6）に変換
+      if (codeUnit >= 0x3041 && codeUnit <= 0x3096) {
+        buffer.writeCharCode(codeUnit + 0x60);
+      } else {
+        buffer.writeCharCode(codeUnit);
+      }
+    }
+    return buffer.toString();
+  }
+
+  Widget _buildSearchResults() {
+    final double topPadding = MediaQuery.of(context).padding.top;
+    const double searchTopOffset = 4;
+    const double searchHeight = 50;
+    const double resultsTopGap = 4;
+
+    final query = _normalizeForSearch(_searchQuery);
+    final matchedStores = _stores.where((store) {
+      final isActive = store['isActive'] == true;
+      final isApproved = store['isApproved'] == true;
+      if (!isActive || !isApproved) return false;
+      final name = _normalizeForSearch((store['name'] ?? '').toString());
+      return name.contains(query);
+    }).take(5).toList();
+
+    if (matchedStores.isEmpty) return const SizedBox.shrink();
+
+    return Positioned(
+      top: topPadding + searchTopOffset + searchHeight + resultsTopGap,
+      left: 20,
+      right: 78, // フィルターボタン分の余白
+      child: Material(
+        elevation: 4,
+        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        child: ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          itemCount: matchedStores.length,
+          separatorBuilder: (_, __) => Divider(
+            height: 1,
+            color: Colors.grey[200],
+            indent: 16,
+            endIndent: 16,
+          ),
+          itemBuilder: (context, index) {
+            final store = matchedStores[index];
+            return InkWell(
+              borderRadius: index == 0
+                  ? const BorderRadius.vertical(top: Radius.circular(12))
+                  : index == matchedStores.length - 1
+                      ? const BorderRadius.vertical(
+                          bottom: Radius.circular(12))
+                      : BorderRadius.zero,
+              onTap: () {
+                FocusScope.of(context).unfocus();
+                _searchController.clear();
+                setState(() {
+                  _searchQuery = '';
+                });
+                // カメラ移動のみ（ピン拡大・ポップアップなし）
+                final storeData = _stores.firstWhere(
+                  (s) => s['id'] == store['id'],
+                  orElse: () => {},
+                );
+                if (storeData.isNotEmpty) {
+                  _currentCenter = storeData['position'] as LatLng;
+                  _currentZoom = 16.0;
+                  _mapController?.animateCamera(
+                    CameraUpdate.newCameraPosition(
+                      CameraPosition(
+                        target: _currentCenter,
+                        zoom: _currentZoom,
+                        bearing: _currentBearing,
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                child: Text(
+                  store['name'] ?? '',
+                  style: const TextStyle(fontSize: 15),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }

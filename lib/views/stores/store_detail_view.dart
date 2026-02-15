@@ -1599,8 +1599,215 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             _buildPaymentMethodsSection(),
             const SizedBox(height: 16),
           ],
+
+          // 設備・サービス
+          if (_hasFacilityInfo()) ...[
+            _buildFacilityInfoSection(),
+            const SizedBox(height: 16),
+          ],
         ],
       ),
+    );
+  }
+
+  bool _hasFacilityInfo() {
+    final facilityInfo = widget.store['facilityInfo'];
+    if (facilityInfo == null || facilityInfo is! Map) return false;
+
+    // 席数に1つでも値があるか
+    final seating = facilityInfo['seatingCapacity'];
+    if (seating is Map) {
+      for (final v in seating.values) {
+        if (v is int && v > 0) return true;
+      }
+    }
+
+    // その他のフィールドにデフォルト以外の値があるか
+    if (facilityInfo['parking'] != null && facilityInfo['parking'] != 'none') return true;
+    if (facilityInfo['accessInfo'] != null && (facilityInfo['accessInfo'] as String).isNotEmpty) return true;
+    if (facilityInfo['takeout'] == true) return true;
+    if (facilityInfo['smokingPolicy'] != null && facilityInfo['smokingPolicy'] != 'no_smoking') return true;
+    if (facilityInfo['hasWifi'] == true) return true;
+    if (facilityInfo['barrierFree'] == true) return true;
+    if (facilityInfo['childFriendly'] == true) return true;
+    if (facilityInfo['petFriendly'] == true) return true;
+
+    return false;
+  }
+
+  Widget _buildFacilityInfoSection() {
+    final facilityInfo = widget.store['facilityInfo'] as Map<String, dynamic>;
+    final seating = facilityInfo['seatingCapacity'] as Map<String, dynamic>?;
+    final parking = facilityInfo['parking'] as String? ?? 'none';
+    final accessInfo = facilityInfo['accessInfo'] as String? ?? '';
+    final takeout = facilityInfo['takeout'] as bool? ?? false;
+    final smokingPolicy = facilityInfo['smokingPolicy'] as String? ?? 'no_smoking';
+    final hasWifi = facilityInfo['hasWifi'] as bool? ?? false;
+    final barrierFree = facilityInfo['barrierFree'] as bool? ?? false;
+    final childFriendly = facilityInfo['childFriendly'] as bool? ?? false;
+    final petFriendly = facilityInfo['petFriendly'] as bool? ?? false;
+
+    // 席数のラベルマップ
+    const seatLabels = {
+      'counter': 'カウンター席',
+      'table': 'テーブル席',
+      'tatami': '座敷席',
+      'terrace': 'テラス席',
+      'privateRoom': '個室',
+      'sofa': 'ソファー席',
+    };
+
+    // 駐車場ラベル
+    String parkingLabel;
+    switch (parking) {
+      case 'available':
+        parkingLabel = 'あり';
+        break;
+      case 'nearby_coin_parking':
+        parkingLabel = '近隣にコインパーキングあり';
+        break;
+      default:
+        parkingLabel = '';
+    }
+
+    // 喫煙ラベル
+    String smokingLabel;
+    switch (smokingPolicy) {
+      case 'separated':
+        smokingLabel = '分煙';
+        break;
+      case 'smoking_allowed':
+        smokingLabel = '喫煙可';
+        break;
+      default:
+        smokingLabel = '';
+    }
+
+    // 席数チップ
+    final seatChips = <Widget>[];
+    if (seating != null) {
+      for (final entry in seatLabels.entries) {
+        final count = seating[entry.key];
+        if (count is int && count > 0) {
+          seatChips.add(Chip(
+            avatar: const Icon(Icons.event_seat, size: 16, color: Color(0xFFFF6B35)),
+            label: Text('${entry.value} $count席'),
+            backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+            labelStyle: const TextStyle(fontSize: 12),
+          ));
+        }
+      }
+    }
+
+    // サービスチップ
+    final serviceChips = <Widget>[];
+    if (parkingLabel.isNotEmpty) {
+      serviceChips.add(Chip(
+        avatar: const Icon(Icons.local_parking, size: 16, color: Color(0xFFFF6B35)),
+        label: Text('駐車場: $parkingLabel'),
+        backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+        labelStyle: const TextStyle(fontSize: 12),
+      ));
+    }
+    if (takeout) {
+      serviceChips.add(Chip(
+        avatar: const Icon(Icons.takeout_dining, size: 16, color: Color(0xFFFF6B35)),
+        label: const Text('テイクアウト対応'),
+        backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+        labelStyle: const TextStyle(fontSize: 12),
+      ));
+    }
+    if (smokingLabel.isNotEmpty) {
+      serviceChips.add(Chip(
+        avatar: const Icon(Icons.smoking_rooms, size: 16, color: Color(0xFFFF6B35)),
+        label: Text(smokingLabel),
+        backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+        labelStyle: const TextStyle(fontSize: 12),
+      ));
+    }
+    if (hasWifi) {
+      serviceChips.add(Chip(
+        avatar: const Icon(Icons.wifi, size: 16, color: Color(0xFFFF6B35)),
+        label: const Text('Wi-Fi'),
+        backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+        labelStyle: const TextStyle(fontSize: 12),
+      ));
+    }
+    if (barrierFree) {
+      serviceChips.add(Chip(
+        avatar: const Icon(Icons.accessible, size: 16, color: Color(0xFFFF6B35)),
+        label: const Text('バリアフリー'),
+        backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+        labelStyle: const TextStyle(fontSize: 12),
+      ));
+    }
+    if (childFriendly) {
+      serviceChips.add(Chip(
+        avatar: const Icon(Icons.child_care, size: 16, color: Color(0xFFFF6B35)),
+        label: const Text('子連れ対応'),
+        backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+        labelStyle: const TextStyle(fontSize: 12),
+      ));
+    }
+    if (petFriendly) {
+      serviceChips.add(Chip(
+        avatar: const Icon(Icons.pets, size: 16, color: Color(0xFFFF6B35)),
+        label: const Text('ペット同伴可'),
+        backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+        labelStyle: const TextStyle(fontSize: 12),
+      ));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '設備・サービス',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // 席数
+        if (seatChips.isNotEmpty) ...[
+          const Text(
+            '席数',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Wrap(spacing: 8, runSpacing: 8, children: seatChips),
+          const SizedBox(height: 12),
+        ],
+
+        // アクセス情報
+        if (accessInfo.isNotEmpty) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.directions_walk, color: Colors.grey, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  accessInfo,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // サービスチップ
+        if (serviceChips.isNotEmpty)
+          Wrap(spacing: 8, runSpacing: 8, children: serviceChips),
+      ],
     );
   }
 

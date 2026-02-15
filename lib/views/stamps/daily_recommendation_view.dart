@@ -82,6 +82,7 @@ class _DailyRecommendationViewState
       'location': location,
       'tags': tags,
       'socialMedia': socialMedia,
+      'facilityInfo': data['facilityInfo'],
       'createdAt': data['createdAt'],
       'updatedAt': data['updatedAt'],
       'isVisited': false,

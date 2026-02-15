@@ -397,6 +397,22 @@
       - `paypay`, `d_barai`, `rakuten_pay`, `au_pay`, `merpay`: 各サービス（bool）
       - `wechat_pay`, `alipay_plus`, `unionpay_qr`: 海外系（bool）
       - `coin_plus`, `j_coin_pay`, `smart_code`, `bank_pay`, `yucho_pay`: その他（bool）
+  - `facilityInfo`: 設備・サービス情報
+    - `seatingCapacity`: 座席数（種別ごと）
+      - `counter`: カウンター席数（int）
+      - `table`: テーブル席数（int）
+      - `tatami`: 座敷席数（int）
+      - `terrace`: テラス席数（int）
+      - `privateRoom`: 個室数（int）
+      - `sofa`: ソファー席数（int）
+    - `parking`: 駐車場（`none`/`free`/`paid`/`nearby`）
+    - `accessInfo`: 最寄り駅・アクセス情報（String）
+    - `takeout`: テイクアウト対応（bool）
+    - `smokingPolicy`: 喫煙ポリシー（`no_smoking`/`smoking`/`separated`/`e_cigarette_only`）
+    - `hasWifi`: Wi-Fi有無（bool）
+    - `barrierFree`: バリアフリー対応（bool）
+    - `childFriendly`: お子様連れ歓迎（bool）
+    - `petFriendly`: ペット同伴可（bool）
   - `location`: 位置（`latitude`, `longitude`）
   - `iconImageUrl`: アイコン画像
   - `storeImageUrl`: 店舗画像
