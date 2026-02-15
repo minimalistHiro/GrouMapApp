@@ -513,6 +513,22 @@ service cloud.firestore {
       allow update, delete: if isOwner() || isStoreOwner(resource.data.storeId);
     }
     
+    // レコメンデーション表示記録
+    match /recommendation_impressions/{impressionId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // レコメンデーションクリック記録
+    match /recommendation_clicks/{clickId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
     // その他のコレクションは認証されたユーザーのみ読み取り可能
     match /{document=**} {
       allow read: if request.auth != null;

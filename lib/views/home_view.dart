@@ -2396,6 +2396,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
       }
     } finally {
       _isShowingAchievement = false;
+      _lastAchievementCheckAt = DateTime.now();
     }
   }
 }

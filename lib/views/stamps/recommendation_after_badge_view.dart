@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math';
-import '../main_navigation_view.dart';
 import '../stores/store_detail_view.dart';
 import '../../widgets/custom_button.dart';
 import '../../services/location_service.dart';
@@ -141,7 +140,11 @@ class _RecommendationAfterBadgeViewState
         _isLoading = false;
       });
 
-      await _recordImpressions(selected);
+      try {
+        await _recordImpressions(selected);
+      } catch (_) {
+        // インプレッション記録の失敗は店舗表示に影響させない
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -424,15 +427,7 @@ class _RecommendationAfterBadgeViewState
   }
 
   void _finishFlow() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => ProviderScope(
-          key: UniqueKey(),
-          child: const MainNavigationView(initialIndex: 0),
-        ),
-      ),
-      (route) => false,
-    );
+    Navigator.of(context).pop();
   }
 
   @override

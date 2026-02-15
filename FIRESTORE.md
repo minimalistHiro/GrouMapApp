@@ -230,6 +230,27 @@
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時
 
+### recommendation_clicks
+- `recommendation_clicks/{clickId}`: レコメンドクリック記録
+  - `userId`: ユーザーUID
+  - `sourceStoreId`: スタンプ押印元店舗ID（任意）
+  - `targetStoreId`: クリック先店舗ID
+  - `triggerType`: トリガー種別（`stamp_recommendation`）
+  - `impressionId`: 表示記録ID
+  - `clickedAt`: クリック日時
+  - `distanceMeters`: 距離（メートル、任意）
+
+### recommendation_impressions
+- `recommendation_impressions/{impressionId}`: レコメンド表示記録
+  - `userId`: ユーザーUID
+  - `sourceStoreId`: スタンプ押印元店舗ID（任意）
+  - `targetStoreId`: レコメンド先店舗ID
+  - `triggerType`: トリガー種別（`stamp_recommendation`）
+  - `algorithmVersion`: アルゴリズムバージョン（`v1`）
+  - `reason`: レコメンド理由
+  - `shownAt`: 表示日時
+  - `distanceMeters`: 距離（メートル、任意）
+
 ### public_coupons
 - `public_coupons/{couponId}`: ユーザー向け公開クーポン
   - `key`: `storeId::couponId`
