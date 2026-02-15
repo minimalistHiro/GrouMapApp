@@ -617,24 +617,22 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
     _dailyRecommendationShown = true;
 
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'lastLoginAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      debugPrint('lastLoginAt更新エラー: $e');
-    }
+    if (!mounted) return;
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted) return;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const DailyRecommendationView(),
-        ),
-      );
+    // ポップアップ表示直前にlastLoginAtを更新（mountedが確認できた場合のみ）
+    FirebaseFirestore.instance.collection('users').doc(userId).update({
+      'lastLoginAt': FieldValue.serverTimestamp(),
+    }).catchError((e) {
+      debugPrint('lastLoginAt更新エラー: $e');
     });
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const DailyRecommendationView(),
+      ),
+    );
   }
 
   void _showInviteeReferralPopup(String userId, Map<dynamic, dynamic> popupData) {
