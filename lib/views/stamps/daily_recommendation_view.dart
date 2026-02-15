@@ -8,21 +8,16 @@ import '../stores/store_detail_view.dart';
 import '../../widgets/custom_button.dart';
 import '../../services/location_service.dart';
 
-class RecommendationAfterBadgeView extends ConsumerStatefulWidget {
-  final String? sourceStoreId;
-
-  const RecommendationAfterBadgeView({
-    Key? key,
-    this.sourceStoreId,
-  }) : super(key: key);
+class DailyRecommendationView extends ConsumerStatefulWidget {
+  const DailyRecommendationView({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<RecommendationAfterBadgeView> createState() =>
-      _RecommendationAfterBadgeViewState();
+  ConsumerState<DailyRecommendationView> createState() =>
+      _DailyRecommendationViewState();
 }
 
-class _RecommendationAfterBadgeViewState
-    extends ConsumerState<RecommendationAfterBadgeView> {
+class _DailyRecommendationViewState
+    extends ConsumerState<DailyRecommendationView> {
   final Map<String, String> _impressionIds = {};
   List<Map<String, dynamic>> _stores = [];
   bool _isLoading = true;
@@ -115,9 +110,6 @@ class _RecommendationAfterBadgeViewState
       final List<Map<String, dynamic>> stores = [];
       for (final doc in snapshot.docs) {
         final data = doc.data();
-        if (widget.sourceStoreId != null && doc.id == widget.sourceStoreId) {
-          continue;
-        }
         final isActive = data['isActive'];
         final isApproved = data['isApproved'];
         if (isActive == false || isApproved == false) {
@@ -163,7 +155,7 @@ class _RecommendationAfterBadgeViewState
     for (final store in stores) {
       final storeId = store['id']?.toString();
       if (storeId == null || storeId.isEmpty) continue;
-      final reason = (store['recommendReason'] ?? 'badge_reward').toString();
+      final reason = (store['recommendReason'] ?? 'general').toString();
       final distance = store['distanceMeters'];
       final docRef = FirebaseFirestore.instance
           .collection('recommendation_impressions')
@@ -171,9 +163,8 @@ class _RecommendationAfterBadgeViewState
       _impressionIds[storeId] = docRef.id;
       batch.set(docRef, {
         'userId': user.uid,
-        if (widget.sourceStoreId != null) 'sourceStoreId': widget.sourceStoreId,
         'targetStoreId': storeId,
-        'triggerType': 'stamp_recommendation',
+        'triggerType': 'daily_login_recommendation',
         'algorithmVersion': 'v1',
         'reason': reason,
         'shownAt': FieldValue.serverTimestamp(),
@@ -395,7 +386,7 @@ class _RecommendationAfterBadgeViewState
     if (isUnvisited) {
       return 'unvisited';
     }
-    return 'badge_reward';
+    return 'general';
   }
 
   Future<void> _handleStoreTap(Map<String, dynamic> store) async {
@@ -408,9 +399,8 @@ class _RecommendationAfterBadgeViewState
             .collection('recommendation_clicks')
             .add({
           'userId': user.uid,
-          if (widget.sourceStoreId != null) 'sourceStoreId': widget.sourceStoreId,
           'targetStoreId': storeId,
-          'triggerType': 'stamp_recommendation',
+          'triggerType': 'daily_login_recommendation',
           'impressionId': _impressionIds[storeId],
           'clickedAt': FieldValue.serverTimestamp(),
           if (distance is num) 'distanceMeters': distance,

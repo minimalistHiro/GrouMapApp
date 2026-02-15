@@ -16,6 +16,7 @@ import 'qr/qr_generator_view.dart';
 import 'profile/profile_view.dart';
 import 'posts/posts_view.dart';
 import 'payment/point_payment_detail_view.dart';
+import 'stamps/daily_recommendation_view.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
   final int initialIndex;
@@ -65,6 +66,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   bool _isNavigatingToPointDetail = false;
   String? _lastHandledRequestId;
   bool _referralPopupShown = false;
+  bool _dailyRecommendationShown = false;
   bool _didInitialLoad = false;
   String? _lastInitialUserId;
 
@@ -89,6 +91,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
               final userData = data.valueOrNull;
               if (userData == null) return;
               _maybeShowReferralPopup(user.uid, userData);
+              _maybeShowDailyRecommendation(user.uid, userData);
             },
           );
         });
@@ -588,6 +591,50 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (!referrerPopupShown && referrerPopupData is Map) {
       _showReferrerReferralPopup(userId, referrerPopupData);
     }
+  }
+
+  Future<void> _maybeShowDailyRecommendation(String userId, Map<String, dynamic> userData) async {
+    if (_dailyRecommendationShown) return;
+
+    final lastLoginAt = userData['lastLoginAt'];
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+
+    bool isFirstLoginToday = true;
+    if (lastLoginAt != null) {
+      DateTime lastLoginDate;
+      if (lastLoginAt is Timestamp) {
+        lastLoginDate = lastLoginAt.toDate();
+      } else if (lastLoginAt is DateTime) {
+        lastLoginDate = lastLoginAt;
+      } else {
+        lastLoginDate = DateTime(2000);
+      }
+      isFirstLoginToday = lastLoginDate.isBefore(todayStart);
+    }
+
+    if (!isFirstLoginToday) return;
+
+    _dailyRecommendationShown = true;
+
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'lastLoginAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      debugPrint('lastLoginAt更新エラー: $e');
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const DailyRecommendationView(),
+        ),
+      );
+    });
   }
 
   void _showInviteeReferralPopup(String userId, Map<dynamic, dynamic> popupData) {

@@ -2,7 +2,7 @@
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
 ※ 2026-02-10更新: `StoreDetailView` のトップタブにクーポン一覧と投稿プレビュー（新着15件）を追加し、投稿の「全て見る＞」で上部タブ「投稿」へ遷移する導線を追加。`CouponsView` のクーポンリストカードUIを共通化し、`StoreListView` のヘッダーを `CommonHeader` + `CustomTopTabBar` 構成へ統一。
-※ 2026-02-08更新: ユーザー用画面の遷移元差分を解消（`StoreListView` / `MapView` / `RecommendationAfterBadgeView` から `StoreDetailView` へ渡す店舗データを正規化）。
+※ 2026-02-08更新: ユーザー用画面の遷移元差分を解消（`StoreListView` / `MapView` / `DailyRecommendationView` から `StoreDetailView` へ渡す店舗データを正規化）。
 
 ## 起動・ナビゲーション
 
@@ -148,9 +148,9 @@
 - 構成: バッジ獲得アニメーション、バッジ情報、次へボタン
 - 説明: バッジ獲得の演出画面
 
-### RecommendationAfterBadgeView (`lib/views/stamps/recommendation_after_badge_view.dart`)
+### DailyRecommendationView (`lib/views/stamps/daily_recommendation_view.dart`)
 - 構成: おすすめ店舗リスト、店舗カード、遷移導線
-- 説明: スタンプ押印後の店舗おすすめ画面（※現在は未使用。BadgeAwardedView終了後はホーム画面に戻る）
+- 説明: その日初めてのアプリ起動時にホーム画面から自動表示されるおすすめ店舗画面（MainNavigationView initState → userDataListenerから発火）
 
 ### BadgesView (`lib/views/badges/badges_view.dart`)
 - 構成: カテゴリフィルタ、バッジグリッド、取得状態表示
@@ -312,7 +312,7 @@
 
 その他の単独遷移・演出系
 ├─ バッジ獲得（BadgeAwardedView）→ ホーム画面に戻る
-├─ おすすめ店舗（RecommendationAfterBadgeView）※現在は未使用
+├─ おすすめ店舗（DailyRecommendationView）→ その日初回ログイン時に自動表示
 ├─ ポイント利用入力（PointUsageRequestView）
 │  └─ 店舗側入力待ち（PointUsageWaitingView）
 └─ 取引履歴（TransactionHistoryView）
