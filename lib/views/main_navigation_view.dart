@@ -177,11 +177,17 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (bottomTabIndex == null) {
       return;
     }
+    final previousTab = tabs[_currentIndex];
     final nextTab = bottomTabs[bottomTabIndex];
     final nextIndex = tabs.indexOf(nextTab);
     setState(() {
       _setCurrentTab(nextIndex, tabs);
     });
+
+    // ホームタブから離れるときにレコメンド店舗をクリア
+    if (previousTab == _MainTab.home && nextTab != _MainTab.home) {
+      HomeView.clearRecommendations();
+    }
 
     // タブに応じて必要なデータを読み込み
     await _loadTabSpecificData(nextTab);
@@ -194,10 +200,17 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (!tabs.contains(tab)) {
       return;
     }
+    final previousTab = tabs[_currentIndex];
     final nextIndex = tabs.indexOf(tab);
     setState(() {
       _setCurrentTab(nextIndex, tabs);
     });
+
+    // ホームタブから離れるときにレコメンド店舗をクリア
+    if (previousTab == _MainTab.home && tab != _MainTab.home) {
+      HomeView.clearRecommendations();
+    }
+
     await _loadTabSpecificData(tab);
   }
 

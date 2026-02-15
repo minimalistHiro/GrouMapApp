@@ -58,11 +58,17 @@ final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((r
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({Key? key}) : super(key: key);
 
+  /// ホームタブから離れたときにレコメンド店舗をクリアする
+  static void clearRecommendations() {
+    _HomeViewState._instance?._clearRecommendations();
+  }
+
   @override
   ConsumerState<HomeView> createState() => _HomeViewState();
 }
 
 class _HomeViewState extends ConsumerState<HomeView> {
+  static _HomeViewState? _instance;
   late final PageController _referralPageController;
   Timer? _referralTimer;
   int _referralPageIndex = 0;
@@ -73,8 +79,17 @@ class _HomeViewState extends ConsumerState<HomeView> {
   static const bool _showDebugLoadingLabels = false;
   bool _isRecommendedStoresLoading = false;
   String? _recommendedStoresError;
-  String? _recommendedStoresUserId;
   List<Map<String, dynamic>> _recommendedStores = [];
+  bool _shouldShowRecommendedStores = false;
+
+  void _clearRecommendations() {
+    if (mounted) {
+      setState(() {
+        _shouldShowRecommendedStores = false;
+        _recommendedStores = [];
+      });
+    }
+  }
 
   Widget _buildLoadingIndicatorWithLabel(
     String label, {
@@ -152,6 +167,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
   @override
   void initState() {
     super.initState();
+    _instance = this;
     _referralPageController = PageController(initialPage: 0);
     _referralTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!_referralPageController.hasClients) {
@@ -167,13 +183,13 @@ class _HomeViewState extends ConsumerState<HomeView> {
         curve: Curves.easeInOut,
       );
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadRecommendedStores(FirebaseAuth.instance.currentUser);
-    });
   }
 
   @override
   void dispose() {
+    if (_instance == this) {
+      _instance = null;
+    }
     _referralTimer?.cancel();
     _referralPageController.dispose();
     super.dispose();
@@ -232,12 +248,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
     final isLoggedIn = user != null;
     final userId = user?.uid ?? 'guest';
-    if (_recommendedStoresUserId != userId && !_isRecommendedStoresLoading) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _loadRecommendedStores(user);
-      });
-    }
     if (isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -257,7 +267,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ref.invalidate(userDataProvider(userId));
               ref.invalidate(userBadgeCountProvider(userId));
             }
-            await _loadRecommendedStores(user);
+            if (_shouldShowRecommendedStores) {
+              await _loadRecommendedStores(user);
+            }
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -277,9 +289,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   const SizedBox(height: 12),
                 ],
 
-                _buildRecommendedStoresSection(context),
-
-                const SizedBox(height: 12),
+                if (_shouldShowRecommendedStores) ...[
+                  _buildRecommendedStoresSection(context),
+                  const SizedBox(height: 12),
+                ],
 
                 _buildReferralSection(context, ref),
                 
@@ -1004,7 +1017,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
     setState(() {
       _isRecommendedStoresLoading = true;
       _recommendedStoresError = null;
-      _recommendedStoresUserId = user?.uid ?? 'guest';
     });
 
     try {
@@ -2393,6 +2405,13 @@ class _HomeViewState extends ConsumerState<HomeView> {
             ),
           ),
         );
+      }
+      // スタンプフロー後にレコメンド店舗を表示
+      if (mounted) {
+        setState(() {
+          _shouldShowRecommendedStores = true;
+        });
+        await _loadRecommendedStores(user);
       }
     } finally {
       _isShowingAchievement = false;
