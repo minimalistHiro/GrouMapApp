@@ -12,6 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../stores/store_detail_view.dart';
 import '../../widgets/custom_button.dart';
+import '../../models/map_filter_model.dart';
+import '../../services/map_filter_service.dart';
+import 'filter_settings_view.dart';
 
 class _MarkerVisual {
   final Color color;
@@ -70,6 +73,12 @@ class _MapViewState extends ConsumerState<MapView> {
   bool _pioneerMode = false; // 「開拓」表示（未開拓/開拓/常連 のスタンプ状況）
   String _selectedMode = 'none'; // 'none' | 'category' | 'pioneer'
 
+  // 詳細フィルター
+  MapFilterModel _mapFilter = const MapFilterModel();
+  List<String> _favoriteStoreIds = [];
+  Map<String, List<Map<String, dynamic>>> _storeCoupons = {};
+  bool _filterDataLoaded = false;
+
   // デフォルトの座標（東京駅周辺）
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
   static const String _lastLocationLatKey = 'map_last_location_lat';
@@ -118,6 +127,12 @@ class _MapViewState extends ConsumerState<MapView> {
 
   // 初期データ読み込み
   Future<void> _initializeMapData() async {
+    // フィルター設定とお気に入りを並行読み込み
+    await Future.wait([
+      _loadFilterSettings(),
+      _loadFavoriteStoreIds(),
+    ]);
+
     // 店舗データを先に読み込む
     await _loadStoresFromDatabase();
 
@@ -128,9 +143,88 @@ class _MapViewState extends ConsumerState<MapView> {
       print('初期位置情報取得に失敗しましたが、アプリは継続します: $e');
     }
 
+    // フィルターにクーポン条件がある場合、クーポンデータを読み込む
+    if (_mapFilter.hasCoupon || _mapFilter.hasAvailableCoupon) {
+      await _loadStoreCoupons();
+    }
+
+    _filterDataLoaded = true;
+
     // 特定の店舗が選択されている場合、その店舗を選択状態にする
     if (widget.selectedStoreId != null) {
       await _selectStoreOnMap(widget.selectedStoreId!);
+    }
+  }
+
+  // フィルター設定を読み込む
+  Future<void> _loadFilterSettings() async {
+    try {
+      final filter = await MapFilterService.loadFilter();
+      if (mounted) {
+        setState(() {
+          _mapFilter = filter;
+          _showOpenNowOnly = filter.showOpenNowOnly;
+        });
+      }
+    } catch (e) {
+      print('フィルター設定の読み込みに失敗しました: $e');
+    }
+  }
+
+  // お気に入り店舗IDを読み込む
+  Future<void> _loadFavoriteStoreIds() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        final favorites = (data['favoriteStoreIds'] as List<dynamic>?)
+                ?.cast<String>() ??
+            [];
+        if (mounted) {
+          setState(() {
+            _favoriteStoreIds = favorites;
+          });
+        }
+      }
+    } catch (e) {
+      print('お気に入り店舗の読み込みに失敗しました: $e');
+    }
+  }
+
+  // 店舗のクーポンデータを読み込む
+  Future<void> _loadStoreCoupons() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('public_coupons')
+          .where('isActive', isEqualTo: true)
+          .get();
+      final Map<String, List<Map<String, dynamic>>> coupons = {};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final storeId = data['storeId'] as String?;
+        if (storeId == null) continue;
+        // 有効期限チェック
+        final validUntil = data['validUntil'];
+        final noExpiry = data['noExpiry'] as bool? ?? false;
+        if (!noExpiry && validUntil != null) {
+          final DateTime expiry = (validUntil as Timestamp).toDate();
+          if (expiry.isBefore(DateTime.now())) continue;
+        }
+        coupons.putIfAbsent(storeId, () => []);
+        coupons[storeId]!.add(data);
+      }
+      if (mounted) {
+        setState(() {
+          _storeCoupons = coupons;
+        });
+      }
+    } catch (e) {
+      print('クーポンデータの読み込みに失敗しました: $e');
     }
   }
 
@@ -1034,6 +1128,10 @@ class _MapViewState extends ConsumerState<MapView> {
       if (_showOpenNowOnly && !_isStoreOpenNow(store)) {
         continue;
       }
+      // 詳細フィルターの適用
+      if (!_passesFilter(store)) {
+        continue;
+      }
       final bool isExpanded = _expandedMarkerId == store['id'];
       final String storeId = store['id'];
       final String flowerType = store['flowerType'];
@@ -1148,6 +1246,89 @@ class _MapViewState extends ConsumerState<MapView> {
     } catch (_) {
       return false;
     }
+  }
+
+  // 詳細フィルターの適用チェック
+  bool _passesFilter(Map<String, dynamic> store) {
+    final filter = _mapFilter;
+
+    // フィルターが無効なら全て通過
+    if (!filter.isActive) return true;
+
+    final String storeId = store['id'] ?? '';
+
+    // カテゴリフィルター
+    if (filter.selectedCategories.isNotEmpty) {
+      final String category = (store['category'] ?? 'その他').toString();
+      if (!filter.selectedCategories.contains(category)) return false;
+    }
+
+    // 開拓状態フィルター
+    if (filter.explorationStatus.isNotEmpty) {
+      final String flowerType = (store['flowerType'] ?? 'unvisited').toString();
+      // flowerType: 'unvisited', 'visited'(exploring), 'regular'
+      final String status =
+          flowerType == 'visited' ? 'exploring' : flowerType;
+      if (!filter.explorationStatus.contains(status)) return false;
+    }
+
+    // お気に入りフィルター
+    if (filter.favoritesOnly) {
+      if (!_favoriteStoreIds.contains(storeId)) return false;
+    }
+
+    // 決済方法フィルター
+    if (filter.paymentMethodCategories.isNotEmpty) {
+      final paymentMethods = store['paymentMethods'];
+      if (paymentMethods == null || paymentMethods is! Map) return false;
+      bool hasAny = false;
+      for (final category in filter.paymentMethodCategories) {
+        final categoryData = paymentMethods[category];
+        if (categoryData is Map) {
+          for (final entry in categoryData.entries) {
+            if (entry.value == true) {
+              hasAny = true;
+              break;
+            }
+          }
+        }
+        if (hasAny) break;
+      }
+      if (!hasAny) return false;
+    }
+
+    // クーポンフィルター
+    if (filter.hasCoupon) {
+      final coupons = _storeCoupons[storeId];
+      if (coupons == null || coupons.isEmpty) return false;
+
+      // 利用可能クーポンフィルター
+      if (filter.hasAvailableCoupon) {
+        final userStamp = _userStamps[storeId];
+        final int stamps = (userStamp?['stamps'] as int?) ?? 0;
+        final hasAvailable = coupons.any((coupon) {
+          final requiredStamps =
+              (coupon['requiredStampCount'] as int?) ?? 0;
+          return stamps >= requiredStamps;
+        });
+        if (!hasAvailable) return false;
+      }
+    }
+
+    // 距離フィルター
+    if (filter.maxDistanceKm != null && _currentLocation != null) {
+      final LatLng storePos = store['position'] as LatLng;
+      final double distanceM = Geolocator.distanceBetween(
+        _currentLocation!.latitude,
+        _currentLocation!.longitude,
+        storePos.latitude,
+        storePos.longitude,
+      );
+      final double distanceKm = distanceM / 1000.0;
+      if (distanceKm > filter.maxDistanceKm!) return false;
+    }
+
+    return true;
   }
 
   // 特定の店舗を地図上で選択状態にする
@@ -1516,6 +1697,53 @@ class _MapViewState extends ConsumerState<MapView> {
     );
   }
 
+  // フィルター設定画面への遷移
+  Future<void> _openFilterSettings() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('ログインが必要です'),
+          content: const Text('フィルター機能を使用するにはログインしてください。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final result = await Navigator.of(context).push<MapFilterModel>(
+      MaterialPageRoute(
+        builder: (context) =>
+            FilterSettingsView(initialFilter: _mapFilter),
+      ),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _mapFilter = result;
+        _showOpenNowOnly = result.showOpenNowOnly;
+      });
+
+      // クーポンフィルターが有効な場合はクーポンデータを再読み込み
+      if (result.hasCoupon || result.hasAvailableCoupon) {
+        await _loadStoreCoupons();
+      }
+
+      // お気に入りフィルターが有効な場合はお気に入りを再読み込み
+      if (result.favoritesOnly) {
+        await _loadFavoriteStoreIds();
+      }
+
+      await _createMarkers();
+    }
+  }
+
   Widget _buildSearchBar() {
     final double topPadding = MediaQuery.of(context).padding.top;
     const double searchTopOffset = 4;
@@ -1523,35 +1751,88 @@ class _MapViewState extends ConsumerState<MapView> {
       top: topPadding + searchTopOffset,
       left: 20,
       right: 20,
-      child: Container(
-        height: 50,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(25),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
+      child: Row(
+        children: [
+          // 検索ボックス
+          Expanded(
+            child: Container(
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: TextField(
+                decoration: InputDecoration(
+                  hintText: '店舗名を入力してください',
+                  hintStyle: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 16,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    color: Colors.grey,
+                    size: 24,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
             ),
-          ],
-        ),
-        child: TextField(
-          decoration: InputDecoration(
-            hintText: '店舗名を入力してください',
-            hintStyle: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 16,
-            ),
-            prefixIcon: const Icon(
-              Icons.search,
-              color: Colors.grey,
-              size: 24,
-            ),
-            border: InputBorder.none,
-            contentPadding: const EdgeInsets.symmetric(vertical: 14),
           ),
-        ),
+          const SizedBox(width: 8),
+          // フィルターボタン
+          GestureDetector(
+            onTap: _openFilterSettings,
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: _mapFilter.isActive
+                    ? const Color(0xFFFF6B35)
+                    : Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    Icons.tune,
+                    color: _mapFilter.isActive ? Colors.white : Colors.grey[700],
+                    size: 24,
+                  ),
+                  // フィルター有効時のインジケーター
+                  if (_mapFilter.isActive)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

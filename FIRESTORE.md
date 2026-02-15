@@ -582,3 +582,13 @@
     - `isDelivered`: 配信済み
     - `data`: 付帯データ
     - `tags`: タグ
+  - `map_filter/settings`: マップフィルター設定
+    - `showOpenNowOnly`: 営業中のみ表示（bool）
+    - `selectedCategories`: 選択カテゴリ（List<string>、空=全表示）
+    - `explorationStatus`: 開拓状態（List<string>: 'unvisited'/'exploring'/'regular'、空=全表示）
+    - `favoritesOnly`: お気に入りのみ表示（bool）
+    - `paymentMethodCategories`: 決済方法カテゴリ（List<string>: 'cash'/'card'/'emoney'/'qr'）
+    - `hasCoupon`: クーポンあり店舗のみ（bool）
+    - `hasAvailableCoupon`: 利用可能クーポンあり店舗のみ（bool）
+    - `maxDistanceKm`: 最大距離km（number、null=制限なし）
+    - `updatedAt`: 更新日時

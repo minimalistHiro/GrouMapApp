@@ -51,8 +51,12 @@
 - 説明: 主要情報と未訪問店舗のレコメンドを集約したダッシュボード
 
 ### MapView (`lib/views/map/map_view.dart`)
-- 構成: GoogleMap、店舗マーカー、検索窓、店舗情報パネル
-- 説明: 周辺店舗を地図で探す画面
+- 構成: GoogleMap、店舗マーカー、検索窓（左）＋フィルターボタン（右）、店舗情報パネル
+- 説明: 周辺店舗を地図で探す画面。フィルターボタンから詳細フィルター設定画面へ遷移可能
+
+### FilterSettingsView (`lib/views/map/filter_settings_view.dart`)
+- 構成: CommonHeader、各フィルターセクション（営業状況/ジャンル/開拓状態/お気に入り/決済方法/クーポン/距離）、リセット＋保存ボタン
+- 説明: マップ表示のフィルター条件を設定する画面。設定はFirestore（users/{userId}/map_filter/settings）に保存
 
 ### PostsView (`lib/views/posts/posts_view.dart`)
 - 構成: 投稿グリッド（3列）、空/エラー/読み込み状態（`public_instagram_posts` から日付降順で取得し、50件ずつ追加読込・最大300件表示）
@@ -277,6 +281,7 @@
             │  └─ フィードバック（FeedbackView）
             │
             ├─ マップ（MapView）
+            │  ├─ フィルター設定（FilterSettingsView）
             │  └─ 店舗詳細（StoreDetailView）
             │
             ├─ QRコード（QRGeneratorView）
