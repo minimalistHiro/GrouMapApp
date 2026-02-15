@@ -150,7 +150,7 @@
 
 ### RecommendationAfterBadgeView (`lib/views/stamps/recommendation_after_badge_view.dart`)
 - 構成: おすすめ店舗リスト、店舗カード、遷移導線
-- 説明: スタンプ押印後の店舗おすすめ画面
+- 説明: スタンプ押印後の店舗おすすめ画面（※現在は未使用。BadgeAwardedView終了後はホーム画面に戻る）
 
 ### BadgesView (`lib/views/badges/badges_view.dart`)
 - 構成: カテゴリフィルタ、バッジグリッド、取得状態表示
@@ -311,8 +311,8 @@
                   └─ 退会完了（AccountDeletionCompleteView）
 
 その他の単独遷移・演出系
-├─ バッジ獲得（BadgeAwardedView）
-├─ おすすめ店舗（RecommendationAfterBadgeView）
+├─ バッジ獲得（BadgeAwardedView）→ ホーム画面に戻る
+├─ おすすめ店舗（RecommendationAfterBadgeView）※現在は未使用
 ├─ ポイント利用入力（PointUsageRequestView）
 │  └─ 店舗側入力待ち（PointUsageWaitingView）
 └─ 取引履歴（TransactionHistoryView）

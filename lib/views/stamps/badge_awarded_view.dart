@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../main_navigation_view.dart';
 import '../../widgets/custom_button.dart';
-import 'recommendation_after_badge_view.dart';
 
 class BadgeAwardedView extends StatefulWidget {
   final List<Map<String, dynamic>> badges;
@@ -77,13 +74,7 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
         ..reset()
         ..forward();
     } else {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => RecommendationAfterBadgeView(
-            sourceStoreId: widget.sourceStoreId,
-          ),
-        ),
-      );
+      Navigator.of(context).pop();
     }
   }
 
@@ -132,13 +123,7 @@ class _BadgeAwardedViewState extends State<BadgeAwardedView>
                 CustomButton(
                   text: '確認',
                   onPressed: () {
-                    Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => RecommendationAfterBadgeView(
-                          sourceStoreId: widget.sourceStoreId,
-                        ),
-                      ),
-                    );
+                    Navigator.of(context).pop();
                   },
                 ),
               ],
