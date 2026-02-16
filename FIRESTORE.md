@@ -88,6 +88,18 @@
     - `readByUserAt`: ユーザー既読日時
     - `readByOwnerAt`: オーナー既読日時
 
+### news
+- `news/{newsId}`: ニュース
+  - `id`: ニュースID
+  - `title`: タイトル
+  - `content`: テキスト本文
+  - `imageUrl`: 画像URL（1:1比率）
+  - `publishStartDate`: 掲載開始日
+  - `publishEndDate`: 掲載終了日
+  - `createdBy`: 作成者UID
+  - `createdAt`: 作成日時
+  - `updatedAt`: 更新日時
+
 ### notifications
 - `notifications/{notificationId}`: 全体お知らせ
   - `notificationId`: お知らせID

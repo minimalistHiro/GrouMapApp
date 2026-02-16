@@ -47,7 +47,7 @@
 ## ホーム・メインタブ
 
 ### HomeView (`lib/views/home_view.dart`)
-- 構成: ログアウト時のみログイン/新規登録カード、現在地に近いおすすめ店舗カード（タイトル無し・タップで店舗詳細へ遷移）、メニュー、クーポン/投稿セクション（Instagram公開投稿）、各詳細への導線
+- 構成: ログアウト時のみログイン/新規登録カード、現在地に近いおすすめ店舗カード（タイトル無し・タップで店舗詳細へ遷移）、メニュー、ニュースセクション（掲載期間内・画像のみ1:1横スクロール・最大7件）、クーポン/投稿セクション（Instagram公開投稿）、各詳細への導線
 - 説明: 主要情報と未訪問店舗のレコメンドを集約したダッシュボード
 
 ### MapView (`lib/views/map/map_view.dart`)
@@ -65,6 +65,10 @@
 ### PostDetailView (`lib/views/posts/post_detail_view.dart`)
 - 構成: 画像カルーセル、タイトル/本文、いいね、コメント一覧/入力
 - 説明: 投稿の詳細表示・反応/コメント画面
+
+### NewsDetailView (`lib/views/news/news_detail_view.dart`)
+- 構成: CommonHeader、ニュース画像（1:1）、タイトル、掲載期間、本文
+- 説明: ニュース詳細表示画面
 
 ### CouponsView (`lib/views/coupons/coupons_view.dart`)
 - 構成: タブ（利用可能/使用済み）、クーポンリスト（共通 `CouponListCard` を使用）
@@ -264,6 +268,7 @@
          ├─ EmailVerificationPendingView（未認証時）
          └─ MainNavigationView
             ├─ ホーム（HomeView）
+            │  ├─ ニュース詳細（NewsDetailView）
             │  ├─ お知らせ（NotificationsView）
             │  │  ├─ お知らせ詳細（AnnouncementDetailView）
             │  │  └─ 通知詳細（NotificationDetailView）

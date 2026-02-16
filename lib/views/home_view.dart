@@ -13,6 +13,9 @@ import '../providers/coupon_provider.dart';
 import '../providers/announcement_provider.dart';
 import '../providers/notification_provider.dart';
 import '../providers/posts_provider.dart';
+import '../providers/news_provider.dart';
+import '../models/news_model.dart';
+import 'news/news_detail_view.dart';
 import '../providers/store_provider.dart';
 import '../models/coupon_model.dart' as model;
 import '../widgets/custom_button.dart';
@@ -257,6 +260,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
             ref.invalidate(publicInstagramPostsProvider);
             ref.invalidate(ownerSettingsProvider);
             ref.invalidate(availableCouponsProvider(userId));
+            ref.invalidate(activeNewsProvider);
             if (isLoggedIn) {
               ref.invalidate(userDataProvider(userId));
               ref.invalidate(userBadgeCountProvider(userId));
@@ -943,8 +947,13 @@ class _HomeViewState extends ConsumerState<HomeView> {
         children: [
           // メニューグリッド
           _buildMenuGrid(context, ref, isLoggedIn),
-          
+
           const SizedBox(height: 20),
+
+          // ニュースセクション
+          _buildNewsSection(context, ref),
+
+          const SizedBox(height: 12),
 
           // クーポンセクション
           _buildCouponSection(context, ref, userId),
@@ -1346,6 +1355,100 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNewsSection(BuildContext context, WidgetRef ref) {
+    return ref.watch(activeNewsProvider).when(
+      data: (newsList) {
+        if (newsList.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return SizedBox(
+          height: 150,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: newsList.length,
+            itemBuilder: (context, index) {
+              final news = newsList[index];
+              return _buildNewsCard(context, news);
+            },
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildNewsCard(BuildContext context, NewsModel news) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => NewsDetailView(news: news),
+          ),
+        );
+      },
+      child: Container(
+        width: 140,
+        margin: const EdgeInsets.symmetric(horizontal: 5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: news.imageUrl != null && news.imageUrl!.isNotEmpty
+              ? Image.network(
+                  news.imageUrl!,
+                  width: 140,
+                  height: 140,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 140,
+                    height: 140,
+                    color: Colors.grey[200],
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.newspaper, color: Colors.grey, size: 32),
+                        const SizedBox(height: 4),
+                        Text(
+                          news.title,
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : Container(
+                  width: 140,
+                  height: 140,
+                  color: Colors.grey[200],
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.newspaper, color: Colors.grey, size: 32),
+                      const SizedBox(height: 4),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          news.title,
+                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
         ),
       ),
     );

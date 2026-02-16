@@ -490,6 +490,14 @@ service cloud.firestore {
       allow create, update, delete: if isOwner();
     }
 
+    // ニュースコレクションのルール
+    match /news/{newsId} {
+      // 公開閲覧可
+      allow read: if true;
+      // オーナーのみ作成・更新・削除可能
+      allow create, update, delete: if isOwner();
+    }
+
     // オーナー設定コレクション
     match /owner_settings/{storeId} {
       allow read: if true;
