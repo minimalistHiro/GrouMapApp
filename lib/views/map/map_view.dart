@@ -1381,6 +1381,7 @@ class _MapViewState extends ConsumerState<MapView> {
         children: [
           // Google Map
           GoogleMap(
+            style: '[{"featureType":"poi","elementType":"all","stylers":[{"visibility":"off"}]}]',
             initialCameraPosition: CameraPosition(
               target: _currentCenter,
               zoom: _currentZoom,
