@@ -7,7 +7,9 @@ service cloud.firestore {
     }
     function isStoreOwner(storeId) {
       return request.auth != null &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isStoreOwner == true;
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isStoreOwner == true &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId == storeId ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores.hasAny([storeId]));
     }
     function isStoreMember(storeId) {
       return request.auth != null &&
