@@ -514,6 +514,125 @@ class CouponService {
     }
   }
 
+  // クーポンを直接使用（ユーザーアプリのクーポン詳細画面から）
+  Future<void> useCouponDirectly(String userId, String couponId, String storeId) async {
+    try {
+      final couponRef = _firestore
+          .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
+          .doc(couponId);
+      final publicCouponRef = _firestore.collection('public_coupons').doc(couponId);
+      final usedByRef = couponRef.collection('usedBy').doc(userId);
+      final userUsedCouponRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('used_coupons')
+          .doc(couponId);
+      final userStoreRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('stores')
+          .doc(storeId);
+
+      await _firestore.runTransaction((txn) async {
+        // === すべての読み取りを先に実行（クライアントSDKの制約） ===
+        final couponSnap = await txn.get(couponRef);
+        final usedBySnap = await txn.get(usedByRef);
+        final userStoreSnap = await txn.get(userStoreRef);
+        final publicSnap = await txn.get(publicCouponRef);
+
+        // クーポン存在チェック
+        if (!couponSnap.exists) {
+          throw Exception('クーポンが見つかりません');
+        }
+        final data = couponSnap.data() ?? {};
+        final isActive = data['isActive'] as bool? ?? true;
+        final validUntil = (data['validUntil'] as Timestamp?)?.toDate();
+        final usageLimit = (data['usageLimit'] as num?)?.toInt() ?? 0;
+        final usedCount = (data['usedCount'] as num?)?.toInt() ?? 0;
+        final requiredStampCount = (data['requiredStampCount'] as num?)?.toInt() ?? 0;
+
+        // 有効性チェック
+        if (!isActive) {
+          throw Exception('クーポンが無効です');
+        }
+        if (validUntil == null || !validUntil.isAfter(DateTime.now())) {
+          throw Exception('クーポンの有効期限が切れています');
+        }
+        if (usedCount >= usageLimit) {
+          throw Exception('クーポンの上限に達しています');
+        }
+
+        // 二重使用防止チェック
+        if (usedBySnap.exists) {
+          throw Exception('このクーポンは既に使用済みです');
+        }
+
+        // スタンプ要件チェック
+        if (requiredStampCount > 0) {
+          final userStamps = (userStoreSnap.data()?['stamps'] as num?)?.toInt() ?? 0;
+          if (userStamps < requiredStampCount) {
+            throw Exception('スタンプが不足しています（必要: $requiredStampCount、現在: $userStamps）');
+          }
+        }
+
+        // === すべての書き込みをここから実行 ===
+
+        // user_coupons ドキュメントを作成（使用済み状態で作成）
+        final userCouponRef = _firestore.collection('user_coupons').doc();
+        txn.set(userCouponRef, {
+          'userId': userId,
+          'couponId': couponId,
+          'obtainedAt': FieldValue.serverTimestamp(),
+          'usedAt': FieldValue.serverTimestamp(),
+          'isUsed': true,
+          'storeId': storeId,
+          'orderId': null,
+        });
+
+        // usedBy ドキュメントを作成
+        txn.set(usedByRef, {
+          'userId': userId,
+          'usedAt': FieldValue.serverTimestamp(),
+          'couponId': couponId,
+          'storeId': storeId,
+          'orderId': null,
+        });
+
+        // users/{userId}/used_coupons/{couponId} を作成
+        txn.set(userUsedCouponRef, {
+          'userId': userId,
+          'couponId': couponId,
+          'usedAt': FieldValue.serverTimestamp(),
+          'storeId': storeId,
+          'orderId': null,
+        });
+
+        // クーポンの usedCount をインクリメント
+        final nextUsedCount = usedCount + 1;
+        final shouldDeactivate = usageLimit > 0 && nextUsedCount == usageLimit;
+        txn.update(couponRef, {
+          'usedCount': nextUsedCount,
+          if (shouldDeactivate) 'isActive': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // public_coupons も同期更新
+        if (publicSnap.exists) {
+          txn.update(publicCouponRef, {
+            'usedCount': nextUsedCount,
+            if (shouldDeactivate) 'isActive': false,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint('Error using coupon directly: $e');
+      throw Exception('クーポンの使用に失敗しました: $e');
+    }
+  }
+
   // プロモーションを作成
   Future<void> createPromotion({
     required String storeId,

@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/coupon_model.dart' as model;
+import '../../providers/coupon_provider.dart';
 import '../../providers/store_provider.dart';
 import '../../widgets/common_header.dart';
+import '../../widgets/custom_button.dart';
 
 class CouponDetailView extends ConsumerStatefulWidget {
   final model.Coupon coupon;
@@ -20,6 +22,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   bool _isStampInfoLoading = true;
   int _requiredStampCount = 0;
   int _userStampCount = 0;
+  bool _isUsed = false;
+  bool _isUsing = false;
 
   @override
   void initState() {
@@ -73,6 +77,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
           (couponData?['requiredStampCount'] as num?)?.toInt() ?? 0;
 
       int userStamps = 0;
+      bool isUsed = false;
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final userStoreDoc = await FirebaseFirestore.instance
@@ -83,12 +88,22 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             .get();
         final userStoreData = userStoreDoc.data();
         userStamps = (userStoreData?['stamps'] as num?)?.toInt() ?? 0;
+
+        // 使用済みチェック
+        final usedCouponDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('used_coupons')
+            .doc(couponId)
+            .get();
+        isUsed = usedCouponDoc.exists;
       }
 
       if (!mounted) return;
       setState(() {
         _requiredStampCount = requiredStampCount;
         _userStampCount = userStamps;
+        _isUsed = isUsed;
         _isStampInfoLoading = false;
       });
     } catch (_) {
@@ -101,6 +116,87 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     }
   }
 
+  // クーポン使用処理
+  Future<void> _useCoupon() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('クーポンを使用'),
+        content: const Text('このクーポンを使用しますか？\n使用すると元に戻せません。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('使用する'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _isUsing = true);
+
+    try {
+      final couponService = ref.read(couponProvider);
+      await couponService.useCouponDirectly(
+        user.uid,
+        widget.coupon.id,
+        widget.coupon.storeId,
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _isUsed = true;
+        _isUsing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('クーポンを使用しました')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isUsing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('エラー: $e')),
+      );
+    }
+  }
+
+  // ボタンが有効かどうかを判定
+  bool get _canUseCoupon {
+    if (_isUsed) return false;
+    if (_isStampInfoLoading) return false;
+    if (_isUsing) return false;
+    if (FirebaseAuth.instance.currentUser == null) return false;
+    if (widget.coupon.validUntil.year < 2100 &&
+        widget.coupon.validUntil.isBefore(DateTime.now())) return false;
+    if (widget.coupon.usedCount >= widget.coupon.usageLimit) return false;
+    if (_requiredStampCount > 0 && _userStampCount < _requiredStampCount) {
+      return false;
+    }
+    return true;
+  }
+
+  // ボタンのテキストを取得
+  String get _buttonText {
+    if (_isUsed) return '使用済み';
+    if (_isStampInfoLoading) return '読み込み中...';
+    if (FirebaseAuth.instance.currentUser == null) return 'ログインしてください';
+    if (widget.coupon.validUntil.year < 2100 &&
+        widget.coupon.validUntil.isBefore(DateTime.now())) return '有効期限切れ';
+    if (widget.coupon.usedCount >= widget.coupon.usageLimit) return '配布終了';
+    if (_requiredStampCount > 0 && _userStampCount < _requiredStampCount) {
+      return 'スタンプ不足（あと${_requiredStampCount - _userStampCount}個）';
+    }
+    return '使用する';
+  }
+
   // 有効期限の表示用フォーマット
   String _formatValidUntil() {
     try {
@@ -111,7 +207,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       final today = DateTime(now.year, now.month, now.day);
       final tomorrow = today.add(const Duration(days: 1));
       final couponDate = DateTime(widget.coupon.validUntil.year, widget.coupon.validUntil.month, widget.coupon.validUntil.day);
-      
+
       String dateText;
       if (couponDate.isAtSameMomentAs(today)) {
         dateText = '今日';
@@ -120,7 +216,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       } else {
         dateText = '${widget.coupon.validUntil.month}月${widget.coupon.validUntil.day}日';
       }
-      
+
       return '$dateText ${widget.coupon.validUntil.hour.toString().padLeft(2, '0')}:${widget.coupon.validUntil.minute.toString().padLeft(2, '0')}まで';
     } catch (e) {
       return '期限不明';
@@ -131,7 +227,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   String _getDiscountText() {
     final discountType = widget.coupon.discountType;
     final discountValue = widget.coupon.discountValue;
-    
+
     if (discountType == 'percentage') {
       return '${discountValue.toInt()}%OFF';
     } else if (discountType == 'fixed_amount') {
@@ -167,19 +263,30 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         slivers: [
           // クーポン画像ヘッダー
           _buildCouponHeader(),
-          
+
           // クーポン基本情報
           _buildCouponInfo(),
-          
+
           // クーポン詳細
           _buildCouponDetails(),
-          
+
           // 店舗情報
           _buildStoreInfo(),
 
           // 注意事項
           _buildNotice(),
         ],
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: CustomButton(
+            text: _buttonText,
+            isLoading: _isUsing,
+            onPressed: _canUseCoupon ? _useCoupon : null,
+            backgroundColor: _isUsed ? Colors.grey : null,
+          ),
+        ),
       ),
     );
   }
@@ -288,7 +395,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               ),
             ),
             const SizedBox(height: 12),
-            
+
             // 説明
             Text(
               widget.coupon.description,
@@ -299,7 +406,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // 必要スタンプ数（目立つ表示）
             Container(
               width: double.infinity,
@@ -352,7 +459,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
                     ),
                   ),
                 ),
-                
+
                 // クーポンタイプ
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -409,7 +516,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // 有効期限
             _buildDetailRow(
               icon: Icons.access_time,
@@ -436,7 +543,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               valueColor: Colors.blueGrey[700]!,
             ),
             const SizedBox(height: 12),
-            
+
             // 残り枚数
             _buildDetailRow(
               icon: Icons.inventory,
@@ -445,7 +552,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               valueColor: Colors.green[700]!,
             ),
             const SizedBox(height: 12),
-            
+
             // 作成日
             _buildDetailRow(
               icon: Icons.calendar_today,
@@ -477,7 +584,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             ref.watch(storeNameProvider(widget.coupon.storeId)).when(
               data: (storeName) => _buildDetailRow(
                 icon: Icons.store,
@@ -530,7 +637,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'クーポンはQRコードをお店に読み取ってもらうことで利用できます。',
+                  'クーポンは画面下部の「使用する」ボタンから利用できます。店舗スタッフに画面を見せてご利用ください。',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.orange,

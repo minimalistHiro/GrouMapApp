@@ -255,6 +255,38 @@
           "order": "DESCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "recommendation_clicks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetStoreId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "clickedAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "recommendation_clicks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "targetStoreId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "clickedAt",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -43,6 +43,7 @@
     - `usedAt`: 使用日時
     - `couponId`: クーポンID
     - `storeId`: 店舗ID
+    - `orderId`: 注文ID（任意）
 
 ### email_otp
 - `email_otp/{uid}`: メール認証OTP
@@ -247,9 +248,9 @@
 ### recommendation_clicks
 - `recommendation_clicks/{clickId}`: レコメンドクリック記録
   - `userId`: ユーザーUID
-  - `sourceStoreId`: スタンプ押印元店舗ID（任意）
+  - `sourceStoreId`: スタンプ押印元店舗ID（任意、stamp_recommendation時のみ）
   - `targetStoreId`: クリック先店舗ID
-  - `triggerType`: トリガー種別（`stamp_recommendation`）
+  - `triggerType`: トリガー種別（`stamp_recommendation` / `daily_login_recommendation`）
   - `impressionId`: 表示記録ID
   - `clickedAt`: クリック日時
   - `distanceMeters`: 距離（メートル、任意）
@@ -257,9 +258,9 @@
 ### recommendation_impressions
 - `recommendation_impressions/{impressionId}`: レコメンド表示記録
   - `userId`: ユーザーUID
-  - `sourceStoreId`: スタンプ押印元店舗ID（任意）
+  - `sourceStoreId`: スタンプ押印元店舗ID（任意、stamp_recommendation時のみ）
   - `targetStoreId`: レコメンド先店舗ID
-  - `triggerType`: トリガー種別（`stamp_recommendation`）
+  - `triggerType`: トリガー種別（`stamp_recommendation` / `daily_login_recommendation`）
   - `algorithmVersion`: アルゴリズムバージョン（`v1`）
   - `reason`: レコメンド理由
   - `shownAt`: 表示日時
@@ -468,6 +469,16 @@
     - `createdAt`: 作成日時
     - `updatedAt`: 更新日時
 
+### user_coupons
+- `user_coupons/{userCouponId}`: ユーザー取得クーポン
+  - `userId`: ユーザーUID
+  - `couponId`: クーポンID
+  - `obtainedAt`: 取得日時
+  - `usedAt`: 使用日時（使用済みの場合）
+  - `isUsed`: 使用済みフラグ
+  - `storeId`: 店舗ID
+  - `orderId`: 注文ID（任意）
+
 ### user_achievement_events
 - `user_achievement_events/{userId}/events/{eventId}`: 実績イベント
   - `type`: 種別（`point_award` / `stamp_punch`）
@@ -583,6 +594,7 @@
     - `usedAt`: 使用日時
     - `couponId`: クーポンID
     - `storeId`: 店舗ID
+    - `orderId`: 注文ID（任意）
   - `liked_posts/{postId}`: いいね履歴
     - `postId`: 投稿ID
     - `postTitle`: 投稿タイトル
