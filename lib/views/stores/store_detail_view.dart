@@ -14,6 +14,7 @@ import '../posts/post_detail_view.dart';
 import '../coupons/coupon_detail_view.dart';
 import '../../constants/payment_methods_constants.dart';
 import '../../widgets/pill_tab_bar.dart';
+import '../../services/mission_service.dart';
 
 class StoreDetailView extends ConsumerStatefulWidget {
   final Map<String, dynamic> store;
@@ -53,6 +54,13 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     }
     _loadUserStamps();
     _loadFavoriteStatus();
+    _markStoreDetailMission();
+  }
+
+  void _markStoreDetailMission() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    MissionService().markRegistrationMission(user.uid, 'first_store_detail');
   }
 
   @override
@@ -193,6 +201,11 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       }
 
       await batch.commit();
+
+      // 新規登録ミッション: お気に入り登録（追加時のみ）
+      if (!_isFavorite) {
+        MissionService().markRegistrationMission(user.uid, 'first_favorite');
+      }
 
       if (!mounted) return;
       setState(() {

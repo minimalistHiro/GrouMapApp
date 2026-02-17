@@ -7,6 +7,7 @@ import 'dart:math';
 import '../stores/store_detail_view.dart';
 import '../../widgets/custom_button.dart';
 import '../../services/location_service.dart';
+import '../../services/mission_service.dart';
 
 class DailyRecommendationView extends ConsumerStatefulWidget {
   const DailyRecommendationView({Key? key}) : super(key: key);
@@ -175,6 +176,9 @@ class _DailyRecommendationViewState
 
     await batch.commit();
     _impressionsLogged = true;
+
+    // デイリーミッション: レコメンドを見る
+    MissionService().markDailyMission(user.uid, 'recommendation_view');
   }
 
   Future<Position?> _tryGetCurrentPosition() async {

@@ -10,6 +10,7 @@ import '../../widgets/common_header.dart';
 import '../../widgets/icon_image_picker_field.dart';
 import '../../utils/icon_image_flow.dart';
 import 'user_icon_crop_view.dart';
+import '../../services/mission_service.dart';
 
 class ProfileEditView extends ConsumerStatefulWidget {
   const ProfileEditView({Key? key}) : super(key: key);
@@ -121,6 +122,21 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
       final user = ref.read(authServiceProvider).currentUser;
       if (!isGoogleUser) {
         await user?.updateDisplayName(newDisplayName);
+      }
+
+      // プロフィール完成ミッション判定
+      if (user != null) {
+        final displayName = isGoogleUser
+            ? (user.displayName ?? '')
+            : newDisplayName;
+        if (displayName.isNotEmpty &&
+            _selectedDate != null &&
+            _selectedGender != null &&
+            _selectedGender!.isNotEmpty &&
+            _selectedPrefecture != null &&
+            _selectedPrefecture!.isNotEmpty) {
+          MissionService().markRegistrationMission(user.uid, 'profile_completed');
+        }
       }
 
       if (!mounted) return;

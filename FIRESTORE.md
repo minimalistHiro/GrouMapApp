@@ -44,6 +44,17 @@
     - `couponId`: クーポンID
     - `storeId`: 店舗ID
     - `orderId`: 注文ID（任意）
+- アクセス制御メモ（`firestore.rules`）:
+  - クーポン管理権限は `canManageStoreCoupons(storeId)` で統一
+  - `isOwner`: 全店舗のクーポン管理が可能
+  - `isStoreOwner`: `createdStores` に含まれる店舗のみ管理可能
+  - 適用先: `coupons/{storeId}/coupons/{couponId}` / `coupons/{couponId}` / `public_coupons/{couponId}`
+
+### daily_login_stats
+- `daily_login_stats/{dateKey}`: 日次ログインユーザー数統計
+  - ドキュメントID: 日付文字列（例: `2026-02-17`）
+  - `loginCount`: その日にログインしたユニークユーザー数（`FieldValue.increment(1)` でアトミック更新）
+  - `date`: 日付文字列（ドキュメントIDと同値、検索用）
 
 ### email_otp
 - `email_otp/{uid}`: メール認証OTP
@@ -299,6 +310,8 @@
   - `updatedAt`: 更新日時
   - `isActive`: 有効フラグ
   - `imageUrl`: 画像URL
+- アクセス制御メモ:
+  - `coupons` と同じ `canManageStoreCoupons(storeId)` 判定で作成/更新/削除を実行
 
 ### public_posts
 - `public_posts/{postId}`: ユーザー向け公開投稿
@@ -593,6 +606,22 @@
   - `lastUpdatedByStoreId`: 更新店舗ID
   - `isActive`: 利用中フラグ
   - `coins`: コイン残高
+  - `loginStreak`: 連続ログイン日数（int）
+  - `lastLoginDate`: 連続ログイン判定用の最終ログイン日（yyyy-MM-dd）
+  - `missionProgress`: ミッション進捗（Map）
+    - `profile_completed`: プロフィール完成達成フラグ（bool）
+    - `profile_claimed`: プロフィール完成報酬受取済みフラグ（bool）
+    - `first_map`: マップ初利用達成フラグ（bool）
+    - `first_map_claimed`: マップ初利用報酬受取済みフラグ（bool）
+    - `first_favorite`: お気に入り登録達成フラグ（bool）
+    - `first_favorite_claimed`: お気に入り登録報酬受取済みフラグ（bool）
+    - `first_store_detail`: 店舗詳細閲覧達成フラグ（bool）
+    - `first_store_detail_claimed`: 店舗詳細閲覧報酬受取済みフラグ（bool）
+    - `first_slot`: スロット初挑戦達成フラグ（bool）
+    - `first_slot_claimed`: スロット初挑戦報酬受取済みフラグ（bool）
+    - `login_3_claimed`: 3日連続ログインボーナス受取済みフラグ（bool）
+    - `login_7_claimed`: 7日連続ログインボーナス受取済みフラグ（bool）
+    - `login_30_claimed`: 30日連続ログインボーナス受取済みフラグ（bool）
   - `showTutorial`: チュートリアル表示
   - `readNotifications`: 既読通知ID配列
   - `stores/{storeId}`: スタンプ/来店情報
@@ -647,3 +676,10 @@
     - `hasAvailableCoupon`: 利用可能クーポンあり店舗のみ（bool）
     - `maxDistanceKm`: 最大距離km（number、null=制限なし）
     - `updatedAt`: 更新日時
+  - `daily_missions/{yyyy-MM-dd}`: デイリーミッション（日付ごと）
+    - `app_open`: アプリを開く達成フラグ（bool）
+    - `app_open_claimed`: アプリを開く報酬受取済みフラグ（bool）
+    - `recommendation_view`: レコメンドを見る達成フラグ（bool）
+    - `recommendation_view_claimed`: レコメンドを見る報酬受取済みフラグ（bool）
+    - `map_open`: マップを開く達成フラグ（bool）
+    - `map_open_claimed`: マップを開く報酬受取済みフラグ（bool）

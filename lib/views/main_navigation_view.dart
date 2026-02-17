@@ -10,6 +10,7 @@ import '../providers/coupon_provider.dart';
 import '../providers/badge_provider.dart';
 import '../providers/posts_provider.dart';
 import '../services/push_notification_service.dart';
+import '../services/mission_service.dart';
 import 'home_view.dart';
 import 'map/map_view.dart';
 import 'qr/qr_generator_view.dart';
@@ -617,6 +618,20 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
     _dailyRecommendationShown = true;
 
+    // daily_login_stats のインクリメント（日次ログインユーザー数の集計用）
+    final nowForStats = DateTime.now();
+    final dateKey = '${nowForStats.year}-${nowForStats.month.toString().padLeft(2, '0')}-${nowForStats.day.toString().padLeft(2, '0')}';
+    FirebaseFirestore.instance
+        .collection('daily_login_stats')
+        .doc(dateKey)
+        .set({
+          'loginCount': FieldValue.increment(1),
+          'date': dateKey,
+        }, SetOptions(merge: true))
+        .catchError((e) {
+          debugPrint('daily_login_stats更新エラー: $e');
+        });
+
     if (!mounted) return;
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
@@ -627,6 +642,11 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }).catchError((e) {
       debugPrint('lastLoginAt更新エラー: $e');
     });
+
+    // デイリーミッション: アプリを開く + ログインストリーク更新
+    final missionService = MissionService();
+    missionService.markDailyMission(userId, 'app_open');
+    missionService.updateLoginStreak(userId);
 
     await Navigator.of(context).push(
       MaterialPageRoute(

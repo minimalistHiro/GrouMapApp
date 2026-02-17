@@ -35,6 +35,28 @@ import '../services/location_service.dart';
 import 'main_navigation_view.dart';
 import 'stores/store_detail_view.dart';
 
+// ユーザーが所持しているコイン数
+final userCoinCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
+  try {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      return Stream.value(0);
+    }
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .snapshots()
+        .map((snapshot) => (snapshot.data()?['coins'] as num?)?.toInt() ?? 0)
+        .handleError((error) {
+      debugPrint('Error fetching user coin count: $error');
+      return 0;
+    });
+  } catch (e) {
+    debugPrint('Error creating user coin count stream: $e');
+    return Stream.value(0);
+  }
+});
+
 // ユーザーが所持しているバッジ数
 final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
   try {
@@ -1036,6 +1058,13 @@ class _HomeViewState extends ConsumerState<HomeView> {
             )
         : '-';
 
+    final coinCount = isLoggedIn
+        ? ref.watch(userCoinCountProvider(userId)).maybeWhen(
+              data: (count) => count.toString(),
+              orElse: () => '-',
+            )
+        : '-';
+
     return Row(
       children: [
         Expanded(
@@ -1043,7 +1072,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
             icon: Icons.monetization_on,
             iconColor: const Color(0xFFFFC107),
             label: 'コイン',
-            value: '0',
+            value: coinCount,
           ),
         ),
         const SizedBox(width: 8),

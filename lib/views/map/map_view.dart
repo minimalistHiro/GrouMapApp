@@ -15,6 +15,7 @@ import '../../widgets/custom_button.dart';
 import '../../models/map_filter_model.dart';
 import '../../services/map_filter_service.dart';
 import 'filter_settings_view.dart';
+import '../../services/mission_service.dart';
 
 class _MarkerVisual {
   final Color color;
@@ -98,6 +99,15 @@ class _MapViewState extends ConsumerState<MapView> {
     _currentCenter = _defaultLocation;
     _loadLastLocationFromPrefs();
     _initializeMapData();
+    _markMapMissions();
+  }
+
+  void _markMapMissions() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final missionService = MissionService();
+    missionService.markDailyMission(user.uid, 'map_open');
+    missionService.markRegistrationMission(user.uid, 'first_map');
   }
 
   @override

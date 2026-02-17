@@ -16,6 +16,14 @@ service cloud.firestore {
         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId == storeId ||
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores.hasAny([storeId]));
     }
+    function canManageStoreCoupons(storeId) {
+      return isOwner() ||
+        (
+          request.auth != null &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isStoreOwner == true &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdStores.hasAny([storeId])
+        );
+    }
     function isStoreStaff() {
       return request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.currentStoreId != null;
@@ -118,6 +126,11 @@ service cloud.firestore {
       match /map_filter/{docId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // デイリーミッション（users/{userId}/daily_missions/{date}）
+      match /daily_missions/{date} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     
     // 投稿コレクションのルール
@@ -169,8 +182,8 @@ service cloud.firestore {
       // 公開閲覧可
       allow read: if true;
       // オーナー/店舗オーナーのみ作成・更新・削除可能
-      allow create: if isOwner() || isStoreOwner(request.resource.data.storeId);
-      allow update, delete: if isOwner() || isStoreOwner(resource.data.storeId);
+      allow create: if canManageStoreCoupons(request.resource.data.storeId);
+      allow update, delete: if canManageStoreCoupons(resource.data.storeId);
 
       // クーポン使用履歴: coupons/{couponId}/usedBy/{userId}
       match /usedBy/{userId} {
@@ -188,12 +201,12 @@ service cloud.firestore {
       // 公開閲覧可
       allow read: if true;
       // オーナー/店舗オーナーのみ作成・更新・削除可能
-      allow create: if isOwner() || isStoreOwner(storeId);
-      allow update: if isOwner() || isStoreOwner(storeId)
+      allow create: if canManageStoreCoupons(storeId);
+      allow update: if canManageStoreCoupons(storeId)
         || isCouponUserViewIncrement()
         || isCouponUserUseIncrement()
         || isCouponUserUseIncrementLegacy();
-      allow delete: if isOwner() || isStoreOwner(storeId);
+      allow delete: if canManageStoreCoupons(storeId);
 
       // クーポン使用履歴: coupons/{storeId}/coupons/{couponId}/usedBy/{userId}
       match /usedBy/{userId} {
@@ -521,12 +534,12 @@ service cloud.firestore {
     // 公開クーポン（ユーザー表示用）
     match /public_coupons/{couponId} {
       allow read: if true;
-      allow create: if isOwner() || isStoreOwner(request.resource.data.storeId);
-      allow update: if isOwner() || isStoreOwner(resource.data.storeId)
+      allow create: if canManageStoreCoupons(request.resource.data.storeId);
+      allow update: if canManageStoreCoupons(resource.data.storeId)
         || isCouponUserViewIncrement()
         || isCouponUserUseIncrement()
         || isCouponUserUseIncrementLegacy();
-      allow delete: if isOwner() || isStoreOwner(resource.data.storeId);
+      allow delete: if canManageStoreCoupons(resource.data.storeId);
     }
 
     // 公開Instagram投稿（ユーザー表示用）
@@ -550,6 +563,17 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    // ログイン日次統計（daily_login_stats/{dateKey}）
+    match /daily_login_stats/{dateKey} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['loginCount', 'date'])
+        && request.resource.data.loginCount is int
+        && request.resource.data.date is string;
+      allow update: if request.auth != null;
+      allow delete: if false;
     }
 
     // その他のコレクションは認証されたユーザーのみ読み取り可能
