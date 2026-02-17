@@ -30,6 +30,7 @@ import 'badges/badges_view.dart';
 import 'stamps/badge_awarded_view.dart';
 import 'stamps/stamp_cards_view.dart';
 import 'lottery/lottery_view.dart';
+import 'missions/missions_view.dart';
 import '../services/location_service.dart';
 import 'main_navigation_view.dart';
 import 'stores/store_detail_view.dart';
@@ -283,54 +284,100 @@ class _HomeViewState extends ConsumerState<HomeView> {
     }
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () async {
-            ref.invalidate(announcementsProvider);
-            ref.invalidate(publicInstagramPostsProvider);
-            ref.invalidate(ownerSettingsProvider);
-            ref.invalidate(availableCouponsProvider(userId));
-            ref.invalidate(activeNewsProvider);
-            if (isLoggedIn) {
-              ref.invalidate(userDataProvider(userId));
-              ref.invalidate(userBadgeCountProvider(userId));
-              ref.invalidate(userTotalStampCountProvider(userId));
-            }
-            await _loadRecommendedStores(user);
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              children: [
-                // ヘッダー部分
-                isLoggedIn
-                    ? _buildHeader(context, ref, user!)
-                    : _buildGuestHeader(context),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(announcementsProvider);
+                ref.invalidate(publicInstagramPostsProvider);
+                ref.invalidate(ownerSettingsProvider);
+                ref.invalidate(availableCouponsProvider(userId));
+                ref.invalidate(activeNewsProvider);
+                if (isLoggedIn) {
+                  ref.invalidate(userDataProvider(userId));
+                  ref.invalidate(userBadgeCountProvider(userId));
+                  ref.invalidate(userTotalStampCountProvider(userId));
+                }
+                await _loadRecommendedStores(user);
+              },
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    // ヘッダー部分
+                    isLoggedIn
+                        ? _buildHeader(context, ref, user!)
+                        : _buildGuestHeader(context),
 
-                _buildMaintenanceNoticeBar(context, ref),
-                
-                const SizedBox(height: 24),
+                    _buildMaintenanceNoticeBar(context, ref),
 
-                if (!isLoggedIn) ...[
-                  _buildGuestLoginCard(context),
-                  const SizedBox(height: 12),
-                ],
+                    const SizedBox(height: 24),
 
-                _buildRecommendedStoresSection(context),
-                const SizedBox(height: 12),
+                    if (!isLoggedIn) ...[
+                      _buildGuestLoginCard(context),
+                      const SizedBox(height: 12),
+                    ],
 
-                // くじ引きキャンペーンボタン（おすすめ店舗の下）
-                _buildLotteryCampaignButton(context, ref),
+                    _buildRecommendedStoresSection(context),
+                    const SizedBox(height: 12),
 
-                _buildReferralSection(context, ref),
-                
-                // その他のコンテンツ
-                _buildAdditionalContent(context, ref, isLoggedIn, userId),
+                    // くじ引きキャンペーンボタン（おすすめ店舗の下）
+                    _buildLotteryCampaignButton(context, ref),
 
-                const SizedBox(height: 16),
-              ],
+                    _buildReferralSection(context, ref),
+
+                    // その他のコンテンツ
+                    _buildAdditionalContent(context, ref, isLoggedIn, userId),
+
+                    const SizedBox(height: 72),
+                  ],
+                ),
+              ),
             ),
           ),
+          // フローティングミッションボタン（右下配置）
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: _buildMissionFloatingButton(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMissionFloatingButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const MissionsView(),
+          ),
+        );
+      },
+      child: Container(
+        width: 68,
+        height: 68,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF2A8B8B), Color(0xFF4DB6AC)],
+            begin: Alignment.bottomLeft,
+            end: Alignment.topRight,
+          ),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF2A8B8B).withOpacity(0.4),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Icon(
+          Icons.monetization_on,
+          color: Colors.white,
+          size: 34,
         ),
       ),
     );
