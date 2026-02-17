@@ -319,6 +319,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 _buildRecommendedStoresSection(context),
                 const SizedBox(height: 12),
 
+                // くじ引きキャンペーンボタン（おすすめ店舗の下）
+                _buildLotteryCampaignButton(context, ref),
+
                 _buildReferralSection(context, ref),
                 
                 // その他のコンテンツ
@@ -1076,11 +1079,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
           // メニューグリッド
           _buildMenuGrid(context, ref, isLoggedIn),
 
-          const SizedBox(height: 12),
-
-          // くじ引きキャンペーンボタン
-          _buildLotteryCampaignButton(context, ref),
-
           const SizedBox(height: 20),
 
           // ニュースセクション
@@ -1154,7 +1152,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Text(
-                      '1日1回限定くじ引き',
+                      '1日1回限定スロット',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,

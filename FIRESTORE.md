@@ -129,8 +129,8 @@
   - `storeCampaignStartDate`: 店舗紹介開始日
   - `storeCampaignEndDate`: 店舗紹介終了日
   - `storeCampaignPoints`: 店舗紹介付与ポイント
-  - `lotteryCampaignStartDate`: くじ引きキャンペーン開始日
-  - `lotteryCampaignEndDate`: くじ引きキャンペーン終了日
+  - `lotteryCampaignStartDate`: スロットキャンペーン開始日
+  - `lotteryCampaignEndDate`: スロットキャンペーン終了日
   - `maintenanceStartDate`: メンテナンス開始日
   - `maintenanceEndDate`: メンテナンス終了日
   - `maintenanceStartTime`: メンテ開始時刻
@@ -226,6 +226,18 @@
   - `comments`: コメント配列
   - `imageUrls`: 画像URL配列
   - `imageCount`: 画像数
+
+### lottery_history
+- `lottery_history/{lotteryId}`: スロット履歴
+  - `userId`: ユーザーUID
+  - `date`: 日付（yyyy-MM-dd）
+  - `result`: 等級ラベル（`1等`/`2等`/`3等`/`ハズレ`）
+  - `prize`: 景品説明テキスト
+  - `coins`: 獲得コイン数
+  - `coinsDelta`: コイン差分（獲得 - 消費）
+  - `couponCount`: 獲得クーポン枚数
+  - `number`: スロット出目（3桁文字列）
+  - `timestamp`: 記録日時
 
 ### instagram_posts
 - `stores/{storeId}/instagram_posts/{instagramPostId}`: 店舗別Instagram投稿（ユーザー表示用）
@@ -580,6 +592,7 @@
   - `lastUpdated`: 最終更新（ランキング用）
   - `lastUpdatedByStoreId`: 更新店舗ID
   - `isActive`: 利用中フラグ
+  - `coins`: コイン残高
   - `showTutorial`: チュートリアル表示
   - `readNotifications`: 既読通知ID配列
   - `stores/{storeId}`: スタンプ/来店情報
