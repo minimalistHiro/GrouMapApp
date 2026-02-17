@@ -29,6 +29,7 @@ import 'coupons/coupons_view.dart';
 import 'badges/badges_view.dart';
 import 'stamps/badge_awarded_view.dart';
 import 'stamps/stamp_cards_view.dart';
+import 'lottery/lottery_view.dart';
 import '../services/location_service.dart';
 import 'main_navigation_view.dart';
 import 'stores/store_detail_view.dart';
@@ -1075,6 +1076,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
           // メニューグリッド
           _buildMenuGrid(context, ref, isLoggedIn),
 
+          const SizedBox(height: 12),
+
+          // くじ引きキャンペーンボタン
+          _buildLotteryCampaignButton(context, ref),
+
           const SizedBox(height: 20),
 
           // ニュースセクション
@@ -1091,6 +1097,89 @@ class _HomeViewState extends ConsumerState<HomeView> {
           _buildPostSection(context, ref, userId),
         ],
       ),
+    );
+  }
+
+  Widget _buildLotteryCampaignButton(BuildContext context, WidgetRef ref) {
+    return ref.watch(ownerSettingsProvider).when(
+      data: (ownerSettings) {
+        final currentSettings = _resolveCurrentSettings(ownerSettings);
+        final isActive = _isCampaignActive(
+          currentSettings,
+          'lotteryCampaignStartDate',
+          'lotteryCampaignEndDate',
+        );
+
+        if (!isActive) {
+          return const SizedBox.shrink();
+        }
+
+        final endDate = _parseDate(currentSettings['lotteryCampaignEndDate']);
+        final endDateText = endDate != null
+            ? '~${endDate.month}/${endDate.day} まで'
+            : '';
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => const LotteryView(),
+              ),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFAA33), Color(0xFFFF6B35)],
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+              ),
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF6B35).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.casino, color: Colors.white, size: 24),
+                const SizedBox(width: 8),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      '1日1回限定くじ引き',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (endDateText.isNotEmpty)
+                      Text(
+                        endDateText,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 11,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
     );
   }
 

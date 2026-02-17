@@ -128,6 +128,8 @@
   - `storeCampaignStartDate`: 店舗紹介開始日
   - `storeCampaignEndDate`: 店舗紹介終了日
   - `storeCampaignPoints`: 店舗紹介付与ポイント
+  - `lotteryCampaignStartDate`: くじ引きキャンペーン開始日
+  - `lotteryCampaignEndDate`: くじ引きキャンペーン終了日
   - `maintenanceStartDate`: メンテナンス開始日
   - `maintenanceEndDate`: メンテナンス終了日
   - `maintenanceStartTime`: メンテ開始時刻
