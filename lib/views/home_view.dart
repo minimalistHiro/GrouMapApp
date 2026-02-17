@@ -56,6 +56,35 @@ final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((r
   }
 });
 
+// ユーザーの全店舗スタンプ数合計
+final userTotalStampCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
+  try {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null || currentUser.uid != userId) {
+      return Stream.value(0);
+    }
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('stores')
+        .snapshots()
+        .map((snapshot) {
+          int total = 0;
+          for (final doc in snapshot.docs) {
+            total += (doc.data()['stamps'] as num?)?.toInt() ?? 0;
+          }
+          return total;
+        })
+        .handleError((error) {
+      debugPrint('Error fetching user stamp count: $error');
+      return 0;
+    });
+  } catch (e) {
+    debugPrint('Error creating user stamp count stream: $e');
+    return Stream.value(0);
+  }
+});
+
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({Key? key}) : super(key: key);
@@ -264,6 +293,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
             if (isLoggedIn) {
               ref.invalidate(userDataProvider(userId));
               ref.invalidate(userBadgeCountProvider(userId));
+              ref.invalidate(userTotalStampCountProvider(userId));
             }
             await _loadRecommendedStores(user);
           },
@@ -935,6 +965,98 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
+  Widget _buildStatsCapsules(
+    BuildContext context,
+    WidgetRef ref,
+    bool isLoggedIn,
+    String userId,
+  ) {
+    final badgeCount = isLoggedIn
+        ? ref.watch(userBadgeCountProvider(userId)).maybeWhen(
+              data: (count) => count.toString(),
+              orElse: () => '-',
+            )
+        : '-';
+
+    final stampCount = isLoggedIn
+        ? ref.watch(userTotalStampCountProvider(userId)).maybeWhen(
+              data: (count) => count.toString(),
+              orElse: () => '-',
+            )
+        : '-';
+
+    return Row(
+      children: [
+        Expanded(
+          child: _buildStatCapsule(
+            icon: Icons.monetization_on,
+            iconColor: const Color(0xFFFFC107),
+            label: 'コイン',
+            value: '0',
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildStatCapsule(
+            icon: Icons.military_tech,
+            iconColor: const Color(0xFF5C6BC0),
+            label: 'バッジ',
+            value: badgeCount,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _buildStatCapsule(
+            icon: Icons.local_activity,
+            iconColor: const Color(0xFFFF6B35),
+            label: 'スタンプ',
+            value: stampCount,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCapsule({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 16, color: iconColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Colors.black54,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              color: Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAdditionalContent(
     BuildContext context,
     WidgetRef ref,
@@ -945,6 +1067,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Column(
         children: [
+          // 統計カプセルバー（コイン・バッジ・スタンプ）
+          _buildStatsCapsules(context, ref, isLoggedIn, userId),
+
+          const SizedBox(height: 12),
+
           // メニューグリッド
           _buildMenuGrid(context, ref, isLoggedIn),
 
