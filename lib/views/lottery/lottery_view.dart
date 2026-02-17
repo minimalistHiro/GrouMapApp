@@ -56,18 +56,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
   bool _showSilverCongratulationsPopup = false;
   bool _shouldLoopSilverConfetti = false;
 
-  // 3等専用のアニメーション関連
-  late AnimationController _bronzeAnimationController;
-  late AnimationController _bronzeBackgroundDimController;
-  late Animation<double> _bronzeGlowAnimation;
-  late Animation<double> _bronzeBackgroundDimAnimation;
-  late ConfettiController _bronzeConfettiController;
-  bool _showBronzeAnimation = false;
-
-  // 3等専用のポップアップ関連
-  bool _showBronzeCongratulationsPopup = false;
-  bool _shouldLoopBronzeConfetti = false;
-
   // ハズレ専用のポップアップ関連
   bool _showLosePopup = false;
 
@@ -76,7 +64,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
   int _result2 = 0;
   int _result3 = 0;
   int _finalNumber = 0;
-  int _prizeResult = 0; // 0: 未実行, 1: 1等, 2: 2等, 3: 3等, 4: ハズレ
+  int _prizeResult = 0; // 0: 未実行, 1: 1等, 2: 2等, 3: ハズレ
   bool _showResult = false;
 
   // 事前決定済みの出目
@@ -215,37 +203,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
       duration: const Duration(milliseconds: 2000),
     );
 
-    // 3等専用アニメーション初期化
-    _bronzeAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
-      vsync: this,
-    );
-
-    _bronzeBackgroundDimController = AnimationController(
-      duration: const Duration(milliseconds: 500),
-      vsync: this,
-    );
-
-    _bronzeGlowAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _bronzeAnimationController,
-      curve: Curves.easeInOut,
-    ));
-
-    _bronzeBackgroundDimAnimation = Tween<double>(
-      begin: 0.0,
-      end: 0.5,
-    ).animate(CurvedAnimation(
-      parent: _bronzeBackgroundDimController,
-      curve: Curves.easeInOut,
-    ));
-
-    _bronzeConfettiController = ConfettiController(
-      duration: const Duration(milliseconds: 2000),
-    );
-
     _checkTodaysSpinStatus();
     _loadUserCoins();
   }
@@ -263,9 +220,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
     _silverAnimationController.dispose();
     _silverBackgroundDimController.dispose();
     _silverConfettiController.dispose();
-    _bronzeAnimationController.dispose();
-    _bronzeBackgroundDimController.dispose();
-    _bronzeConfettiController.dispose();
     super.dispose();
   }
 
@@ -346,13 +300,9 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
           _predeterminedResult3 = sameDigit;
           break;
       }
-    } else if (roll < 26) {
-      // 3等: 20% (roll == 6-25)
-      _prizeResult = 3;
-      _generateAllDifferentDigits(random);
     } else {
-      // ハズレ: 74% (roll == 26-99)
-      _prizeResult = 4;
+      // ハズレ: 94% (roll == 6-99)
+      _prizeResult = 3;
       _generateAllDifferentDigits(random);
     }
   }
@@ -472,8 +422,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
       _playGoldenAnimation();
     } else if (_prizeResult == 2) {
       _playSilverAnimation();
-    } else if (_prizeResult == 3) {
-      _playBronzeAnimation();
     } else {
       _playLoseAnimation();
     }
@@ -507,12 +455,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
           resultLabel = '2等';
           break;
         case 3:
-          coinsEarned = 3;
-          couponCount = 0;
-          prize = 'コイン×3';
-          resultLabel = '3等';
-          break;
-        case 4:
           coinsEarned = 1;
           couponCount = 0;
           prize = 'コイン×1';
@@ -571,7 +513,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_showCongratulationsPopup && !_showSilverCongratulationsPopup && !_showBronzeCongratulationsPopup && !_showLosePopup,
+      canPop: !_showCongratulationsPopup && !_showSilverCongratulationsPopup && !_showLosePopup,
       child: Scaffold(
       backgroundColor: _showGoldenAnimation
           ? Color.lerp(
@@ -585,13 +527,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                 Colors.grey[800]!,
                 _silverBackgroundDimAnimation.value,
               )
-            : _showBronzeAnimation
-              ? Color.lerp(
-                  const Color(0xFFF5F5F5),
-                  Colors.grey[800]!,
-                  _bronzeBackgroundDimAnimation.value,
-                )
-              : const Color(0xFFF5F5F5),
+            : const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: const Text(
           'スロット',
@@ -635,7 +571,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
 
               // 説明
               Text(
-                '1日1回チャレンジ！（1コイン消費）\n1等: 未訪問クーポン×2  2等: 未訪問クーポン×1\n3等: コイン×3  ハズレ: コイン×1',
+                '1日1回チャレンジ！（1コイン消費）\n1等: 未訪問クーポン×2  2等: 未訪問クーポン×1\nハズレ: コイン×1',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[600],
@@ -739,42 +675,12 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                             );
                           },
                         ),
-                      // 3等時の追加の明るいリング
-                      if (_showBronzeAnimation)
-                        AnimatedBuilder(
-                          animation: _bronzeGlowAnimation,
-                          builder: (context, child) {
-                            return Container(
-                              width: 440,
-                              height: 240,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(25),
-                                border: Border.all(
-                                  color: const Color(0xFFCD7F32).withOpacity(
-                                    ((sin(_bronzeGlowAnimation.value * 20) + 1) / 2) * 0.8
-                                  ),
-                                  width: 4,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFFCD7F32).withOpacity(
-                                      ((sin(_bronzeGlowAnimation.value * 20) + 1) / 2) * 0.5
-                                    ),
-                                    spreadRadius: 10,
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 0),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
                       // メインのスロットマシン
                       Container(
                         width: 400,
                         height: 200,
                     decoration: BoxDecoration(
-                      color: _showGoldenAnimation || _showSilverAnimation || _showBronzeAnimation ? Colors.black : Colors.black87,
+                      color: _showGoldenAnimation || _showSilverAnimation ? Colors.black : Colors.black87,
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: _showGoldenAnimation
@@ -789,20 +695,14 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                                 Colors.white,
                                 (sin(_silverGlowAnimation.value * 10) + 1) / 2,
                               )!
-                            : _showBronzeAnimation
-                              ? Color.lerp(
-                                  const Color(0xFFCD7F32),
-                                  Colors.white,
-                                  (sin(_bronzeGlowAnimation.value * 10) + 1) / 2,
-                                )!
-                              : _showWinAnimation
+                            : _showWinAnimation
                                 ? Color.lerp(
                                     const Color(0xFFFF6B35),
                                     Colors.yellow,
                                     _glowAnimation.value,
                                   )!
                                 : const Color(0xFFFF6B35),
-                        width: _showGoldenAnimation || _showSilverAnimation || _showBronzeAnimation ? 6 : 4,
+                        width: _showGoldenAnimation || _showSilverAnimation ? 6 : 4,
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -829,16 +729,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                             blurRadius: _silverGlowAnimation.value * 50,
                             offset: const Offset(0, 0),
                           ),
-                        if (_showBronzeAnimation)
-                          BoxShadow(
-                            color: const Color(0xFFCD7F32).withOpacity(
-                              ((sin(_bronzeGlowAnimation.value * 10) + 1) / 2) * 0.9
-                            ),
-                            spreadRadius: _bronzeGlowAnimation.value * 20,
-                            blurRadius: _bronzeGlowAnimation.value * 40,
-                            offset: const Offset(0, 0),
-                          ),
-                        if (_showWinAnimation && !_showGoldenAnimation && !_showSilverAnimation && !_showBronzeAnimation)
+                        if (_showWinAnimation && !_showGoldenAnimation && !_showSilverAnimation)
                           BoxShadow(
                             color: Colors.yellow.withOpacity(_glowAnimation.value * 0.8),
                             spreadRadius: _glowAnimation.value * 15,
@@ -1034,32 +925,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
               ),
             ),
 
-          // 3等専用: ブロンズの紙吹雪アニメーション
-          if (_showBronzeAnimation)
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConfettiWidget(
-                confettiController: _bronzeConfettiController,
-                blastDirection: 90 * (3.14159 / 180),
-                blastDirectionality: BlastDirectionality.explosive,
-                particleDrag: 0.01,
-                emissionFrequency: 0.03,
-                numberOfParticles: 360,
-                gravity: 0.15,
-                shouldLoop: false,
-                maxBlastForce: 30,
-                minBlastForce: 10,
-                colors: const [
-                  Color(0xFFCD7F32),
-                  Color(0xFFB87333),
-                  Color(0xFFDA9100),
-                  Color(0xFFC68E17),
-                  Color(0xFFAD8A56),
-                  Color(0xFF8B6914),
-                ],
-              ),
-            ),
-
           // 1等専用: おめでとうポップアップ（モーダル）
           if (_showCongratulationsPopup) ...[
             const ModalBarrier(
@@ -1207,92 +1072,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                     ElevatedButton(
                       onPressed: () {
                         _stopSilverAnimation();
-                        Navigator.of(context).pop();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFFFF6B35),
-                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        elevation: 2,
-                      ),
-                      child: const Text(
-                        '確認',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          // 3等専用: おめでとうポップアップ（モーダル）
-          if (_showBronzeCongratulationsPopup) ...[
-            const ModalBarrier(
-              dismissible: false,
-              color: Colors.transparent,
-            ),
-            Center(
-              child: Container(
-                width: 320,
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFCD7F32),
-                      Color(0xFF8B6914),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      spreadRadius: 5,
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      '🎉',
-                      style: TextStyle(fontSize: 40),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      '3等当選！',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'コイン×3 獲得！',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        _stopBronzeAnimation();
                         Navigator.of(context).pop();
                       },
                       style: ElevatedButton.styleFrom(
@@ -1737,58 +1516,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
     Future.delayed(const Duration(milliseconds: 3000), () {
       if (_shouldLoopSilverConfetti && mounted) {
         _startLoopingSilverConfetti();
-      }
-    });
-  }
-
-  // 3等専用ブロンズアニメーションを実行
-  void _playBronzeAnimation() {
-    setState(() {
-      _showBronzeAnimation = true;
-    });
-
-    _bronzeBackgroundDimController.forward();
-    _bronzeAnimationController.repeat();
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _startLoopingBronzeConfetti();
-    });
-
-    Future.delayed(const Duration(milliseconds: 1500), () {
-      if (mounted) {
-        setState(() {
-          _showBronzeCongratulationsPopup = true;
-        });
-      }
-    });
-  }
-
-  // 3等アニメーションを停止
-  void _stopBronzeAnimation() {
-    setState(() {
-      _showBronzeAnimation = false;
-      _showBronzeCongratulationsPopup = false;
-      _shouldLoopBronzeConfetti = false;
-    });
-    _bronzeAnimationController.stop();
-    _bronzeAnimationController.reset();
-    _bronzeBackgroundDimController.reverse();
-    _bronzeConfettiController.stop();
-  }
-
-  // 3等用ブロンズ紙吹雪をループさせる
-  void _startLoopingBronzeConfetti() {
-    if (!mounted) return;
-
-    setState(() {
-      _shouldLoopBronzeConfetti = true;
-    });
-
-    _bronzeConfettiController.play();
-
-    Future.delayed(const Duration(milliseconds: 3000), () {
-      if (_shouldLoopBronzeConfetti && mounted) {
-        _startLoopingBronzeConfetti();
       }
     });
   }

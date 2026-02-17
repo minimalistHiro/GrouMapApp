@@ -231,7 +231,7 @@
 - `lottery_history/{lotteryId}`: スロット履歴
   - `userId`: ユーザーUID
   - `date`: 日付（yyyy-MM-dd）
-  - `result`: 等級ラベル（`1等`/`2等`/`3等`/`ハズレ`）
+  - `result`: 等級ラベル（`1等`/`2等`/`ハズレ`）
   - `prize`: 景品説明テキスト
   - `coins`: 獲得コイン数
   - `coinsDelta`: コイン差分（獲得 - 消費）
