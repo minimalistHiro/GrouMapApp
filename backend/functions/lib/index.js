@@ -364,16 +364,18 @@ function experienceForStampCardComplete() {
     return 100;
 }
 async function countTransactions(params) {
-    const { userId, since, onlyPositive = true, dayOfWeek, storeId } = params;
+    const { userId, since, dayOfWeek, storeId } = params;
     let count = 0;
     const storeIds = storeId
         ? [storeId]
         : (await db.collection('stores').get()).docs.map((doc) => doc.id);
     for (const sid of storeIds) {
-        const snap = await db.collection('point_transactions').doc(sid).collection(userId).get();
+        const snap = await db.collection('stores').doc(sid).collection('transactions')
+            .where('type', '==', 'stamp')
+            .where('userId', '==', userId)
+            .get();
         for (const doc of snap.docs) {
             const data = doc.data();
-            const amount = asInt(data['amount'], 0);
             const raw = data['createdAt'];
             let ts = new Date();
             if (raw instanceof firestore_2.Timestamp) {
@@ -389,42 +391,11 @@ async function countTransactions(params) {
             }
             const inPeriod = ts.getTime() >= since.getTime();
             const weekdayOk = dayOfWeek ? weekdayToStr(ts) === dayOfWeek : true;
-            const positiveOk = onlyPositive ? amount > 0 : true;
-            if (inPeriod && weekdayOk && positiveOk)
+            if (inPeriod && weekdayOk)
                 count += 1;
         }
     }
     return count;
-}
-async function sumTransactionAmounts(params) {
-    const { userId, since } = params;
-    let sum = 0;
-    const stores = await db.collection('stores').get();
-    for (const store of stores.docs) {
-        const snap = await db.collection('point_transactions').doc(store.id).collection(userId).get();
-        for (const doc of snap.docs) {
-            const data = doc.data();
-            const raw = data['createdAt'];
-            let ts = new Date();
-            if (raw instanceof firestore_2.Timestamp) {
-                ts = raw.toDate();
-            }
-            else if (typeof raw === 'string') {
-                const parsed = new Date(raw);
-                if (!Number.isNaN(parsed.getTime()))
-                    ts = parsed;
-            }
-            else if (typeof raw === 'number') {
-                ts = new Date(raw);
-            }
-            if (ts.getTime() >= since.getTime()) {
-                const amount = asInt(data['amount'], 0);
-                if (amount > 0)
-                    sum += amount;
-            }
-        }
-    }
-    return sum;
 }
 async function getUserBadgeCount(userId) {
     const snap = await db.collection('user_badges').doc(userId).collection('badges').get();
@@ -437,21 +408,13 @@ async function getUserLevel(userId) {
         return 1;
     return asInt((_a = doc.data()) === null || _a === void 0 ? void 0 : _a['level'], 1);
 }
-async function getUserTotalPoints(userId) {
-    var _a;
-    const doc = await db.collection('user_point_balances').doc(userId).get();
-    if (!doc.exists)
-        return 0;
-    return asInt((_a = doc.data()) === null || _a === void 0 ? void 0 : _a['totalPoints'], 0);
-}
 async function checkAndAwardBadges(params) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
     const { userId, storeId } = params;
     const firestore = db;
     const badgesSnap = await firestore.collection('badges').get();
     const badgeCount = await getUserBadgeCount(userId);
     const userLevel = await getUserLevel(userId);
-    const totalPoints = await getUserTotalPoints(userId);
     const newlyAwarded = [];
     for (const doc of badgesSnap.docs) {
         const data = doc.data();
@@ -485,22 +448,9 @@ async function checkAndAwardBadges(params) {
                     isSatisfied = c >= 1;
                     break;
                 }
-                case 'points_total': {
-                    const threshold = asInt(params['threshold']);
-                    isSatisfied = totalPoints >= threshold;
-                    break;
-                }
-                case 'points_in_period': {
-                    const threshold = asInt(params['threshold']);
-                    const period = ((_h = params['period']) !== null && _h !== void 0 ? _h : 'month').toString();
-                    const since = startFromPeriod(period);
-                    const sum = await sumTransactionAmounts({ userId, since });
-                    isSatisfied = sum >= threshold;
-                    break;
-                }
                 case 'checkins_count': {
                     const threshold = asInt(params['threshold']);
-                    const period = ((_j = params['period']) !== null && _j !== void 0 ? _j : 'month').toString();
+                    const period = ((_h = params['period']) !== null && _h !== void 0 ? _h : 'month').toString();
                     const since = startFromPeriod(period);
                     const c = await countTransactions({ userId, since });
                     isSatisfied = c >= threshold;
@@ -516,18 +466,10 @@ async function checkAndAwardBadges(params) {
                     isSatisfied = badgeCount >= threshold;
                     break;
                 }
-                case 'payment_amount': {
-                    const threshold = asInt(params['threshold']);
-                    const period = ((_k = params['period']) !== null && _k !== void 0 ? _k : 'month').toString();
-                    const since = startFromPeriod(period);
-                    const sum = await sumTransactionAmounts({ userId, since });
-                    isSatisfied = sum >= threshold;
-                    break;
-                }
                 case 'day_of_week_count': {
                     const threshold = asInt(params['threshold']);
-                    const period = ((_l = params['period']) !== null && _l !== void 0 ? _l : 'week').toString();
-                    const dow = ((_m = params['day_of_week']) !== null && _m !== void 0 ? _m : 'monday').toString();
+                    const period = ((_j = params['period']) !== null && _j !== void 0 ? _j : 'week').toString();
+                    const dow = ((_k = params['day_of_week']) !== null && _k !== void 0 ? _k : 'monday').toString();
                     const since = startFromPeriod(period);
                     const c = await countTransactions({
                         userId,
@@ -539,7 +481,7 @@ async function checkAndAwardBadges(params) {
                 }
                 case 'usage_count': {
                     const threshold = asInt(params['threshold']);
-                    const period = ((_o = params['period']) !== null && _o !== void 0 ? _o : 'month').toString();
+                    const period = ((_l = params['period']) !== null && _l !== void 0 ? _l : 'month').toString();
                     const since = period === 'unlimited' ? new Date(0) : startFromPeriod(period);
                     const c = await countTransactions({ userId, since });
                     isSatisfied = c >= threshold;
@@ -547,13 +489,12 @@ async function checkAndAwardBadges(params) {
                 }
                 case 'visit_frequency': {
                     const threshold = asInt(params['threshold']);
-                    const period = ((_p = params['period']) !== null && _p !== void 0 ? _p : 'day').toString();
+                    const period = ((_m = params['period']) !== null && _m !== void 0 ? _m : 'day').toString();
                     const since = period === 'unlimited' ? new Date(0) : startFromPeriod(period);
                     const c = await countTransactions({
                         userId,
                         since,
                         storeId,
-                        onlyPositive: false,
                     });
                     isSatisfied = c >= threshold;
                     break;
@@ -588,7 +529,7 @@ async function checkAndAwardBadges(params) {
                 iconUrl: data['iconUrl'],
                 iconPath: data['iconPath'],
                 rarity: data['rarity'],
-                order: (_q = data['order']) !== null && _q !== void 0 ? _q : 0,
+                order: (_o = data['order']) !== null && _o !== void 0 ? _o : 0,
             });
             await userBadgeRef.set(badgeDoc);
         }
@@ -2196,47 +2137,10 @@ async function recordCheckIn(userId, storeId, jti, deviceId) {
             createdAt: new Date()
         };
         await db.collection('check_ins').add(checkInData);
-        // ユーザーのポイントを更新（例：10ポイント付与）
-        await updateUserPoints(userId, 10, storeId);
         console.log(`Check-in recorded for user ${userId} at store ${storeId}`);
     }
     catch (error) {
         console.error('Error recording check-in:', error);
-        throw error;
-    }
-}
-// ユーザーポイント更新
-async function updateUserPoints(userId, points, storeId) {
-    try {
-        const userRef = db.collection('users').doc(userId);
-        await db.runTransaction(async (transaction) => {
-            var _a;
-            const userDoc = await transaction.get(userRef);
-            if (userDoc.exists) {
-                const currentPoints = ((_a = userDoc.data()) === null || _a === void 0 ? void 0 : _a.points) || 0;
-                const newPoints = currentPoints + points;
-                transaction.update(userRef, {
-                    points: newPoints,
-                    lastCheckIn: new Date(),
-                    updatedAt: new Date()
-                });
-                // ポイント履歴を記録
-                const pointTransaction = {
-                    userId,
-                    amount: points,
-                    paymentAmount: null,
-                    type: 'check_in',
-                    description: `QRコードチェックイン (店舗: ${storeId})`,
-                    storeId: storeId,
-                    timestamp: new Date(),
-                    createdAt: new Date()
-                };
-                transaction.set(db.collection('point_transactions').doc(), pointTransaction);
-            }
-        });
-    }
-    catch (error) {
-        console.error('Error updating user points:', error);
         throw error;
     }
 }

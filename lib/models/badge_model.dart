@@ -36,8 +36,8 @@ class UserBadgeModel with _$UserBadgeModel {
 }
 
 enum BadgeType {
-  @JsonValue('points_earned')
-  pointsEarned,
+  @JsonValue('stamps_total')
+  stampsTotal,
   @JsonValue('visits_count')
   visitsCount,
   @JsonValue('consecutive_days')

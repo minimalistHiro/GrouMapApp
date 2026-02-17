@@ -37,7 +37,7 @@ Map<String, dynamic> _$$BadgeModelImplToJson(_$BadgeModelImpl instance) =>
     };
 
 const _$BadgeTypeEnumMap = {
-  BadgeType.pointsEarned: 'points_earned',
+  BadgeType.stampsTotal: 'stamps_total',
   BadgeType.visitsCount: 'visits_count',
   BadgeType.consecutiveDays: 'consecutive_days',
   BadgeType.qrScans: 'qr_scans',
