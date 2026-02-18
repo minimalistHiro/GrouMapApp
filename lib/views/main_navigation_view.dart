@@ -71,6 +71,12 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   bool _didInitialLoad = false;
   String? _lastInitialUserId;
 
+  // static: ウィジェット再生成（ValueKey変更等）を跨いで保持
+  // 本日初ログイン処理（stats/mission）が完了済みかどうか
+  static bool _dailyLoginProcessed = false;
+  // ポップアップ表示待ちかどうか（処理済みだが表示前にmounted=falseで失敗した場合true）
+  static bool _pendingDailyRecommendation = false;
+
   @override
   void initState() {
     super.initState();
@@ -111,6 +117,11 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         loading: () {},
         error: (_, __) {},
       );
+
+      // 前のウィジェットでmounted=falseにより失敗したレコメンドポップアップをリトライ
+      if (_pendingDailyRecommendation && !_dailyLoginProcessed) {
+        _retryPendingDailyRecommendation();
+      }
     });
   }
 
@@ -597,62 +608,103 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   Future<void> _maybeShowDailyRecommendation(String userId, Map<String, dynamic> userData) async {
     if (_dailyRecommendationShown) return;
 
-    final lastLoginAt = userData['lastLoginAt'];
-    final now = DateTime.now();
-    final todayStart = DateTime(now.year, now.month, now.day);
+    // ログイン統計・ミッション処理（セッション中、ユーザーごとに1回のみ）
+    if (!_dailyLoginProcessed && !_pendingDailyRecommendation) {
+      final lastLoginAt = userData['lastLoginAt'];
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
 
-    bool isFirstLoginToday = true;
-    if (lastLoginAt != null) {
-      DateTime lastLoginDate;
-      if (lastLoginAt is Timestamp) {
-        lastLoginDate = lastLoginAt.toDate();
-      } else if (lastLoginAt is DateTime) {
-        lastLoginDate = lastLoginAt;
-      } else {
-        lastLoginDate = DateTime(2000);
+      bool isFirstLoginToday = true;
+      if (lastLoginAt != null) {
+        DateTime lastLoginDate;
+        if (lastLoginAt is Timestamp) {
+          lastLoginDate = lastLoginAt.toDate();
+        } else if (lastLoginAt is DateTime) {
+          lastLoginDate = lastLoginAt;
+        } else {
+          lastLoginDate = DateTime(2000);
+        }
+        isFirstLoginToday = lastLoginDate.isBefore(todayStart);
       }
-      isFirstLoginToday = lastLoginDate.isBefore(todayStart);
+
+      if (!isFirstLoginToday) return;
+
+      _pendingDailyRecommendation = true;
+
+      // lastLoginAtを即座に更新（mounted状態に依存させない）
+      FirebaseFirestore.instance.collection('users').doc(userId).update({
+        'lastLoginAt': FieldValue.serverTimestamp(),
+      }).catchError((e) {
+        debugPrint('lastLoginAt更新エラー: $e');
+      });
+
+      // daily_login_stats のインクリメント（日次ログインユーザー数の集計用）
+      final nowForStats = DateTime.now();
+      final dateKey = '${nowForStats.year}-${nowForStats.month.toString().padLeft(2, '0')}-${nowForStats.day.toString().padLeft(2, '0')}';
+      FirebaseFirestore.instance
+          .collection('daily_login_stats')
+          .doc(dateKey)
+          .set({
+            'loginCount': FieldValue.increment(1),
+            'date': dateKey,
+          }, SetOptions(merge: true))
+          .catchError((e) {
+            debugPrint('daily_login_stats更新エラー: $e');
+          });
+
+      // デイリーミッション: アプリを開く + ログインストリーク更新
+      final missionService = MissionService();
+      missionService.markDailyMission(userId, 'app_open');
+      missionService.updateLoginStreak(userId);
     }
 
-    if (!isFirstLoginToday) return;
+    // ポップアップ表示済みなら終了（前のウィジェットで表示完了していた場合）
+    if (_dailyLoginProcessed) return;
 
     _dailyRecommendationShown = true;
 
-    // daily_login_stats のインクリメント（日次ログインユーザー数の集計用）
-    final nowForStats = DateTime.now();
-    final dateKey = '${nowForStats.year}-${nowForStats.month.toString().padLeft(2, '0')}-${nowForStats.day.toString().padLeft(2, '0')}';
-    FirebaseFirestore.instance
-        .collection('daily_login_stats')
-        .doc(dateKey)
-        .set({
-          'loginCount': FieldValue.increment(1),
-          'date': dateKey,
-        }, SetOptions(merge: true))
-        .catchError((e) {
-          debugPrint('daily_login_stats更新エラー: $e');
-        });
+    // ホーム画面に一定期間いた後にポップアップを表示
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted) {
+      debugPrint('レコメンドポップアップ: mounted=false のため表示スキップ（新ウィジェットで再試行されます）');
+      return;
+    }
 
-    if (!mounted) return;
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
+    // ポップアップ表示確定 → 再試行不要フラグをセット
+    _dailyLoginProcessed = true;
+    _pendingDailyRecommendation = false;
 
-    // ポップアップ表示直前にlastLoginAtを更新（mountedが確認できた場合のみ）
-    FirebaseFirestore.instance.collection('users').doc(userId).update({
-      'lastLoginAt': FieldValue.serverTimestamp(),
-    }).catchError((e) {
-      debugPrint('lastLoginAt更新エラー: $e');
-    });
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const DailyRecommendationView(),
+        ),
+      );
+    } catch (e) {
+      debugPrint('レコメンドポップアップ表示エラー: $e');
+    }
+  }
 
-    // デイリーミッション: アプリを開く + ログインストリーク更新
-    final missionService = MissionService();
-    missionService.markDailyMission(userId, 'app_open');
-    missionService.updateLoginStreak(userId);
+  // 前のウィジェットでmounted=falseにより失敗したレコメンドポップアップのリトライ
+  Future<void> _retryPendingDailyRecommendation() async {
+    _dailyRecommendationShown = true;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const DailyRecommendationView(),
-      ),
-    );
+    // ホーム画面が安定するまで待機
+    await Future.delayed(const Duration(seconds: 3));
+    if (!mounted || _dailyLoginProcessed) return;
+
+    _dailyLoginProcessed = true;
+    _pendingDailyRecommendation = false;
+
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const DailyRecommendationView(),
+        ),
+      );
+    } catch (e) {
+      debugPrint('レコメンドポップアップ表示エラー（リトライ）: $e');
+    }
   }
 
   void _showInviteeReferralPopup(String userId, Map<dynamic, dynamic> popupData) {

@@ -306,9 +306,20 @@ class _MissionsViewState extends State<MissionsView> {
     }
 
     if (success) {
-      // コインとミッション状態を再読み込み
-      await _loadAllMissionData();
+      // ローカル状態を即時更新（Firestore再取得のキャッシュ遅延を回避）
       if (mounted) {
+        setState(() {
+          switch (_selectedTabIndex) {
+            case 0: // デイリー
+              _dailyMissionData['${mission.id}_claimed'] = true;
+              break;
+            case 1: // ログインボーナス
+            case 2: // 新規登録
+              _missionProgress['${mission.id}_claimed'] = true;
+              break;
+          }
+          _userCoins += mission.coinReward;
+        });
         _showCoinRewardPopup(mission);
       }
     } else {

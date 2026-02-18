@@ -109,6 +109,23 @@ final userTotalStampCountProvider = StreamProvider.autoDispose.family<int, Strin
   }
 });
 
+// 今日すでにスロットを回したかチェック
+final todaySlotPlayedProvider = FutureProvider.autoDispose<bool>((ref) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return false;
+
+  final today = DateTime.now();
+  final dateString = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+  final doc = await FirebaseFirestore.instance
+      .collection('lottery_history')
+      .where('userId', isEqualTo: user.uid)
+      .where('date', isEqualTo: dateString)
+      .limit(1)
+      .get();
+
+  return doc.docs.isNotEmpty;
+});
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({Key? key}) : super(key: key);
@@ -1175,6 +1192,12 @@ class _HomeViewState extends ConsumerState<HomeView> {
   }
 
   Widget _buildLotteryCampaignButton(BuildContext context, WidgetRef ref) {
+    // 今日すでにスロットを回していたら非表示
+    final todayPlayed = ref.watch(todaySlotPlayedProvider);
+    if (todayPlayed.valueOrNull == true) {
+      return const SizedBox.shrink();
+    }
+
     return ref.watch(ownerSettingsProvider).when(
       data: (ownerSettings) {
         final currentSettings = _resolveCurrentSettings(ownerSettings);
