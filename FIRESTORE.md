@@ -503,6 +503,13 @@
   - `isUsed`: 使用済みフラグ
   - `storeId`: 店舗ID
   - `orderId`: 注文ID（任意）
+  - `storeName`: 店舗名（コイン交換クーポン時）
+  - `type`: クーポン種別（`coin_exchange` = コイン交換クーポン）
+  - `title`: クーポン名（例: `100円引きクーポン`）
+  - `discountValue`: 割引値（例: 100）
+  - `discountType`: 割引種別（`fixed_amount` = 固定額）
+  - `validFrom`: 有効開始日時（Timestamp）
+  - `validUntil`: 有効期限（Timestamp、コイン交換の場合は取得日+30日）
 
 ### user_achievement_events
 - `user_achievement_events/{userId}/events/{eventId}`: 実績イベント
@@ -517,6 +524,7 @@
   - `badges`: 付与バッジ配列
   - `createdAt`: 作成日時
   - `seenAt`: 既読日時
+  - `coinBonusAwarded`: 来店ボーナスコイン付与済みフラグ（bool、二重付与防止用）
 
 ### user_badges
 - `user_badges/{userId}/badges/{badgeId}`: ユーザー獲得バッジ

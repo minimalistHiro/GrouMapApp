@@ -294,4 +294,68 @@ class MissionService {
       return 0;
     }
   }
+
+  // ========== コイン交換（未訪問店舗クーポン） ==========
+
+  /// 訪問済み店舗IDのセットを取得
+  Future<Set<String>> getVisitedStoreIds(String userId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('stores')
+          .get();
+      return snapshot.docs.map((doc) => doc.id).toSet();
+    } catch (e) {
+      debugPrint('訪問済み店舗取得エラー: $e');
+      return {};
+    }
+  }
+
+  /// コイン10枚で未訪問店舗の100円引きクーポンを取得
+  Future<bool> exchangeCoinForCoupon(String userId, String storeId, String storeName) async {
+    try {
+      final userRef = _firestore.collection('users').doc(userId);
+      final couponRef = _firestore.collection('user_coupons').doc();
+
+      await _firestore.runTransaction((transaction) async {
+        final userDoc = await transaction.get(userRef);
+        if (!userDoc.exists) throw Exception('ユーザーが存在しません');
+
+        final currentCoins = (userDoc.data()?['coins'] as num?)?.toInt() ?? 0;
+        if (currentCoins < 10) {
+          throw Exception('コインが不足しています');
+        }
+
+        final now = DateTime.now();
+        final validUntil = now.add(const Duration(days: 30));
+
+        // コイン消費
+        transaction.update(userRef, {
+          'coins': currentCoins - 10,
+        });
+
+        // クーポン作成
+        transaction.set(couponRef, {
+          'userId': userId,
+          'couponId': couponRef.id,
+          'storeId': storeId,
+          'storeName': storeName,
+          'type': 'coin_exchange',
+          'title': '100円引きクーポン',
+          'discountValue': 100,
+          'discountType': 'fixed_amount',
+          'validFrom': Timestamp.fromDate(now),
+          'validUntil': Timestamp.fromDate(validUntil),
+          'isUsed': false,
+          'obtainedAt': FieldValue.serverTimestamp(),
+        });
+      });
+
+      return true;
+    } catch (e) {
+      debugPrint('コイン交換エラー: $e');
+      return false;
+    }
+  }
 }

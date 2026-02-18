@@ -374,11 +374,18 @@ service cloud.firestore {
     // ユーザー実績イベント（スタンプ押印後のバッジ・レコメンド表示用）
     match /user_achievement_events/{userId}/events/{eventId} {
       allow read: if request.auth != null && request.auth.uid == userId;
-      // seenAt のみ更新可
+      // seenAt / coinBonusAwarded のみ更新可
       allow update: if request.auth != null
         && request.auth.uid == userId
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['seenAt'])
-        && request.resource.data.seenAt is timestamp;
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['seenAt', 'coinBonusAwarded'])
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['seenAt'])
+          || request.resource.data.seenAt is timestamp
+        )
+        && (
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['coinBonusAwarded'])
+          || request.resource.data.coinBonusAwarded is bool
+        );
     }
 
     // バッジ進捗

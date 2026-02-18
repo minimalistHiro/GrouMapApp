@@ -13,6 +13,7 @@ class RankingModel with _$RankingModel {
     required int badgeCount,
     required int stampCount,
     required int totalPayment,
+    @Default(0) int coins,
     required DateTime lastUpdated,
     required int rank,
     @Default(0) int previousRank,
@@ -60,6 +61,8 @@ enum RankingType {
   stampCount,
   @JsonValue('total_payment')
   totalPayment,
+  @JsonValue('coins')
+  coins,
 }
 
 enum RankingPeriodType {

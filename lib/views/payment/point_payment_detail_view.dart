@@ -53,6 +53,7 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
   late final Animation<double> _shineAnim;
   int? _punchIndex;
   bool _shouldAnimatePunch = false;
+  bool _coinBonusAwarded = false;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _userStoreSub;
 
   @override
@@ -352,8 +353,47 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       _isSyncing = stampsAfter > _stamps;
       _punchIndex = (stampsAfter - 1).clamp(0, _maxStamps - 1);
       _shouldAnimatePunch = true;
+
+      // 来店ボーナス: +1コイン付与（二重付与防止）
+      await _awardVisitCoinBonus(userId, eventsSnap.docs.first);
     } catch (_) {
       // ignore
+    }
+  }
+
+  Future<void> _awardVisitCoinBonus(
+    String userId,
+    DocumentSnapshot<Map<String, dynamic>> eventDoc,
+  ) async {
+    try {
+      final data = eventDoc.data();
+      if (data == null) return;
+      if (data['coinBonusAwarded'] == true) return;
+
+      final firestore = FirebaseFirestore.instance;
+      final userRef = firestore.collection('users').doc(userId);
+      final eventRef = firestore
+          .collection('user_achievement_events')
+          .doc(userId)
+          .collection('events')
+          .doc(eventDoc.id);
+
+      await firestore.runTransaction((transaction) async {
+        final userDoc = await transaction.get(userRef);
+        final eventSnap = await transaction.get(eventRef);
+
+        // 二重付与チェック
+        if (eventSnap.data()?['coinBonusAwarded'] == true) return;
+
+        final currentCoins =
+            (userDoc.data()?['coins'] as num?)?.toInt() ?? 0;
+        transaction.update(userRef, {'coins': currentCoins + 1});
+        transaction.update(eventRef, {'coinBonusAwarded': true});
+      });
+
+      _coinBonusAwarded = true;
+    } catch (e) {
+      debugPrint('来店ボーナス付与エラー: $e');
     }
   }
 
@@ -386,6 +426,10 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
                   _buildUsedCouponsSection(),
                   const SizedBox(height: 12),
                   _buildStampCard(),
+                  if (_coinBonusAwarded) ...[
+                    const SizedBox(height: 12),
+                    _buildCoinBonusBanner(),
+                  ],
                   const SizedBox(height: 24),
                   _buildCouponSection(),
                 ],
@@ -421,6 +465,48 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
                   '完了',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoinBonusBanner() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF2EC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFFF6B35), width: 1.5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.monetization_on, color: Colors.amber[700], size: 24),
+          const SizedBox(width: 8),
+          const Text(
+            '来店ボーナス',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFFF6B35),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF6B35),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              '+1 コイン',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
               ),
             ),
           ),
