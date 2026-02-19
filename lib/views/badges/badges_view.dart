@@ -1,24 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
+import '../../models/badge_model.dart';
+import '../../data/badge_definitions.dart';
 import '../../widgets/custom_button.dart';
-
-class BadgeModel {
-  final String id;
-  final String name;
-  final String description;
-  final String iconPath;
-  final String category;
-
-  BadgeModel({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.iconPath,
-    required this.category,
-  });
-}
 
 class BadgesView extends ConsumerStatefulWidget {
   const BadgesView({Key? key}) : super(key: key);
@@ -29,57 +14,16 @@ class BadgesView extends ConsumerStatefulWidget {
 
 class _BadgesViewState extends ConsumerState<BadgesView> {
   String _selectedCategory = 'すべて';
-  List<String> _categories = ['すべて'];
+  late final List<String> _categories;
 
-  // 英語カテゴリ → 日本語ラベルの対応
-  String _displayCategory(String raw) {
-    final key = (raw.isEmpty ? 'その他' : raw).toLowerCase();
-    switch (key) {
-      case 'basic':
-        return '基本';
-      case 'advanced':
-        return '上級';
-      case 'event':
-        return 'イベント';
-      case 'shop':
-      case 'store':
-        return '店舗';
-      case 'social':
-        return 'ソーシャル';
-      case 'seasonal':
-        return '季節';
-      case 'rare':
-        return 'レア';
-      case 'challenge':
-        return 'チャレンジ';
-      case 'other':
-      case 'others':
-        return 'その他';
-      default:
-        // 既に日本語の場合や未定義はそのまま
-        return raw.isEmpty ? '未分類' : raw;
+  @override
+  void initState() {
+    super.initState();
+    final categorySet = <String>{'すべて'};
+    for (final badge in kBadgeDefinitions) {
+      categorySet.add(badge.category ?? '未分類');
     }
-  }
-
-  // Firestore からバッジを購読
-  Stream<List<BadgeModel>> _badgesStream() {
-    return FirebaseFirestore.instance
-        .collection('badges')
-        .orderBy('requiredValue', descending: false)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return BadgeModel(
-          id: (data['badgeId'] ?? doc.id).toString(),
-          name: (data['name'] ?? '').toString(),
-          description: (data['description'] ?? '').toString(),
-          // iconUrl または iconPath を許容
-          iconPath: (data['imageUrl'] ?? data['iconUrl'] ?? data['iconPath'] ?? '').toString(),
-          category: (data['category'] ?? '未分類').toString(),
-        );
-      }).toList();
-    });
+    _categories = categorySet.toList();
   }
 
   @override
@@ -117,34 +61,13 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
   }
 
   Widget _buildBadgesContent(BuildContext context) {
-    return StreamBuilder<List<BadgeModel>>(
-      stream: _badgesStream(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('バッジ取得に失敗しました: ${snapshot.error}'));
-        }
+    final filteredBadges = _selectedCategory == 'すべて'
+        ? kBadgeDefinitions
+        : kBadgeDefinitions
+            .where((b) => (b.category ?? '未分類') == _selectedCategory)
+            .toList();
 
-        final badges = snapshot.data ?? [];
-        final categories = <String>{'すべて'}
-          ..addAll(
-            badges.map((b) => _displayCategory(b.category)).where((c) => c.isNotEmpty),
-          );
-
-        if (!categories.contains(_selectedCategory)) {
-          _selectedCategory = 'すべて';
-        }
-        _categories = categories.toList();
-
-        final filteredBadges = _selectedCategory == 'すべて'
-            ? badges
-            : badges.where((b) => _displayCategory(b.category) == _selectedCategory).toList();
-
-        return _buildBadgeGrid(filteredBadges);
-      },
-    );
+    return _buildBadgeGrid(filteredBadges);
   }
 
   Widget _buildAuthRequired(BuildContext context) {
@@ -231,7 +154,6 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // バッジアイコン
             Container(
               width: 80,
               height: 80,
@@ -239,18 +161,12 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
                 color: const Color(0xFFFF6B35).withOpacity(0.1),
                 borderRadius: BorderRadius.circular(40),
               ),
-              child: _getBadgeIcon(
-                badge.iconPath,
-                size: 48,
-              ),
+              child: _getBadgeIcon(badge.iconUrl, size: 48),
             ),
-            
             const SizedBox(height: 8),
-            
-            // バッジ名
             Text(
               badge.name,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
@@ -274,39 +190,19 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
       );
     }
 
-    // URL or アセットの両方に対応
-    final isUrl = iconPath.startsWith('http');
-    if (isUrl) {
-      return Image.network(
-        iconPath,
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          return Icon(
-            Icons.star,
-            size: size,
-            color: const Color(0xFFFF6B35),
-          );
-        },
-      );
-    } else {
-      return Image.asset(
-        'assets/images/badges/$iconPath',
-        width: size,
-        height: size,
-        fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) {
-          // デバッグ用にエラーをコンソールに出力
-          print('画像読み込みエラー: assets/images/badges/$iconPath - $error');
-          return Icon(
-            Icons.star,
-            size: size,
-            color: const Color(0xFFFF6B35),
-          );
-        },
-      );
-    }
+    return Image.asset(
+      'assets/images/badges/$iconPath',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(
+          Icons.emoji_events,
+          size: size,
+          color: const Color(0xFFFF6B35),
+        );
+      },
+    );
   }
 
   void _showBadgeDetail(BuildContext context, BadgeModel badge) {
@@ -328,10 +224,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
                   color: const Color(0xFFFF6B35).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(150),
                 ),
-                child: _getBadgeIcon(
-                  badge.iconPath,
-                  size: 144,
-                ),
+                child: _getBadgeIcon(badge.iconUrl, size: 144),
               ),
             ),
             const SizedBox(height: 12),
@@ -344,7 +237,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
               ),
             ),
             Text(
-              badge.category,
+              badge.category ?? '未分類',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,

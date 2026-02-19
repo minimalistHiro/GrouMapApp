@@ -336,10 +336,10 @@ service cloud.firestore {
       allow write: if false;
     }
     
-    // バッジマスタ（閲覧のみ）
+    // バッジマスタ（アプリ内蔵に移行済み。既存データ参照用にreadのみ残す）
     match /badges/{badgeId} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.token.role in ['admin', 'company'];
+      allow write: if false;
     }
 
     // ユーザーの獲得バッジ（階層: user_badges/{userId}/badges/{badgeId}）

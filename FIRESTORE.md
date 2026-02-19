@@ -2,21 +2,11 @@
 
 ## Firestore: コレクション一覧（abc順・コード参照ベース）
 
-### badges
-- `badges/{badgeId}`: バッジ定義
-  - `name`: バッジ名
-  - `description`: バッジ説明
-  - `rarity`: レア度
-  - `category`: 分類
-  - `isActive`: 有効フラグ
-  - `order`: 表示順
-  - `requiredValue`: 条件の閾値
-  - `imageUrl`: 画像URL
-  - `condition`: 条件（typed/jsonlogic）
-  - `conditionVersion`: 条件のバージョン
-  - `createdBy`: 作成者UID
-  - `createdAt`: 作成日時
-  - `updatedAt`: 更新日時
+### badges（廃止・アプリ内蔵に移行済み）
+- `badges/{badgeId}`: バッジ定義（参照専用・write無効）
+  - バッジ定義はアプリ内蔵（`lib/data/badge_definitions.dart`）に移行済み
+  - Firestoreルールで write を無効化（既存データ参照用に read のみ残存）
+  - 旧フィールド: `name`, `description`, `rarity`, `category`, `isActive`, `order`, `requiredValue`, `imageUrl`, `condition`, `conditionVersion`, `createdBy`, `createdAt`, `updatedAt`
 
 ### coupons
 - `coupons/{storeId}/coupons/{couponId}`: 店舗別クーポン
@@ -547,19 +537,11 @@
 ### user_badges
 - `user_badges/{userId}/badges/{badgeId}`: ユーザー獲得バッジ
   - `userId`: ユーザーUID
-  - `badgeId`: バッジID
+  - `badgeId`: バッジID（`lib/data/badge_definitions.dart` の badgeId と対応）
   - `unlockedAt`: 獲得日時
-  - `isNew`: 新規フラグ
-  - `name`: バッジ名
-  - `description`: 説明
-  - `category`: カテゴリ
-  - `imageUrl`: 画像URL
-  - `iconUrl`: アイコンURL
-  - `iconPath`: アイコンパス
-  - `rarity`: レア度
-  - `order`: 表示順
-  - `progress`: 進捗
-  - `requiredValue`: 閾値
+  - `progress`: 獲得時の進捗値
+  - `requiredValue`: 獲得条件の閾値
+  - `isNew`: 新規フラグ（未読バッジ表示用、markBadgeAsSeen で false に更新）
 
 ### user_point_balances
 - `user_point_balances/{userId}`: ユーザーのポイント残高

@@ -1137,7 +1137,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       return const SizedBox.shrink();
     }
 
-    final storePosts = ref.watch(storeInstagramPostsProvider(storeId));
+    final storePosts = ref.watch(storeUnifiedPostsProvider(storeId));
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -1269,7 +1269,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       );
     }
 
-    final posts = ref.watch(storeInstagramPostsProvider(storeId));
+    final posts = ref.watch(storeUnifiedPostsProvider(storeId));
 
     return posts.when(
       data: (posts) {

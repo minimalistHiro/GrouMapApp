@@ -32,6 +32,7 @@ import 'stamps/stamp_cards_view.dart';
 import 'lottery/lottery_view.dart';
 import 'missions/missions_view.dart';
 import '../services/location_service.dart';
+import '../services/mission_service.dart';
 import 'main_navigation_view.dart';
 import 'stores/store_detail_view.dart';
 
@@ -150,6 +151,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
   String? _recommendedStoresError;
   List<Map<String, dynamic>> _recommendedStores = [];
   bool _recommendedStoresLoaded = false;
+  bool _hasClaimableMissions = false;
+  String? _lastMissionCheckUserId;
 
   Widget _buildLoadingIndicatorWithLabel(
     String label, {
@@ -222,6 +225,30 @@ class _HomeViewState extends ConsumerState<HomeView> {
         builder: (context) => CouponDetailView(coupon: coupon),
       ),
     );
+  }
+
+  Future<void> _checkClaimableMissions(String userId) async {
+    if (_lastMissionCheckUserId == userId) return;
+    _lastMissionCheckUserId = userId;
+    try {
+      final result = await MissionService().hasClaimableMissions(userId);
+      if (mounted && result != _hasClaimableMissions) {
+        setState(() {
+          _hasClaimableMissions = result;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _refreshClaimableMissions(String userId) async {
+    try {
+      final result = await MissionService().hasClaimableMissions(userId);
+      if (mounted && result != _hasClaimableMissions) {
+        setState(() {
+          _hasClaimableMissions = result;
+        });
+      }
+    } catch (_) {}
   }
 
   @override
@@ -309,6 +336,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     final isLoggedIn = user != null;
     final userId = user?.uid ?? 'guest';
     if (isLoggedIn) {
+      _checkClaimableMissions(userId);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _checkAchievementEvents(user!);
@@ -382,44 +410,73 @@ class _HomeViewState extends ConsumerState<HomeView> {
             Positioned(
               right: 16,
               bottom: 16,
-              child: _buildMissionFloatingButton(context),
+              child: _buildMissionFloatingButton(context, userId),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildMissionFloatingButton(BuildContext context) {
+  Widget _buildMissionFloatingButton(BuildContext context, String userId) {
+    final isActive = _hasClaimableMissions;
     return GestureDetector(
-      onTap: () {
-        Navigator.of(context).push(
+      onTap: () async {
+        await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const MissionsView(),
           ),
         );
+        _refreshClaimableMissions(userId);
       },
       child: Container(
-        width: 68,
-        height: 68,
+        width: 80,
+        height: 80,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF2A8B8B), Color(0xFF4DB6AC)],
-            begin: Alignment.bottomLeft,
-            end: Alignment.topRight,
-          ),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF2A8B8B).withOpacity(0.4),
-              blurRadius: 12,
+              color: isActive
+                  ? const Color(0xFF2A8B8B).withOpacity(0.5)
+                  : Colors.grey.withOpacity(0.3),
+              blurRadius: 16,
+              spreadRadius: 2,
               offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(isActive ? 0.3 : 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: const Icon(
-          Icons.monetization_on,
-          color: Colors.white,
-          size: 34,
+        child: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isActive
+                  ? const [
+                      Color(0xFF1A7A7A),
+                      Color(0xFF2A8B8B),
+                      Color(0xFF4DB6AC),
+                      Color(0xFF6BD4C8),
+                    ]
+                  : const [
+                      Color(0xFF9E9E9E),
+                      Color(0xFFBDBDBD),
+                    ],
+              begin: Alignment.bottomLeft,
+              end: Alignment.topRight,
+            ),
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: Colors.white.withOpacity(isActive ? 0.35 : 0.2),
+              width: 2,
+            ),
+          ),
+          child: Icon(
+            Icons.monetization_on,
+            color: isActive ? Colors.white : Colors.white.withOpacity(0.6),
+            size: 38,
+          ),
         ),
       ),
     );

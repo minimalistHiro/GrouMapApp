@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import '../models/badge_model.dart';
+import '../data/badge_definitions.dart';
 
 // バッジプロバイダー
 final badgeProvider = Provider<BadgeService>((ref) {
@@ -14,10 +15,10 @@ final userBadgesProvider = FutureProvider.family<List<UserBadgeModel>, String>((
   return await badgeService.getUserBadges(userId);
 });
 
-// 利用可能なバッジ一覧
-final availableBadgesProvider = FutureProvider<List<BadgeModel>>((ref) async {
-  final badgeService = ref.read(badgeProvider);
-  return await badgeService.getAvailableBadges();
+// 利用可能なバッジ一覧（内蔵データから取得）
+final availableBadgesProvider = Provider<List<BadgeModel>>((ref) {
+  return List.from(kBadgeDefinitions)
+    ..sort((a, b) => a.requiredValue.compareTo(b.requiredValue));
 });
 
 // バッジの進捗状況
@@ -34,7 +35,8 @@ class BadgeService {
     try {
       final querySnapshot = await _firestore
           .collection('user_badges')
-          .where('userId', isEqualTo: userId)
+          .doc(userId)
+          .collection('badges')
           .orderBy('unlockedAt', descending: true)
           .get();
 
@@ -43,7 +45,6 @@ class BadgeService {
           .toList();
     } catch (e) {
       debugPrint('Error fetching user badges: $e');
-      // Firestoreの権限エラーの場合は空のリストを返す
       if (e.toString().contains('permission-denied')) {
         return [];
       }
@@ -57,26 +58,24 @@ class BadgeService {
     required BadgeModel badge,
   }) async {
     try {
-      // 既に同じバッジを持っているか確認
-      final existing = await _firestore
+      final badgeRef = _firestore
           .collection('user_badges')
-          .where('userId', isEqualTo: userId)
-          .where('badgeId', isEqualTo: badge.badgeId)
-          .limit(1)
-          .get();
+          .doc(userId)
+          .collection('badges')
+          .doc(badge.badgeId);
 
-      if (existing.docs.isNotEmpty) {
-        return false; // すでに付与済み
+      final existing = await badgeRef.get();
+      if (existing.exists) {
+        return false;
       }
 
-      await _firestore.collection('user_badges').add({
+      await badgeRef.set({
         'userId': userId,
         'badgeId': badge.badgeId,
         'unlockedAt': FieldValue.serverTimestamp(),
         'progress': badge.requiredValue,
         'requiredValue': badge.requiredValue,
         'isNew': true,
-        'rarity': badge.rarity.name, // 正規化済み
       });
       return true;
     } catch (e) {
@@ -85,25 +84,10 @@ class BadgeService {
     }
   }
 
-  // 利用可能なバッジ一覧を取得
+  // 利用可能なバッジ一覧を取得（内蔵データ）
   Future<List<BadgeModel>> getAvailableBadges() async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('badges')
-          .orderBy('requiredValue')
-          .get();
-
-      return querySnapshot.docs
-          .map((doc) => BadgeModel.fromJson(doc.data()))
-          .toList();
-    } catch (e) {
-      debugPrint('Error fetching available badges: $e');
-      // Firestoreの権限エラーの場合は空のリストを返す
-      if (e.toString().contains('permission-denied')) {
-        return [];
-      }
-      throw Exception('バッジ一覧の取得に失敗しました');
-    }
+    return List.from(kBadgeDefinitions)
+      ..sort((a, b) => a.requiredValue.compareTo(b.requiredValue));
   }
 
   // バッジの進捗状況を取得
@@ -139,14 +123,14 @@ class BadgeService {
 
       await _firestore.runTransaction((transaction) async {
         final snapshot = await transaction.get(progressRef);
-        
+
         int currentValue = 0;
         if (snapshot.exists) {
           currentValue = snapshot.data()?['currentValue'] ?? 0;
         }
 
         final newValue = currentValue + increment;
-        
+
         transaction.set(progressRef, {
           'userId': userId,
           'badgeType': badgeType.name,
@@ -163,36 +147,30 @@ class BadgeService {
     }
   }
 
-  // バッジの条件をチェックして付与
+  // バッジの条件をチェックして付与（内蔵データから判定）
   Future<void> _checkAndAwardBadge(String userId, BadgeType badgeType, int currentValue) async {
     try {
-      // 該当するバッジを検索
-      final badgesSnapshot = await _firestore
-          .collection('badges')
-          .where('type', isEqualTo: badgeType.name)
-          .where('requiredValue', isLessThanOrEqualTo: currentValue)
-          .get();
+      final matchingBadges = kBadgeDefinitions
+          .where((b) => b.type == badgeType && b.requiredValue <= currentValue)
+          .toList();
 
-      for (final badgeDoc in badgesSnapshot.docs) {
-        final badge = BadgeModel.fromJson(badgeDoc.data());
-        
-        // 既に獲得済みかチェック
-        final existingBadge = await _firestore
+      for (final badge in matchingBadges) {
+        final badgeRef = _firestore
             .collection('user_badges')
-            .where('userId', isEqualTo: userId)
-            .where('badgeId', isEqualTo: badge.badgeId)
-            .get();
+            .doc(userId)
+            .collection('badges')
+            .doc(badge.badgeId);
 
-        if (existingBadge.docs.isEmpty) {
-          // バッジを付与
-          await _firestore.collection('user_badges').add({
+        final existingBadge = await badgeRef.get();
+
+        if (!existingBadge.exists) {
+          await badgeRef.set({
             'userId': userId,
             'badgeId': badge.badgeId,
             'unlockedAt': FieldValue.serverTimestamp(),
             'progress': currentValue,
             'requiredValue': badge.requiredValue,
             'isNew': true,
-            'rarity': badge.rarity.name, // 正規化済み
           });
         }
       }
@@ -204,15 +182,12 @@ class BadgeService {
   // バッジを新規フラグを解除
   Future<void> markBadgeAsSeen(String userId, String badgeId) async {
     try {
-      final querySnapshot = await _firestore
+      await _firestore
           .collection('user_badges')
-          .where('userId', isEqualTo: userId)
-          .where('badgeId', isEqualTo: badgeId)
-          .get();
-
-      for (final doc in querySnapshot.docs) {
-        await doc.reference.update({'isNew': false});
-      }
+          .doc(userId)
+          .collection('badges')
+          .doc(badgeId)
+          .update({'isNew': false});
     } catch (e) {
       debugPrint('Error marking badge as seen: $e');
     }
@@ -223,7 +198,8 @@ class BadgeService {
     try {
       final querySnapshot = await _firestore
           .collection('user_badges')
-          .where('userId', isEqualTo: userId)
+          .doc(userId)
+          .collection('badges')
           .where('isNew', isEqualTo: true)
           .get();
 

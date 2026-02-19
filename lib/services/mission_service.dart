@@ -282,6 +282,52 @@ class MissionService {
     }
   }
 
+  /// 受け取り可能（達成済み＆未受取）なミッションがあるか判定
+  Future<bool> hasClaimableMissions(String userId) async {
+    try {
+      // デイリーミッション確認
+      final dailyData = await getDailyMissions(userId);
+      const dailyIds = ['app_open', 'recommendation_view', 'map_open'];
+      for (final id in dailyIds) {
+        if (dailyData[id] == true && dailyData['${id}_claimed'] != true) {
+          return true;
+        }
+      }
+
+      // missionProgress（新規登録ミッション＋ログインボーナス）確認
+      final progress = await getMissionProgress(userId);
+
+      // 新規登録ミッション
+      const regIds = [
+        'profile_completed',
+        'first_map',
+        'first_favorite',
+        'first_store_detail',
+        'first_slot',
+      ];
+      for (final id in regIds) {
+        if (progress[id] == true && progress['${id}_claimed'] != true) {
+          return true;
+        }
+      }
+
+      // ログインボーナス
+      final loginStreak = await getLoginStreak(userId);
+      const loginMilestones = {'login_3': 3, 'login_7': 7, 'login_30': 30};
+      for (final entry in loginMilestones.entries) {
+        if (loginStreak >= entry.value &&
+            progress['${entry.key}_claimed'] != true) {
+          return true;
+        }
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('受取可能ミッション判定エラー: $e');
+      return false;
+    }
+  }
+
   /// ユーザーのコイン残高を取得
   Future<int> getUserCoins(String userId) async {
     try {

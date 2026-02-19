@@ -13,29 +13,12 @@ class PostsView extends ConsumerStatefulWidget {
 }
 
 class _PostsViewState extends ConsumerState<PostsView> {
-  static const double _loadMoreThreshold = 200;
   final ScrollController _scrollController = ScrollController();
 
   @override
-  void initState() {
-    super.initState();
-    _scrollController.addListener(_onScroll);
-  }
-
-  @override
   void dispose() {
-    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
-  }
-
-  void _onScroll() {
-    if (!_scrollController.hasClients) return;
-    final remain = _scrollController.position.maxScrollExtent -
-        _scrollController.position.pixels;
-    if (remain <= _loadMoreThreshold) {
-      ref.read(unifiedFeedProvider.notifier).loadMore();
-    }
   }
 
   @override
@@ -154,6 +137,27 @@ class _PostsViewState extends ConsumerState<PostsView> {
               child: Center(
                 child: CircularProgressIndicator(
                   color: Color(0xFFFF6B35),
+                ),
+              ),
+            ),
+          ),
+        if (!state.isLoadingMore && state.hasMore)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: TextButton(
+                  onPressed: () {
+                    ref.read(unifiedFeedProvider.notifier).loadMore();
+                  },
+                  child: const Text(
+                    'さらに表示する',
+                    style: TextStyle(
+                      color: Colors.blue,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),

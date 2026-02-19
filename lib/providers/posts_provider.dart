@@ -10,7 +10,7 @@ Stream<List<PostModel>> _instagramPostsStream({
     await for (final snapshot in query.snapshots()) {
       final posts = snapshot.docs
           .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
-          .where((p) => p.isActive == true)
+          .where((p) => p.isActive == true && p.imageUrls.isNotEmpty)
           .toList();
       yield posts;
     }
@@ -178,8 +178,8 @@ class InstagramSearchPostsState {
 
 class InstagramSearchPostsNotifier
     extends StateNotifier<InstagramSearchPostsState> {
-  static const int _pageSize = 50;
-  static const int _maxItems = 300;
+  static const int _pageSize = 51;
+  static const int _maxItems = 306;
 
   final FirebaseFirestore _firestore;
   DocumentSnapshot<Map<String, dynamic>>? _lastDoc;
@@ -274,7 +274,7 @@ class InstagramSearchPostsNotifier
 
     final items = snapshot.docs
         .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
-        .where((post) => post.isActive == true)
+        .where((post) => post.isActive == true && post.imageUrls.isNotEmpty)
         .toList();
     final hasMore = snapshot.docs.length == queryLimit;
 
@@ -310,7 +310,7 @@ final instagramSearchPostsProvider = StateNotifierProvider<
 final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
   return FirebaseFirestore.instance
       .collection('public_posts')
-      .limit(50)
+      .limit(51)
       .snapshots()
       .map((snapshot) {
     final posts = snapshot.docs
@@ -318,7 +318,7 @@ final allPostsProvider = StreamProvider<List<PostModel>>((ref) {
         .toList();
 
     // クライアント側フィルタで公開中かつ有効のみを表示（複合インデックス不要化）
-    final filtered = posts.where((p) => p.isActive == true).toList();
+    final filtered = posts.where((p) => p.isActive == true && p.imageUrls.isNotEmpty).toList();
     filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return filtered;
   }).handleError((error) {
@@ -349,7 +349,7 @@ final appPostsHomeProvider = StreamProvider<List<PostModel>>((ref) {
       .map((snapshot) {
     final posts = snapshot.docs
         .map((doc) => PostModel.fromMap(doc.data(), doc.id))
-        .where((p) => p.isActive)
+        .where((p) => p.isActive && p.imageUrls.isNotEmpty)
         .toList();
     posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     return posts;
@@ -423,8 +423,8 @@ class UnifiedFeedState {
 
 // 統一フィードNotifier（投稿一覧用）: 2コレクションからページネーション取得
 class UnifiedFeedNotifier extends StateNotifier<UnifiedFeedState> {
-  static const int _pageSize = 50;
-  static const int _maxItems = 300;
+  static const int _pageSize = 51;
+  static const int _maxItems = 306;
 
   final FirebaseFirestore _firestore;
   DocumentSnapshot<Map<String, dynamic>>? _lastInstagramDoc;
@@ -523,7 +523,7 @@ class UnifiedFeedNotifier extends StateNotifier<UnifiedFeedState> {
       results.addAll(
         igSnap.docs
             .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
-            .where((p) => p.isActive),
+            .where((p) => p.isActive && p.imageUrls.isNotEmpty),
       );
     }
 
@@ -543,13 +543,25 @@ class UnifiedFeedNotifier extends StateNotifier<UnifiedFeedState> {
       results.addAll(
         appSnap.docs
             .map((doc) => PostModel.fromMap(doc.data(), doc.id))
-            .where((p) => p.isActive),
+            .where((p) => p.isActive && p.imageUrls.isNotEmpty),
       );
     }
 
     // 日付順でソート
     results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return results;
+
+    // 1店舗あたり51件に制限（3で割り切れる数）
+    final storeCount = <String, int>{};
+    final limited = <PostModel>[];
+    for (final post in results) {
+      final sid = post.storeId ?? '';
+      final count = storeCount[sid] ?? 0;
+      if (count < 51) {
+        limited.add(post);
+        storeCount[sid] = count + 1;
+      }
+    }
+    return limited;
   }
 }
 
@@ -569,7 +581,7 @@ final storeInstagramPostsProvider =
       .collection('instagram_posts')
       .where('isVideo', isEqualTo: false)
       .orderBy('timestamp', descending: true)
-      .limit(50);
+      .limit(51);
   return _instagramPostsStream(
     query: query,
     logLabel: 'store',
@@ -588,7 +600,7 @@ final storePostsProvider =
         .map((snapshot) {
       final posts = snapshot.docs
           .map((doc) => PostModel.fromMap(doc.data(), doc.id))
-          .where((p) => p.isActive == true)
+          .where((p) => p.isActive == true && p.imageUrls.isNotEmpty)
           .toList();
 
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -619,12 +631,12 @@ final storePostsNestedProvider =
         .collection('posts')
         .doc(storeId)
         .collection('posts')
-        .limit(20)
+        .limit(51)
         .snapshots()
         .map((snapshot) {
       final posts = snapshot.docs
           .map((doc) => PostModel.fromMap(doc.data(), doc.id))
-          .where((p) => p.isActive == true)
+          .where((p) => p.isActive == true && p.imageUrls.isNotEmpty)
           .toList();
 
       posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -638,6 +650,24 @@ final storePostsNestedProvider =
     debugPrint('Exception in storePostsNestedProvider: $e');
     return Stream.value(<PostModel>[]);
   }
+});
+
+// 店舗の統一投稿プロバイダー（店舗詳細用: Instagram + 通常投稿を混合、最大50件）
+final storeUnifiedPostsProvider =
+    Provider.family<AsyncValue<List<PostModel>>, String>((ref, storeId) {
+  final igPosts = ref.watch(storeInstagramPostsProvider(storeId));
+  final regularPosts = ref.watch(storePostsNestedProvider(storeId));
+
+  if (igPosts is AsyncLoading<List<PostModel>> &&
+      regularPosts is AsyncLoading<List<PostModel>>) {
+    return const AsyncValue.loading();
+  }
+
+  final igList = igPosts.valueOrNull ?? [];
+  final regularList = regularPosts.valueOrNull ?? [];
+  final merged = [...igList, ...regularList];
+  merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return AsyncValue.data(merged.take(51).toList());
 });
 
 // フォールバック用の投稿プロバイダー（インデックスエラーを完全に回避）
