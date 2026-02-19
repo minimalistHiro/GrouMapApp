@@ -30,6 +30,7 @@ mixin _$BadgeModel {
   bool get isUnlocked => throw _privateConstructorUsedError;
   DateTime? get unlockedAt => throw _privateConstructorUsedError;
   String? get category => throw _privateConstructorUsedError;
+  String? get categoryGroupKey => throw _privateConstructorUsedError;
 
   /// Serializes this BadgeModel to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -57,7 +58,8 @@ abstract class $BadgeModelCopyWith<$Res> {
       BadgeRarity rarity,
       bool isUnlocked,
       DateTime? unlockedAt,
-      String? category});
+      String? category,
+      String? categoryGroupKey});
 }
 
 /// @nodoc
@@ -85,6 +87,7 @@ class _$BadgeModelCopyWithImpl<$Res, $Val extends BadgeModel>
     Object? isUnlocked = null,
     Object? unlockedAt = freezed,
     Object? category = freezed,
+    Object? categoryGroupKey = freezed,
   }) {
     return _then(_value.copyWith(
       badgeId: null == badgeId
@@ -127,6 +130,10 @@ class _$BadgeModelCopyWithImpl<$Res, $Val extends BadgeModel>
           ? _value.category
           : category // ignore: cast_nullable_to_non_nullable
               as String?,
+      categoryGroupKey: freezed == categoryGroupKey
+          ? _value.categoryGroupKey
+          : categoryGroupKey // ignore: cast_nullable_to_non_nullable
+              as String?,
     ) as $Val);
   }
 }
@@ -149,7 +156,8 @@ abstract class _$$BadgeModelImplCopyWith<$Res>
       BadgeRarity rarity,
       bool isUnlocked,
       DateTime? unlockedAt,
-      String? category});
+      String? category,
+      String? categoryGroupKey});
 }
 
 /// @nodoc
@@ -175,6 +183,7 @@ class __$$BadgeModelImplCopyWithImpl<$Res>
     Object? isUnlocked = null,
     Object? unlockedAt = freezed,
     Object? category = freezed,
+    Object? categoryGroupKey = freezed,
   }) {
     return _then(_$BadgeModelImpl(
       badgeId: null == badgeId
@@ -217,6 +226,10 @@ class __$$BadgeModelImplCopyWithImpl<$Res>
           ? _value.category
           : category // ignore: cast_nullable_to_non_nullable
               as String?,
+      categoryGroupKey: freezed == categoryGroupKey
+          ? _value.categoryGroupKey
+          : categoryGroupKey // ignore: cast_nullable_to_non_nullable
+              as String?,
     ));
   }
 }
@@ -234,7 +247,8 @@ class _$BadgeModelImpl implements _BadgeModel {
       required this.rarity,
       this.isUnlocked = false,
       this.unlockedAt,
-      this.category});
+      this.category,
+      this.categoryGroupKey});
 
   factory _$BadgeModelImpl.fromJson(Map<String, dynamic> json) =>
       _$$BadgeModelImplFromJson(json);
@@ -260,10 +274,12 @@ class _$BadgeModelImpl implements _BadgeModel {
   final DateTime? unlockedAt;
   @override
   final String? category;
+  @override
+  final String? categoryGroupKey;
 
   @override
   String toString() {
-    return 'BadgeModel(badgeId: $badgeId, name: $name, description: $description, iconUrl: $iconUrl, type: $type, requiredValue: $requiredValue, rarity: $rarity, isUnlocked: $isUnlocked, unlockedAt: $unlockedAt, category: $category)';
+    return 'BadgeModel(badgeId: $badgeId, name: $name, description: $description, iconUrl: $iconUrl, type: $type, requiredValue: $requiredValue, rarity: $rarity, isUnlocked: $isUnlocked, unlockedAt: $unlockedAt, category: $category, categoryGroupKey: $categoryGroupKey)';
   }
 
   @override
@@ -285,13 +301,26 @@ class _$BadgeModelImpl implements _BadgeModel {
             (identical(other.unlockedAt, unlockedAt) ||
                 other.unlockedAt == unlockedAt) &&
             (identical(other.category, category) ||
-                other.category == category));
+                other.category == category) &&
+            (identical(other.categoryGroupKey, categoryGroupKey) ||
+                other.categoryGroupKey == categoryGroupKey));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, badgeId, name, description,
-      iconUrl, type, requiredValue, rarity, isUnlocked, unlockedAt, category);
+  int get hashCode => Object.hash(
+      runtimeType,
+      badgeId,
+      name,
+      description,
+      iconUrl,
+      type,
+      requiredValue,
+      rarity,
+      isUnlocked,
+      unlockedAt,
+      category,
+      categoryGroupKey);
 
   /// Create a copy of BadgeModel
   /// with the given fields replaced by the non-null parameter values.
@@ -320,7 +349,8 @@ abstract class _BadgeModel implements BadgeModel {
       required final BadgeRarity rarity,
       final bool isUnlocked,
       final DateTime? unlockedAt,
-      final String? category}) = _$BadgeModelImpl;
+      final String? category,
+      final String? categoryGroupKey}) = _$BadgeModelImpl;
 
   factory _BadgeModel.fromJson(Map<String, dynamic> json) =
       _$BadgeModelImpl.fromJson;
@@ -345,6 +375,8 @@ abstract class _BadgeModel implements BadgeModel {
   DateTime? get unlockedAt;
   @override
   String? get category;
+  @override
+  String? get categoryGroupKey;
 
   /// Create a copy of BadgeModel
   /// with the given fields replaced by the non-null parameter values.

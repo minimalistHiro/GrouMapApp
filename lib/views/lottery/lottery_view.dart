@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:confetti/confetti.dart';
 import 'dart:math';
 import '../../services/mission_service.dart';
+import '../../providers/badge_provider.dart';
 
 class LotteryView extends StatefulWidget {
   const LotteryView({super.key});
@@ -579,6 +580,19 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
 
       // 新規登録ミッション: スロット初挑戦
       MissionService().markRegistrationMission(user.uid, 'first_slot');
+
+      // バッジカウンター: スロットプレイ
+      BadgeService().incrementBadgeCounter(user.uid, 'slotPlayed');
+
+      // バッジカウンター: スロット当選（1等・2等）
+      if (result == 1 || result == 2) {
+        BadgeService().incrementBadgeCounter(user.uid, 'slotWin');
+      }
+
+      // バッジカウンター: コイン獲得
+      if (coinsEarned > 0) {
+        BadgeService().incrementBadgeCounter(user.uid, 'coinsEarned');
+      }
 
       debugPrint('スロット結果保存成功: $prize');
     } catch (e) {

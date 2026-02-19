@@ -20,6 +20,7 @@ _$BadgeModelImpl _$$BadgeModelImplFromJson(Map<String, dynamic> json) =>
           ? null
           : DateTime.parse(json['unlockedAt'] as String),
       category: json['category'] as String?,
+      categoryGroupKey: json['categoryGroupKey'] as String?,
     );
 
 Map<String, dynamic> _$$BadgeModelImplToJson(_$BadgeModelImpl instance) =>
@@ -34,15 +35,30 @@ Map<String, dynamic> _$$BadgeModelImplToJson(_$BadgeModelImpl instance) =>
       'isUnlocked': instance.isUnlocked,
       'unlockedAt': instance.unlockedAt?.toIso8601String(),
       'category': instance.category,
+      'categoryGroupKey': instance.categoryGroupKey,
     };
 
 const _$BadgeTypeEnumMap = {
   BadgeType.stampsTotal: 'stamps_total',
   BadgeType.visitsCount: 'visits_count',
   BadgeType.consecutiveDays: 'consecutive_days',
-  BadgeType.qrScans: 'qr_scans',
   BadgeType.storesVisited: 'stores_visited',
   BadgeType.specialEvents: 'special_events',
+  BadgeType.categoryVisit: 'category_visit',
+  BadgeType.mapOpened: 'map_opened',
+  BadgeType.storeDetailViewed: 'store_detail_viewed',
+  BadgeType.profileCompleted: 'profile_completed',
+  BadgeType.favoriteAdded: 'favorite_added',
+  BadgeType.slotPlayed: 'slot_played',
+  BadgeType.slotWin: 'slot_win',
+  BadgeType.couponUsed: 'coupon_used',
+  BadgeType.likeGiven: 'like_given',
+  BadgeType.commentPosted: 'comment_posted',
+  BadgeType.followUser: 'follow_user',
+  BadgeType.coinsEarned: 'coins_earned',
+  BadgeType.missionCompleted: 'mission_completed',
+  BadgeType.recommendViewed: 'recommend_viewed',
+  BadgeType.stampCardCompleted: 'stamp_card_completed',
 };
 
 const _$BadgeRarityEnumMap = {

@@ -27,7 +27,6 @@ import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
 import 'coupons/coupons_view.dart';
 import 'badges/badges_view.dart';
-import 'stamps/badge_awarded_view.dart';
 import 'stamps/stamp_cards_view.dart';
 import 'lottery/lottery_view.dart';
 import 'missions/missions_view.dart';
@@ -143,9 +142,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Timer? _referralTimer;
   int _referralPageIndex = 0;
   int _referralPageCount = 0;
-  bool _isShowingAchievement = false;
-  String? _lastAchievementUserId;
-  DateTime? _lastAchievementCheckAt;
+  // バッジポップアップはmain_navigation_viewに移管済み
   static const bool _showDebugLoadingLabels = false;
   bool _isRecommendedStoresLoading = true;
   String? _recommendedStoresError;
@@ -337,10 +334,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
     final userId = user?.uid ?? 'guest';
     if (isLoggedIn) {
       _checkClaimableMissions(userId);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _checkAchievementEvents(user!);
-      });
     }
     if (!_recommendedStoresLoaded) {
       _recommendedStoresLoaded = true;
@@ -2767,81 +2760,4 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Future<void> _checkAchievementEvents(User user) async {
-    if (_isShowingAchievement) return;
-    if (_lastAchievementUserId != user.uid) {
-      _lastAchievementUserId = user.uid;
-      _lastAchievementCheckAt = null;
-    }
-    final now = DateTime.now();
-    if (_lastAchievementCheckAt != null &&
-        now.difference(_lastAchievementCheckAt!) < const Duration(seconds: 5)) {
-      return;
-    }
-    _lastAchievementCheckAt = now;
-
-    final eventsRef = FirebaseFirestore.instance
-        .collection('user_achievement_events')
-        .doc(user.uid)
-        .collection('events');
-
-    QuerySnapshot<Map<String, dynamic>> snapshot;
-    try {
-      snapshot = await eventsRef
-          .where('seenAt', isEqualTo: null)
-          .orderBy('createdAt')
-          .get();
-    } catch (_) {
-      return;
-    }
-
-    if (snapshot.docs.isEmpty) return;
-
-    final badgeMap = <String, Map<String, dynamic>>{};
-    String? sourceStoreId;
-    final batch = FirebaseFirestore.instance.batch();
-
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-      if (data['seenAt'] != null) {
-        continue;
-      }
-
-      final badgesRaw = data['badges'];
-      if (badgesRaw is List) {
-        for (final raw in badgesRaw) {
-          if (raw is! Map) continue;
-          final badge = Map<String, dynamic>.from(raw as Map);
-          final key = (badge['badgeId'] ?? badge['id'] ?? badge['name'] ?? '').toString();
-          if (key.isEmpty) continue;
-          badgeMap[key] = badge;
-        }
-      }
-
-      final storeId = data['storeId'];
-      if (storeId is String && storeId.isNotEmpty) {
-        sourceStoreId = storeId;
-      }
-
-      batch.update(doc.reference, {'seenAt': Timestamp.now()});
-    }
-
-    _isShowingAchievement = true;
-    try {
-      await batch.commit();
-      if (badgeMap.isNotEmpty) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => BadgeAwardedView(
-              badges: badgeMap.values.toList(),
-              sourceStoreId: sourceStoreId,
-            ),
-          ),
-        );
-      }
-    } finally {
-      _isShowingAchievement = false;
-      _lastAchievementCheckAt = DateTime.now();
-    }
-  }
 }

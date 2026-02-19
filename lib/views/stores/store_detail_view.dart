@@ -10,11 +10,13 @@ import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/coupon_list_card.dart';
 import '../../widgets/custom_top_tab_bar.dart';
+import '../../widgets/stamp_card_widget.dart';
 import '../posts/post_detail_view.dart';
 import '../coupons/coupon_detail_view.dart';
 import '../../constants/payment_methods_constants.dart';
 import '../../widgets/pill_tab_bar.dart';
 import '../../services/mission_service.dart';
+import '../../providers/badge_provider.dart';
 
 class StoreDetailView extends ConsumerStatefulWidget {
   final Map<String, dynamic> store;
@@ -61,6 +63,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     MissionService().markRegistrationMission(user.uid, 'first_store_detail');
+
+    // バッジカウンター: 店舗詳細表示
+    BadgeService().incrementBadgeCounter(user.uid, 'storeDetailViewed');
   }
 
   @override
@@ -202,9 +207,10 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
       await batch.commit();
 
-      // 新規登録ミッション: お気に入り登録（追加時のみ）
+      // 新規登録ミッション・バッジカウンター: お気に入り登録（追加時のみ）
       if (!_isFavorite) {
         MissionService().markRegistrationMission(user.uid, 'first_favorite');
+        BadgeService().incrementBadgeCounter(user.uid, 'favoriteAdded');
       }
 
       if (!mounted) return;
@@ -263,6 +269,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
       // スタンプカード完成時の通知
       if (clampedStamps >= 10) {
+        // バッジカウンター: スタンプカード達成
+        BadgeService().incrementBadgeCounter(user.uid, 'stampCardCompleted');
         _showStampCompletionDialog();
       }
     } catch (e) {
@@ -865,133 +873,20 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildStampCard() {
-    if (_isLoadingStamps) {
-      return const Padding(
-        padding: EdgeInsets.all(16),
-        child: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFFFF6B35),
-          ),
-        ),
-      );
-    }
+    final stamps = (_userStamps?['stamps'] as int?) ?? 0;
+    final storeName = _getStringValue(widget.store['name'], '店舗名');
+    final storeCategory = _getStringValue(widget.store['category'], 'その他');
+    final iconImageUrl = _getStringValue(widget.store['iconImageUrl'], '');
 
-    final stamps = _userStamps?['stamps'] ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.all(16),
+    return Padding(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'スタンプカード',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // スタンプ表示（5x2のグリッド）
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 5,
-              childAspectRatio: 1,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-            ),
-            itemCount: 10,
-            itemBuilder: (context, index) {
-              final hasStamp = index < stamps;
-
-              final iconUrl = _getStringValue(widget.store['iconImageUrl'], '');
-              final category = _getStringValue(widget.store['category'], 'その他');
-              Widget stampContent = iconUrl.isNotEmpty
-                  ? SizedBox.expand(
-                      child: Image.network(
-                        iconUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Center(
-                          child: Icon(
-                            _getCategoryIcon(category),
-                            color: _getCategoryColor(category),
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    )
-                  : Center(
-                      child: Icon(
-                        _getCategoryIcon(category),
-                        color: _getCategoryColor(category),
-                        size: 20,
-                      ),
-                    );
-              if (!hasStamp) {
-                return Container(
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Icon(
-                      _getCategoryIcon(category),
-                      color: Colors.grey,
-                      size: 20,
-                    ),
-                  ),
-                );
-              }
-              return ClipOval(child: stampContent);
-            },
-          ),
-
-          // スタンプカード完成通知
-          if (stamps >= 10)
-            Container(
-              margin: const EdgeInsets.only(top: 16),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.green.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.celebration, color: Colors.green, size: 20),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'おめでとうございます！スタンプカードが完成しました！',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.green,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          const SizedBox(height: 16),
-        ],
+      child: StampCardWidget(
+        storeName: storeName,
+        storeCategory: storeCategory,
+        iconImageUrl: iconImageUrl.isNotEmpty ? iconImageUrl : null,
+        stamps: stamps,
+        maxStamps: 10,
+        isLoading: _isLoadingStamps,
       ),
     );
   }

@@ -10,8 +10,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/badge_provider.dart';
 import '../settings/profile_edit_view.dart';
 import '../settings/password_change_view.dart';
-import '../settings/push_notification_settings_view.dart';
-import '../settings/email_notification_settings_view.dart';
+import '../settings/notification_settings_view.dart';
 import '../legal/privacy_policy_view.dart';
 import '../legal/terms_view.dart';
 import '../support/help_view.dart';
@@ -303,15 +302,9 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 _buildSettingsMenuContainer(context, [
                   _buildMenuItem(
                     icon: Icons.notifications,
-                    title: 'プッシュ通知',
-                    subtitle: 'プッシュ通知の設定',
-                    onTap: () => _openPushNotificationSettings(context),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.mail,
-                    title: 'メール通知',
-                    subtitle: 'メール通知の設定',
-                    onTap: () => _openEmailNotificationSettings(context),
+                    title: '通知設定',
+                    subtitle: 'プッシュ通知・メール通知の設定',
+                    onTap: () => _openNotificationSettings(context),
                   ),
                 ]),
 
@@ -817,18 +810,10 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     );
   }
 
-  void _openPushNotificationSettings(BuildContext context) {
+  void _openNotificationSettings(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => const PushNotificationSettingsView(),
-      ),
-    );
-  }
-
-  void _openEmailNotificationSettings(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const EmailNotificationSettingsView(),
+        builder: (context) => const NotificationSettingsView(),
       ),
     );
   }

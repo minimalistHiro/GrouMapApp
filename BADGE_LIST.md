@@ -349,12 +349,32 @@
 
 - 保存先: `assets/images/badges/{badgeId}.png`
 - サイズ: 512x512px（推奨）
-- 形式: PNG
-- 状態: 未生成（後日Nano Banana APIで生成予定）
+- 形式: PNG（背景透明）
+- 生成ツール: Nano Banana Pro（Gemini 3 Pro Image）API
+- 生成スキル: `badge-image-gen`（統一テンプレートでバッジ画像を生成）
+- 生成済み: 1/141（`stamps_total_1.png`）
 
 ## 獲得処理
 
-- 獲得ロジック: `lib/providers/badge_provider.dart` の `updateBadgeProgress()` → `_checkAndAwardBadge()`
+- 獲得ロジック: `lib/providers/badge_provider.dart`
+  - アクション系: `incrementBadgeCounter()` → カウンター更新後に即座に `_checkAndAwardBadge()` で判定・付与
+  - スタンプ/来店/連続ログイン等: `runComprehensiveBadgeCheck()` で日次包括判定
 - 獲得状況の保存先: Firestore `user_badges/{userId}/badges/{badgeId}`
-- 進捗の保存先: Firestore `badge_progress/{userId}_{badgeType}`
-- トリガー実装: 未実装（各アクション時に `updateBadgeProgress()` を呼ぶ処理が必要）
+- 進捗の保存先: Firestore `badge_progress/{userId}_{counterKey}`
+- ポップアップ制御: `lib/views/main_navigation_view.dart` で一元管理
+  - 毎回ホーム画面表示時: `isNew: true` の軽量チェック → 2秒後にポップアップ
+  - 本日初ログイン時: 包括チェック → レコメンドポップアップ優先 → 閉じた後2秒でバッジポップアップ
+- トリガー実装状況: **実装済み**（13箇所）
+  - マップ画面表示 (`mapOpened`): `lib/views/map/map_view.dart`
+  - 店舗詳細表示 (`storeDetailViewed`): `lib/views/stores/store_detail_view.dart`
+  - お気に入り登録 (`favoriteAdded`): `lib/views/stores/store_detail_view.dart`
+  - スロットプレイ (`slotPlayed`): `lib/views/lottery/lottery_view.dart`
+  - スロット当選 (`slotWin`): `lib/views/lottery/lottery_view.dart`
+  - コイン獲得 (`coinsEarned`): `lib/views/lottery/lottery_view.dart`, `lib/views/missions/missions_view.dart`
+  - クーポン使用 (`couponUsed`): `lib/views/coupons/coupon_detail_view.dart`
+  - いいね (`likeGiven`): `lib/providers/social_provider.dart`
+  - コメント投稿 (`commentPosted`): `lib/providers/social_provider.dart`
+  - フォロー (`followUser`): `lib/providers/social_provider.dart`
+  - ミッション達成 (`missionCompleted`): `lib/views/missions/missions_view.dart`
+  - レコメンド閲覧 (`recommendViewed`): `lib/views/stamps/daily_recommendation_view.dart`
+  - スタンプカード達成 (`stampCardCompleted`): `lib/views/stores/store_detail_view.dart`

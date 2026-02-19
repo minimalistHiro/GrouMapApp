@@ -8,6 +8,7 @@ import '../stores/store_detail_view.dart';
 import '../../widgets/custom_button.dart';
 import '../../services/location_service.dart';
 import '../../services/mission_service.dart';
+import '../../providers/badge_provider.dart';
 
 class DailyRecommendationView extends ConsumerStatefulWidget {
   const DailyRecommendationView({Key? key}) : super(key: key);
@@ -30,6 +31,12 @@ class _DailyRecommendationViewState
   void initState() {
     super.initState();
     _loadRecommendedStores();
+
+    // バッジカウンター: レコメンド閲覧
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId != null) {
+      BadgeService().incrementBadgeCounter(userId, 'recommendViewed');
+    }
   }
 
   Map<String, dynamic> _toStoreDetailStore(

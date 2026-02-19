@@ -18,6 +18,7 @@ import 'profile/profile_view.dart';
 import 'posts/posts_view.dart';
 import 'payment/point_payment_detail_view.dart';
 import 'stamps/daily_recommendation_view.dart';
+import 'stamps/badge_awarded_view.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
   final int initialIndex;
@@ -70,12 +71,15 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   bool _dailyRecommendationShown = false;
   bool _didInitialLoad = false;
   String? _lastInitialUserId;
+  bool _badgePopupShown = false;
 
   // static: ウィジェット再生成（ValueKey変更等）を跨いで保持
   // 本日初ログイン処理（stats/mission）が完了済みかどうか
   static bool _dailyLoginProcessed = false;
   // ポップアップ表示待ちかどうか（処理済みだが表示前にmounted=falseで失敗した場合true）
   static bool _pendingDailyRecommendation = false;
+  // 本日の包括バッジチェック完了済みかどうか
+  static bool _dailyBadgeCheckDone = false;
 
   @override
   void initState() {
@@ -198,6 +202,16 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     setState(() {
       _setCurrentTab(nextIndex, tabs);
     });
+
+    // ホームタブに切り替わった時はバッジポップアップフラグをリセット
+    if (nextTab == _MainTab.home && previousTab != _MainTab.home) {
+      _badgePopupShown = false;
+      final authState = ref.read(authStateProvider);
+      final user = authState.maybeWhen(data: (u) => u, orElse: () => null);
+      if (user != null) {
+        _checkBadgesOnHomeView(user.uid);
+      }
+    }
 
     // タブに応じて必要なデータを読み込み
     await _loadTabSpecificData(nextTab);
@@ -627,7 +641,11 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         isFirstLoginToday = lastLoginDate.isBefore(todayStart);
       }
 
-      if (!isFirstLoginToday) return;
+      if (!isFirstLoginToday) {
+        // 本日初ログインでない場合: 軽量バッジチェックのみ実行
+        _checkBadgesOnHomeView(userId);
+        return;
+      }
 
       _pendingDailyRecommendation = true;
 
@@ -659,9 +677,21 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
 
     // ポップアップ表示済みなら終了（前のウィジェットで表示完了していた場合）
-    if (_dailyLoginProcessed) return;
+    if (_dailyLoginProcessed) {
+      // 日次処理済みだがバッジポップアップは未表示の場合、軽量チェック
+      _checkBadgesOnHomeView(userId);
+      return;
+    }
 
     _dailyRecommendationShown = true;
+
+    // 包括バッジチェックをバックグラウンドで開始
+    Future<List<Map<String, dynamic>>>? badgeFuture;
+    if (!_dailyBadgeCheckDone) {
+      _dailyBadgeCheckDone = true;
+      final badgeService = ref.read(badgeProvider);
+      badgeFuture = badgeService.runComprehensiveBadgeCheck(userId);
+    }
 
     // ホーム画面に一定期間いた後にポップアップを表示
     await Future.delayed(const Duration(seconds: 3));
@@ -683,11 +713,29 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     } catch (e) {
       debugPrint('レコメンドポップアップ表示エラー: $e');
     }
+
+    // レコメンド閉じた後、バッジポップアップ表示
+    if (badgeFuture != null) {
+      await _showBadgePopupAfterDelay(userId, badgeFuture);
+    } else {
+      // 包括チェック済みの場合、軽量チェック
+      await _showBadgePopupAfterDelay(userId, null);
+    }
   }
 
   // 前のウィジェットでmounted=falseにより失敗したレコメンドポップアップのリトライ
   Future<void> _retryPendingDailyRecommendation() async {
     _dailyRecommendationShown = true;
+
+    // 包括バッジチェックをバックグラウンドで開始
+    final authState = ref.read(authStateProvider);
+    final user = authState.maybeWhen(data: (u) => u, orElse: () => null);
+    Future<List<Map<String, dynamic>>>? badgeFuture;
+    if (user != null && !_dailyBadgeCheckDone) {
+      _dailyBadgeCheckDone = true;
+      final badgeService = ref.read(badgeProvider);
+      badgeFuture = badgeService.runComprehensiveBadgeCheck(user.uid);
+    }
 
     // ホーム画面が安定するまで待機
     await Future.delayed(const Duration(seconds: 3));
@@ -704,6 +752,91 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       );
     } catch (e) {
       debugPrint('レコメンドポップアップ表示エラー（リトライ）: $e');
+    }
+
+    // レコメンド閉じた後、バッジポップアップ表示
+    if (user != null) {
+      await _showBadgePopupAfterDelay(user.uid, badgeFuture);
+    }
+  }
+
+  // バッジポップアップ表示（レコメンド後 or 直接表示）
+  Future<void> _showBadgePopupAfterDelay(String userId, Future<List<Map<String, dynamic>>>? comprehensiveFuture) async {
+    if (_badgePopupShown) return;
+    _badgePopupShown = true;
+
+    // 包括チェック結果がある場合はそれを待つ、なければ軽量チェック
+    List<Map<String, dynamic>> newBadges;
+    if (comprehensiveFuture != null) {
+      newBadges = await comprehensiveFuture;
+    } else {
+      final badgeService = ref.read(badgeProvider);
+      newBadges = await badgeService.getNewBadges(userId);
+    }
+
+    if (newBadges.isEmpty || !mounted) return;
+
+    // 2秒待機
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BadgeAwardedView(
+            badges: newBadges,
+            sourceStoreId: null,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('バッジポップアップ表示エラー: $e');
+    }
+
+    // isNewフラグをクリア
+    final badgeIds = newBadges
+        .map((b) => (b['badgeId'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (badgeIds.isNotEmpty) {
+      final badgeService = ref.read(badgeProvider);
+      await badgeService.markBadgesAsSeen(userId, badgeIds);
+    }
+  }
+
+  // ホーム画面表示時の軽量バッジチェック（2回目以降のホーム表示用）
+  Future<void> _checkBadgesOnHomeView(String userId) async {
+    if (_badgePopupShown) return;
+    _badgePopupShown = true;
+
+    final badgeService = ref.read(badgeProvider);
+    final newBadges = await badgeService.getNewBadges(userId);
+    if (newBadges.isEmpty || !mounted) return;
+
+    // 2秒待機
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => BadgeAwardedView(
+            badges: newBadges,
+            sourceStoreId: null,
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('バッジポップアップ表示エラー: $e');
+    }
+
+    // isNewフラグをクリア
+    final badgeIds = newBadges
+        .map((b) => (b['badgeId'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (badgeIds.isNotEmpty) {
+      await badgeService.markBadgesAsSeen(userId, badgeIds);
     }
   }
 

@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import '../models/social_model.dart';
+import 'badge_provider.dart';
 
 // ソーシャルサービスプロバイダー
 final socialProvider = Provider<SocialService>((ref) {
@@ -135,6 +137,12 @@ class SocialService {
     try {
       // 実際の実装では、現在のユーザーIDを取得してフォロー処理を実行
       debugPrint('Following user: $targetUserId');
+
+      // バッジカウンター: フォロー
+      final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+      if (currentUserId != null) {
+        BadgeService().incrementBadgeCounter(currentUserId, 'followUser');
+      }
     } catch (e) {
       debugPrint('Error following user: $e');
       throw Exception('フォローに失敗しました: $e');
@@ -305,6 +313,9 @@ class SocialService {
 
       await _firestore.collection('comments').add(commentData);
 
+      // バッジカウンター: コメント投稿
+      BadgeService().incrementBadgeCounter(userId, 'commentPosted');
+
       // 投稿のコメント数を更新
       await _firestore.collection('posts').doc(postId).update({
         'commentCount': FieldValue.increment(1),
@@ -355,6 +366,9 @@ class SocialService {
         'likeCount': FieldValue.increment(1),
         'likedBy': FieldValue.arrayUnion([userId]),
       });
+
+      // バッジカウンター: いいね
+      BadgeService().incrementBadgeCounter(userId, 'likeGiven');
     } catch (e) {
       debugPrint('Error liking post: $e');
       throw Exception('いいねに失敗しました: $e');

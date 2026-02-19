@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/pill_tab_bar.dart';
 import '../../services/mission_service.dart';
+import '../../providers/badge_provider.dart';
 
 /// ミッションの状態
 enum MissionStatus {
@@ -308,6 +309,14 @@ class _MissionsViewState extends State<MissionsView> {
     }
 
     if (success) {
+      // バッジカウンター: ミッション達成
+      BadgeService().incrementBadgeCounter(user.uid, 'missionCompleted');
+
+      // バッジカウンター: コイン獲得
+      if (mission.coinReward > 0) {
+        BadgeService().incrementBadgeCounter(user.uid, 'coinsEarned');
+      }
+
       // ローカル状態を即時更新（Firestore再取得のキャッシュ遅延を回避）
       if (mounted) {
         setState(() {

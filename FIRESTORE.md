@@ -54,6 +54,20 @@
   - `lastSentAt`: 最終送信日時
   - `updatedAt`: 更新日時
 
+### account_deletion_requests
+- `account_deletion_requests/{requestId}`: アカウント削除申請
+  - `storeId`: 対象店舗ID
+  - `storeName`: 店舗名（表示用）
+  - `storeIconImageUrl`: 店舗アイコンURL（表示用、nullable）
+  - `storeCategory`: 店舗カテゴリ（表示用）
+  - `userId`: 申請者UID
+  - `reason`: 退会理由
+  - `status`: 対応状況（pending/approved/rejected）
+  - `createdAt`: 申請日時
+  - `updatedAt`: 更新日時
+  - `processedAt`: 処理日時（nullable）
+  - `processedBy`: 処理した管理者UID（nullable）
+
 ### feedback
 - `feedback/{feedbackId}`: フィードバック
   - `userId`: 投稿者UID
@@ -462,6 +476,15 @@
     - `childFriendly`: お子様連れ歓迎（bool）
     - `petFriendly`: ペット同伴可（bool）
   - `location`: 位置（`latitude`, `longitude`）
+  - `notificationSettings`: 店舗プッシュ通知設定
+    - `newVisitor`: 新規来店者通知の有効フラグ
+    - `couponUsage`: クーポン使用通知の有効フラグ
+    - `feedback`: フィードバック通知の有効フラグ
+    - `updatedAt`: 更新日時
+  - `emailNotificationSettings`: 店舗メール通知設定
+    - `system`: システム通知の有効フラグ
+    - `promotions`: プロモーション通知の有効フラグ
+    - `updatedAt`: 更新日時
   - `iconImageUrl`: アイコン画像
   - `storeImageUrl`: 店舗画像
   - `createdBy`: 作成者UID
@@ -534,14 +557,27 @@
   - `seenAt`: 既読日時
   - `coinBonusAwarded`: 来店ボーナスコイン付与済みフラグ（bool、二重付与防止用）
 
+### badge_progress
+- `badge_progress/{userId}_{counterKey}`: バッジ進捗カウンター（アクション系バッジの累積回数を記録）
+  - `userId`: ユーザーUID
+  - `badgeType`: カウンターキー（BadgeType名: `mapOpened`, `storeDetailViewed`, `favoriteAdded`, `slotPlayed`, `slotWin`, `couponUsed`, `likeGiven`, `commentPosted`, `followUser`, `coinsEarned`, `missionCompleted`, `recommendViewed`, `stampCardCompleted`, `specialEvents`）
+  - `currentValue`: 現在値（`FieldValue.increment(1)` でアトミック更新）
+  - `lastUpdated`: 最終更新日時
+- 書き込みタイミング: 各アクション実行時に `BadgeService().incrementBadgeCounter()` で自動記録
+- インクリメント後に即座にバッジ判定を実行し、条件達成時は `user_badges` に `isNew: true` で書き込み
+
 ### user_badges
 - `user_badges/{userId}/badges/{badgeId}`: ユーザー獲得バッジ
   - `userId`: ユーザーUID
   - `badgeId`: バッジID（`lib/data/badge_definitions.dart` の badgeId と対応）
+  - `name`: バッジ名
+  - `description`: バッジ説明
+  - `iconUrl`: アイコン画像パス
+  - `rarity`: レア度（`common` / `rare` / `epic` / `legendary`）
   - `unlockedAt`: 獲得日時
   - `progress`: 獲得時の進捗値
   - `requiredValue`: 獲得条件の閾値
-  - `isNew`: 新規フラグ（未読バッジ表示用、markBadgeAsSeen で false に更新）
+  - `isNew`: 新規フラグ（未読バッジ表示用、`markBadgesAsSeen` で false に一括更新）
 
 ### user_point_balances
 - `user_point_balances/{userId}`: ユーザーのポイント残高

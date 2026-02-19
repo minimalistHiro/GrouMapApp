@@ -8,6 +8,7 @@ import '../../providers/coupon_provider.dart';
 import '../../providers/store_provider.dart';
 import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
+import '../../providers/badge_provider.dart';
 
 class CouponDetailView extends ConsumerStatefulWidget {
   final model.Coupon coupon;
@@ -150,6 +151,9 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         widget.coupon.id,
         widget.coupon.storeId,
       );
+
+      // バッジカウンター: クーポン使用
+      BadgeService().incrementBadgeCounter(user.uid, 'couponUsed');
 
       if (!mounted) return;
       setState(() {

@@ -16,6 +16,7 @@ class BadgeModel with _$BadgeModel {
     @Default(false) bool isUnlocked,
     DateTime? unlockedAt,
     String? category,
+    String? categoryGroupKey,
   }) = _BadgeModel;
 
   factory BadgeModel.fromJson(Map<String, dynamic> json) => _$BadgeModelFromJson(json);
@@ -42,12 +43,40 @@ enum BadgeType {
   visitsCount,
   @JsonValue('consecutive_days')
   consecutiveDays,
-  @JsonValue('qr_scans')
-  qrScans,
   @JsonValue('stores_visited')
   storesVisited,
   @JsonValue('special_events')
   specialEvents,
+  @JsonValue('category_visit')
+  categoryVisit,
+  @JsonValue('map_opened')
+  mapOpened,
+  @JsonValue('store_detail_viewed')
+  storeDetailViewed,
+  @JsonValue('profile_completed')
+  profileCompleted,
+  @JsonValue('favorite_added')
+  favoriteAdded,
+  @JsonValue('slot_played')
+  slotPlayed,
+  @JsonValue('slot_win')
+  slotWin,
+  @JsonValue('coupon_used')
+  couponUsed,
+  @JsonValue('like_given')
+  likeGiven,
+  @JsonValue('comment_posted')
+  commentPosted,
+  @JsonValue('follow_user')
+  followUser,
+  @JsonValue('coins_earned')
+  coinsEarned,
+  @JsonValue('mission_completed')
+  missionCompleted,
+  @JsonValue('recommend_viewed')
+  recommendViewed,
+  @JsonValue('stamp_card_completed')
+  stampCardCompleted,
 }
 
 enum BadgeRarity {
