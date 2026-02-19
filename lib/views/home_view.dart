@@ -330,6 +330,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
               onRefresh: () async {
                 ref.invalidate(announcementsProvider);
                 ref.invalidate(publicInstagramPostsProvider);
+                ref.invalidate(appPostsHomeProvider);
                 ref.invalidate(ownerSettingsProvider);
                 ref.invalidate(availableCouponsProvider(userId));
                 ref.invalidate(activeNewsProvider);
@@ -361,8 +362,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     _buildRecommendedStoresSection(context),
                     const SizedBox(height: 12),
 
-                    // くじ引きキャンペーンボタン（おすすめ店舗の下）
-                    _buildLotteryCampaignButton(context, ref),
+                    // くじ引きキャンペーンボタン（おすすめ店舗の下）- ログインユーザーのみ
+                    if (isLoggedIn)
+                      _buildLotteryCampaignButton(context, ref),
 
                     _buildReferralSection(context, ref),
 
@@ -375,12 +377,13 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ),
             ),
           ),
-          // フローティングミッションボタン（右下配置）
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: _buildMissionFloatingButton(context),
-          ),
+          // フローティングミッションボタン（右下配置）- ログインユーザーのみ
+          if (isLoggedIn)
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: _buildMissionFloatingButton(context),
+            ),
         ],
       ),
     );
@@ -1226,51 +1229,24 @@ class _HomeViewState extends ConsumerState<HomeView> {
           },
           child: Container(
             margin: const EdgeInsets.symmetric(horizontal: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            height: 72,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFAA33), Color(0xFFFF6B35)],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
               borderRadius: BorderRadius.circular(30),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFFFF6B35).withOpacity(0.3),
+                  color: const Color(0xFFFFC107).withOpacity(0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.casino, color: Colors.white, size: 24),
-                const SizedBox(width: 8),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      '1日1回限定スロット',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (endDateText.isNotEmpty)
-                      Text(
-                        endDateText,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: 11,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
-              ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: Image.asset(
+                'assets/images/daily_slot_button.png',
+                fit: BoxFit.cover,
+                width: double.infinity,
+              ),
             ),
           ),
         );
@@ -1886,7 +1862,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
         const SizedBox(height: 10),
         SizedBox(
           height: 300,
-          child: ref.watch(publicInstagramPostsProvider).when(
+          child: ref.watch(unifiedHomePostsProvider).when(
             data: (posts) {
               if (posts.isEmpty) {
                 return const Center(

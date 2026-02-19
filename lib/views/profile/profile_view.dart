@@ -154,7 +154,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFBF6F2),
       body: SafeArea(
         top: true,
         bottom: false,
@@ -275,6 +275,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   _buildMenuItem(
                     icon: Icons.person,
                     title: 'プロフィール編集',
+                    subtitle: 'アイコンや表示名を変更',
                     onTap: () {
                       Navigator.push(
                         context,
@@ -286,6 +287,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     _buildMenuItem(
                       icon: Icons.lock,
                       title: 'パスワード変更',
+                      subtitle: 'ログインパスワードを変更',
                       onTap: () {
                         Navigator.push(
                           context,
@@ -302,11 +304,13 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   _buildMenuItem(
                     icon: Icons.notifications,
                     title: 'プッシュ通知',
+                    subtitle: 'プッシュ通知の設定',
                     onTap: () => _openPushNotificationSettings(context),
                   ),
                   _buildMenuItem(
                     icon: Icons.mail,
                     title: 'メール通知',
+                    subtitle: 'メール通知の設定',
                     onTap: () => _openEmailNotificationSettings(context),
                   ),
                 ]),
@@ -320,22 +324,26 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   _buildMenuItem(
                     icon: Icons.help,
                     title: 'ヘルプ・サポート',
+                    subtitle: 'よくある質問やサポート',
                     trailing: _buildLiveChatUnreadTrailing(),
                     onTap: () => _showHelp(context),
                   ),
                   _buildMenuItem(
                     icon: Icons.chat_bubble_outline,
                     title: 'フィードバック',
+                    subtitle: 'ご意見・不具合の報告',
                     onTap: () => _openFeedback(context),
                   ),
                   _buildMenuItem(
                     icon: Icons.description,
                     title: '利用規約',
+                    subtitle: 'サービス利用規約を確認',
                     onTap: () => _showTerms(context),
                   ),
                   _buildMenuItem(
                     icon: Icons.policy,
                     title: 'プライバシーポリシー',
+                    subtitle: '個人情報の取り扱いについて',
                     onTap: () => _showPrivacyPolicy(context),
                   ),
                 ]),
@@ -347,12 +355,14 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   _buildMenuItem(
                     icon: Icons.logout,
                     title: 'ログアウト',
+                    subtitle: 'アカウントからログアウト',
                     onTap: () => _showLogoutDialog(context, ref),
                     isDestructive: true,
                   ),
                   _buildMenuItem(
                     icon: Icons.delete_forever,
                     title: '退会する',
+                    subtitle: 'アカウントを完全に削除',
                     onTap: () => _showDeleteAccountDialog(context),
                     isDestructive: true,
                   ),
@@ -711,7 +721,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       child: Text(
         title,
         style: const TextStyle(
-          fontSize: 18,
+          fontSize: 16,
           fontWeight: FontWeight.bold,
           color: Colors.grey,
         ),
@@ -721,17 +731,9 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
   Widget _buildSettingsMenuContainer(BuildContext context, List<Widget> children) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(children: children),
     );
@@ -741,20 +743,23 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    String? subtitle,
     Widget? trailing,
     bool isDestructive = false,
   }) {
     return ListTile(
-      leading: Icon(icon, color: isDestructive ? Colors.red : Colors.grey[600]),
+      leading: Icon(icon, color: isDestructive ? Colors.red : const Color(0xFFFF6B35)),
       title: Text(
         title,
         style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: isDestructive ? Colors.red : null,
         ),
       ),
-      trailing: trailing ?? const Icon(Icons.arrow_forward_ios, size: 16),
+      subtitle: subtitle != null
+          ? Text(subtitle, style: TextStyle(color: Colors.grey[600]))
+          : null,
+      trailing: trailing ?? const Icon(Icons.chevron_right),
       onTap: onTap,
     );
   }
@@ -765,7 +770,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       builder: (context, authSnapshot) {
         final userId = authSnapshot.data?.uid;
         if (userId == null) {
-          return const Icon(Icons.arrow_forward_ios, size: 16);
+          return const Icon(Icons.chevron_right);
         }
         return StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
@@ -776,11 +781,11 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
-              return const Icon(Icons.arrow_forward_ios, size: 16);
+              return const Icon(Icons.chevron_right);
             }
             final totalUnread = snapshot.data?.docs.length ?? 0;
             if (totalUnread <= 0) {
-              return const Icon(Icons.arrow_forward_ios, size: 16);
+              return const Icon(Icons.chevron_right);
             }
             final badgeText = totalUnread > 99 ? '99+' : totalUnread.toString();
             return Row(
@@ -803,7 +808,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.arrow_forward_ios, size: 16),
+                const Icon(Icons.chevron_right),
               ],
             );
           },

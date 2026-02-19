@@ -105,7 +105,7 @@ class _MissionsViewState extends State<MissionsView> {
     try {
       final firestore = FirebaseFirestore.instance;
 
-      // 承認済み店舗を取得
+      // アクティブかつ承認済みの店舗を取得
       final storesSnap = await firestore
           .collection('stores')
           .where('isApproved', isEqualTo: true)
@@ -117,13 +117,15 @@ class _MissionsViewState extends State<MissionsView> {
       // 差分が未訪問店舗
       final unvisited = <Map<String, dynamic>>[];
       for (final doc in storesSnap.docs) {
+        final data = doc.data();
+        // isActiveもチェック（他の画面と同様）
+        if (data['isActive'] != true) continue;
         if (!visitedIds.contains(doc.id)) {
-          final data = doc.data();
           unvisited.add({
             'storeId': doc.id,
-            'storeName': data['storeName'] ?? '不明な店舗',
+            'storeName': data['name'] ?? '不明な店舗',
             'category': data['category'] ?? '',
-            'photoUrl': data['photoUrl'] ?? '',
+            'iconImageUrl': data['iconImageUrl'] ?? '',
           });
         }
       }
@@ -873,10 +875,10 @@ class _MissionsViewState extends State<MissionsView> {
               color: const Color(0xFFFF6B35).withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: store['photoUrl'] != null && (store['photoUrl'] as String).isNotEmpty
+            child: store['iconImageUrl'] != null && (store['iconImageUrl'] as String).isNotEmpty
                 ? ClipOval(
                     child: Image.network(
-                      store['photoUrl'] as String,
+                      store['iconImageUrl'] as String,
                       width: 48,
                       height: 48,
                       fit: BoxFit.cover,

@@ -27,8 +27,14 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   bool _isLoadingComments = true;
   bool _hasRecordedView = false; // 閲覧記録の重複を防ぐフラグ
   late final bool _isInstagramPost;
+  String? _storeIconUrl;
 
   DocumentReference<Map<String, dynamic>> _postDocRef() {
+    if (_isInstagramPost) {
+      return FirebaseFirestore.instance
+          .collection('public_instagram_posts')
+          .doc(widget.post.id);
+    }
     final storeId = widget.post.storeId;
     if (storeId == null || storeId.isEmpty) {
       throw Exception('storeIdが取得できません');
@@ -45,11 +51,33 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
     super.initState();
     _pageController = PageController();
     _isInstagramPost = widget.post.source == 'instagram';
-    if (!_isInstagramPost) {
-      _loadComments();
-      _checkIfLiked();
-      _loadLikeCount();
-      _recordView(); // 閲覧履歴を記録
+    _storeIconUrl = widget.post.storeIconImageUrl;
+    _loadStoreIcon();
+    _loadComments();
+    _checkIfLiked();
+    _loadLikeCount();
+    _recordView();
+  }
+
+  Future<void> _loadStoreIcon() async {
+    if (_storeIconUrl != null && _storeIconUrl!.isNotEmpty) return;
+    final storeId = widget.post.storeId;
+    if (storeId == null || storeId.isEmpty) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .get();
+      if (doc.exists && mounted) {
+        final iconUrl = doc.data()?['iconImageUrl']?.toString();
+        if (iconUrl != null && iconUrl.isNotEmpty) {
+          setState(() {
+            _storeIconUrl = iconUrl;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('店舗アイコン取得エラー: $e');
     }
   }
 
@@ -57,9 +85,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     // 画面が表示された時にも閲覧を記録（より確実にするため）
-    if (!_isInstagramPost) {
-      _recordView();
-    }
+    _recordView();
   }
 
   @override
@@ -380,6 +406,9 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
               ),
             ),
 
+            // 店舗名・日付
+            SliverToBoxAdapter(child: _buildStoreAndDate()),
+
             // 投稿情報
             SliverToBoxAdapter(child: _buildPostInfo()),
           ],
@@ -459,6 +488,70 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
     );
   }
 
+  Widget _buildStoreAndDate() {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Row(
+        children: [
+          if (widget.post.storeName != null && widget.post.storeName!.isNotEmpty) ...[
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
+              backgroundImage: _storeIconUrl != null && _storeIconUrl!.isNotEmpty
+                  ? NetworkImage(_storeIconUrl!)
+                  : null,
+              child: _storeIconUrl == null || _storeIconUrl!.isEmpty
+                  ? const Icon(Icons.store, size: 20, color: Color(0xFFFF6B35))
+                  : null,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.post.storeName!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(Icons.access_time, size: 13, color: Colors.grey),
+                      const SizedBox(width: 3),
+                      Text(
+                        _formatDate(widget.post.createdAt),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (widget.post.storeName == null || widget.post.storeName!.isEmpty) ...[
+            const Icon(Icons.access_time, size: 14, color: Colors.grey),
+            const SizedBox(width: 4),
+            Text(
+              _formatDate(widget.post.createdAt),
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildPostInfo() {
     final isLoggedIn = FirebaseAuth.instance.currentUser != null;
     return Container(
@@ -466,10 +559,10 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       child: Column(
         children: [
           // いいね・コメント・シェアボタン
-          if (isLoggedIn && !_isInstagramPost) _buildActionButtons(),
+          if (isLoggedIn) _buildActionButtons(),
 
           // いいね数
-          if (_likeCount > 0 && !_isInstagramPost)
+          if (_likeCount > 0)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
@@ -496,16 +589,18 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // タイトル
-                Text(
-                  widget.post.title,
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                // タイトル（店舗名と同じ場合は非表示）
+                if (widget.post.title != widget.post.storeName) ...[
+                  Text(
+                    widget.post.title,
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
+                ],
 
                 // 本文
                 Text(
@@ -516,7 +611,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                 const SizedBox(height: 16),
 
                 // コメントセクション
-                if (!_isInstagramPost) _buildCommentsSection(isLoggedIn),
+                _buildCommentsSection(isLoggedIn),
               ],
             ),
           ),

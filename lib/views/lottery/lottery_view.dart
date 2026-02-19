@@ -319,7 +319,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
              _predeterminedResult3 == _predeterminedResult2);
   }
 
-  // スロットを開始する（手動停止式）
+  // スロットを開始する（確認ポップアップ付き）
   Future<void> _startSlots() async {
     if (!_canSpin || _isSpinning) return;
 
@@ -328,6 +328,10 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
       _showInsufficientCoinsDialog();
       return;
     }
+
+    // コイン消費確認ポップアップ
+    final confirmed = await _showCoinConfirmDialog();
+    if (confirmed != true) return;
 
     // 当選結果を事前決定
     _determineLotteryResult();
@@ -349,6 +353,74 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
     _slot1Controller.repeat();
     _slot2Controller.repeat();
     _slot3Controller.repeat();
+  }
+
+  // コイン消費確認ダイアログ
+  Future<bool?> _showCoinConfirmDialog() {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.monetization_on, color: Color(0xFFFFC107), size: 28),
+            const SizedBox(width: 8),
+            const Text('コイン使用確認'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'スロットを回すのに1コインを使用します。',
+              style: TextStyle(fontSize: 15),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFFC107), width: 1),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.monetization_on, color: Color(0xFFFFC107), size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    '所持コイン: $_userCoins → ${_userCoins - 1}',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF333333),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'キャンセル',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFFF6B35),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            ),
+            child: const Text('スタート'),
+          ),
+        ],
+      ),
+    );
   }
 
   // コイン不足ダイアログ
@@ -444,21 +516,21 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
 
       switch (result) {
         case 1:
-          coinsEarned = 0;
-          couponCount = 2;
-          prize = '未訪問店舗クーポン（100円引き）×2店分';
+          coinsEarned = 20;
+          couponCount = 0;
+          prize = 'コイン×20';
           resultLabel = '1等';
           break;
         case 2:
-          coinsEarned = 0;
-          couponCount = 1;
-          prize = '未訪問店舗クーポン（100円引き）×1店分';
+          coinsEarned = 10;
+          couponCount = 0;
+          prize = 'コイン×10';
           resultLabel = '2等';
           break;
         case 3:
-          coinsEarned = 1;
+          coinsEarned = 0;
           couponCount = 0;
-          prize = 'コイン×1';
+          prize = 'コイン×0';
           resultLabel = 'ハズレ';
           break;
       }
@@ -558,29 +630,176 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-              const SizedBox(height: 20),
-
-              // タイトル
-              const Text(
-                '🎰 スロット 🎰',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFFF6B35),
-                ),
-                textAlign: TextAlign.center,
-              ),
-
               const SizedBox(height: 10),
 
-              // 説明
-              Text(
-                '1日1回チャレンジ！（1コイン消費）\n1等: 未訪問クーポン×2  2等: 未訪問クーポン×1\nハズレ: コイン×1',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
+              // タイトル画像 - トップ配置
+              Container(
+                constraints: const BoxConstraints(maxWidth: 340),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFC107).withOpacity(0.4),
+                      spreadRadius: 2,
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Stack(
+                    children: [
+                      Image.asset(
+                        'assets/images/daily_slot_button.png',
+                        width: 340,
+                        fit: BoxFit.fitWidth,
+                      ),
+                      Positioned(
+                        bottom: 6,
+                        left: 0,
+                        right: 0,
+                        child: Text(
+                          '${DateTime.now().year}年${DateTime.now().month.toString().padLeft(2, '0')}月${DateTime.now().day.toString().padLeft(2, '0')}日まで',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            shadows: [
+                              Shadow(
+                                color: Colors.black.withOpacity(0.7),
+                                offset: const Offset(1, 1),
+                                blurRadius: 3,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 賞品テーブル
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1A1A2E),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFFC107), width: 2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFC107).withOpacity(0.3),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                child: Column(
+                  children: [
+                    // 1等
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            '1等',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A1A2E),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'コイン × 20',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFFD700),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // 2等
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFC0C0C0), Color(0xFF909090)],
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            '2等',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A1A2E),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'コイン × 10',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFC0C0C0),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // ハズレ
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white24,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'ハズレ',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'コイン × 0',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
 
               const SizedBox(height: 20),
@@ -978,7 +1197,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      '未訪問店舗クーポン（100円引き）\n×2店分 獲得！',
+                      'コイン×20 獲得！',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1064,7 +1283,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      '未訪問店舗クーポン（100円引き）\n×1店分 獲得！',
+                      'コイン×10 獲得！',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1150,7 +1369,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'コイン×1が戻りました\nまた明日挑戦してください！',
+                      'コインは獲得できませんでした\nまた明日挑戦してください！',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

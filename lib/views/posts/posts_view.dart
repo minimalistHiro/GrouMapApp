@@ -34,13 +34,13 @@ class _PostsViewState extends ConsumerState<PostsView> {
     final remain = _scrollController.position.maxScrollExtent -
         _scrollController.position.pixels;
     if (remain <= _loadMoreThreshold) {
-      ref.read(instagramSearchPostsProvider.notifier).loadMore();
+      ref.read(unifiedFeedProvider.notifier).loadMore();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(instagramSearchPostsProvider);
+    final state = ref.watch(unifiedFeedProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
@@ -54,7 +54,7 @@ class _PostsViewState extends ConsumerState<PostsView> {
 
   Widget _buildSearchBody(
     BuildContext context,
-    InstagramSearchPostsState state,
+    UnifiedFeedState state,
   ) {
     if (state.isInitialLoading) {
       return const Center(
@@ -105,7 +105,7 @@ class _PostsViewState extends ConsumerState<PostsView> {
               child: CustomButton(
                 text: '再試行',
                 onPressed: () {
-                  ref.read(instagramSearchPostsProvider.notifier).refresh();
+                  ref.read(unifiedFeedProvider.notifier).refresh();
                 },
               ),
             ),
@@ -166,7 +166,7 @@ class _PostsViewState extends ConsumerState<PostsView> {
                 child: CustomButton(
                   text: '再読み込み',
                   onPressed: () {
-                    ref.read(instagramSearchPostsProvider.notifier).refresh();
+                    ref.read(unifiedFeedProvider.notifier).refresh();
                   },
                 ),
               ),

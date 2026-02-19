@@ -38,6 +38,7 @@ class PostModel {
   final bool isActive;
   final int viewCount;
   final String source;
+  final String? storeIconImageUrl;
 
   PostModel({
     required this.id,
@@ -52,6 +53,7 @@ class PostModel {
     required this.isActive,
     required this.viewCount,
     this.source = 'app',
+    this.storeIconImageUrl,
   });
 
   factory PostModel.fromMap(Map<String, dynamic> data, String id) {
@@ -68,6 +70,7 @@ class PostModel {
       isActive: data['isActive'] ?? true,
       viewCount: data['viewCount'] ?? 0,
       source: data['source'] ?? 'app',
+      storeIconImageUrl: data['storeIconImageUrl']?.toString(),
     );
   }
 
@@ -109,6 +112,7 @@ class PostModel {
       isActive: data['isActive'] ?? true,
       viewCount: data['viewCount'] ?? 0,
       source: 'instagram',
+      storeIconImageUrl: data['storeIconImageUrl']?.toString(),
     );
   }
 
@@ -334,6 +338,226 @@ final publicInstagramPostsProvider = StreamProvider<List<PostModel>>((ref) {
     query: query,
     logLabel: 'public',
   );
+});
+
+// 通常投稿（ホーム用）
+final appPostsHomeProvider = StreamProvider<List<PostModel>>((ref) {
+  return FirebaseFirestore.instance
+      .collection('public_posts')
+      .limit(10)
+      .snapshots()
+      .map((snapshot) {
+    final posts = snapshot.docs
+        .map((doc) => PostModel.fromMap(doc.data(), doc.id))
+        .where((p) => p.isActive)
+        .toList();
+    posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return posts;
+  }).handleError((error) {
+    debugPrint('Error fetching app posts for home: $error');
+    return <PostModel>[];
+  });
+});
+
+// 統一フィード（ホーム用）: Instagram投稿 + 通常投稿を日付順で混合
+final unifiedHomePostsProvider =
+    Provider<AsyncValue<List<PostModel>>>((ref) {
+  final instagram = ref.watch(publicInstagramPostsProvider);
+  final appPosts = ref.watch(appPostsHomeProvider);
+
+  if (instagram is AsyncLoading<List<PostModel>> &&
+      appPosts is AsyncLoading<List<PostModel>>) {
+    return const AsyncValue.loading();
+  }
+
+  final instagramList = instagram.valueOrNull ?? [];
+  final appList = appPosts.valueOrNull ?? [];
+  final merged = [...instagramList, ...appList];
+  merged.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  return AsyncValue.data(merged.take(10).toList());
+});
+
+// 統一フィード状態（投稿一覧用）
+class UnifiedFeedState {
+  final List<PostModel> items;
+  final bool isInitialLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
+  final String? errorMessage;
+
+  const UnifiedFeedState({
+    required this.items,
+    required this.isInitialLoading,
+    required this.isLoadingMore,
+    required this.hasMore,
+    required this.errorMessage,
+  });
+
+  factory UnifiedFeedState.initial() {
+    return const UnifiedFeedState(
+      items: <PostModel>[],
+      isInitialLoading: false,
+      isLoadingMore: false,
+      hasMore: true,
+      errorMessage: null,
+    );
+  }
+
+  UnifiedFeedState copyWith({
+    List<PostModel>? items,
+    bool? isInitialLoading,
+    bool? isLoadingMore,
+    bool? hasMore,
+    String? errorMessage,
+    bool clearError = false,
+  }) {
+    return UnifiedFeedState(
+      items: items ?? this.items,
+      isInitialLoading: isInitialLoading ?? this.isInitialLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      hasMore: hasMore ?? this.hasMore,
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+    );
+  }
+}
+
+// 統一フィードNotifier（投稿一覧用）: 2コレクションからページネーション取得
+class UnifiedFeedNotifier extends StateNotifier<UnifiedFeedState> {
+  static const int _pageSize = 50;
+  static const int _maxItems = 300;
+
+  final FirebaseFirestore _firestore;
+  DocumentSnapshot<Map<String, dynamic>>? _lastInstagramDoc;
+  DocumentSnapshot<Map<String, dynamic>>? _lastAppDoc;
+  bool _instagramHasMore = true;
+  bool _appHasMore = true;
+
+  UnifiedFeedNotifier({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        super(UnifiedFeedState.initial());
+
+  Future<void> loadInitial() async {
+    if (state.isInitialLoading) return;
+
+    _lastInstagramDoc = null;
+    _lastAppDoc = null;
+    _instagramHasMore = true;
+    _appHasMore = true;
+
+    state = state.copyWith(
+      items: <PostModel>[],
+      isInitialLoading: true,
+      isLoadingMore: false,
+      hasMore: true,
+      clearError: true,
+    );
+
+    try {
+      final items = await _fetchMergedPage();
+      state = state.copyWith(
+        items: items,
+        isInitialLoading: false,
+        hasMore: _instagramHasMore || _appHasMore,
+        clearError: true,
+      );
+    } catch (e) {
+      debugPrint('Error loading initial unified feed: $e');
+      state = state.copyWith(
+        isInitialLoading: false,
+        hasMore: false,
+        errorMessage: '投稿の取得に失敗しました',
+      );
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (state.isInitialLoading || state.isLoadingMore || !state.hasMore) return;
+    if (state.items.length >= _maxItems) {
+      state = state.copyWith(hasMore: false);
+      return;
+    }
+
+    state = state.copyWith(isLoadingMore: true, clearError: true);
+
+    try {
+      final newItems = await _fetchMergedPage();
+      final merged = [...state.items, ...newItems];
+      final clipped = merged.take(_maxItems).toList();
+      state = state.copyWith(
+        items: clipped,
+        isLoadingMore: false,
+        hasMore: (_instagramHasMore || _appHasMore) &&
+            clipped.length < _maxItems,
+      );
+    } catch (e) {
+      debugPrint('Error loading more unified feed: $e');
+      state = state.copyWith(
+        isLoadingMore: false,
+        errorMessage: '投稿の取得に失敗しました',
+      );
+    }
+  }
+
+  Future<void> refresh() async {
+    await loadInitial();
+  }
+
+  Future<List<PostModel>> _fetchMergedPage() async {
+    final results = <PostModel>[];
+
+    // Instagram投稿を取得
+    if (_instagramHasMore) {
+      Query<Map<String, dynamic>> igQuery = _firestore
+          .collection('public_instagram_posts')
+          .where('isVideo', isEqualTo: false)
+          .orderBy('timestamp', descending: true)
+          .limit(_pageSize);
+      if (_lastInstagramDoc != null) {
+        igQuery = igQuery.startAfterDocument(_lastInstagramDoc!);
+      }
+      final igSnap = await igQuery.get();
+      if (igSnap.docs.isNotEmpty) {
+        _lastInstagramDoc = igSnap.docs.last;
+      }
+      _instagramHasMore = igSnap.docs.length == _pageSize;
+      results.addAll(
+        igSnap.docs
+            .map((doc) => PostModel.fromInstagramMap(doc.data(), doc.id))
+            .where((p) => p.isActive),
+      );
+    }
+
+    // 通常投稿を取得
+    if (_appHasMore) {
+      Query<Map<String, dynamic>> appQuery = _firestore
+          .collection('public_posts')
+          .limit(_pageSize);
+      if (_lastAppDoc != null) {
+        appQuery = appQuery.startAfterDocument(_lastAppDoc!);
+      }
+      final appSnap = await appQuery.get();
+      if (appSnap.docs.isNotEmpty) {
+        _lastAppDoc = appSnap.docs.last;
+      }
+      _appHasMore = appSnap.docs.length == _pageSize;
+      results.addAll(
+        appSnap.docs
+            .map((doc) => PostModel.fromMap(doc.data(), doc.id))
+            .where((p) => p.isActive),
+      );
+    }
+
+    // 日付順でソート
+    results.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return results;
+  }
+}
+
+final unifiedFeedProvider =
+    StateNotifierProvider<UnifiedFeedNotifier, UnifiedFeedState>((ref) {
+  final notifier = UnifiedFeedNotifier();
+  notifier.loadInitial();
+  return notifier;
 });
 
 // 店舗のInstagram投稿（店舗詳細用）

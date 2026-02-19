@@ -352,6 +352,24 @@
   - `isActive`: 有効フラグ
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時
+  - `likeCount`: いいね数
+  - `likedBy`: いいねユーザーUID配列
+  - `viewCount`: 閲覧数
+  - サブコレクション:
+    - `comments/{commentId}`: コメント
+      - `userId`: ユーザーID
+      - `userName`: ユーザー名
+      - `content`: コメント内容
+      - `createdAt`: 作成日時
+    - `likes/{likeId}`: いいね
+      - `userId`: ユーザーID
+      - `createdAt`: 作成日時
+    - `views/{userId}`: 閲覧記録
+      - `userId`: ユーザーID
+      - `userName`: ユーザー名
+      - `viewedAt`: 閲覧日時
+      - `postId`: 投稿ID
+      - `postTitle`: 投稿タイトル
 
 ### sales
 - `sales/{saleId}`: 売上記録（ポイント付与リクエスト作成時）
