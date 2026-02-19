@@ -349,10 +349,10 @@
 
 - 保存先: `assets/images/badges/{badgeId}.png`
 - サイズ: 512x512px（推奨）
-- 形式: PNG（背景透明）
+- 形式: PNG（背景白）
 - 生成ツール: Nano Banana Pro（Gemini 3 Pro Image）API
 - 生成スキル: `badge-image-gen`（統一テンプレートでバッジ画像を生成）
-- 生成済み: 1/141（`stamps_total_1.png`）
+- 生成済み: 3/141（`stamps_total_1.png`, `stamps_total_3.png`, `stamps_total_5.png`）
 
 ## 獲得処理
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/posts_provider.dart';
 import '../../widgets/common_header.dart';
 
@@ -608,6 +609,29 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                   textAlign: TextAlign.left,
                   style: const TextStyle(fontSize: 14),
                 ),
+
+                // Instagramを開くボタン
+                if (_isInstagramPost && widget.post.permalink != null && widget.post.permalink!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: GestureDetector(
+                      onTap: () async {
+                        final uri = Uri.parse(widget.post.permalink!);
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                        }
+                      },
+                      child: const Text(
+                        'Instagramを開く',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+
                 const SizedBox(height: 16),
 
                 // コメントセクション

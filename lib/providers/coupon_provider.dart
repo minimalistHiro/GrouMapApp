@@ -64,6 +64,16 @@ final promotionsProvider = StreamProvider<List<Promotion>>((ref) {
   });
 });
 
+// コイン交換クーポン一覧プロバイダー（未使用・有効期限内）
+final coinExchangeCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, userId) {
+  final couponService = ref.watch(couponProvider);
+  return couponService.getCoinExchangeCoupons(userId)
+      .handleError((error) {
+    debugPrint('Coin exchange coupons provider error: $error');
+    return <Coupon>[];
+  });
+});
+
 // 使用済みクーポン一覧プロバイダー
 final usedCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, userId) {
   final couponService = ref.watch(couponProvider);
@@ -79,6 +89,14 @@ final usedCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, us
 
 class CouponService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  static DateTime _parseTimestamp(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value) ?? DateTime.now();
+    return DateTime.now();
+  }
 
   // 店舗のクーポン一覧を取得（公開クーポン）
   Stream<List<Coupon>> getStoreCoupons(String storeId) {
@@ -313,6 +331,57 @@ class CouponService {
       });
     } catch (e) {
       debugPrint('Error getting used coupons: $e');
+      return Stream.value([]);
+    }
+  }
+
+  // コイン交換クーポン一覧を取得（未使用・有効期限内）
+  Stream<List<Coupon>> getCoinExchangeCoupons(String userId) {
+    try {
+      if (userId.isEmpty || userId == 'guest') {
+        return Stream.value([]);
+      }
+      final now = DateTime.now();
+      return _firestore
+          .collection('user_coupons')
+          .where('userId', isEqualTo: userId)
+          .where('type', isEqualTo: 'coin_exchange')
+          .where('isUsed', isEqualTo: false)
+          .snapshots()
+          .map((snapshot) {
+        final coupons = snapshot.docs.map((doc) {
+          final data = doc.data();
+          final validFrom = _parseTimestamp(data['validFrom']);
+          final validUntil = _parseTimestamp(data['validUntil']);
+          final obtainedAt = _parseTimestamp(data['obtainedAt']);
+          return Coupon(
+            id: doc.id,
+            storeId: data['storeId'] as String? ?? '',
+            title: data['title'] as String? ?? '100円引きクーポン',
+            description: '${data['storeName'] ?? '店舗'}で使える100円引きクーポンです。コイン交換で獲得しました。',
+            type: CouponType.discount,
+            discountValue: (data['discountValue'] as num?)?.toDouble() ?? 100.0,
+            discountType: data['discountType'] as String? ?? 'fixed_amount',
+            validFrom: validFrom,
+            validUntil: validUntil,
+            usageLimit: 1,
+            usedCount: 0,
+            minOrderAmount: 0,
+            isActive: true,
+            createdAt: obtainedAt,
+            updatedAt: obtainedAt,
+            imageUrl: null,
+            conditions: {'coinExchange': true},
+          );
+        }).where((coupon) => coupon.validUntil.isAfter(now)).toList();
+        coupons.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return coupons;
+      }).handleError((error) {
+        debugPrint('Error getting coin exchange coupons: $error');
+        return <Coupon>[];
+      });
+    } catch (e) {
+      debugPrint('Error getting coin exchange coupons: $e');
       return Stream.value([]);
     }
   }

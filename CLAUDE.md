@@ -51,11 +51,30 @@ Firestoreのルールはユーザーアプリのリポジトリで管理しま�
 `/Users/kanekohiroki/Desktop/groumapapp/firestore.rules` を編集し、そのプロジェクトからデプロイしてください。
 このリポジトリからルールの更新やデプロイは行わないでください。
 
+### Firestoreルールの自動見直し
+
+コードの修正・変更を行った際に、新しいFirestoreコレクションへの読み書きが発生する場合は、必ず `firestore.rules` にそのコレクションのルールが存在するか確認してください。ルールが不足している場合は追加し、`firebase deploy --only firestore:rules` でデプロイまで実行してください。
+
+### 複合インデックスの自動見直し
+
+コードの修正・変更を行った際に、Firestoreクエリで複数フィールドの `where` 条件や `orderBy` の組み合わせが新たに発生する場合は、必ず `firestore.indexes.json` に必要な複合インデックスが定義されているか確認してください。不足している場合はインデックスを追加し、`firebase deploy --only firestore:indexes` でデプロイまで実行してください。
+
+### Firebase Functionsの自動デプロイ
+
+`backend/functions` 配下のCloud Functionsコードに修正・変更を行った場合は、必ず `firebase deploy --only functions` でデプロイまで実行してください。特定の関数のみ変更した場合は `firebase deploy --only functions:関数名` で対象を絞ってデプロイしても構いません。
+
 ## Firebase関連の変更
 
-Firebase関連の設定変更は、このプロジェクト内のファイルを編集してください。
-- `/Users/kanekohiroki/Desktop/groumapapp/firebase.json`
-- `/Users/kanekohiroki/Desktop/groumapapp/firestore.indexes.json`
+Firebase関連の設定変更は、すべてユーザーアプリのリポジトリ内のファイルを編集してください。
+- **Firestoreルール**: `/Users/kanekohiroki/Desktop/groumapapp/firestore.rules`
+- **複合インデックス**: `/Users/kanekohiroki/Desktop/groumapapp/firestore.indexes.json`
+- **Firebase設定**: `/Users/kanekohiroki/Desktop/groumapapp/firebase.json`
+- **Cloud Functions**: `/Users/kanekohiroki/Desktop/groumapapp/backend/functions`
+
+コード変更後、関連するFirebaseリソースに影響がある場合は、以下を自動的に確認・デプロイしてください：
+1. `firebase deploy --only firestore:rules` — ルール変更時
+2. `firebase deploy --only firestore:indexes` — インデックス変更時
+3. `firebase deploy --only functions` — Functions変更時
 
 ## Plan Mode
 

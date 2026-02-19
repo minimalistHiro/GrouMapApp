@@ -33,8 +33,13 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     _loadStampInfo();
   }
 
+  bool get _isCoinExchangeCoupon =>
+      widget.coupon.conditions != null &&
+      widget.coupon.conditions!['coinExchange'] == true;
+
   // クーポン詳細を開いた際に閲覧数をインクリメント
   Future<void> _incrementViewCount() async {
+    if (_isCoinExchangeCoupon) return;
     try {
       final storeId = widget.coupon.storeId;
       if (storeId.isEmpty) {
@@ -58,6 +63,31 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
 
   Future<void> _loadStampInfo() async {
     try {
+      // coin_exchangeクーポンの場合はuser_couponsから使用済みチェックのみ
+      if (_isCoinExchangeCoupon) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final userCouponDoc = await FirebaseFirestore.instance
+              .collection('user_coupons')
+              .doc(widget.coupon.id)
+              .get();
+          if (userCouponDoc.exists) {
+            final data = userCouponDoc.data();
+            if (!mounted) return;
+            setState(() {
+              _isUsed = data?['isUsed'] as bool? ?? false;
+              _isStampInfoLoading = false;
+            });
+            return;
+          }
+        }
+        if (!mounted) return;
+        setState(() {
+          _isStampInfoLoading = false;
+        });
+        return;
+      }
+
       final storeId = widget.coupon.storeId;
       final couponId = widget.coupon.id;
       if (storeId.isEmpty || couponId.isEmpty) {
@@ -145,6 +175,29 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     setState(() => _isUsing = true);
 
     try {
+      // coin_exchangeクーポンの場合はuser_couponsを直接更新
+      if (_isCoinExchangeCoupon) {
+        await FirebaseFirestore.instance
+            .collection('user_coupons')
+            .doc(widget.coupon.id)
+            .update({
+          'isUsed': true,
+          'usedAt': FieldValue.serverTimestamp(),
+        });
+
+        BadgeService().incrementBadgeCounter(user.uid, 'couponUsed');
+
+        if (!mounted) return;
+        setState(() {
+          _isUsed = true;
+          _isUsing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('クーポンを使用しました')),
+        );
+        return;
+      }
+
       final couponService = ref.read(couponProvider);
       await couponService.useCouponDirectly(
         user.uid,
@@ -296,6 +349,35 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   }
 
   Widget _buildCouponHeader() {
+    // coin_exchangeクーポンの場合はローカルアセット画像を表示
+    if (_isCoinExchangeCoupon) {
+      return SliverToBoxAdapter(
+        child: AspectRatio(
+          aspectRatio: 1,
+          child: Image.asset(
+            'assets/images/special_coupon_100yen.png',
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                color: const Color(0xFFFFB300),
+                child: const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.local_offer, size: 80, color: Colors.white),
+                      SizedBox(height: 8),
+                      Text('100円OFF', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
     final Widget imageContent = widget.coupon.imageUrl != null
         ? Image.network(
             widget.coupon.imageUrl!,

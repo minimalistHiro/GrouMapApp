@@ -1232,6 +1232,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
           const SizedBox(height: 12),
 
+          // 特別クーポンセクション（コイン交換）
+          _buildSpecialCouponSection(context, ref, userId),
+
           // クーポンセクション
           _buildCouponSection(context, ref, userId),
           
@@ -1788,6 +1791,247 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     ],
                   ),
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSpecialCouponSection(BuildContext context, WidgetRef ref, String userId) {
+    if (userId.isEmpty || userId == 'guest') {
+      return const SizedBox.shrink();
+    }
+
+    return ref.watch(coinExchangeCouponsProvider(userId)).when(
+      data: (coupons) {
+        if (coupons.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30),
+              child: Row(
+                children: [
+                  const Icon(Icons.stars, size: 22, color: Color(0xFFFFB300)),
+                  const SizedBox(width: 6),
+                  const Text(
+                    '特別クーポン',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFB300).withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${coupons.length}枚',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFFFB300),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 300,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: coupons.length,
+                itemBuilder: (context, index) {
+                  final coupon = coupons[index];
+                  return _buildSpecialCouponCard(context, ref, coupon);
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+        );
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (_, __) => const SizedBox.shrink(),
+    );
+  }
+
+  Widget _buildSpecialCouponCard(BuildContext context, WidgetRef ref, model.Coupon coupon) {
+    String formatEndDate() {
+      final date = coupon.validUntil;
+      try {
+        if (date.year >= 2100) return '無期限';
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final tomorrow = today.add(const Duration(days: 1));
+        final couponDate = DateTime(date.year, date.month, date.day);
+
+        String dateText;
+        if (couponDate.isAtSameMomentAs(today)) {
+          dateText = '今日';
+        } else if (couponDate.isAtSameMomentAs(tomorrow)) {
+          dateText = '明日';
+        } else {
+          dateText = '${date.month}月${date.day}日';
+        }
+        return '$dateText ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}まで';
+      } catch (e) {
+        return '期限不明';
+      }
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => CouponDetailView(coupon: coupon),
+          ),
+        );
+      },
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Container(
+          height: 270,
+          width: 170,
+          margin: const EdgeInsets.symmetric(horizontal: 5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                spreadRadius: 1,
+                blurRadius: 3,
+                offset: const Offset(0, 1),
+              ),
+            ],
+            border: Border.all(
+              color: const Color(0xFFFFB300).withOpacity(0.4),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 150,
+                height: 150,
+                margin: const EdgeInsets.only(top: 7, bottom: 7),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: Image.asset(
+                    'assets/images/special_coupon_100yen.png',
+                    width: 150,
+                    height: 150,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: const Color(0xFFFFB300),
+                        child: const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.local_offer, size: 40, color: Colors.white),
+                              SizedBox(height: 4),
+                              Text(
+                                '100円OFF',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  formatEndDate(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text(
+                  coupon.title,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 2,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                margin: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFB300).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFFFB300).withOpacity(0.3),
+                  ),
+                ),
+                child: Text(
+                  '${coupon.discountValue.toInt()}円OFF',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFFB300),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: ref.watch(storeNameProvider(coupon.storeId)).when(
+                  data: (storeName) => Text(
+                    storeName ?? '店舗名なし',
+                    style: const TextStyle(fontSize: 9),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  loading: () => const Text(
+                    '読み込み中...',
+                    style: TextStyle(fontSize: 9),
+                    textAlign: TextAlign.center,
+                  ),
+                  error: (_, __) => Text(
+                    coupon.storeId,
+                    style: const TextStyle(fontSize: 9),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 3),
+            ],
+          ),
         ),
       ),
     );
@@ -2405,56 +2649,44 @@ class _HomeViewState extends ConsumerState<HomeView> {
             ),
             
             // カテゴリバッジ
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              margin: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFFFF6B35).withOpacity(0.3),
+            Builder(builder: (context) {
+              final isInstagram = post.source == 'instagram';
+              final badgeColor = isInstagram ? const Color(0xFFE1306C) : const Color(0xFFFF6B35);
+              final badgeText = isInstagram ? 'Instagram' : (post.storeCategory ?? post.category ?? '未分類');
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                margin: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: badgeColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: badgeColor.withOpacity(0.3),
+                  ),
                 ),
-              ),
-              child: Text(
-                post.category ?? 'お知らせ',
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFFFF6B35),
-                  fontWeight: FontWeight.w500,
+                child: Text(
+                  badgeText,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: badgeColor,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-            ),
-            
+              );
+            }),
+
             const SizedBox(height: 8),
-            
-            // タイトル
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Text(
-                post.title,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 2,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            
-            const SizedBox(height: 5),
-            
-            // 内容
+
+            // 内容（2行表示）
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Text(
                   post.content,
                   style: const TextStyle(
-                    fontSize: 9,
-                    color: Colors.grey,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
                   ),
-                  maxLines: 3,
+                  maxLines: 2,
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
                 ),

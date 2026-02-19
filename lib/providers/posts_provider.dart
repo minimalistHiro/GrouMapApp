@@ -38,7 +38,9 @@ class PostModel {
   final bool isActive;
   final int viewCount;
   final String source;
+  final String? permalink;
   final String? storeIconImageUrl;
+  final String? storeCategory;
 
   PostModel({
     required this.id,
@@ -53,7 +55,9 @@ class PostModel {
     required this.isActive,
     required this.viewCount,
     this.source = 'app',
+    this.permalink,
     this.storeIconImageUrl,
+    this.storeCategory,
   });
 
   factory PostModel.fromMap(Map<String, dynamic> data, String id) {
@@ -70,7 +74,9 @@ class PostModel {
       isActive: data['isActive'] ?? true,
       viewCount: data['viewCount'] ?? 0,
       source: data['source'] ?? 'app',
+      permalink: data['permalink']?.toString(),
       storeIconImageUrl: data['storeIconImageUrl']?.toString(),
+      storeCategory: data['storeCategory']?.toString(),
     );
   }
 
@@ -112,7 +118,9 @@ class PostModel {
       isActive: data['isActive'] ?? true,
       viewCount: data['viewCount'] ?? 0,
       source: 'instagram',
+      permalink: data['permalink']?.toString(),
       storeIconImageUrl: data['storeIconImageUrl']?.toString(),
+      storeCategory: data['storeCategory']?.toString(),
     );
   }
 
@@ -129,6 +137,7 @@ class PostModel {
       'isActive': isActive,
       'viewCount': viewCount,
       'source': source,
+      'storeCategory': storeCategory,
     };
   }
 }

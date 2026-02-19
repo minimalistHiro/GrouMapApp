@@ -225,12 +225,13 @@
 ### posts
 - `posts/{storeId}/posts/{postId}`: 店舗投稿
   - `postId`: 投稿ID
-  - `title`: タイトル
+  - `title`: タイトル（現在は空文字で保存）
   - `content`: 本文
   - `storeId`: 店舗ID
   - `storeName`: 店舗名
   - `storeIconImageUrl`: 店舗アイコン
-  - `category`: カテゴリ
+  - `category`: カテゴリ（店舗ジャンルを保存）
+  - `storeCategory`: 店舗ジャンル（表示用、店舗の`category`から取得）
   - `createdBy`: 作成者UID
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時
@@ -324,9 +325,10 @@
   - `storeId`: 店舗ID
   - `storeName`: 店舗名
   - `storeIconImageUrl`: 店舗アイコン
-  - `title`: タイトル
+  - `title`: タイトル（現在は空文字で保存）
   - `content`: 本文
-  - `category`: カテゴリ
+  - `category`: カテゴリ（店舗ジャンルを保存）
+  - `storeCategory`: 店舗ジャンル（表示用、店舗の`category`から取得）
   - `createdBy`: 作成者UID
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時

@@ -1,12 +1,13 @@
 """
 Nano Banana Pro (Gemini 3 Pro Image) 画像生成スクリプト
-Usage: python3 generate_image.py "プロンプト" "出力パス" "アスペクト比" "画像サイズ"
+Usage: python3 generate_image.py "プロンプト" "出力パス" "アスペクト比" "画像サイズ" ["参考画像パス"]
 """
 import sys
 import os
 
 from google import genai
 from google.genai import types
+from PIL import Image
 
 
 def generate_image(
@@ -14,12 +15,19 @@ def generate_image(
     output_path: str,
     aspect_ratio: str = "1:1",
     image_size: str = "2K",
+    reference_image_path: str = None,
 ):
     client = genai.Client()
 
+    if reference_image_path and os.path.exists(reference_image_path):
+        ref_image = Image.open(reference_image_path)
+        contents = [prompt, ref_image]
+    else:
+        contents = prompt
+
     response = client.models.generate_content(
         model="gemini-3-pro-image-preview",
-        contents=prompt,
+        contents=contents,
         config=types.GenerateContentConfig(
             response_modalities=["TEXT", "IMAGE"],
             image_config=types.ImageConfig(
@@ -55,5 +63,6 @@ if __name__ == "__main__":
     output_path = sys.argv[2] if len(sys.argv) > 2 else "generated_image.png"
     aspect_ratio = sys.argv[3] if len(sys.argv) > 3 else "1:1"
     image_size = sys.argv[4] if len(sys.argv) > 4 else "2K"
+    reference_image_path = sys.argv[5] if len(sys.argv) > 5 else None
 
-    generate_image(prompt, output_path, aspect_ratio, image_size)
+    generate_image(prompt, output_path, aspect_ratio, image_size, reference_image_path)
