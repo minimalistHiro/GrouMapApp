@@ -352,7 +352,26 @@
 - 形式: PNG（背景白）
 - 生成ツール: Nano Banana Pro（Gemini 3 Pro Image）API
 - 生成スキル: `badge-image-gen`（統一テンプレートでバッジ画像を生成）
-- 生成済み: 3/141（`stamps_total_1.png`, `stamps_total_3.png`, `stamps_total_5.png`）
+- 生成済み: 96/141
+  - スタンプ（stampsTotal）: 15個 全完了
+  - 来店（visitsCount）: 4個 全完了
+  - 連続ログイン（consecutiveDays）: 4個 全完了
+  - 店舗巡り（storesVisited）: 4個 全完了
+  - イベント（specialEvents）: 4個 全完了
+  - カテゴリ別来店 - カフェ・スイーツ系（cafe_sweets）: 5個 全完了
+  - カテゴリ別来店 - 和食系（washoku）: 5個 全完了
+  - カテゴリ別来店 - 居酒屋・バー系（izakaya_bar）: 5個 全完了
+  - カテゴリ別来店 - 焼き鳥・揚げ物系（yakitori_age）: 5個 全完了
+  - カテゴリ別来店 - 鍋・焼肉系（nabe_yakiniku）: 5個 全完了
+  - カテゴリ別来店 - ラーメン・中華系（ramen_chinese）: 5個 全完了
+  - カテゴリ別来店 - アジア・エスニック系（asian_ethnic）: 5個 全完了
+  - カテゴリ別来店 - 洋食・フレンチ系（western_french）: 5個 全完了
+  - カテゴリ別来店 - イタリアン・肉料理系（italian_meat）: 5個 全完了
+  - カテゴリ別来店 - 食堂・その他（shokudo_other）: 5個 全完了
+  - マップ閲覧（mapOpened）: 5個 全完了
+  - 店舗詳細閲覧（storeDetailViewed）: 5個 全完了
+  - プロフィール完成（profileCompleted）: 1個 全完了
+  - お気に入り登録（favoriteAdded）: 4個（1,3,5,10）完了 ※25は未生成
 
 ## 獲得処理
 

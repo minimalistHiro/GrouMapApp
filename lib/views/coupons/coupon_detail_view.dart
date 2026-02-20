@@ -233,7 +233,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     if (FirebaseAuth.instance.currentUser == null) return false;
     if (widget.coupon.validUntil.year < 2100 &&
         widget.coupon.validUntil.isBefore(DateTime.now())) return false;
-    if (widget.coupon.usedCount >= widget.coupon.usageLimit) return false;
+    if (!widget.coupon.noUsageLimit && widget.coupon.usedCount >= widget.coupon.usageLimit) return false;
     if (_requiredStampCount > 0 && _userStampCount < _requiredStampCount) {
       return false;
     }
@@ -247,7 +247,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     if (FirebaseAuth.instance.currentUser == null) return 'ログインしてください';
     if (widget.coupon.validUntil.year < 2100 &&
         widget.coupon.validUntil.isBefore(DateTime.now())) return '有効期限切れ';
-    if (widget.coupon.usedCount >= widget.coupon.usageLimit) return '配布終了';
+    if (!widget.coupon.noUsageLimit && widget.coupon.usedCount >= widget.coupon.usageLimit) return '配布終了';
     if (_requiredStampCount > 0 && _userStampCount < _requiredStampCount) {
       return 'スタンプ不足（あと${_requiredStampCount - _userStampCount}個）';
     }
@@ -631,13 +631,15 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             const SizedBox(height: 12),
 
             // 残り枚数
-            _buildDetailRow(
-              icon: Icons.inventory,
-              label: '残り枚数',
-              value: '${widget.coupon.usageLimit - widget.coupon.usedCount}枚',
-              valueColor: Colors.green[700]!,
-            ),
-            const SizedBox(height: 12),
+            if (!widget.coupon.noUsageLimit) ...[
+              _buildDetailRow(
+                icon: Icons.inventory,
+                label: '残り枚数',
+                value: '${widget.coupon.usageLimit - widget.coupon.usedCount}枚',
+                valueColor: Colors.green[700]!,
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // 作成日
             _buildDetailRow(

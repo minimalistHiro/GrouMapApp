@@ -7,7 +7,9 @@
       "Edit(//Users/kanekohiroki/Desktop/groumapapp_store/**)",
       "Write(//Users/kanekohiroki/Desktop/groumapapp_store/**)",
       "Glob(//Users/kanekohiroki/Desktop/groumapapp_store/**)",
-      "Grep(//Users/kanekohiroki/Desktop/groumapapp_store/**)"
+      "Grep(//Users/kanekohiroki/Desktop/groumapapp_store/**)",
+      "Bash(source *)",
+      "Bash(python3 *)"
     ]
   }
 }

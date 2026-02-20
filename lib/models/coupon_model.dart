@@ -26,6 +26,7 @@ class Coupon with _$Coupon {
     List<String>? applicableItems,
     Map<String, dynamic>? conditions,
     @Default([]) List<String> usedBy,
+    @Default(false) bool noUsageLimit,
   }) = _Coupon;
 
   factory Coupon.fromJson(Map<String, dynamic> json) => _$CouponFromJson(json);
@@ -57,6 +58,7 @@ class Coupon with _$Coupon {
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      noUsageLimit: data['noUsageLimit'] as bool? ?? false,
     );
   }
   

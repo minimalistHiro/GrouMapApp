@@ -568,6 +568,7 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
     final usageLimit = _parseInt(coupon['usageLimit']);
     final usedCount = _parseInt(coupon['usedCount']);
     final remaining = usageLimit - usedCount;
+    final noUsageLimit = coupon['noUsageLimit'] == true;
     final requiredStampCount = _parseInt(coupon['requiredStampCount']);
     final needsStamps = requiredStampCount > 0 && _stamps < requiredStampCount;
     final remainingStamps = requiredStampCount - _stamps;
@@ -611,13 +612,14 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Text(
-                            '残り$remaining枚',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: needsStamps ? Colors.grey[500] : Colors.green,
+                          if (!noUsageLimit)
+                            Text(
+                              '残り$remaining枚',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: needsStamps ? Colors.grey[500] : Colors.green,
+                              ),
                             ),
-                          ),
                           const SizedBox(width: 12),
                           if (validUntil != null)
                             Text(

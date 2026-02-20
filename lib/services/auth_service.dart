@@ -410,11 +410,25 @@ class AuthService {
       // 紹介コードを生成
       final referralCode = _generateReferralCode(user.uid);
       final storeReferralCode = _generateStoreReferralCode(user.uid);
-      
+
+      // デフォルト表示名: 空の場合は「ユーザー」を設定
+      final effectiveDisplayName = displayName.trim().isNotEmpty
+          ? displayName
+          : 'ユーザー';
+
+      // デフォルトユーザーID: user_ + uidの先頭8文字（小文字）
+      final defaultUsername = 'user_${user.uid.substring(0, 8).toLowerCase()}';
+
+      // usernamesコレクションにユニークネス登録
+      await _firestore
+          .collection('usernames')
+          .doc(defaultUsername)
+          .set({'uid': user.uid});
+
       final userData = {
         'uid': user.uid,
         'email': user.email,
-        'displayName': displayName,
+        'displayName': effectiveDisplayName,
         'emailVerified': user.emailVerified,
         'authProvider': authProvider ?? 'email', // 認証プロバイダー情報
         'isOwner': false, // デフォルトで一般ユーザー
@@ -436,6 +450,10 @@ class AuthService {
         'storeReferralCount': 0, // 紹介した店舗数
         'storeReferralEarnings': 0, // 店舗紹介で獲得したポイント数
         'favoriteStoreIds': <String>[], // お気に入り店舗IDリスト
+        'username': defaultUsername, // ユーザーID（user_ + uid先頭8文字）
+        'bio': '', // 自己紹介
+        'occupation': null, // 職業
+        'interestCategories': <String>[], // 興味のあるカテゴリ
         'notificationSettings': {
           'couponIssued': true,
           'post': true,

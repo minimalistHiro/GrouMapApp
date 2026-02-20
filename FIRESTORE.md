@@ -20,6 +20,7 @@
   - `validUntil`: 有効期限
   - `requiredStampCount`: 必要スタンプ数（0-10）
   - `noExpiry`: 無期限フラグ
+  - `noUsageLimit`: 発行枚数無制限フラグ（trueの場合、usageLimitは0で保存）
   - `usageLimit`: 使用上限回数
   - `usedCount`: 使用済み回数
   - `viewCount`: 表示回数
@@ -307,6 +308,7 @@
   - `validUntil`: 有効期限
   - `requiredStampCount`: 必要スタンプ数（0-10）
   - `noExpiry`: 無期限フラグ
+  - `noUsageLimit`: 発行枚数無制限フラグ（trueの場合、usageLimitは0で保存）
   - `usageLimit`: 使用上限回数
   - `usedCount`: 使用済み回数
   - `viewCount`: 表示回数
@@ -590,11 +592,25 @@
   - `lastUpdated`: 更新日時
   - `lastUpdatedByStoreId`: 更新した店舗ID
 
+### usernames
+- `usernames/{username}`: ユーザーIDユニーク制約用コレクション
+  - ドキュメントID: ユーザーIDの小文字（ユニーク制約を実現）
+  - `uid`: 所有者のユーザーUID
+  - 新規登録時にデフォルトユーザーID（`user_` + UIDの先頭8文字）が自動登録される
+- アクセス制御メモ:
+  - 認証済みユーザーは読み取り可能
+  - 作成は自分の`uid`を含むドキュメントのみ
+  - 削除は自分が所有するドキュメントのみ
+
 ### users
 - `users/{userId}`: ユーザープロフィール/状態
   - `uid`: ユーザーUID
   - `email`: メールアドレス
-  - `displayName`: 表示名
+  - `displayName`: 表示名（新規登録時のデフォルト値: `ユーザー`。Googleサインインの場合はGoogleアカウント名）
+  - `username`: ユーザーID（ユニーク、英数字+アンダースコア、3〜20文字、`usernames`コレクションで重複防止。新規登録時のデフォルト値: `user_` + UIDの先頭8文字（小文字）。`usernames`コレクションに自動登録）
+  - `bio`: 自己紹介（最大100文字）
+  - `occupation`: 職業（`学生`/`会社員`/`公務員`/`自営業`/`フリーランス`/`パート・アルバイト`/`主婦・主夫`/`その他`）
+  - `interestCategories`: 興味のあるカテゴリ（List<String>、CATEGORY_LIST.mdのカテゴリ名）
   - `emailVerified`: メール認証フラグ
   - `emailVerifiedAt`: メール認証日時
   - `emailOtpRequired`: ログイン時OTP必須フラグ

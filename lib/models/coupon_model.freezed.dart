@@ -40,6 +40,7 @@ mixin _$Coupon {
   List<String>? get applicableItems => throw _privateConstructorUsedError;
   Map<String, dynamic>? get conditions => throw _privateConstructorUsedError;
   List<String> get usedBy => throw _privateConstructorUsedError;
+  bool get noUsageLimit => throw _privateConstructorUsedError;
 
   /// Serializes this Coupon to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -74,7 +75,8 @@ abstract class $CouponCopyWith<$Res> {
       String? imageUrl,
       List<String>? applicableItems,
       Map<String, dynamic>? conditions,
-      List<String> usedBy});
+      List<String> usedBy,
+      bool noUsageLimit});
 }
 
 /// @nodoc
@@ -111,6 +113,7 @@ class _$CouponCopyWithImpl<$Res, $Val extends Coupon>
     Object? applicableItems = freezed,
     Object? conditions = freezed,
     Object? usedBy = null,
+    Object? noUsageLimit = null,
   }) {
     return _then(_value.copyWith(
       id: null == id
@@ -189,6 +192,10 @@ class _$CouponCopyWithImpl<$Res, $Val extends Coupon>
           ? _value.usedBy
           : usedBy // ignore: cast_nullable_to_non_nullable
               as List<String>,
+      noUsageLimit: null == noUsageLimit
+          ? _value.noUsageLimit
+          : noUsageLimit // ignore: cast_nullable_to_non_nullable
+              as bool,
     ) as $Val);
   }
 }
@@ -219,7 +226,8 @@ abstract class _$$CouponImplCopyWith<$Res> implements $CouponCopyWith<$Res> {
       String? imageUrl,
       List<String>? applicableItems,
       Map<String, dynamic>? conditions,
-      List<String> usedBy});
+      List<String> usedBy,
+      bool noUsageLimit});
 }
 
 /// @nodoc
@@ -254,6 +262,7 @@ class __$$CouponImplCopyWithImpl<$Res>
     Object? applicableItems = freezed,
     Object? conditions = freezed,
     Object? usedBy = null,
+    Object? noUsageLimit = null,
   }) {
     return _then(_$CouponImpl(
       id: null == id
@@ -332,6 +341,10 @@ class __$$CouponImplCopyWithImpl<$Res>
           ? _value._usedBy
           : usedBy // ignore: cast_nullable_to_non_nullable
               as List<String>,
+      noUsageLimit: null == noUsageLimit
+          ? _value.noUsageLimit
+          : noUsageLimit // ignore: cast_nullable_to_non_nullable
+              as bool,
     ));
   }
 }
@@ -358,7 +371,8 @@ class _$CouponImpl implements _Coupon {
       this.imageUrl,
       final List<String>? applicableItems,
       final Map<String, dynamic>? conditions,
-      final List<String> usedBy = const []})
+      final List<String> usedBy = const [],
+      this.noUsageLimit = false})
       : _applicableItems = applicableItems,
         _conditions = conditions,
         _usedBy = usedBy;
@@ -429,8 +443,12 @@ class _$CouponImpl implements _Coupon {
   }
 
   @override
+  @JsonKey()
+  final bool noUsageLimit;
+
+  @override
   String toString() {
-    return 'Coupon(id: $id, storeId: $storeId, title: $title, description: $description, type: $type, discountValue: $discountValue, discountType: $discountType, validFrom: $validFrom, validUntil: $validUntil, usageLimit: $usageLimit, usedCount: $usedCount, minOrderAmount: $minOrderAmount, isActive: $isActive, createdAt: $createdAt, updatedAt: $updatedAt, imageUrl: $imageUrl, applicableItems: $applicableItems, conditions: $conditions, usedBy: $usedBy)';
+    return 'Coupon(id: $id, storeId: $storeId, title: $title, description: $description, type: $type, discountValue: $discountValue, discountType: $discountType, validFrom: $validFrom, validUntil: $validUntil, usageLimit: $usageLimit, usedCount: $usedCount, minOrderAmount: $minOrderAmount, isActive: $isActive, createdAt: $createdAt, updatedAt: $updatedAt, imageUrl: $imageUrl, applicableItems: $applicableItems, conditions: $conditions, usedBy: $usedBy, noUsageLimit: $noUsageLimit)';
   }
 
   @override
@@ -470,7 +488,9 @@ class _$CouponImpl implements _Coupon {
                 .equals(other._applicableItems, _applicableItems) &&
             const DeepCollectionEquality()
                 .equals(other._conditions, _conditions) &&
-            const DeepCollectionEquality().equals(other._usedBy, _usedBy));
+            const DeepCollectionEquality().equals(other._usedBy, _usedBy) &&
+            (identical(other.noUsageLimit, noUsageLimit) ||
+                other.noUsageLimit == noUsageLimit));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -495,7 +515,8 @@ class _$CouponImpl implements _Coupon {
         imageUrl,
         const DeepCollectionEquality().hash(_applicableItems),
         const DeepCollectionEquality().hash(_conditions),
-        const DeepCollectionEquality().hash(_usedBy)
+        const DeepCollectionEquality().hash(_usedBy),
+        noUsageLimit
       ]);
 
   /// Create a copy of Coupon
@@ -534,7 +555,8 @@ abstract class _Coupon implements Coupon {
       final String? imageUrl,
       final List<String>? applicableItems,
       final Map<String, dynamic>? conditions,
-      final List<String> usedBy}) = _$CouponImpl;
+      final List<String> usedBy,
+      final bool noUsageLimit}) = _$CouponImpl;
 
   factory _Coupon.fromJson(Map<String, dynamic> json) = _$CouponImpl.fromJson;
 
@@ -576,6 +598,8 @@ abstract class _Coupon implements Coupon {
   Map<String, dynamic>? get conditions;
   @override
   List<String> get usedBy;
+  @override
+  bool get noUsageLimit;
 
   /// Create a copy of Coupon
   /// with the given fields replaced by the non-null parameter values.

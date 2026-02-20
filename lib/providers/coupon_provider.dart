@@ -193,7 +193,7 @@ class CouponService {
           .map((snapshot) {
         final items = snapshot.docs
             .map((doc) => Coupon.fromFirestore(doc.data(), doc.id))
-            .where((coupon) => coupon.isActive && coupon.validUntil.isAfter(now) && coupon.usedCount < coupon.usageLimit)
+            .where((coupon) => coupon.isActive && coupon.validUntil.isAfter(now) && (coupon.noUsageLimit || coupon.usedCount < coupon.usageLimit))
             .toList();
         items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return items;
@@ -239,7 +239,7 @@ class CouponService {
               final key = '${coupon.storeId}::${coupon.id}';
               return coupon.isActive &&
                   coupon.validUntil.isAfter(now) &&
-                  coupon.usedCount < coupon.usageLimit &&
+                  (coupon.noUsageLimit || coupon.usedCount < coupon.usageLimit) &&
                   !usedKeys.contains(key);
             })
             .toList();
@@ -469,7 +469,7 @@ class CouponService {
       }
 
       // 使用制限をチェック
-      if (coupon.usedCount >= coupon.usageLimit) {
+      if (!coupon.noUsageLimit && coupon.usedCount >= coupon.usageLimit) {
         throw Exception('このクーポンの配布は終了しました');
       }
 
@@ -531,6 +531,7 @@ class CouponService {
         final validUntil = (data['validUntil'] as Timestamp?)?.toDate();
         final usageLimit = (data['usageLimit'] as num?)?.toInt() ?? 0;
         final usedCount = (data['usedCount'] as num?)?.toInt() ?? 0;
+        final noUsageLimit = data['noUsageLimit'] as bool? ?? false;
 
         if (!isActive) {
           throw Exception('クーポンが無効です');
@@ -538,7 +539,7 @@ class CouponService {
         if (validUntil == null || !validUntil.isAfter(DateTime.now())) {
           throw Exception('クーポンの有効期限が切れています');
         }
-        if (usedCount >= usageLimit) {
+        if (!noUsageLimit && usedCount >= usageLimit) {
           throw Exception('クーポンの上限に達しています');
         }
 
@@ -561,7 +562,7 @@ class CouponService {
         });
 
         final nextUsedCount = usedCount + 1;
-        final shouldDeactivate = usageLimit > 0 && nextUsedCount == usageLimit;
+        final shouldDeactivate = !noUsageLimit && usageLimit > 0 && nextUsedCount == usageLimit;
         txn.update(couponRef, {
           'usedCount': nextUsedCount,
           if (shouldDeactivate) 'isActive': false,
@@ -620,6 +621,7 @@ class CouponService {
         final validUntil = (data['validUntil'] as Timestamp?)?.toDate();
         final usageLimit = (data['usageLimit'] as num?)?.toInt() ?? 0;
         final usedCount = (data['usedCount'] as num?)?.toInt() ?? 0;
+        final noUsageLimitFlag = data['noUsageLimit'] as bool? ?? false;
         final requiredStampCount = (data['requiredStampCount'] as num?)?.toInt() ?? 0;
 
         // 有効性チェック
@@ -629,7 +631,7 @@ class CouponService {
         if (validUntil == null || !validUntil.isAfter(DateTime.now())) {
           throw Exception('クーポンの有効期限が切れています');
         }
-        if (usedCount >= usageLimit) {
+        if (!noUsageLimitFlag && usedCount >= usageLimit) {
           throw Exception('クーポンの上限に達しています');
         }
 
@@ -680,7 +682,7 @@ class CouponService {
 
         // クーポンの usedCount をインクリメント
         final nextUsedCount = usedCount + 1;
-        final shouldDeactivate = usageLimit > 0 && nextUsedCount == usageLimit;
+        final shouldDeactivate = !noUsageLimitFlag && usageLimit > 0 && nextUsedCount == usageLimit;
         txn.update(couponRef, {
           'usedCount': nextUsedCount,
           if (shouldDeactivate) 'isActive': false,

@@ -265,23 +265,31 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     UserStatsCard(userId: user.uid),
                   ],
                 ),
-                
+
+                // プロフィール完成度カード
+                if (_userData != null && _calcProfileCompletion(_userData!) < 1.0) ...[
+                  const SizedBox(height: 16),
+                  _buildProfileCompletionCard(context, _userData!),
+                ],
+
                 const SizedBox(height: 24),
-                
+
                 // 設定セクション（SettingsView と同様）
                 _buildSectionTitle('アカウント'),
                 _buildSettingsMenuContainer(context, [
-                  _buildMenuItem(
-                    icon: Icons.person,
-                    title: 'プロフィール編集',
-                    subtitle: 'アイコンや表示名を変更',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const ProfileEditView()),
-                      );
-                    },
-                  ),
+                  if (_userData == null || _calcProfileCompletion(_userData!) >= 1.0)
+                    _buildMenuItem(
+                      icon: Icons.person,
+                      title: 'プロフィール編集',
+                      subtitle: 'アイコンや表示名を変更',
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const ProfileEditView()),
+                        );
+                        _loadUserData();
+                      },
+                    ),
                   if (canChangePassword)
                     _buildMenuItem(
                       icon: Icons.lock,
@@ -704,6 +712,110 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           ),
         ),
       ],
+    );
+  }
+
+  // =============== Profile Completion ===============
+  double _calcProfileCompletion(Map<String, dynamic> data) {
+    int filled = 0;
+    const total = 9;
+
+    if (data['displayName'] is String && (data['displayName'] as String).trim().isNotEmpty) filled++;
+    if (data['birthDate'] != null) filled++;
+    if (data['gender'] is String && (data['gender'] as String).isNotEmpty) filled++;
+    if (data['prefecture'] is String && (data['prefecture'] as String).isNotEmpty) filled++;
+    if (data['city'] is String && (data['city'] as String).isNotEmpty) filled++;
+    if (data['occupation'] is String && (data['occupation'] as String).isNotEmpty) filled++;
+    if (data['bio'] is String && (data['bio'] as String).trim().isNotEmpty) filled++;
+    if (data['interestCategories'] is List && (data['interestCategories'] as List).isNotEmpty) filled++;
+    if (data['profileImageUrl'] is String && (data['profileImageUrl'] as String).isNotEmpty) filled++;
+
+    return filled / total;
+  }
+
+  Widget _buildProfileCompletionCard(BuildContext context, Map<String, dynamic> data) {
+    final completion = _calcProfileCompletion(data);
+    final percent = (completion * 100).round();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFF6B35).withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'プロフィールを完成させよう！',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFFF6B35),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: LinearProgressIndicator(
+                    value: completion,
+                    minHeight: 10,
+                    backgroundColor: Colors.grey.shade200,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '$percent%',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFFF6B35),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '完成させると5コインもらえる＆あなたに合ったお店が見つかりやすくなります',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProfileEditView()),
+                );
+                _loadUserData();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B35),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                'プロフィールを編集する',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

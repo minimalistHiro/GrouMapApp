@@ -1997,6 +1997,7 @@ exports.punchStamp = (0, https_1.onCall)({
                 const usageLimit = asInt(couponData['usageLimit'], 0);
                 const usedCount = asInt(couponData['usedCount'], 0);
                 const noExpiry = couponData['noExpiry'] === true;
+                const noUsageLimit = couponData['noUsageLimit'] === true;
                 const validUntilValue = couponData['validUntil'];
                 const validUntil = validUntilValue instanceof firestore_2.Timestamp ? validUntilValue.toDate() : undefined;
                 const isNoExpiry = noExpiry || (validUntil && validUntil.getFullYear() >= 2100);
@@ -2006,10 +2007,10 @@ exports.punchStamp = (0, https_1.onCall)({
                 if (!isNoExpiry && (!validUntil || validUntil.getTime() <= now.getTime())) {
                     throw new https_1.HttpsError('failed-precondition', `Coupon expired: ${couponId}`);
                 }
-                if (usageLimit <= 0) {
+                if (!noUsageLimit && usageLimit <= 0) {
                     throw new https_1.HttpsError('failed-precondition', `Coupon usage limit invalid: ${couponId}`);
                 }
-                if (usedCount >= usageLimit) {
+                if (!noUsageLimit && usedCount >= usageLimit) {
                     throw new https_1.HttpsError('failed-precondition', `Coupon usage limit reached: ${couponId}`);
                 }
                 if (usedBySnap.exists) {
@@ -2031,7 +2032,7 @@ exports.punchStamp = (0, https_1.onCall)({
                     storeId,
                 });
                 const nextUsedCount = usedCount + 1;
-                const shouldDeactivate = usageLimit > 0 && nextUsedCount === usageLimit;
+                const shouldDeactivate = !noUsageLimit && usageLimit > 0 && nextUsedCount === usageLimit;
                 txn.update(couponRef, Object.assign(Object.assign({ usedCount: nextUsedCount }, (shouldDeactivate ? { isActive: false } : {})), { updatedAt: firestore_2.FieldValue.serverTimestamp() }));
                 if (publicSnap.exists) {
                     txn.update(publicCouponRef, Object.assign(Object.assign({ usedCount: nextUsedCount }, (shouldDeactivate ? { isActive: false } : {})), { updatedAt: firestore_2.FieldValue.serverTimestamp() }));

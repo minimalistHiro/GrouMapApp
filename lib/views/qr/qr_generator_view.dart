@@ -2,13 +2,12 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../widgets/common_header.dart';
-import '../../widgets/custom_button.dart';
 import '../payment/point_payment_view.dart';
 import '../payment/point_payment_detail_view.dart';
 import '../points/point_usage_approval_view.dart';
@@ -20,10 +19,7 @@ class QRGeneratorView extends ConsumerStatefulWidget {
   ConsumerState<QRGeneratorView> createState() => _QRGeneratorViewState();
 }
 
-class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  MobileScannerController? _scannerController;
-  bool _isScanning = false;
+class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _pendingRequestSub;
   String? _lastHandledRequestId;
   String? _lastHandledUsageRequestId;
@@ -39,8 +35,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-    _scannerController = MobileScannerController();
+    _setMaxBrightness();
     // FirebaseAuth のストリームで認証変化を監視（ref.listenの制約を回避）
     _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (!mounted) return;
@@ -57,25 +52,37 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         }
       }
     });
-    
-    // タブ変更を監視して、QRコードを読み取るタブが選択された時にカメラを開始
-    _tabController.addListener(() {
-      if (_tabController.index == 1) {
-        _startScanning();
-      } else {
-        _stopScanning();
-      }
-    });
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
-    _scannerController?.dispose();
+    _resetBrightness();
     _cancelPendingRequestListener();
     _authStateSub?.close();
     _authSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _setMaxBrightness() async {
+    try {
+      await ScreenBrightness().setScreenBrightness(1.0);
+    } catch (_) {}
+  }
+
+  Future<void> _resetBrightness() async {
+    try {
+      await ScreenBrightness().resetScreenBrightness();
+    } catch (_) {}
+  }
+
+  /// 他画面へのNavigator.pushをラップし、遷移中は輝度を元に戻し、戻ってきたら再度MAXにする
+  Future<T?> _pushWithBrightness<T>(BuildContext context, Route<T> route) async {
+    await _resetBrightness();
+    final result = await Navigator.of(context).push(route);
+    if (mounted) {
+      await _setMaxBrightness();
+    }
+    return result;
   }
 
   @override
@@ -98,13 +105,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
                     );
                   }
 
-                  return TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildQRCodeList(context, user),
-                      _buildQRScanner(context),
-                    ],
-                  );
+                  return _buildQRCodeList(context, user);
                 },
                 loading: () => const Center(
                   child: CircularProgressIndicator(),
@@ -113,25 +114,6 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
                   child: Text('エラー: $error'),
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-      bottomNavigationBar: Container(
-        color: const Color(0xFFFF6B35),
-        child: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(
-              icon: Icon(Icons.qr_code),
-              text: 'QRコード',
-            ),
-            Tab(
-              icon: Icon(Icons.qr_code_scanner),
-              text: 'QRコードを読み取る',
             ),
           ],
         ),
@@ -390,120 +372,6 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
     );
   }
 
-
-  Widget _buildQRScanner(BuildContext context) {
-    if (!_isScanning) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              Icons.qr_code_scanner,
-              size: 120,
-              color: Color(0xFFFF6B35),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'QRコードをスキャン',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFFF6B35),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'カメラをQRコードに向けて\nスキャンしてください',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 32),
-            CustomButton(
-              text: 'スキャンを開始',
-              onPressed: () {
-                _startScanning();
-              },
-              backgroundColor: const Color(0xFFFF6B35),
-              icon: const Icon(Icons.qr_code_scanner, size: 20),
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () {
-                _showManualInputDialog(context);
-              },
-              child: const Text(
-                '手動でQRコードを入力',
-                style: TextStyle(
-                  color: Color(0xFFFF6B35),
-                  fontSize: 16,
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Stack(
-      children: [
-        MobileScanner(
-          controller: _scannerController!,
-          onDetect: (capture) {
-            final List<Barcode> barcodes = capture.barcodes;
-            if (barcodes.isNotEmpty) {
-              final String? code = barcodes.first.rawValue;
-              if (code != null) {
-                _handleQRCodeDetected(context, code);
-              }
-            }
-          },
-        ),
-        // スキャンエリアのオーバーレイ
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.5),
-          ),
-          child: Center(
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(
-                child: Text(
-                  'QRコードをここに合わせてください',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _startScanning() {
-    setState(() {
-      _isScanning = true;
-    });
-  }
-
-  void _stopScanning() {
-    setState(() {
-      _isScanning = false;
-    });
-  }
-
   // ユーザー宛の保留中リクエストをリアルタイム監視して自動遷移
   void _startPendingRequestListener(String userId) {
     // 既存の購読を解除して再作成
@@ -671,7 +539,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             _lastHandledUsageRequestId = combinedRequestId;
             try {
               await _markUsageApprovalNotified(storeId: storeId, userId: userId);
-              await Navigator.of(context).push(
+              await _pushWithBrightness(
+                context,
                 MaterialPageRoute(
                   builder: (context) => PointUsageApprovalView(
                     storeId: storeId,
@@ -716,7 +585,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             final usedCouponIds = _parseRequestCouponIds(data);
             await _markRequestNotified(storeId: storeId, userId: userId);
             print('PendingListener:navigate accepted -> requestId=$combinedRequestId');
-            await Navigator.of(context).push(
+            await _pushWithBrightness(
+              context,
               MaterialPageRoute(
                 builder: (context) => PointPaymentDetailView(
                   storeId: storeId,
@@ -789,7 +659,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             _lastHandledUsageRequestId = combinedRequestId;
             try {
               await _markUsageApprovalNotified(storeId: storeId, userId: userId);
-              await Navigator.of(context).push(
+              await _pushWithBrightness(
+                context,
                 MaterialPageRoute(
                   builder: (context) => PointUsageApprovalView(
                     storeId: storeId,
@@ -826,7 +697,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
         final usedPoints = _parseRequestUsedPoints(data);
         final usedCouponIds = _parseRequestCouponIds(data);
         await _markRequestNotified(storeId: storeId, userId: userId);
-        await Navigator.of(context).push(
+        await _pushWithBrightness(
+          context,
           MaterialPageRoute(
             builder: (context) => PointPaymentDetailView(
               storeId: storeId,
@@ -847,7 +719,6 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
   }
 
   void _handleQRCodeDetected(BuildContext context, String code) {
-    _stopScanning();
     _processQRCode(context, code);
   }
 
@@ -956,7 +827,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
             final usedCouponIds = _parseRequestCouponIds(data);
             await _markRequestNotified(storeId: storeId, userId: user.uid);
             if (context.mounted) {
-              await Navigator.of(context).push(
+              await _pushWithBrightness(
+                context,
                 MaterialPageRoute(
                   builder: (context) => PointPaymentDetailView(
                     storeId: storeId,
@@ -1079,7 +951,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> with SingleTi
       if (context.mounted) {
         try {
           timeoutTimer.cancel();
-          await Navigator.of(context).push(
+          await _pushWithBrightness(
+            context,
             MaterialPageRoute(
               builder: (context) => PointPaymentView(storeId: storeId),
             ),

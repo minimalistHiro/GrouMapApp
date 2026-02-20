@@ -632,14 +632,16 @@ class CouponsView extends ConsumerWidget {
                     color: Colors.grey[600],
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  '残り${coupon.usageLimit - coupon.usedCount}枚',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
+                if (!coupon.noUsageLimit) ...[
+                  const Spacer(),
+                  Text(
+                    '残り${coupon.usageLimit - coupon.usedCount}枚',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
             const SizedBox(height: 16),

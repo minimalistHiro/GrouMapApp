@@ -22,6 +22,8 @@ class ProfileEditView extends ConsumerStatefulWidget {
 class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController _displayNameController = TextEditingController();
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _bioController = TextEditingController();
   bool _isSaving = false;
   bool _isUploadingImage = false;
 
@@ -39,6 +41,30 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
   String? _selectedPrefecture;
   String? _selectedCity;
   List<String> _cities = [];
+
+  // 新規フィールド
+  String? _currentUsername; // 保存済みのusername（変更検知用）
+  String? _selectedOccupation;
+  List<String> _selectedInterestCategories = [];
+
+  final List<String> _occupations = [
+    '学生', '会社員', '公務員', '自営業', 'フリーランス',
+    'パート・アルバイト', '主婦・主夫', 'その他',
+  ];
+
+  static const List<String> _allCategories = [
+    'カフェ・喫茶店', 'レストラン', '居酒屋', '和食', '日本料理',
+    '海鮮', '寿司', 'そば', 'うどん', 'うなぎ',
+    '焼き鳥', 'とんかつ', '串揚げ', '天ぷら',
+    'お好み焼き', 'もんじゃ焼き', 'しゃぶしゃぶ', '鍋',
+    '焼肉', 'ホルモン', 'ラーメン', '中華料理', '餃子',
+    '韓国料理', 'タイ料理', 'カレー', '洋食', 'フレンチ',
+    'スペイン料理', 'ビストロ', 'パスタ', 'ピザ',
+    'ステーキ', 'ハンバーグ', 'ハンバーガー',
+    'ビュッフェ', '食堂', 'パン・サンドイッチ',
+    'スイーツ', 'ケーキ', 'タピオカ',
+    'バー・お酒', 'スナック', '料理旅館', '沖縄料理', 'その他',
+  ];
 
   final List<String> _genders = ['男性', '女性', 'その他', '回答しない'];
   final List<String> _prefectures = [
@@ -88,6 +114,16 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
         _selectedPrefecture = (data['prefecture'] as String?)?.isNotEmpty == true ? data['prefecture'] : null;
         _selectedCity = (data['city'] as String?)?.isNotEmpty == true ? data['city'] : null;
 
+        // 新規フィールド読み込み
+        _usernameController.text = (data['username'] ?? '').toString();
+        _currentUsername = _usernameController.text.isNotEmpty ? _usernameController.text : null;
+        _bioController.text = (data['bio'] ?? '').toString();
+        _selectedOccupation = (data['occupation'] as String?)?.isNotEmpty == true ? data['occupation'] : null;
+        final interests = data['interestCategories'];
+        if (interests is List) {
+          _selectedInterestCategories = interests.cast<String>().toList();
+        }
+
         if (_selectedPrefecture != null) {
           await _loadCitiesForPrefecture(_selectedPrefecture!);
         }
@@ -105,11 +141,52 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
     try {
       final isGoogleUser = _isGoogleUser();
       final newDisplayName = _displayNameController.text.trim();
+      final newUsername = _usernameController.text.trim();
+      final firestore = FirebaseFirestore.instance;
+      final user = ref.read(authServiceProvider).currentUser;
+
+      // ユーザーIDのユニークチェック（変更がある場合のみ）
+      if (newUsername.isNotEmpty && newUsername != _currentUsername) {
+        final usernameLower = newUsername.toLowerCase();
+        final existingDoc = await firestore
+            .collection('usernames')
+            .doc(usernameLower)
+            .get();
+        if (existingDoc.exists && existingDoc.data()?['uid'] != user?.uid) {
+          if (!mounted) return;
+          setState(() => _isSaving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('このユーザーIDは既に使用されています'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        // 旧usernameのドキュメントを削除
+        if (_currentUsername != null && _currentUsername!.isNotEmpty) {
+          await firestore
+              .collection('usernames')
+              .doc(_currentUsername!.toLowerCase())
+              .delete();
+        }
+        // 新usernameのドキュメントを作成
+        await firestore
+            .collection('usernames')
+            .doc(usernameLower)
+            .set({'uid': user?.uid});
+      }
+
       final updateData = <String, dynamic>{
         'birthDate': _selectedDate,
         'gender': _selectedGender,
         'prefecture': _selectedPrefecture,
         'city': _selectedCity,
+        'username': newUsername.isNotEmpty ? newUsername : null,
+        'bio': _bioController.text.trim(),
+        'occupation': _selectedOccupation,
+        'interestCategories': _selectedInterestCategories,
         'updatedAt': FieldValue.serverTimestamp(),
       };
       if (!isGoogleUser) {
@@ -119,7 +196,6 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
 
       await ref.read(authServiceProvider).updateUserInfo(updateData);
 
-      final user = ref.read(authServiceProvider).currentUser;
       if (!isGoogleUser) {
         await user?.updateDisplayName(newDisplayName);
       }
@@ -514,6 +590,79 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                   const SizedBox(height: 16),
                 ],
 
+                // ユーザーID
+                const Text(
+                  'ユーザーID',
+                  style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _usernameController,
+                  maxLength: 20,
+                  decoration: InputDecoration(
+                    hintText: '英数字・アンダースコア（3〜20文字）',
+                    counterText: '',
+                    filled: true,
+                    fillColor: Colors.white,
+                    prefixText: '@',
+                    prefixStyle: const TextStyle(color: Colors.grey, fontSize: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFFF6B35), width: 2),
+                    ),
+                  ),
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return null; // 任意
+                    if (value.length < 3) return '3文字以上で入力してください';
+                    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value)) {
+                      return '英数字とアンダースコアのみ使用できます';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // 自己紹介
+                const Text(
+                  '自己紹介',
+                  style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 6),
+                TextFormField(
+                  controller: _bioController,
+                  maxLength: 100,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'ひとことを入力（任意）',
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFFF6B35), width: 2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
                 // 生年月日
                 const Text('生年月日', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),
@@ -616,6 +765,21 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                 ),
                 const SizedBox(height: 16),
 
+                // 職業
+                DropdownButtonFormField<String>(
+                  value: _selectedOccupation,
+                  decoration: InputDecoration(
+                    labelText: '職業',
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  ),
+                  items: _occupations.map((o) => DropdownMenuItem<String>(value: o, child: Text(o))).toList(),
+                  onChanged: (v) => setState(() => _selectedOccupation = v),
+                ),
+                const SizedBox(height: 16),
+
                 // 都道府県
                 DropdownButtonFormField<String>(
                   value: _selectedPrefecture,
@@ -652,6 +816,50 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                     onChanged: (v) => setState(() => _selectedCity = v),
                   ),
                 if (_selectedPrefecture != null) const SizedBox(height: 16),
+
+                // 興味のあるカテゴリ
+                const Text(
+                  '興味のあるカテゴリ',
+                  style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _allCategories.map((category) {
+                    final isSelected = _selectedInterestCategories.contains(category);
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          if (isSelected) {
+                            _selectedInterestCategories.remove(category);
+                          } else {
+                            _selectedInterestCategories.add(category);
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFFFF6B35) : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isSelected ? const Color(0xFFFF6B35) : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Text(
+                          category,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isSelected ? Colors.white : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
 
                 if (!isGoogleUser) ...[
                   const Text('プロフィール画像（任意）', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),

@@ -2410,6 +2410,7 @@ export const punchStamp = onCall(
           const usageLimit = asInt(couponData['usageLimit'], 0);
           const usedCount = asInt(couponData['usedCount'], 0);
           const noExpiry = couponData['noExpiry'] === true;
+          const noUsageLimit = couponData['noUsageLimit'] === true;
           const validUntilValue = couponData['validUntil'];
           const validUntil =
             validUntilValue instanceof Timestamp ? validUntilValue.toDate() : undefined;
@@ -2421,10 +2422,10 @@ export const punchStamp = onCall(
           if (!isNoExpiry && (!validUntil || validUntil.getTime() <= now.getTime())) {
             throw new HttpsError('failed-precondition', `Coupon expired: ${couponId}`);
           }
-          if (usageLimit <= 0) {
+          if (!noUsageLimit && usageLimit <= 0) {
             throw new HttpsError('failed-precondition', `Coupon usage limit invalid: ${couponId}`);
           }
-          if (usedCount >= usageLimit) {
+          if (!noUsageLimit && usedCount >= usageLimit) {
             throw new HttpsError('failed-precondition', `Coupon usage limit reached: ${couponId}`);
           }
           if (usedBySnap.exists) {
@@ -2448,7 +2449,7 @@ export const punchStamp = onCall(
           });
 
           const nextUsedCount = usedCount + 1;
-          const shouldDeactivate = usageLimit > 0 && nextUsedCount === usageLimit;
+          const shouldDeactivate = !noUsageLimit && usageLimit > 0 && nextUsedCount === usageLimit;
           txn.update(couponRef, {
             usedCount: nextUsedCount,
             ...(shouldDeactivate ? { isActive: false } : {}),

@@ -31,6 +31,7 @@ _$CouponImpl _$$CouponImplFromJson(Map<String, dynamic> json) => _$CouponImpl(
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      noUsageLimit: json['noUsageLimit'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$$CouponImplToJson(_$CouponImpl instance) =>
@@ -54,6 +55,7 @@ Map<String, dynamic> _$$CouponImplToJson(_$CouponImpl instance) =>
       'applicableItems': instance.applicableItems,
       'conditions': instance.conditions,
       'usedBy': instance.usedBy,
+      'noUsageLimit': instance.noUsageLimit,
     };
 
 const _$CouponTypeEnumMap = {

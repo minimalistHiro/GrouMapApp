@@ -46,18 +46,24 @@ service cloud.firestore {
     function isCouponUserUseIncrement() {
       return request.auth != null
         && !(resource.data.isActive == false)
-        && (resource.data.usageLimit is int || resource.data.usageLimit is float)
         && (resource.data.usedCount is int || resource.data.usedCount is float)
-        && resource.data.usageLimit > 0
         && request.resource.data.diff(resource.data).changedKeys()
           .hasOnly(['usedCount','isActive','updatedAt'])
         && request.resource.data.usedCount == resource.data.usedCount + 1
-        && request.resource.data.usedCount <= resource.data.usageLimit
         && (
-          (request.resource.data.usedCount < resource.data.usageLimit
-            && request.resource.data.isActive == resource.data.isActive) ||
-          (request.resource.data.usedCount == resource.data.usageLimit
-            && request.resource.data.isActive == false)
+          resource.data.noUsageLimit == true
+            ? request.resource.data.isActive == resource.data.isActive
+            : (
+              (resource.data.usageLimit is int || resource.data.usageLimit is float)
+              && resource.data.usageLimit > 0
+              && request.resource.data.usedCount <= resource.data.usageLimit
+              && (
+                (request.resource.data.usedCount < resource.data.usageLimit
+                  && request.resource.data.isActive == resource.data.isActive) ||
+                (request.resource.data.usedCount == resource.data.usageLimit
+                  && request.resource.data.isActive == false)
+              )
+            )
         );
     }
     function isCouponUserUseIncrementLegacy() {
@@ -75,6 +81,15 @@ service cloud.firestore {
             : true
         );
     }
+    // ユーザーIDユニーク制約用コレクション
+    match /usernames/{username} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
+    }
+
     // ユーザーコレクションのルール
     match /users/{userId} {
       // 認証されたユーザーは自分のドキュメントを読み書き可能

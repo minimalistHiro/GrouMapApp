@@ -1533,7 +1533,7 @@ class _MapViewState extends ConsumerState<MapView> {
                         // ジャンルバッジ
                         Positioned(
                           top: 10,
-                          right: 10,
+                          left: 10,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 8,
