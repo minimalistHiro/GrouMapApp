@@ -96,16 +96,41 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       print('店舗一覧の読み込みを開始...');
       final QuerySnapshot snapshot =
           await FirebaseFirestore.instance.collection('stores').get();
+      final ownerUsersBoolSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('isOwner', isEqualTo: true)
+          .get();
+      final ownerUsersStringSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('isOwner', isEqualTo: 'true')
+          .get();
+      final ownerUserIds = <String>{
+        ...ownerUsersBoolSnapshot.docs.map((doc) => doc.id),
+        ...ownerUsersStringSnapshot.docs.map((doc) => doc.id),
+      };
       print('取得したドキュメント数: ${snapshot.docs.length}');
+      print('isOwner=true ユーザー数: ${ownerUserIds.length}');
 
       final List<Map<String, dynamic>> stores = [];
 
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        final rawIsOwner = data['isOwner'];
+        final hasOwnerFlag = rawIsOwner == true ||
+            rawIsOwner?.toString().toLowerCase() == 'true';
+        final createdBy = (data['createdBy'] ?? data['ownerId'])?.toString();
+        final isOwnerByCreator =
+            createdBy != null && ownerUserIds.contains(createdBy);
+        final isOwnerStore = hasOwnerFlag || isOwnerByCreator;
         print(
             '店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
+        if (isOwnerStore) {
+          print(
+              'isOwner=true のため除外: ${doc.id} (storeFlag: $hasOwnerFlag, createdBy: $createdBy, creatorOwner: $isOwnerByCreator)');
+          continue;
+        }
 
-        // マップ画面と同様に、アクティブかつ承認済みのみ表示
+        // マップ画面と同様に、isOwner=false かつアクティブかつ承認済みのみ表示
         if (data['isActive'] == true && data['isApproved'] == true) {
           stores.add(_toStoreDetailStore(doc.id, data));
           print('店舗を追加: ${data['name']}');
@@ -145,7 +170,8 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
               orElse: () => null,
             );
         final favoriteIds = _extractFavoriteIds(userData);
-        return _buildStoreListScaffold(favoriteIds: favoriteIds);
+        final followedIds = _extractFollowedIds(userData);
+        return _buildStoreListScaffold(favoriteIds: favoriteIds, followedIds: followedIds);
       },
       loading: () => const Scaffold(
         backgroundColor: Colors.grey,
@@ -163,9 +189,9 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     );
   }
 
-  Widget _buildStoreListScaffold({Set<String>? favoriteIds}) {
+  Widget _buildStoreListScaffold({Set<String>? favoriteIds, Set<String>? followedIds}) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: Colors.grey[50],
         appBar: const CommonHeader(title: '店舗一覧'),
@@ -174,11 +200,12 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
             const CustomTopTabBar(
               tabs: [
                 Tab(text: 'お気に入り'),
+                Tab(text: 'フォロー'),
                 Tab(text: '店舗一覧'),
               ],
             ),
             Expanded(
-              child: _buildBody(favoriteIds: favoriteIds ?? {}),
+              child: _buildBody(favoriteIds: favoriteIds ?? {}, followedIds: followedIds ?? {}),
             ),
           ],
         ),
@@ -186,7 +213,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     );
   }
 
-  Widget _buildBody({required Set<String> favoriteIds}) {
+  Widget _buildBody({required Set<String> favoriteIds, required Set<String> followedIds}) {
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
@@ -227,12 +254,17 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     }
 
     final favoriteStores = _filterFavoriteStores(_stores, favoriteIds);
+    final followedStores = _filterFollowedStores(_stores, followedIds);
 
     return TabBarView(
       children: [
         _buildStoresContent(
           stores: favoriteStores,
           emptyMessage: 'お気に入りの店舗がありません',
+        ),
+        _buildStoresContent(
+          stores: followedStores,
+          emptyMessage: 'フォロー中の店舗がありません',
         ),
         _buildStoresContent(
           stores: _stores,
@@ -251,6 +283,15 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     return {};
   }
 
+  Set<String> _extractFollowedIds(Map<String, dynamic>? userData) {
+    if (userData == null) return {};
+    final raw = userData['followedStoreIds'];
+    if (raw is List) {
+      return raw.map((id) => id.toString()).toSet();
+    }
+    return {};
+  }
+
   List<Map<String, dynamic>> _filterFavoriteStores(
     List<Map<String, dynamic>> stores,
     Set<String> favoriteIds,
@@ -263,6 +304,20 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         favorites.add(store);
     }
     return favorites;
+  }
+
+  List<Map<String, dynamic>> _filterFollowedStores(
+    List<Map<String, dynamic>> stores,
+    Set<String> followedIds,
+  ) {
+    if (followedIds.isEmpty) return [];
+    final followed = <Map<String, dynamic>>[];
+    for (final store in stores) {
+      final storeId = store['id']?.toString();
+      if (storeId != null && followedIds.contains(storeId))
+        followed.add(store);
+    }
+    return followed;
   }
 
   Widget _buildStoresContent({

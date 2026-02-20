@@ -287,7 +287,7 @@ class MissionService {
     try {
       // デイリーミッション確認
       final dailyData = await getDailyMissions(userId);
-      const dailyIds = ['app_open', 'recommendation_view', 'map_open'];
+      const dailyIds = ['app_open', 'recommendation_view', 'feed_view'];
       for (final id in dailyIds) {
         if (dailyData[id] == true && dailyData['${id}_claimed'] != true) {
           return true;
@@ -303,7 +303,7 @@ class MissionService {
         'first_map',
         'first_favorite',
         'first_store_detail',
-        'first_slot',
+        'first_stamp',
       ];
       for (final id in regIds) {
         if (progress[id] == true && progress['${id}_claimed'] != true) {

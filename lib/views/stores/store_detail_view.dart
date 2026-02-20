@@ -38,6 +38,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   bool _isFavorite = false;
   bool _isFavoriteLoading = true;
   bool _isUpdatingFavorite = false;
+  bool _isFollowing = false;
+  bool _isFollowLoading = true;
+  bool _isUpdatingFollow = false;
   bool _isBusinessHoursExpanded = false;
   int _menuCategoryIndex = 0;
   static const _menuCategories = ['コース', '料理', 'ドリンク', 'デザート'];
@@ -56,6 +59,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     }
     _loadUserStamps();
     _loadFavoriteStatus();
+    _loadFollowStatus();
     _markStoreDetailMission();
   }
 
@@ -90,13 +94,18 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
       if (docSnapshot.exists) {
         final data = docSnapshot.data() as Map<String, dynamic>;
+        final stamps = (data['stamps'] as int?) ?? 0;
         setState(() {
           _userStamps = {
-            'stamps': data['stamps'] ?? 0,
+            'stamps': stamps,
             'lastVisited': data['lastVisited'],
             'totalSpending': data['totalSpending'] ?? 0.0,
           };
         });
+        // 新規登録ミッション: スタンプ初獲得
+        if (stamps > 0) {
+          MissionService().markRegistrationMission(user.uid, 'first_stamp');
+        }
       } else {
         setState(() {
           _userStamps = {
@@ -144,6 +153,116 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       if (!mounted) return;
       setState(() {
         _isFavoriteLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadFollowStatus() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final followDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('followed_stores')
+          .doc(widget.store['id'])
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _isFollowing = followDoc.exists;
+      });
+    } catch (e) {
+      print('フォロー状態の読み込みに失敗しました: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isFollowLoading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleFollow() async {
+    if (_isUpdatingFollow) return;
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      setState(() {
+        _isUpdatingFollow = true;
+      });
+
+      final storeId = widget.store['id'];
+      final userDocRef =
+          FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final followDocRef =
+          userDocRef.collection('followed_stores').doc(storeId);
+      final storeFollowerDocRef = FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .collection('followers')
+          .doc(user.uid);
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      if (_isFollowing) {
+        batch.delete(followDocRef);
+        batch.delete(storeFollowerDocRef);
+        batch.set(
+          userDocRef,
+          {
+            'followedStoreIds': FieldValue.arrayRemove([storeId]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      } else {
+        batch.set(followDocRef, {
+          'storeId': storeId,
+          'storeName': widget.store['name'],
+          'category': widget.store['category'],
+          'storeImageUrl': widget.store['storeImageUrl'],
+          'followedAt': FieldValue.serverTimestamp(),
+          'source': 'manual',
+        });
+        batch.set(storeFollowerDocRef, {
+          'userId': user.uid,
+          'userName': user.displayName ?? 'ユーザー',
+          'followedAt': FieldValue.serverTimestamp(),
+        });
+        batch.set(
+          userDocRef,
+          {
+            'followedStoreIds': FieldValue.arrayUnion([storeId]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      await batch.commit();
+
+      // バッジカウンター: フォロー追加時のみ
+      if (!_isFollowing) {
+        BadgeService().incrementBadgeCounter(user.uid, 'followUser');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _isFollowing = !_isFollowing;
+      });
+    } catch (e) {
+      print('フォロー更新エラー: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('フォローの更新に失敗しました: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _isUpdatingFollow = false;
       });
     }
   }
@@ -761,6 +880,43 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                             fontSize: 13,
                             color: _isFavorite
                                 ? Colors.amber[700]
+                                : Colors.grey[700],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed:
+                              (_isFollowLoading || _isUpdatingFollow)
+                                  ? null
+                                  : _toggleFollow,
+                          icon: Icon(
+                            _isFollowing
+                                ? Icons.notifications_active
+                                : Icons.notifications_none,
+                            color: _isFollowing
+                                ? Colors.blue[700]
+                                : Colors.grey,
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: _isFollowing
+                              ? 'フォロー解除'
+                              : 'フォローして通知を受け取る',
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _isFollowing
+                              ? 'フォロー中'
+                              : 'フォローして通知を受け取る',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: _isFollowing
+                                ? Colors.blue[700]
                                 : Colors.grey[700],
                             fontWeight: FontWeight.w600,
                           ),

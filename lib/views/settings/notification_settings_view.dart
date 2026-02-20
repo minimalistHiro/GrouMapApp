@@ -145,6 +145,7 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
                 _buildCard([
                   CustomSwitchListTile(
                     title: const Text('クーポン発行'),
+                    subtitle: const Text('フォロー中の店舗がクーポンを発行した時'),
                     value: _couponIssued,
                     onChanged: _isSaving
                         ? null
@@ -156,6 +157,7 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
                   const Divider(height: 0),
                   CustomSwitchListTile(
                     title: const Text('投稿'),
+                    subtitle: const Text('フォロー中の店舗が投稿した時'),
                     value: _post,
                     onChanged: _isSaving
                         ? null

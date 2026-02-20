@@ -421,8 +421,9 @@
   - `phone`: 電話番号
   - `description`: 店舗説明
   - `ownerId`: オーナーUID
+  - `createdBy`: 店舗作成者UID（実運用での所有者参照キー）
   - `isRegularHoliday`: 不定休フラグ（true/false）
-  - `isActive`: 店舗公開フラグ（店舗設定画面のトグルで切り替え）
+  - `isActive`: 店舗公開フラグ（初期値false。5項目（店舗プロフィール・位置情報・メニュー・店内画像・決済方法）全完了で自動true。設定画面のトグルでも切り替え可能）
   - `isApproved`: 承認フラグ（承認ボタンでtrue）
   - `approvalStatus`: 承認ステータス（`pending`/`approved`/`rejected`）
   - `approvedAt`: 承認日時
@@ -430,6 +431,7 @@
   - `rejectedAt`: 拒否日時
   - `rejectedBy`: 拒否者UID
   - `pendingRequestNotifiedAt`: 未承認店舗通知送信済み日時
+  - 表示ルール（ユーザーアプリ）: マップ/店舗一覧は `isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` または `createdBy` の `users.isOwner=true` に該当する店舗は非表示
   - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）
   - `socialMedia`: SNSリンク（`instagram`, `x`, `facebook`, `website`）
   - `instagramAuth`: Instagram連携情報（Functions用）
@@ -528,6 +530,10 @@
     - `isActive`: 表示フラグ
     - `createdAt`: 作成日時
     - `updatedAt`: 更新日時
+  - `followers/{userId}`: 店舗フォロワー
+    - `userId`: ユーザーUID
+    - `userName`: ユーザー表示名
+    - `followedAt`: フォロー日時
 
 ### user_coupons
 - `user_coupons/{userCouponId}`: ユーザー取得クーポン
@@ -640,6 +646,7 @@
   - `storeReferralCount`: 店舗紹介数
   - `storeReferralEarnings`: 店舗紹介獲得ポイント
   - `favoriteStoreIds`: お気に入り店舗ID配列
+  - `followedStoreIds`: フォロー中店舗ID配列
   - `fcmToken`: 端末FCMトークン
   - `fcmTokenUpdatedAt`: FCM更新日時
   - `profileImageUrl`: プロフィール画像
@@ -679,8 +686,8 @@
     - `first_favorite_claimed`: お気に入り登録報酬受取済みフラグ（bool）
     - `first_store_detail`: 店舗詳細閲覧達成フラグ（bool）
     - `first_store_detail_claimed`: 店舗詳細閲覧報酬受取済みフラグ（bool）
-    - `first_slot`: スロット初挑戦達成フラグ（bool）
-    - `first_slot_claimed`: スロット初挑戦報酬受取済みフラグ（bool）
+    - `first_stamp`: スタンプ初獲得達成フラグ（bool）
+    - `first_stamp_claimed`: スタンプ初獲得報酬受取済みフラグ（bool）
     - `login_3_claimed`: 3日連続ログインボーナス受取済みフラグ（bool）
     - `login_7_claimed`: 7日連続ログインボーナス受取済みフラグ（bool）
     - `login_30_claimed`: 30日連続ログインボーナス受取済みフラグ（bool）
@@ -711,6 +718,13 @@
     - `category`: カテゴリ
     - `storeImageUrl`: 店舗画像
     - `favoritedAt`: お気に入り日時
+  - `followed_stores/{storeId}`: フォロー中店舗（来店時自動フォロー / 手動フォロー）
+    - `storeId`: 店舗ID
+    - `storeName`: 店舗名
+    - `category`: カテゴリ
+    - `storeImageUrl`: 店舗画像
+    - `followedAt`: フォロー日時
+    - `source`: フォロー経路（`stamp` = スタンプ自動 / `manual` = 手動）
   - `comments/{commentId}`: コメント履歴
     - `commentId`: コメントID
     - `postId`: 投稿ID
@@ -743,5 +757,5 @@
     - `app_open_claimed`: アプリを開く報酬受取済みフラグ（bool）
     - `recommendation_view`: レコメンドを見る達成フラグ（bool）
     - `recommendation_view_claimed`: レコメンドを見る報酬受取済みフラグ（bool）
-    - `map_open`: マップを開く達成フラグ（bool）
-    - `map_open_claimed`: マップを開く報酬受取済みフラグ（bool）
+    - `feed_view`: 投稿を1件見る達成フラグ（bool）
+    - `feed_view_claimed`: 投稿を1件見る報酬受取済みフラグ（bool）

@@ -64,6 +64,18 @@ class _MissionsViewState extends State<MissionsView> {
   List<Map<String, dynamic>> _unvisitedStores = [];
   bool _isExchanging = false;
 
+  /// 新規登録ミッションがすべて達成済み（claimed）かどうか
+  bool get _isRegistrationComplete {
+    const ids = [
+      'profile_completed',
+      'first_map',
+      'first_favorite',
+      'first_store_detail',
+      'first_stamp',
+    ];
+    return ids.every((id) => _missionProgress['${id}_claimed'] == true);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -94,6 +106,10 @@ class _MissionsViewState extends State<MissionsView> {
         _userCoins = results[3] as int;
         _unvisitedStores = results[4] as List<Map<String, dynamic>>;
         _isLoading = false;
+        // 新規登録ミッション未達成なら「新規登録」タブを初期選択
+        if (!_isRegistrationComplete && _selectedTabIndex == 0) {
+          _selectedTabIndex = 2;
+        }
       });
     } catch (e) {
       debugPrint('ミッションデータ読み込みエラー: $e');
@@ -143,7 +159,7 @@ class _MissionsViewState extends State<MissionsView> {
     return [
       _buildDailyMission('app_open', 'アプリを開く', '今日アプリを起動する', 1, Icons.phone_android),
       _buildDailyMission('recommendation_view', 'レコメンドを見る', '今日のおすすめ店舗を確認する', 1, Icons.recommend),
-      _buildDailyMission('map_open', 'マップを開く', 'マップ画面を表示する', 1, Icons.map),
+      _buildDailyMission('feed_view', '投稿を1件見る', '投稿の詳細を1件閲覧する', 1, Icons.article),
     ];
   }
 
@@ -213,7 +229,7 @@ class _MissionsViewState extends State<MissionsView> {
       _buildRegistrationMission('first_map', 'マップ初利用', '初めてマップ画面を開く', 3, Icons.explore),
       _buildRegistrationMission('first_favorite', 'お気に入り登録', '初めて店舗をお気に入りに追加', 3, Icons.favorite),
       _buildRegistrationMission('first_store_detail', '店舗詳細閲覧', '初めて店舗詳細画面を表示', 2, Icons.storefront),
-      _buildRegistrationMission('first_slot', 'スロット初挑戦', '初めてスロットを回す', 2, Icons.casino),
+      _buildRegistrationMission('first_stamp', 'スタンプ初獲得', 'お店に行ってスタンプを1つ獲得する', 2, Icons.approval),
     ];
   }
 
@@ -484,6 +500,9 @@ class _MissionsViewState extends State<MissionsView> {
                       });
                     },
                     activeColor: const Color(0xFF2A8B8B),
+                    disabledIndices: _isRegistrationComplete
+                        ? const {}
+                        : const {0, 1},
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -503,12 +522,54 @@ class _MissionsViewState extends State<MissionsView> {
                     onRefresh: _loadAllMissionData,
                     child: _selectedTabIndex == 3
                         ? _buildCoinExchangeTab()
-                        : ListView.builder(
+                        : ListView(
                             padding: const EdgeInsets.only(bottom: 24),
-                            itemCount: _currentMissions.length,
-                            itemBuilder: (context, index) {
-                              return _buildMissionCard(_currentMissions[index]);
-                            },
+                            children: [
+                              // 新規登録タブ＆未達成時のガイドメッセージ
+                              if (_selectedTabIndex == 2 && !_isRegistrationComplete)
+                                Container(
+                                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFFF6B35), Color(0xFFFF8F00)],
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.flag, color: Colors.white, size: 28),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'まずは新規登録ミッションを完了しよう!',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'すべてのミッションを達成すると、デイリーミッションやログインボーナスが解放されます',
+                                              style: TextStyle(
+                                                color: Colors.white.withOpacity(0.9),
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ..._currentMissions.map(_buildMissionCard),
+                            ],
                           ),
                   ),
                 ),

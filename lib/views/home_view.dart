@@ -384,8 +384,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     const SizedBox(height: 12),
 
                     // くじ引きキャンペーンボタン（おすすめ店舗の下）- ログインユーザーのみ
-                    if (isLoggedIn)
-                      _buildLotteryCampaignButton(context, ref),
+                    // TODO: スロット機能は一時的に非表示（将来再開予定）
+                    // if (isLoggedIn)
+                    //   _buildLotteryCampaignButton(context, ref),
 
                     _buildReferralSection(context, ref),
 

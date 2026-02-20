@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:confetti/confetti.dart';
 import 'dart:math';
-import '../../services/mission_service.dart';
 import '../../providers/badge_provider.dart';
 
 class LotteryView extends StatefulWidget {
@@ -577,9 +576,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
           _userCoins = (_userCoins + coinsDelta).clamp(0, 999999);
         });
       }
-
-      // 新規登録ミッション: スロット初挑戦
-      MissionService().markRegistrationMission(user.uid, 'first_slot');
 
       // バッジカウンター: スロットプレイ
       BadgeService().incrementBadgeCounter(user.uid, 'slotPlayed');

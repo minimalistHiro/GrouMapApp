@@ -107,7 +107,6 @@ class _MapViewState extends ConsumerState<MapView> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     final missionService = MissionService();
-    missionService.markDailyMission(user.uid, 'map_open');
     missionService.markRegistrationMission(user.uid, 'first_map');
 
     // バッジカウンター: マップ画面表示
@@ -258,14 +257,39 @@ class _MapViewState extends ConsumerState<MapView> {
       print('店舗データの読み込みを開始...');
       final QuerySnapshot snapshot =
           await FirebaseFirestore.instance.collection('stores').get();
+      final ownerUsersBoolSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('isOwner', isEqualTo: true)
+          .get();
+      final ownerUsersStringSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('isOwner', isEqualTo: 'true')
+          .get();
+      final ownerUserIds = <String>{
+        ...ownerUsersBoolSnapshot.docs.map((doc) => doc.id),
+        ...ownerUsersStringSnapshot.docs.map((doc) => doc.id),
+      };
       print('取得したドキュメント数: ${snapshot.docs.length}');
+      print('isOwner=true ユーザー数: ${ownerUserIds.length}');
 
       final List<Map<String, dynamic>> stores = [];
 
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        final rawIsOwner = data['isOwner'];
+        final hasOwnerFlag = rawIsOwner == true ||
+            rawIsOwner?.toString().toLowerCase() == 'true';
+        final createdBy = (data['createdBy'] ?? data['ownerId'])?.toString();
+        final isOwnerByCreator =
+            createdBy != null && ownerUserIds.contains(createdBy);
+        final isOwnerStore = hasOwnerFlag || isOwnerByCreator;
         print(
             '店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
+        if (isOwnerStore) {
+          print(
+              'isOwner=true のため除外: ${doc.id} (storeFlag: $hasOwnerFlag, createdBy: $createdBy, creatorOwner: $isOwnerByCreator)');
+          continue;
+        }
 
         // 条件を緩和してテスト用の店舗も表示
         if (data['isActive'] == true && data['isApproved'] == true) {

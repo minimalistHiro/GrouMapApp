@@ -286,10 +286,10 @@
 
 | バッジID | 名前 | 獲得条件 | レア度 |
 |----------|------|----------|--------|
-| follow_user_1 | はじめてのフォロー | 初めて他ユーザーをフォロー | common |
-| follow_user_5 | フォロワー | 5人をフォロー | common |
-| follow_user_10 | ソーシャルバタフライ | 10人をフォロー | rare |
-| follow_user_25 | コミュニティリーダー | 25人をフォロー | epic |
+| follow_user_1 | はじめてのフォロー | 初めて店舗をフォロー | common |
+| follow_user_5 | フォロワー | 5店舗をフォロー | common |
+| follow_user_10 | ソーシャルバタフライ | 10店舗をフォロー | rare |
+| follow_user_25 | コミュニティリーダー | 25店舗をフォロー | epic |
 
 ### コイン獲得（coinsEarned）
 
@@ -349,29 +349,11 @@
 
 - 保存先: `assets/images/badges/{badgeId}.png`
 - サイズ: 512x512px（推奨）
-- 形式: PNG（背景白）
+- 形式: PNG（背景透過）
+- 背景透過: rembg（ローカル実行）で一括処理済み
 - 生成ツール: Nano Banana Pro（Gemini 3 Pro Image）API
 - 生成スキル: `badge-image-gen`（統一テンプレートでバッジ画像を生成）
-- 生成済み: 96/141
-  - スタンプ（stampsTotal）: 15個 全完了
-  - 来店（visitsCount）: 4個 全完了
-  - 連続ログイン（consecutiveDays）: 4個 全完了
-  - 店舗巡り（storesVisited）: 4個 全完了
-  - イベント（specialEvents）: 4個 全完了
-  - カテゴリ別来店 - カフェ・スイーツ系（cafe_sweets）: 5個 全完了
-  - カテゴリ別来店 - 和食系（washoku）: 5個 全完了
-  - カテゴリ別来店 - 居酒屋・バー系（izakaya_bar）: 5個 全完了
-  - カテゴリ別来店 - 焼き鳥・揚げ物系（yakitori_age）: 5個 全完了
-  - カテゴリ別来店 - 鍋・焼肉系（nabe_yakiniku）: 5個 全完了
-  - カテゴリ別来店 - ラーメン・中華系（ramen_chinese）: 5個 全完了
-  - カテゴリ別来店 - アジア・エスニック系（asian_ethnic）: 5個 全完了
-  - カテゴリ別来店 - 洋食・フレンチ系（western_french）: 5個 全完了
-  - カテゴリ別来店 - イタリアン・肉料理系（italian_meat）: 5個 全完了
-  - カテゴリ別来店 - 食堂・その他（shokudo_other）: 5個 全完了
-  - マップ閲覧（mapOpened）: 5個 全完了
-  - 店舗詳細閲覧（storeDetailViewed）: 5個 全完了
-  - プロフィール完成（profileCompleted）: 1個 全完了
-  - お気に入り登録（favoriteAdded）: 4個（1,3,5,10）完了 ※25は未生成
+- 生成済み: **141/141（全完了）**
 
 ## 獲得処理
 
@@ -393,7 +375,7 @@
   - クーポン使用 (`couponUsed`): `lib/views/coupons/coupon_detail_view.dart`
   - いいね (`likeGiven`): `lib/providers/social_provider.dart`
   - コメント投稿 (`commentPosted`): `lib/providers/social_provider.dart`
-  - フォロー (`followUser`): `lib/providers/social_provider.dart`
+  - フォロー (`followUser`): `lib/views/stores/store_detail_view.dart`（店舗フォロー時）
   - ミッション達成 (`missionCompleted`): `lib/views/missions/missions_view.dart`
   - レコメンド閲覧 (`recommendViewed`): `lib/views/stamps/daily_recommendation_view.dart`
   - スタンプカード達成 (`stampCardCompleted`): `lib/views/stores/store_detail_view.dart`

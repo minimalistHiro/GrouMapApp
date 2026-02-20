@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/posts_provider.dart';
+import '../../services/mission_service.dart';
 import '../../widgets/common_header.dart';
 
 class PostDetailView extends ConsumerStatefulWidget {
@@ -58,6 +59,13 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
     _checkIfLiked();
     _loadLikeCount();
     _recordView();
+    _markFeedViewMission();
+  }
+
+  void _markFeedViewMission() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    MissionService().markDailyMission(user.uid, 'feed_view');
   }
 
   Future<void> _loadStoreIcon() async {

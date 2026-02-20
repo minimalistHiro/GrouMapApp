@@ -901,11 +901,15 @@ async function createUserNotification({
   title,
   body,
   data,
+  type = 'system',
+  tags = ['live_chat'],
 }: {
   userId: string;
   title: string;
   body: string;
   data?: Record<string, unknown>;
+  type?: string;
+  tags?: string[];
 }) {
   const notificationRef = db
     .collection(USERS_COLLECTION)
@@ -918,7 +922,7 @@ async function createUserNotification({
     userId,
     title,
     body,
-    type: 'system',
+    type,
     createdAt: new Date().toISOString(),
     isRead: false,
     isDelivered: false,
@@ -926,7 +930,7 @@ async function createUserNotification({
       source: 'user',
       ...stripUndefined(data ?? {}),
     },
-    tags: ['live_chat'],
+    tags,
   });
 }
 
@@ -2576,6 +2580,49 @@ export const punchStamp = onCall(
       console.error('[punchStamp] achievement event creation error:', e);
     }
 
+    // 自動フォロー: スタンプ押印時に店舗を自動フォロー（未フォローの場合のみ）
+    try {
+      const followDocRef = db
+        .collection(USERS_COLLECTION)
+        .doc(userId)
+        .collection('followed_stores')
+        .doc(storeId);
+      const followSnap = await followDocRef.get();
+
+      if (!followSnap.exists) {
+        const storeDoc = await db.collection('stores').doc(storeId).get();
+        const storeData = storeDoc.data() as Record<string, unknown> | undefined;
+        const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+        const userData = userDoc.data() as Record<string, unknown> | undefined;
+
+        const followBatch = db.batch();
+        followBatch.set(followDocRef, {
+          storeId,
+          storeName: result.storeName ?? '',
+          category: storeData?.category ?? '',
+          storeImageUrl: storeData?.storeImageUrl ?? null,
+          followedAt: FieldValue.serverTimestamp(),
+          source: 'stamp',
+        });
+        followBatch.set(
+          db.collection('stores').doc(storeId).collection('followers').doc(userId),
+          {
+            userId,
+            userName: userData?.displayName ?? 'ユーザー',
+            followedAt: FieldValue.serverTimestamp(),
+          },
+        );
+        followBatch.update(db.collection(USERS_COLLECTION).doc(userId), {
+          followedStoreIds: FieldValue.arrayUnion(storeId),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        await followBatch.commit();
+        console.log(`[punchStamp] Auto-followed store ${storeId} for user ${userId}`);
+      }
+    } catch (e) {
+      console.error('[punchStamp] auto-follow error:', e);
+    }
+
     return result;
   },
 );
@@ -2831,3 +2878,135 @@ export const syncInstagramPostsScheduled = onSchedule(
 //     }
 //   }
 // );
+
+// フォロワーへの投稿通知
+export const notifyFollowersOnNewPost = onDocumentCreated(
+  {
+    document: 'public_posts/{postId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    const data = event.data?.data() as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const storeId = (data['storeId'] ?? '').toString();
+    const storeName = (data['storeName'] ?? '').toString();
+    const content = (data['content'] ?? '').toString();
+    const isActive = data['isActive'] !== false;
+    const isPublished = data['isPublished'] !== false;
+
+    if (!storeId || !isActive || !isPublished) return;
+
+    const followersSnap = await db
+      .collection('stores')
+      .doc(storeId)
+      .collection('followers')
+      .get();
+
+    if (followersSnap.empty) return;
+
+    const truncatedContent =
+      content.length > 50 ? content.substring(0, 50) + '...' : content;
+
+    const BATCH_SIZE = 500;
+    const followerDocs = followersSnap.docs;
+    for (let i = 0; i < followerDocs.length; i += BATCH_SIZE) {
+      const chunk = followerDocs.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        chunk.map(async (followerDoc) => {
+          const followerId = followerDoc.id;
+          try {
+            const userDoc = await db.collection(USERS_COLLECTION).doc(followerId).get();
+            const userData = userDoc.data() as Record<string, unknown> | undefined;
+            const postNotification = (userData?.notificationSettings as Record<string, unknown> | undefined)?.post;
+            if (postNotification === false) return;
+
+            await createUserNotification({
+              userId: followerId,
+              title: `${storeName}が新しい投稿を公開しました`,
+              body: truncatedContent || '新しい投稿をチェックしましょう！',
+              type: 'marketing',
+              tags: ['store_post'],
+              data: {
+                type: 'store_post',
+                storeId,
+                storeName,
+                postId: event.params.postId,
+              },
+            });
+          } catch (e) {
+            console.error(`[notifyFollowersOnNewPost] Error for follower ${followerId}:`, e);
+          }
+        }),
+      );
+    }
+
+    console.log(
+      `[notifyFollowersOnNewPost] Notified ${followersSnap.size} followers for store ${storeId}`,
+    );
+  },
+);
+
+// フォロワーへのクーポン通知
+export const notifyFollowersOnNewCoupon = onDocumentCreated(
+  {
+    document: 'public_coupons/{couponId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    const data = event.data?.data() as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const storeId = (data['storeId'] ?? '').toString();
+    const storeName = (data['storeName'] ?? '').toString();
+    const title = (data['title'] ?? '').toString();
+    const isActive = data['isActive'] !== false;
+
+    if (!storeId || !isActive) return;
+
+    const followersSnap = await db
+      .collection('stores')
+      .doc(storeId)
+      .collection('followers')
+      .get();
+
+    if (followersSnap.empty) return;
+
+    const BATCH_SIZE = 500;
+    const followerDocs = followersSnap.docs;
+    for (let i = 0; i < followerDocs.length; i += BATCH_SIZE) {
+      const chunk = followerDocs.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        chunk.map(async (followerDoc) => {
+          const followerId = followerDoc.id;
+          try {
+            const userDoc = await db.collection(USERS_COLLECTION).doc(followerId).get();
+            const userData = userDoc.data() as Record<string, unknown> | undefined;
+            const couponNotification = (userData?.notificationSettings as Record<string, unknown> | undefined)?.couponIssued;
+            if (couponNotification === false) return;
+
+            await createUserNotification({
+              userId: followerId,
+              title: `${storeName}が新しいクーポンを発行しました`,
+              body: title || '新しいクーポンをチェックしましょう！',
+              type: 'marketing',
+              tags: ['store_coupon'],
+              data: {
+                type: 'store_coupon',
+                storeId,
+                storeName,
+                couponId: event.params.couponId,
+              },
+            });
+          } catch (e) {
+            console.error(`[notifyFollowersOnNewCoupon] Error for follower ${followerId}:`, e);
+          }
+        }),
+      );
+    }
+
+    console.log(
+      `[notifyFollowersOnNewCoupon] Notified ${followersSnap.size} followers for store ${storeId}`,
+    );
+  },
+);

@@ -204,10 +204,10 @@ const List<BadgeModel> kBadgeDefinitions = [
   BadgeModel(badgeId: 'comment_posted_50', name: 'コメントレジェンド', description: 'コメントを50回投稿', iconUrl: 'comment_posted_50.png', type: BadgeType.commentPosted, requiredValue: 50, rarity: BadgeRarity.legendary, category: 'コメント'),
 
   // フォロー（followUser）4個
-  BadgeModel(badgeId: 'follow_user_1', name: 'はじめてのフォロー', description: '初めて他ユーザーをフォロー', iconUrl: 'follow_user_1.png', type: BadgeType.followUser, requiredValue: 1, rarity: BadgeRarity.common, category: 'フォロー'),
-  BadgeModel(badgeId: 'follow_user_5', name: 'フォロワー', description: '5人をフォロー', iconUrl: 'follow_user_5.png', type: BadgeType.followUser, requiredValue: 5, rarity: BadgeRarity.common, category: 'フォロー'),
-  BadgeModel(badgeId: 'follow_user_10', name: 'ソーシャルバタフライ', description: '10人をフォロー', iconUrl: 'follow_user_10.png', type: BadgeType.followUser, requiredValue: 10, rarity: BadgeRarity.rare, category: 'フォロー'),
-  BadgeModel(badgeId: 'follow_user_25', name: 'コミュニティリーダー', description: '25人をフォロー', iconUrl: 'follow_user_25.png', type: BadgeType.followUser, requiredValue: 25, rarity: BadgeRarity.epic, category: 'フォロー'),
+  BadgeModel(badgeId: 'follow_user_1', name: 'はじめてのフォロー', description: '初めて店舗をフォロー', iconUrl: 'follow_user_1.png', type: BadgeType.followUser, requiredValue: 1, rarity: BadgeRarity.common, category: 'フォロー'),
+  BadgeModel(badgeId: 'follow_user_5', name: 'フォロワー', description: '5店舗をフォロー', iconUrl: 'follow_user_5.png', type: BadgeType.followUser, requiredValue: 5, rarity: BadgeRarity.common, category: 'フォロー'),
+  BadgeModel(badgeId: 'follow_user_10', name: 'ソーシャルバタフライ', description: '10店舗をフォロー', iconUrl: 'follow_user_10.png', type: BadgeType.followUser, requiredValue: 10, rarity: BadgeRarity.rare, category: 'フォロー'),
+  BadgeModel(badgeId: 'follow_user_25', name: 'コミュニティリーダー', description: '25店舗をフォロー', iconUrl: 'follow_user_25.png', type: BadgeType.followUser, requiredValue: 25, rarity: BadgeRarity.epic, category: 'フォロー'),
 
   // コイン獲得（coinsEarned）5個
   BadgeModel(badgeId: 'coins_earned_10', name: 'コインビギナー', description: 'コインを累計10枚獲得', iconUrl: 'coins_earned_10.png', type: BadgeType.coinsEarned, requiredValue: 10, rarity: BadgeRarity.common, category: 'コイン'),

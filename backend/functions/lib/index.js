@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.notifyFollowersOnNewCoupon = exports.notifyFollowersOnNewPost = exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -743,7 +743,7 @@ async function resolveUserName(userId) {
     const data = userDoc.data();
     return (_a = data === null || data === void 0 ? void 0 : data.displayName) !== null && _a !== void 0 ? _a : 'ユーザー';
 }
-async function createUserNotification({ userId, title, body, data, }) {
+async function createUserNotification({ userId, title, body, data, type = 'system', tags = ['live_chat'], }) {
     const notificationRef = db
         .collection(USERS_COLLECTION)
         .doc(userId)
@@ -754,12 +754,12 @@ async function createUserNotification({ userId, title, body, data, }) {
         userId,
         title,
         body,
-        type: 'system',
+        type,
         createdAt: new Date().toISOString(),
         isRead: false,
         isDelivered: false,
         data: Object.assign({ source: 'user' }, stripUndefined(data !== null && data !== void 0 ? data : {})),
-        tags: ['live_chat'],
+        tags,
     });
 }
 function createOtp() {
@@ -1873,7 +1873,7 @@ exports.punchStamp = (0, https_1.onCall)({
     region: 'asia-northeast1',
     enforceAppCheck: false,
 }, async (request) => {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Store must be authenticated');
     }
@@ -2124,6 +2124,44 @@ exports.punchStamp = (0, https_1.onCall)({
     catch (e) {
         console.error('[punchStamp] achievement event creation error:', e);
     }
+    // 自動フォロー: スタンプ押印時に店舗を自動フォロー（未フォローの場合のみ）
+    try {
+        const followDocRef = db
+            .collection(USERS_COLLECTION)
+            .doc(userId)
+            .collection('followed_stores')
+            .doc(storeId);
+        const followSnap = await followDocRef.get();
+        if (!followSnap.exists) {
+            const storeDoc = await db.collection('stores').doc(storeId).get();
+            const storeData = storeDoc.data();
+            const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+            const userData = userDoc.data();
+            const followBatch = db.batch();
+            followBatch.set(followDocRef, {
+                storeId,
+                storeName: (_g = result.storeName) !== null && _g !== void 0 ? _g : '',
+                category: (_h = storeData === null || storeData === void 0 ? void 0 : storeData.category) !== null && _h !== void 0 ? _h : '',
+                storeImageUrl: (_j = storeData === null || storeData === void 0 ? void 0 : storeData.storeImageUrl) !== null && _j !== void 0 ? _j : null,
+                followedAt: firestore_2.FieldValue.serverTimestamp(),
+                source: 'stamp',
+            });
+            followBatch.set(db.collection('stores').doc(storeId).collection('followers').doc(userId), {
+                userId,
+                userName: (_k = userData === null || userData === void 0 ? void 0 : userData.displayName) !== null && _k !== void 0 ? _k : 'ユーザー',
+                followedAt: firestore_2.FieldValue.serverTimestamp(),
+            });
+            followBatch.update(db.collection(USERS_COLLECTION).doc(userId), {
+                followedStoreIds: firestore_2.FieldValue.arrayUnion(storeId),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            });
+            await followBatch.commit();
+            console.log(`[punchStamp] Auto-followed store ${storeId} for user ${userId}`);
+        }
+    }
+    catch (e) {
+        console.error('[punchStamp] auto-follow error:', e);
+    }
     return result;
 });
 // チェックイン記録
@@ -2322,4 +2360,118 @@ exports.syncInstagramPostsScheduled = (0, scheduler_1.onSchedule)({
 //     }
 //   }
 // );
+// フォロワーへの投稿通知
+exports.notifyFollowersOnNewPost = (0, firestore_1.onDocumentCreated)({
+    document: 'public_posts/{postId}',
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d;
+    const data = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    if (!data)
+        return;
+    const storeId = ((_b = data['storeId']) !== null && _b !== void 0 ? _b : '').toString();
+    const storeName = ((_c = data['storeName']) !== null && _c !== void 0 ? _c : '').toString();
+    const content = ((_d = data['content']) !== null && _d !== void 0 ? _d : '').toString();
+    const isActive = data['isActive'] !== false;
+    const isPublished = data['isPublished'] !== false;
+    if (!storeId || !isActive || !isPublished)
+        return;
+    const followersSnap = await db
+        .collection('stores')
+        .doc(storeId)
+        .collection('followers')
+        .get();
+    if (followersSnap.empty)
+        return;
+    const truncatedContent = content.length > 50 ? content.substring(0, 50) + '...' : content;
+    const BATCH_SIZE = 500;
+    const followerDocs = followersSnap.docs;
+    for (let i = 0; i < followerDocs.length; i += BATCH_SIZE) {
+        const chunk = followerDocs.slice(i, i + BATCH_SIZE);
+        await Promise.all(chunk.map(async (followerDoc) => {
+            var _a;
+            const followerId = followerDoc.id;
+            try {
+                const userDoc = await db.collection(USERS_COLLECTION).doc(followerId).get();
+                const userData = userDoc.data();
+                const postNotification = (_a = userData === null || userData === void 0 ? void 0 : userData.notificationSettings) === null || _a === void 0 ? void 0 : _a.post;
+                if (postNotification === false)
+                    return;
+                await createUserNotification({
+                    userId: followerId,
+                    title: `${storeName}が新しい投稿を公開しました`,
+                    body: truncatedContent || '新しい投稿をチェックしましょう！',
+                    type: 'marketing',
+                    tags: ['store_post'],
+                    data: {
+                        type: 'store_post',
+                        storeId,
+                        storeName,
+                        postId: event.params.postId,
+                    },
+                });
+            }
+            catch (e) {
+                console.error(`[notifyFollowersOnNewPost] Error for follower ${followerId}:`, e);
+            }
+        }));
+    }
+    console.log(`[notifyFollowersOnNewPost] Notified ${followersSnap.size} followers for store ${storeId}`);
+});
+// フォロワーへのクーポン通知
+exports.notifyFollowersOnNewCoupon = (0, firestore_1.onDocumentCreated)({
+    document: 'public_coupons/{couponId}',
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d;
+    const data = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    if (!data)
+        return;
+    const storeId = ((_b = data['storeId']) !== null && _b !== void 0 ? _b : '').toString();
+    const storeName = ((_c = data['storeName']) !== null && _c !== void 0 ? _c : '').toString();
+    const title = ((_d = data['title']) !== null && _d !== void 0 ? _d : '').toString();
+    const isActive = data['isActive'] !== false;
+    if (!storeId || !isActive)
+        return;
+    const followersSnap = await db
+        .collection('stores')
+        .doc(storeId)
+        .collection('followers')
+        .get();
+    if (followersSnap.empty)
+        return;
+    const BATCH_SIZE = 500;
+    const followerDocs = followersSnap.docs;
+    for (let i = 0; i < followerDocs.length; i += BATCH_SIZE) {
+        const chunk = followerDocs.slice(i, i + BATCH_SIZE);
+        await Promise.all(chunk.map(async (followerDoc) => {
+            var _a;
+            const followerId = followerDoc.id;
+            try {
+                const userDoc = await db.collection(USERS_COLLECTION).doc(followerId).get();
+                const userData = userDoc.data();
+                const couponNotification = (_a = userData === null || userData === void 0 ? void 0 : userData.notificationSettings) === null || _a === void 0 ? void 0 : _a.couponIssued;
+                if (couponNotification === false)
+                    return;
+                await createUserNotification({
+                    userId: followerId,
+                    title: `${storeName}が新しいクーポンを発行しました`,
+                    body: title || '新しいクーポンをチェックしましょう！',
+                    type: 'marketing',
+                    tags: ['store_coupon'],
+                    data: {
+                        type: 'store_coupon',
+                        storeId,
+                        storeName,
+                        couponId: event.params.couponId,
+                    },
+                });
+            }
+            catch (e) {
+                console.error(`[notifyFollowersOnNewCoupon] Error for follower ${followerId}:`, e);
+            }
+        }));
+    }
+    console.log(`[notifyFollowersOnNewCoupon] Notified ${followersSnap.size} followers for store ${storeId}`);
+});
 //# sourceMappingURL=index.js.map

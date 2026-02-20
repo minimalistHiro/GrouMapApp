@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../main_navigation_view.dart';
 import '../../widgets/stamp_card_widget.dart';
+import '../../services/mission_service.dart';
 
 class PointPaymentDetailView extends StatefulWidget {
   final String storeId;
@@ -354,6 +355,9 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       _isSyncing = stampsAfter > _stamps;
       _punchIndex = (stampsAfter - 1).clamp(0, _maxStamps - 1);
       _shouldAnimatePunch = true;
+
+      // 新規登録ミッション: スタンプ初獲得
+      MissionService().markRegistrationMission(userId, 'first_stamp');
 
       // 来店ボーナス: +1コイン付与（二重付与防止）
       await _awardVisitCoinBonus(userId, eventsSnap.docs.first);
