@@ -27,6 +27,7 @@ import 'posts/post_detail_view.dart';
 import 'coupons/coupon_detail_view.dart';
 import 'coupons/coupons_view.dart';
 import 'badges/badges_view.dart';
+import '../data/badge_definitions.dart';
 import 'stamps/stamp_cards_view.dart';
 import 'lottery/lottery_view.dart';
 import 'missions/missions_view.dart';
@@ -57,19 +58,22 @@ final userCoinCountProvider = StreamProvider.autoDispose.family<int, String>((re
   }
 });
 
-// ユーザーが所持しているバッジ数
+// ユーザーが所持しているバッジ数（ローカル定義に存在するバッジのみカウント）
 final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
   try {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null || currentUser.uid != userId) {
       return Stream.value(0);
     }
+    final localBadgeIds = kBadgeDefinitions.map((b) => b.badgeId).toSet();
     return FirebaseFirestore.instance
         .collection('user_badges')
         .doc(userId)
         .collection('badges')
         .snapshots()
-        .map((snapshot) => snapshot.docs.length)
+        .map((snapshot) => snapshot.docs
+            .where((doc) => localBadgeIds.contains(doc.id))
+            .length)
         .handleError((error) {
       debugPrint('Error fetching user badge count: $error');
       return 0;

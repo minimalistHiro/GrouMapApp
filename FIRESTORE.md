@@ -80,6 +80,11 @@
   - `status`: 対応状況（pending/reviewed/resolved）
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時
+- アクセス制御メモ（`firestore.rules`）:
+  - read: 認証済みユーザーは全件読み取り可能
+  - create: 認証済みユーザーはフィードバック送信可能
+  - update: `isOwner` のみステータス更新可能
+  - delete: 禁止
 
 ### service_chat_rooms
 - `service_chat_rooms/{roomId}`: サービス全体のライブチャット（ユーザーごと）

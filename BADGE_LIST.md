@@ -362,9 +362,14 @@
   - スタンプ/来店/連続ログイン等: `runComprehensiveBadgeCheck()` で日次包括判定
 - 獲得状況の保存先: Firestore `user_badges/{userId}/badges/{badgeId}`
 - 進捗の保存先: Firestore `badge_progress/{userId}_{counterKey}`
+- ホーム画面バッジカウント: `lib/views/home_view.dart` の `userBadgeCountProvider` でFirestoreの取得済みバッジをローカル定義（`kBadgeDefinitions`）と照合し、ローカル定義に存在するバッジのみカウント（バッジ一覧画面と同じロジック）
 - ポップアップ制御: `lib/views/main_navigation_view.dart` で一元管理
   - 毎回ホーム画面表示時: `isNew: true` の軽量チェック → 2秒後にポップアップ
   - 本日初ログイン時: 包括チェック → レコメンドポップアップ優先 → 閉じた後2秒でバッジポップアップ
+  - セッション内重複表示防止: `_shownBadgeIds`（static Set）で表示済みバッジIDを記録し、同一セッション中の再表示を防止
+- バッジ取得フィルタリング: `getNewBadges()` はローカル定義（`kBadgeDefinitions`）に存在するバッジのみ返す
+  - ローカル定義の最新情報（name/iconUrl等）で上書きして返却
+  - 旧バッジ（ローカル定義に存在しない `isNew: true` のバッジ）は自動的に `isNew: false` に更新しクリーンアップ
 - トリガー実装状況: **実装済み**（13箇所）
   - マップ画面表示 (`mapOpened`): `lib/views/map/map_view.dart`
   - 店舗詳細表示 (`storeDetailViewed`): `lib/views/stores/store_detail_view.dart`

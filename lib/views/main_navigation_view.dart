@@ -80,6 +80,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   static bool _pendingDailyRecommendation = false;
   // 本日の包括バッジチェック完了済みかどうか
   static bool _dailyBadgeCheckDone = false;
+  // セッション中に表示済みのバッジIDを記録（重複表示防止）
+  static final Set<String> _shownBadgeIds = {};
 
   @override
   void initState() {
@@ -670,10 +672,13 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
             debugPrint('daily_login_stats更新エラー: $e');
           });
 
-      // デイリーミッション: アプリを開く + ログインストリーク更新
+      // デイリーミッション: 新規登録ミッション完了済みの場合のみ実行
       final missionService = MissionService();
-      missionService.markDailyMission(userId, 'app_open');
-      missionService.updateLoginStreak(userId);
+      final regComplete = await missionService.isRegistrationComplete(userId);
+      if (regComplete) {
+        missionService.markDailyMission(userId, 'app_open');
+        missionService.updateLoginStreak(userId);
+      }
     }
 
     // ポップアップ表示済みなら終了（前のウィジェットで表示完了していた場合）
@@ -774,11 +779,20 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       newBadges = await badgeService.getNewBadges(userId);
     }
 
+    // セッション内で表示済みのバッジを除外
+    newBadges.removeWhere((b) => _shownBadgeIds.contains(b['badgeId']?.toString() ?? ''));
     if (newBadges.isEmpty || !mounted) return;
 
     // 2秒待機
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
+
+    // 表示前にバッジIDを記録（重複表示防止）
+    final badgeIds = newBadges
+        .map((b) => (b['badgeId'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    _shownBadgeIds.addAll(badgeIds);
 
     try {
       await Navigator.of(context).push(
@@ -794,10 +808,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
 
     // isNewフラグをクリア
-    final badgeIds = newBadges
-        .map((b) => (b['badgeId'] ?? '').toString())
-        .where((id) => id.isNotEmpty)
-        .toList();
     if (badgeIds.isNotEmpty) {
       final badgeService = ref.read(badgeProvider);
       await badgeService.markBadgesAsSeen(userId, badgeIds);
@@ -811,11 +821,20 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
     final badgeService = ref.read(badgeProvider);
     final newBadges = await badgeService.getNewBadges(userId);
+    // セッション内で表示済みのバッジを除外
+    newBadges.removeWhere((b) => _shownBadgeIds.contains(b['badgeId']?.toString() ?? ''));
     if (newBadges.isEmpty || !mounted) return;
 
     // 2秒待機
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
+
+    // 表示前にバッジIDを記録（重複表示防止）
+    final badgeIds = newBadges
+        .map((b) => (b['badgeId'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    _shownBadgeIds.addAll(badgeIds);
 
     try {
       await Navigator.of(context).push(
@@ -831,10 +850,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
 
     // isNewフラグをクリア
-    final badgeIds = newBadges
-        .map((b) => (b['badgeId'] ?? '').toString())
-        .where((id) => id.isNotEmpty)
-        .toList();
     if (badgeIds.isNotEmpty) {
       await badgeService.markBadgesAsSeen(userId, badgeIds);
     }

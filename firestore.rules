@@ -639,6 +639,18 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // フィードバックコレクションのルール
+    match /feedback/{feedbackId} {
+      // 認証されたユーザーは読み取り可能
+      allow read: if request.auth != null;
+      // 認証されたユーザーはフィードバックを送信可能
+      allow create: if request.auth != null;
+      // オーナーのみステータス更新可能
+      allow update: if isOwner();
+      // 削除は禁止
+      allow delete: if false;
+    }
+
     // その他のコレクションは認証されたユーザーのみ読み取り可能
     match /{document=**} {
       allow read: if request.auth != null;

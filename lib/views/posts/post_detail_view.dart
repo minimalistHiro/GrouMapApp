@@ -62,10 +62,15 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
     _markFeedViewMission();
   }
 
-  void _markFeedViewMission() {
+  Future<void> _markFeedViewMission() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    MissionService().markDailyMission(user.uid, 'feed_view');
+    // 新規登録ミッション完了済みの場合のみデイリーミッションを実行
+    final missionService = MissionService();
+    final regComplete = await missionService.isRegistrationComplete(user.uid);
+    if (regComplete) {
+      missionService.markDailyMission(user.uid, 'feed_view');
+    }
   }
 
   Future<void> _loadStoreIcon() async {

@@ -40,9 +40,19 @@ class BadgeService {
           .orderBy('unlockedAt', descending: true)
           .get();
 
-      return querySnapshot.docs
-          .map((doc) => UserBadgeModel.fromJson(doc.data()))
-          .toList();
+      return querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        // FirestoreのTimestampをISO8601文字列に変換
+        if (data['unlockedAt'] is Timestamp) {
+          data['unlockedAt'] = (data['unlockedAt'] as Timestamp).toDate().toIso8601String();
+        } else if (data['unlockedAt'] == null) {
+          data['unlockedAt'] = DateTime.now().toIso8601String();
+        }
+        // nullの場合のデフォルト値を設定
+        data['progress'] ??= 0;
+        data['requiredValue'] ??= 0;
+        return UserBadgeModel.fromJson(data);
+      }).toList();
     } catch (e) {
       debugPrint('Error fetching user badges: $e');
       if (e.toString().contains('permission-denied')) {
@@ -232,6 +242,7 @@ class BadgeService {
   }
 
   // 軽量チェック: isNew: true のバッジ一覧を取得（毎回ホーム画面表示時）
+  // ローカル定義（kBadgeDefinitions）に存在するバッジのみ返す
   Future<List<Map<String, dynamic>>> getNewBadges(String userId) async {
     try {
       final snapshot = await _firestore
@@ -240,11 +251,37 @@ class BadgeService {
           .collection('badges')
           .where('isNew', isEqualTo: true)
           .get();
-      return snapshot.docs.map((d) {
-        final data = d.data();
-        data['badgeId'] = d.id;
-        return data;
-      }).toList();
+
+      final validBadgeIds = kBadgeDefinitions.map((b) => b.badgeId).toSet();
+      final List<Map<String, dynamic>> validBadges = [];
+      final List<String> obsoleteBadgeIds = [];
+
+      for (final d in snapshot.docs) {
+        final badgeId = d.id;
+        if (validBadgeIds.contains(badgeId)) {
+          final data = d.data();
+          data['badgeId'] = badgeId;
+          // ローカル定義の情報で上書き（最新のname/iconUrl等を使用）
+          final localBadge = findBadgeById(badgeId);
+          if (localBadge != null) {
+            data['name'] = localBadge.name;
+            data['description'] = localBadge.description;
+            data['iconUrl'] = localBadge.iconUrl;
+            data['rarity'] = localBadge.rarity.name;
+          }
+          validBadges.add(data);
+        } else {
+          obsoleteBadgeIds.add(badgeId);
+        }
+      }
+
+      // 旧バッジのisNewフラグをバックグラウンドで解除
+      if (obsoleteBadgeIds.isNotEmpty) {
+        debugPrint('旧バッジ ${obsoleteBadgeIds.length}件のisNewフラグを解除');
+        markBadgesAsSeen(userId, obsoleteBadgeIds);
+      }
+
+      return validBadges;
     } catch (e) {
       debugPrint('Error getting new badges: $e');
       return [];

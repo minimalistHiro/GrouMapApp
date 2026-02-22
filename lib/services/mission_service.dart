@@ -201,6 +201,26 @@ class MissionService {
     }
   }
 
+  // ========== 新規登録ミッション完了チェック ==========
+
+  /// 新規登録ミッションがすべて達成済み（claimed）かどうか判定
+  Future<bool> isRegistrationComplete(String userId) async {
+    try {
+      final progress = await getMissionProgress(userId);
+      const regIds = [
+        'profile_completed',
+        'first_map',
+        'first_favorite',
+        'first_store_detail',
+        'first_stamp',
+      ];
+      return regIds.every((id) => progress['${id}_claimed'] == true);
+    } catch (e) {
+      debugPrint('新規登録ミッション完了チェックエラー: $e');
+      return false;
+    }
+  }
+
   // ========== 新規登録ミッション ==========
 
   /// 新規登録ミッション達成をマーク（冪等）
@@ -285,15 +305,6 @@ class MissionService {
   /// 受け取り可能（達成済み＆未受取）なミッションがあるか判定
   Future<bool> hasClaimableMissions(String userId) async {
     try {
-      // デイリーミッション確認
-      final dailyData = await getDailyMissions(userId);
-      const dailyIds = ['app_open', 'recommendation_view', 'feed_view'];
-      for (final id in dailyIds) {
-        if (dailyData[id] == true && dailyData['${id}_claimed'] != true) {
-          return true;
-        }
-      }
-
       // missionProgress（新規登録ミッション＋ログインボーナス）確認
       final progress = await getMissionProgress(userId);
 
@@ -311,7 +322,21 @@ class MissionService {
         }
       }
 
-      // ログインボーナス
+      // 新規登録ミッション未完了なら、デイリー・ログインボーナスはチェックしない
+      final regComplete =
+          regIds.every((id) => progress['${id}_claimed'] == true);
+      if (!regComplete) return false;
+
+      // デイリーミッション確認（新規登録完了後のみ）
+      final dailyData = await getDailyMissions(userId);
+      const dailyIds = ['app_open', 'recommendation_view', 'feed_view'];
+      for (final id in dailyIds) {
+        if (dailyData[id] == true && dailyData['${id}_claimed'] != true) {
+          return true;
+        }
+      }
+
+      // ログインボーナス（新規登録完了後のみ）
       final loginStreak = await getLoginStreak(userId);
       const loginMilestones = {'login_3': 3, 'login_7': 7, 'login_30': 30};
       for (final entry in loginMilestones.entries) {

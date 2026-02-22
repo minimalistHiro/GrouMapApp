@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/badge_provider.dart';
 import '../../models/badge_model.dart';
 import '../../data/badge_definitions.dart';
 import '../../widgets/custom_button.dart';
@@ -14,16 +15,13 @@ class BadgesView extends ConsumerStatefulWidget {
 
 class _BadgesViewState extends ConsumerState<BadgesView> {
   String _selectedCategory = 'すべて';
-  late final List<String> _categories;
 
-  @override
-  void initState() {
-    super.initState();
+  List<String> _buildCategories(List<BadgeModel> badges) {
     final categorySet = <String>{'すべて'};
-    for (final badge in kBadgeDefinitions) {
+    for (final badge in badges) {
       categorySet.add(badge.category ?? '未分類');
     }
-    _categories = categorySet.toList();
+    return categorySet.toList();
   }
 
   @override
@@ -48,7 +46,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
           if (user == null) {
             return _buildAuthRequired(context);
           }
-          return _buildBadgesContent(context);
+          return _buildBadgesContent(context, user.uid);
         },
         loading: () => const Center(
           child: CircularProgressIndicator(),
@@ -60,14 +58,30 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     );
   }
 
-  Widget _buildBadgesContent(BuildContext context) {
-    final filteredBadges = _selectedCategory == 'すべて'
-        ? kBadgeDefinitions
-        : kBadgeDefinitions
-            .where((b) => (b.category ?? '未分類') == _selectedCategory)
-            .toList();
+  Widget _buildBadgesContent(BuildContext context, String userId) {
+    final userBadgesAsync = ref.watch(userBadgesProvider(userId));
 
-    return _buildBadgeGrid(filteredBadges);
+    return userBadgesAsync.when(
+      data: (userBadges) {
+        // 取得済みバッジIDのセット
+        final earnedBadgeIds = userBadges.map((ub) => ub.badgeId).toSet();
+
+        // カテゴリフィルター適用（全バッジ定義から）
+        final filteredBadges = _selectedCategory == 'すべて'
+            ? kBadgeDefinitions
+            : kBadgeDefinitions
+                .where((b) => (b.category ?? '未分類') == _selectedCategory)
+                .toList();
+
+        return _buildBadgeGrid(filteredBadges, earnedBadgeIds);
+      },
+      loading: () => const Center(
+        child: CircularProgressIndicator(),
+      ),
+      error: (error, _) => Center(
+        child: Text('バッジの読み込みに失敗しました'),
+      ),
+    );
   }
 
   Widget _buildAuthRequired(BuildContext context) {
@@ -116,7 +130,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     );
   }
 
-  Widget _buildBadgeGrid(List<BadgeModel> badges) {
+  Widget _buildBadgeGrid(List<BadgeModel> badges, Set<String> earnedBadgeIds) {
     return Padding(
       padding: const EdgeInsets.all(16),
       child: GridView.builder(
@@ -129,18 +143,19 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
         itemCount: badges.length,
         itemBuilder: (context, index) {
           final badge = badges[index];
-          return _buildBadgeCard(badge);
+          final isEarned = earnedBadgeIds.contains(badge.badgeId);
+          return _buildBadgeCard(badge, isEarned: isEarned);
         },
       ),
     );
   }
 
-  Widget _buildBadgeCard(BadgeModel badge) {
+  Widget _buildBadgeCard(BadgeModel badge, {required bool isEarned}) {
     return GestureDetector(
-      onTap: () => _showBadgeDetail(context, badge),
+      onTap: () => _showBadgeDetail(context, badge, isEarned: isEarned),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isEarned ? Colors.white : Colors.grey[100],
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -158,18 +173,26 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: const Color(0xFFFF6B35).withOpacity(0.1),
+                color: isEarned
+                    ? const Color(0xFFFF6B35).withOpacity(0.1)
+                    : Colors.grey[200],
                 borderRadius: BorderRadius.circular(40),
               ),
-              child: _getBadgeIcon(badge.iconUrl, size: 48),
+              child: isEarned
+                  ? _getBadgeIcon(badge.iconUrl, size: 48)
+                  : Icon(
+                      Icons.help_outline,
+                      size: 48,
+                      color: Colors.grey[400],
+                    ),
             ),
             const SizedBox(height: 8),
             Text(
-              badge.name,
-              style: const TextStyle(
+              isEarned ? badge.name : '？？？',
+              style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: isEarned ? Colors.black87 : Colors.grey[400],
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -205,7 +228,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     );
   }
 
-  void _showBadgeDetail(BuildContext context, BadgeModel badge) {
+  void _showBadgeDetail(BuildContext context, BadgeModel badge, {required bool isEarned}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -221,15 +244,23 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
                 width: 300,
                 height: 300,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B35).withOpacity(0.1),
+                  color: isEarned
+                      ? const Color(0xFFFF6B35).withOpacity(0.1)
+                      : Colors.grey[200],
                   borderRadius: BorderRadius.circular(150),
                 ),
-                child: _getBadgeIcon(badge.iconUrl, size: 144),
+                child: isEarned
+                    ? _getBadgeIcon(badge.iconUrl, size: 144)
+                    : Icon(
+                        Icons.help_outline,
+                        size: 144,
+                        color: Colors.grey[400],
+                      ),
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              badge.name,
+              isEarned ? badge.name : '？？？',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 18,
@@ -248,7 +279,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
         ),
         content: SingleChildScrollView(
           child: Text(
-            badge.description,
+            isEarned ? badge.description : '条件を達成してバッジを獲得しよう！',
             style: const TextStyle(fontSize: 14),
           ),
         ),
@@ -263,6 +294,8 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
   }
 
   void _showFilterDialog(BuildContext context) {
+    final categories = _buildCategories(kBadgeDefinitions);
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -270,7 +303,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: _categories.map((category) {
+            children: categories.map((category) {
               return ListTile(
                 title: Text(category),
                 leading: Radio<String>(

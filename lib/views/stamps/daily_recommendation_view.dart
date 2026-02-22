@@ -184,8 +184,12 @@ class _DailyRecommendationViewState
     await batch.commit();
     _impressionsLogged = true;
 
-    // デイリーミッション: レコメンドを見る
-    MissionService().markDailyMission(user.uid, 'recommendation_view');
+    // デイリーミッション: 新規登録ミッション完了済みの場合のみ実行
+    final missionService = MissionService();
+    final regComplete = await missionService.isRegistrationComplete(user.uid);
+    if (regComplete) {
+      missionService.markDailyMission(user.uid, 'recommendation_view');
+    }
   }
 
   Future<Position?> _tryGetCurrentPosition() async {

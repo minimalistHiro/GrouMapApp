@@ -65,9 +65,9 @@ class AnnouncementDetailView extends ConsumerWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // タイトル
             Text(
               announcement['title'],
@@ -215,7 +215,7 @@ class AnnouncementDetailView extends ConsumerWidget {
 
   String _formatDateTime(dynamic timestamp) {
     if (timestamp == null) return '日時不明';
-    
+
     DateTime date;
     if (timestamp is Timestamp) {
       date = timestamp.toDate();
