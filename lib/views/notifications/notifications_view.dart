@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/notification_provider.dart';
 import '../../providers/announcement_provider.dart';
@@ -81,7 +82,7 @@ class _NotificationsViewState extends ConsumerState<NotificationsView> {
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('お知らせ'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

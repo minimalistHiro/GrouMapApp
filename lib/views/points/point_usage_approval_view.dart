@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -36,7 +37,7 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
         .doc('usage_request');
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('ポイント利用確認'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

@@ -94,39 +94,23 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       });
 
       print('店舗一覧の読み込みを開始...');
-      final QuerySnapshot snapshot =
-          await FirebaseFirestore.instance.collection('stores').get();
-      final ownerUsersBoolSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('isOwner', isEqualTo: true)
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('stores')
+          .where('isActive', isEqualTo: true)
+          .where('isApproved', isEqualTo: true)
           .get();
-      final ownerUsersStringSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('isOwner', isEqualTo: 'true')
-          .get();
-      final ownerUserIds = <String>{
-        ...ownerUsersBoolSnapshot.docs.map((doc) => doc.id),
-        ...ownerUsersStringSnapshot.docs.map((doc) => doc.id),
-      };
       print('取得したドキュメント数: ${snapshot.docs.length}');
-      print('isOwner=true ユーザー数: ${ownerUserIds.length}');
 
       final List<Map<String, dynamic>> stores = [];
 
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        // isOwner店舗を除外（店舗ドキュメントのフラグで判定）
         final rawIsOwner = data['isOwner'];
-        final hasOwnerFlag = rawIsOwner == true ||
+        final isOwnerStore = rawIsOwner == true ||
             rawIsOwner?.toString().toLowerCase() == 'true';
-        final createdBy = (data['createdBy'] ?? data['ownerId'])?.toString();
-        final isOwnerByCreator =
-            createdBy != null && ownerUserIds.contains(createdBy);
-        final isOwnerStore = hasOwnerFlag || isOwnerByCreator;
-        print(
-            '店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
         if (isOwnerStore) {
-          print(
-              'isOwner=true のため除外: ${doc.id} (storeFlag: $hasOwnerFlag, createdBy: $createdBy, creatorOwner: $isOwnerByCreator)');
+          print('isOwner=true のため除外: ${doc.id}');
           continue;
         }
 
@@ -180,7 +164,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         ),
       ),
       error: (error, _) => Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: const Color(0xFFFBF6F2),
         appBar: const CommonHeader(title: '店舗一覧'),
         body: Center(
           child: Text('エラー: $error'),
@@ -193,7 +177,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: const Color(0xFFFBF6F2),
         appBar: const CommonHeader(title: '店舗一覧'),
         body: Column(
           children: [

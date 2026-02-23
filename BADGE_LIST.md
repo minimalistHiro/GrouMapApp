@@ -1,7 +1,7 @@
 # バッジ一覧
 
 バッジ定義はアプリ内蔵（`lib/data/badge_definitions.dart`）で管理。
-全141種（既存基本20種 + スタンプ追加11種 + カテゴリ別来店50種 + アクション系60種）。
+全162種（既存基本20種 + スタンプ追加11種 + カテゴリ別来店50種 + 曜日別利用21種 + アクション系60種）。
 
 ## レア度
 
@@ -196,6 +196,68 @@
 
 ---
 
+## 曜日別利用バッジ（dayVisit）
+
+特定の曜日にアプリを利用（来店）した回数でカウント。各曜日1〜3回の3段階。
+
+### 月曜日（monday）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|----------|------|----------|--------|
+| day_monday_visit_1 | 月曜デビュー | 月曜日に初めて来店 | common |
+| day_monday_visit_2 | 月曜リピーター | 月曜日に2回来店 | rare |
+| day_monday_visit_3 | 月曜マスター | 月曜日に3回来店 | epic |
+
+### 火曜日（tuesday）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|----------|------|----------|--------|
+| day_tuesday_visit_1 | 火曜デビュー | 火曜日に初めて来店 | common |
+| day_tuesday_visit_2 | 火曜リピーター | 火曜日に2回来店 | rare |
+| day_tuesday_visit_3 | 火曜マスター | 火曜日に3回来店 | epic |
+
+### 水曜日（wednesday）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|----------|------|----------|--------|
+| day_wednesday_visit_1 | 水曜デビュー | 水曜日に初めて来店 | common |
+| day_wednesday_visit_2 | 水曜リピーター | 水曜日に2回来店 | rare |
+| day_wednesday_visit_3 | 水曜マスター | 水曜日に3回来店 | epic |
+
+### 木曜日（thursday）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|----------|------|----------|--------|
+| day_thursday_visit_1 | 木曜デビュー | 木曜日に初めて来店 | common |
+| day_thursday_visit_2 | 木曜リピーター | 木曜日に2回来店 | rare |
+| day_thursday_visit_3 | 木曜マスター | 木曜日に3回来店 | epic |
+
+### 金曜日（friday）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|----------|------|----------|--------|
+| day_friday_visit_1 | 金曜デビュー | 金曜日に初めて来店 | common |
+| day_friday_visit_2 | 金曜リピーター | 金曜日に2回来店 | rare |
+| day_friday_visit_3 | 金曜マスター | 金曜日に3回来店 | epic |
+
+### 土曜日（saturday）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|----------|------|----------|--------|
+| day_saturday_visit_1 | 土曜デビュー | 土曜日に初めて来店 | common |
+| day_saturday_visit_2 | 土曜リピーター | 土曜日に2回来店 | rare |
+| day_saturday_visit_3 | 土曜マスター | 土曜日に3回来店 | epic |
+
+### 日曜日（sunday）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|----------|------|----------|--------|
+| day_sunday_visit_1 | 日曜デビュー | 日曜日に初めて来店 | common |
+| day_sunday_visit_2 | 日曜リピーター | 日曜日に2回来店 | rare |
+| day_sunday_visit_3 | 日曜マスター | 日曜日に3回来店 | epic |
+
+---
+
 ## アクション系バッジ
 
 ### マップ閲覧（mapOpened）
@@ -234,7 +296,9 @@
 | favorite_added_10 | お気に入りマニア | 10店舗をお気に入りに登録 | epic |
 | favorite_added_25 | お気に入りキング | 25店舗をお気に入りに登録 | legendary |
 
-### スロット（slotPlayed）
+### スロット（slotPlayed）（廃止・獲得不可）
+
+※ スロット機能廃止に伴い、以下のバッジは新規獲得不可。既に獲得済みのバッジは維持。
 
 | バッジID | 名前 | 獲得条件 | レア度 |
 |----------|------|----------|--------|
@@ -244,7 +308,9 @@
 | slot_played_25 | スロットマニア | スロットを25回プレイ | epic |
 | slot_played_50 | スロットキング | スロットを50回プレイ | legendary |
 
-### スロット当選（slotWin）
+### スロット当選（slotWin）（廃止・獲得不可）
+
+※ スロット機能廃止に伴い、以下のバッジは新規獲得不可。既に獲得済みのバッジは維持。
 
 | バッジID | 名前 | 獲得条件 | レア度 |
 |----------|------|----------|--------|
@@ -340,8 +406,9 @@
 | 店舗巡り（storesVisited） | 4 |
 | イベント（specialEvents） | 4 |
 | カテゴリ別来店（categoryVisit）10グループ | 50 |
-| アクション系（14カテゴリ） | 60 |
-| **合計** | **141** |
+| 曜日別利用（dayVisit）7曜日 | 21 |
+| アクション系（14カテゴリ、うちスロット関連2カテゴリは廃止） | 60（うち8個は廃止・獲得不可） |
+| **合計** | **162**（うち8個はスロット廃止により獲得不可） |
 
 ---
 
@@ -353,7 +420,7 @@
 - 背景透過: rembg（ローカル実行）で一括処理済み
 - 生成ツール: Nano Banana Pro（Gemini 3 Pro Image）API
 - 生成スキル: `badge-image-gen`（統一テンプレートでバッジ画像を生成）
-- 生成済み: **141/141（全完了）**
+- 生成済み: **162/162（全完了）**
 
 ## 獲得処理
 
@@ -370,13 +437,14 @@
 - バッジ取得フィルタリング: `getNewBadges()` はローカル定義（`kBadgeDefinitions`）に存在するバッジのみ返す
   - ローカル定義の最新情報（name/iconUrl等）で上書きして返却
   - 旧バッジ（ローカル定義に存在しない `isNew: true` のバッジ）は自動的に `isNew: false` に更新しクリーンアップ
-- トリガー実装状況: **実装済み**（13箇所）
+- 曜日別利用バッジ（dayVisit）: `incrementBadgeCounter('dayVisit_{曜日}')` で曜日ごとにカウント。日次包括チェックでも判定。カウンターキーは `dayVisit_monday` ～ `dayVisit_sunday`
+- トリガー実装状況: **実装済み**（13箇所 + 曜日別利用2箇所）
   - マップ画面表示 (`mapOpened`): `lib/views/map/map_view.dart`
   - 店舗詳細表示 (`storeDetailViewed`): `lib/views/stores/store_detail_view.dart`
   - お気に入り登録 (`favoriteAdded`): `lib/views/stores/store_detail_view.dart`
-  - スロットプレイ (`slotPlayed`): `lib/views/lottery/lottery_view.dart`
-  - スロット当選 (`slotWin`): `lib/views/lottery/lottery_view.dart`
-  - コイン獲得 (`coinsEarned`): `lib/views/lottery/lottery_view.dart`, `lib/views/missions/missions_view.dart`
+  - スロットプレイ (`slotPlayed`): `lib/views/lottery/lottery_view.dart`（※スロット機能廃止に伴い実質無効）
+  - スロット当選 (`slotWin`): `lib/views/lottery/lottery_view.dart`（※スロット機能廃止に伴い実質無効）
+  - コイン獲得 (`coinsEarned`): `lib/views/missions/missions_view.dart`
   - クーポン使用 (`couponUsed`): `lib/views/coupons/coupon_detail_view.dart`
   - いいね (`likeGiven`): `lib/providers/social_provider.dart`
   - コメント投稿 (`commentPosted`): `lib/providers/social_provider.dart`
@@ -384,3 +452,4 @@
   - ミッション達成 (`missionCompleted`): `lib/views/missions/missions_view.dart`
   - レコメンド閲覧 (`recommendViewed`): `lib/views/stamps/daily_recommendation_view.dart`
   - スタンプカード達成 (`stampCardCompleted`): `lib/views/stores/store_detail_view.dart`
+  - 曜日別利用 (`dayVisit_{曜日}`): `lib/views/payment/point_payment_detail_view.dart`（QR決済スタンプ押印時）、`lib/views/stores/store_detail_view.dart`（手動スタンプ更新時）

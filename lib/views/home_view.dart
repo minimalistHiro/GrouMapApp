@@ -35,31 +35,54 @@ import '../services/location_service.dart';
 import '../services/mission_service.dart';
 import 'main_navigation_view.dart';
 import 'stores/store_detail_view.dart';
+import '../services/coin_service.dart';
 
-// ユーザーが所持しているコイン数
-final userCoinCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
+// ユーザーが所持しているコイン状態
+final userCoinStatusProvider =
+    StreamProvider.autoDispose.family<CoinStatus, String>((ref, userId) {
   try {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null || currentUser.uid != userId) {
-      return Stream.value(0);
+      return Stream.value(
+        const CoinStatus(
+          rawCoins: 0,
+          availableCoins: 0,
+          expiresAt: null,
+          isExpired: false,
+        ),
+      );
     }
     return FirebaseFirestore.instance
         .collection('users')
         .doc(userId)
         .snapshots()
-        .map((snapshot) => (snapshot.data()?['coins'] as num?)?.toInt() ?? 0)
+        .map((snapshot) =>
+            CoinService.resolveCoinStatusFromUserData(snapshot.data()))
         .handleError((error) {
-      debugPrint('Error fetching user coin count: $error');
-      return 0;
+      debugPrint('Error fetching user coin status: $error');
+      return const CoinStatus(
+        rawCoins: 0,
+        availableCoins: 0,
+        expiresAt: null,
+        isExpired: false,
+      );
     });
   } catch (e) {
-    debugPrint('Error creating user coin count stream: $e');
-    return Stream.value(0);
+    debugPrint('Error creating user coin status stream: $e');
+    return Stream.value(
+      const CoinStatus(
+        rawCoins: 0,
+        availableCoins: 0,
+        expiresAt: null,
+        isExpired: false,
+      ),
+    );
   }
 });
 
 // ユーザーが所持しているバッジ数（ローカル定義に存在するバッジのみカウント）
-final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
+final userBadgeCountProvider =
+    StreamProvider.autoDispose.family<int, String>((ref, userId) {
   try {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null || currentUser.uid != userId) {
@@ -71,9 +94,8 @@ final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((r
         .doc(userId)
         .collection('badges')
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .where((doc) => localBadgeIds.contains(doc.id))
-            .length)
+        .map((snapshot) =>
+            snapshot.docs.where((doc) => localBadgeIds.contains(doc.id)).length)
         .handleError((error) {
       debugPrint('Error fetching user badge count: $error');
       return 0;
@@ -85,7 +107,8 @@ final userBadgeCountProvider = StreamProvider.autoDispose.family<int, String>((r
 });
 
 // ユーザーの全店舗スタンプ数合計
-final userTotalStampCountProvider = StreamProvider.autoDispose.family<int, String>((ref, userId) {
+final userTotalStampCountProvider =
+    StreamProvider.autoDispose.family<int, String>((ref, userId) {
   try {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null || currentUser.uid != userId) {
@@ -97,13 +120,12 @@ final userTotalStampCountProvider = StreamProvider.autoDispose.family<int, Strin
         .collection('stores')
         .snapshots()
         .map((snapshot) {
-          int total = 0;
-          for (final doc in snapshot.docs) {
-            total += (doc.data()['stamps'] as num?)?.toInt() ?? 0;
-          }
-          return total;
-        })
-        .handleError((error) {
+      int total = 0;
+      for (final doc in snapshot.docs) {
+        total += (doc.data()['stamps'] as num?)?.toInt() ?? 0;
+      }
+      return total;
+    }).handleError((error) {
       debugPrint('Error fetching user stamp count: $error');
       return 0;
     });
@@ -119,7 +141,8 @@ final todaySlotPlayedProvider = FutureProvider.autoDispose<bool>((ref) async {
   if (user == null) return false;
 
   final today = DateTime.now();
-  final dateString = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+  final dateString =
+      '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
   final doc = await FirebaseFirestore.instance
       .collection('lottery_history')
@@ -133,8 +156,6 @@ final todaySlotPlayedProvider = FutureProvider.autoDispose<bool>((ref) async {
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({Key? key}) : super(key: key);
-
-
 
   @override
   ConsumerState<HomeView> createState() => _HomeViewState();
@@ -154,6 +175,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
   bool _recommendedStoresLoaded = false;
   bool _hasClaimableMissions = false;
   String? _lastMissionCheckUserId;
+  String? _lastCoinExpiryCheckUserId;
 
   Widget _buildLoadingIndicatorWithLabel(
     String label, {
@@ -197,7 +219,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Future<void> _openCouponDetail(BuildContext context, dynamic coupon) async {
     final storeId = coupon.storeId as String?;
     final couponId = coupon.id as String?;
-    if (storeId != null && storeId.isNotEmpty && couponId != null && couponId.isNotEmpty) {
+    if (storeId != null &&
+        storeId.isNotEmpty &&
+        couponId != null &&
+        couponId.isNotEmpty) {
       try {
         final doc = await FirebaseFirestore.instance
             .collection('coupons')
@@ -250,6 +275,16 @@ class _HomeViewState extends ConsumerState<HomeView> {
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _ensureCoinExpiryApplied(String userId) async {
+    if (_lastCoinExpiryCheckUserId == userId) return;
+    _lastCoinExpiryCheckUserId = userId;
+    try {
+      await CoinService().expireCoinsIfNeeded(userId);
+    } catch (e) {
+      debugPrint('コイン有効期限チェックエラー: $e');
+    }
   }
 
   @override
@@ -338,6 +373,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     final userId = user?.uid ?? 'guest';
     if (isLoggedIn) {
       _checkClaimableMissions(userId);
+      _ensureCoinExpiryApplied(userId);
     }
     if (!_recommendedStoresLoaded) {
       _recommendedStoresLoaded = true;
@@ -363,6 +399,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   ref.invalidate(userDataProvider(userId));
                   ref.invalidate(userBadgeCountProvider(userId));
                   ref.invalidate(userTotalStampCountProvider(userId));
+                  ref.invalidate(userCoinStatusProvider(userId));
                 }
                 await _loadRecommendedStores(user);
               },
@@ -493,8 +530,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   'assets/images/groumap_icon.png',
                   width: 30,
                   height: 30,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.location_on, size: 30, color: Colors.blue),
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.location_on,
+                      size: 30,
+                      color: Colors.blue),
                 ),
                 const SizedBox(width: 8),
                 const Expanded(
@@ -601,8 +640,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   'assets/images/groumap_icon.png',
                   width: 30,
                   height: 30,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const Icon(Icons.location_on, size: 30, color: Colors.blue),
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                      Icons.location_on,
+                      size: 30,
+                      color: Colors.blue),
                 ),
                 const SizedBox(width: 8),
                 const Expanded(
@@ -619,10 +660,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ],
             ),
           ),
-          
+
           // 中央：ユーザーアイコンと円形経験値バー
           const Spacer(),
-          
+
           // 右側：お知らせのベルボタン（固定幅）
           SizedBox(
             width: 60, // 固定幅を設定
@@ -636,53 +677,61 @@ class _HomeViewState extends ConsumerState<HomeView> {
                   ),
                   // 未読通知のバッジ（readNotificationsフィールドと比較）
                   ref.watch(userDataProvider(userId)).when(
-                    data: (userData) {
-                      if (userData == null) return const SizedBox.shrink();
-                      
-                      final readNotifications = List<String>.from(userData['readNotifications'] ?? []);
-                      
-                      final unreadAnnouncements = ref.watch(announcementsProvider).maybeWhen(
-                            data: (announcements) => announcements
-                                .where((announcement) => !readNotifications.contains(announcement['id']))
-                                .length,
-                            orElse: () => 0,
-                          );
-                      final unreadNotifications = ref
-                          .watch(unreadNotificationCountProvider(userId))
-                          .maybeWhen(data: (count) => count, orElse: () => 0);
-                      final totalUnread = unreadAnnouncements + unreadNotifications;
+                        data: (userData) {
+                          if (userData == null) return const SizedBox.shrink();
 
-                      if (totalUnread > 0) {
-                        return Positioned(
-                          right: 0,
-                          top: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            constraints: const BoxConstraints(
-                              minWidth: 16,
-                              minHeight: 16,
-                            ),
-                            child: Text(
-                              totalUnread > 99 ? '99+' : totalUnread.toString(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
+                          final readNotifications = List<String>.from(
+                              userData['readNotifications'] ?? []);
+
+                          final unreadAnnouncements =
+                              ref.watch(announcementsProvider).maybeWhen(
+                                    data: (announcements) => announcements
+                                        .where((announcement) =>
+                                            !readNotifications
+                                                .contains(announcement['id']))
+                                        .length,
+                                    orElse: () => 0,
+                                  );
+                          final unreadNotifications = ref
+                              .watch(unreadNotificationCountProvider(userId))
+                              .maybeWhen(
+                                  data: (count) => count, orElse: () => 0);
+                          final totalUnread =
+                              unreadAnnouncements + unreadNotifications;
+
+                          if (totalUnread > 0) {
+                            return Positioned(
+                              right: 0,
+                              top: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(2),
+                                decoration: BoxDecoration(
+                                  color: Colors.red,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  totalUnread > 99
+                                      ? '99+'
+                                      : totalUnread.toString(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
                               ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                    loading: () => const SizedBox.shrink(),
-                    error: (_, __) => const SizedBox.shrink(),
-                  ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
                 ],
               ),
               onPressed: () {
@@ -713,7 +762,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
         }
         final now = DateTime.now();
         final oneWeekBefore = startAt.subtract(const Duration(days: 7));
-        final shouldShow = !now.isBefore(oneWeekBefore) && !now.isAfter(startAt);
+        final shouldShow =
+            !now.isBefore(oneWeekBefore) && !now.isAfter(startAt);
         if (!shouldShow) {
           return const SizedBox.shrink();
         }
@@ -757,7 +807,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget? _buildMaintenanceGate(BuildContext context, WidgetRef ref, User? user) {
+  Widget? _buildMaintenanceGate(
+      BuildContext context, WidgetRef ref, User? user) {
     final settings = ref.watch(ownerSettingsProvider).maybeWhen(
           data: (value) => value,
           orElse: () => null,
@@ -870,7 +921,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
     if (parsed == null) {
       return null;
     }
-    return DateTime(date.year, date.month, date.day, parsed.hour, parsed.minute);
+    return DateTime(
+        date.year, date.month, date.day, parsed.hour, parsed.minute);
   }
 
   TimeOfDay? _parseTime(String value) {
@@ -912,74 +964,77 @@ class _HomeViewState extends ConsumerState<HomeView> {
   }
 
   bool _isSameDate(DateTime start, DateTime end) {
-    return start.year == end.year && start.month == end.month && start.day == end.day;
+    return start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day;
   }
 
   Widget _buildReferralSection(BuildContext context, WidgetRef ref) {
     return ref.watch(ownerSettingsProvider).when(
-      data: (ownerSettings) {
-        final currentSettings = _resolveCurrentSettings(ownerSettings);
-        final isFriendActive = _isCampaignActive(
-          currentSettings,
-          'friendCampaignStartDate',
-          'friendCampaignEndDate',
+          data: (ownerSettings) {
+            final currentSettings = _resolveCurrentSettings(ownerSettings);
+            final isFriendActive = _isCampaignActive(
+              currentSettings,
+              'friendCampaignStartDate',
+              'friendCampaignEndDate',
+            );
+            final isStoreActive = _isCampaignActive(
+              currentSettings,
+              'storeCampaignStartDate',
+              'storeCampaignEndDate',
+            );
+
+            if (!isFriendActive && !isStoreActive) {
+              _scheduleReferralPageCountUpdate(0);
+              return const SizedBox(height: 12);
+            }
+
+            final referralItems = <Widget>[
+              if (isStoreActive)
+                _buildReferralImageButton(
+                  context: context,
+                  label: '店舗紹介',
+                  imagePath: 'assets/images/store_icon.png',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const StoreReferralView(),
+                      ),
+                    );
+                  },
+                ),
+              if (isFriendActive)
+                _buildReferralImageButton(
+                  context: context,
+                  label: '友達紹介',
+                  imagePath: 'assets/images/friend_intro_icon.png',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const FriendReferralView(),
+                      ),
+                    );
+                  },
+                ),
+            ];
+
+            _scheduleReferralPageCountUpdate(referralItems.length);
+
+            return Column(
+              children: [
+                const SizedBox(height: 12),
+                _buildReferralCarousel(context, referralItems),
+                const SizedBox(height: 24),
+              ],
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
         );
-        final isStoreActive = _isCampaignActive(
-          currentSettings,
-          'storeCampaignStartDate',
-          'storeCampaignEndDate',
-        );
-
-        if (!isFriendActive && !isStoreActive) {
-          _scheduleReferralPageCountUpdate(0);
-          return const SizedBox(height: 12);
-        }
-
-        final referralItems = <Widget>[
-          if (isStoreActive)
-            _buildReferralImageButton(
-              context: context,
-              label: '店舗紹介',
-              imagePath: 'assets/images/store_icon.png',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const StoreReferralView(),
-                  ),
-                );
-              },
-            ),
-          if (isFriendActive)
-            _buildReferralImageButton(
-              context: context,
-              label: '友達紹介',
-              imagePath: 'assets/images/friend_intro_icon.png',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const FriendReferralView(),
-                  ),
-                );
-              },
-            ),
-        ];
-
-        _scheduleReferralPageCountUpdate(referralItems.length);
-
-        return Column(
-          children: [
-            const SizedBox(height: 12),
-            _buildReferralCarousel(context, referralItems),
-            const SizedBox(height: 24),
-          ],
-        );
-      },
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-    );
   }
 
-  Map<String, dynamic> _resolveCurrentSettings(Map<String, dynamic>? ownerSettings) {
+  Map<String, dynamic> _resolveCurrentSettings(
+      Map<String, dynamic>? ownerSettings) {
     final rawCurrent = ownerSettings?['current'];
     if (rawCurrent is Map<String, dynamic>) {
       return rawCurrent;
@@ -1044,7 +1099,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
     });
   }
 
-  Widget _buildReferralCarousel(BuildContext context, List<Widget> referralItems) {
+  Widget _buildReferralCarousel(
+      BuildContext context, List<Widget> referralItems) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       height: 96,
@@ -1119,6 +1175,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
     bool isLoggedIn,
     String userId,
   ) {
+    final coinStatus = isLoggedIn
+        ? ref.watch(userCoinStatusProvider(userId)).valueOrNull
+        : null;
     final badgeCount = isLoggedIn
         ? ref.watch(userBadgeCountProvider(userId)).maybeWhen(
               data: (count) => count.toString(),
@@ -1133,43 +1192,73 @@ class _HomeViewState extends ConsumerState<HomeView> {
             )
         : '-';
 
-    final coinCount = isLoggedIn
-        ? ref.watch(userCoinCountProvider(userId)).maybeWhen(
-              data: (count) => count.toString(),
-              orElse: () => '-',
-            )
-        : '-';
+    final coinCount =
+        isLoggedIn ? (coinStatus?.availableCoins.toString() ?? '-') : '-';
+    final coinExpiryText = _buildCoinExpiryText(coinStatus);
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: _buildStatCapsule(
-            icon: Icons.monetization_on,
-            iconColor: const Color(0xFFFFC107),
-            label: 'コイン',
-            value: coinCount,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCapsule(
+                icon: Icons.monetization_on,
+                iconColor: const Color(0xFFFFC107),
+                label: 'コイン',
+                value: coinCount,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildStatCapsule(
+                icon: Icons.military_tech,
+                iconColor: const Color(0xFF5C6BC0),
+                label: 'バッジ',
+                value: badgeCount,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildStatCapsule(
+                icon: Icons.local_activity,
+                iconColor: const Color(0xFFFF6B35),
+                label: 'スタンプ',
+                value: stampCount,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildStatCapsule(
-            icon: Icons.military_tech,
-            iconColor: const Color(0xFF5C6BC0),
-            label: 'バッジ',
-            value: badgeCount,
+        if (coinExpiryText != null) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(
+              coinExpiryText,
+              style: TextStyle(
+                fontSize: 11,
+                color: coinStatus?.isExpired == true
+                    ? const Color(0xFFD32F2F)
+                    : Colors.black54,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _buildStatCapsule(
-            icon: Icons.local_activity,
-            iconColor: const Color(0xFFFF6B35),
-            label: 'スタンプ',
-            value: stampCount,
-          ),
-        ),
+        ],
       ],
     );
+  }
+
+  String? _buildCoinExpiryText(CoinStatus? status) {
+    if (status == null) return null;
+    if (status.expiresAt == null) {
+      return status.availableCoins > 0 ? 'コイン有効期限: 未設定' : null;
+    }
+    final text = DateFormat('yyyy/MM/dd').format(status.expiresAt!);
+    if (status.isExpired) {
+      return 'コイン有効期限: $text（期限切れ）';
+    }
+    return 'コイン有効期限: $text まで';
   }
 
   Widget _buildStatCapsule({
@@ -1242,9 +1331,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
           // クーポンセクション
           _buildCouponSection(context, ref, userId),
-          
+
           const SizedBox(height: 12),
-          
+
           // 投稿セクション
           _buildPostSection(context, ref, userId),
         ],
@@ -1260,58 +1349,58 @@ class _HomeViewState extends ConsumerState<HomeView> {
     }
 
     return ref.watch(ownerSettingsProvider).when(
-      data: (ownerSettings) {
-        final currentSettings = _resolveCurrentSettings(ownerSettings);
-        final isActive = _isCampaignActive(
-          currentSettings,
-          'lotteryCampaignStartDate',
-          'lotteryCampaignEndDate',
-        );
+          data: (ownerSettings) {
+            final currentSettings = _resolveCurrentSettings(ownerSettings);
+            final isActive = _isCampaignActive(
+              currentSettings,
+              'lotteryCampaignStartDate',
+              'lotteryCampaignEndDate',
+            );
 
-        if (!isActive) {
-          return const SizedBox.shrink();
-        }
+            if (!isActive) {
+              return const SizedBox.shrink();
+            }
 
-        final endDate = _parseDate(currentSettings['lotteryCampaignEndDate']);
-        final endDateText = endDate != null
-            ? '~${endDate.month}/${endDate.day} まで'
-            : '';
+            final endDate =
+                _parseDate(currentSettings['lotteryCampaignEndDate']);
+            final endDateText =
+                endDate != null ? '~${endDate.month}/${endDate.day} まで' : '';
 
-        return GestureDetector(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => const LotteryView(),
+            return GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const LotteryView(),
+                  ),
+                );
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                height: 72,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFFFFC107).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(30),
+                  child: Image.asset(
+                    'assets/images/daily_slot_button.png',
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                  ),
+                ),
               ),
             );
           },
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            height: 72,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(30),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFFC107).withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(30),
-              child: Image.asset(
-                'assets/images/daily_slot_button.png',
-                fit: BoxFit.cover,
-                width: double.infinity,
-              ),
-            ),
-          ),
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
         );
-      },
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-    );
   }
 
   Widget _buildMenuGrid(BuildContext context, WidgetRef ref, bool isLoggedIn) {
@@ -1358,7 +1447,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-
   Future<void> _loadRecommendedStores(User? user) async {
     if (!mounted) return;
     setState(() {
@@ -1368,7 +1456,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
     try {
       final currentPosition = await _tryGetCurrentPosition();
-      final visitedStoreIds = user == null ? <String>{} : await _loadVisitedStoreIds(user.uid);
+      final visitedStoreIds =
+          user == null ? <String>{} : await _loadVisitedStoreIds(user.uid);
 
       final snapshot = await FirebaseFirestore.instance
           .collection('stores')
@@ -1383,8 +1472,17 @@ class _HomeViewState extends ConsumerState<HomeView> {
           continue;
         }
         final data = doc.data();
+
+        // isOwner店舗を除外（店舗ドキュメントのフラグで判定）
+        final rawIsOwner = data['isOwner'];
+        final isOwnerStore = rawIsOwner == true ||
+            rawIsOwner?.toString().toLowerCase() == 'true';
+        if (isOwnerStore) {
+          continue;
+        }
         final location = data['location'];
-        final distanceMeters = _calculateDistanceMeters(currentPosition, location);
+        final distanceMeters =
+            _calculateDistanceMeters(currentPosition, location);
         stores.add({
           'id': doc.id,
           'name': data['name'] ?? '店舗名なし',
@@ -1674,7 +1772,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
                           return Container(
                             width: 16,
                             height: 16,
-                            margin: EdgeInsets.only(right: index == stampTotal - 1 ? 0 : 6),
+                            margin: EdgeInsets.only(
+                                right: index == stampTotal - 1 ? 0 : 6),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isActive
@@ -1709,26 +1808,26 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
   Widget _buildNewsSection(BuildContext context, WidgetRef ref) {
     return ref.watch(activeNewsProvider).when(
-      data: (newsList) {
-        if (newsList.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        return SizedBox(
-          height: 150,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: newsList.length,
-            itemBuilder: (context, index) {
-              final news = newsList[index];
-              return _buildNewsCard(context, news);
-            },
-          ),
+          data: (newsList) {
+            if (newsList.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return SizedBox(
+              height: 150,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: newsList.length,
+                itemBuilder: (context, index) {
+                  final news = newsList[index];
+                  return _buildNewsCard(context, news);
+                },
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
         );
-      },
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-    );
   }
 
   Widget _buildNewsCard(BuildContext context, NewsModel news) {
@@ -1761,11 +1860,13 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.newspaper, color: Colors.grey, size: 32),
+                        const Icon(Icons.newspaper,
+                            color: Colors.grey, size: 32),
                         const SizedBox(height: 4),
                         Text(
                           news.title,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 11, color: Colors.grey),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
@@ -1787,7 +1888,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         child: Text(
                           news.title,
-                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 11, color: Colors.grey),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
@@ -1801,72 +1903,76 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _buildSpecialCouponSection(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildSpecialCouponSection(
+      BuildContext context, WidgetRef ref, String userId) {
     if (userId.isEmpty || userId == 'guest') {
       return const SizedBox.shrink();
     }
 
     return ref.watch(coinExchangeCouponsProvider(userId)).when(
-      data: (coupons) {
-        if (coupons.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Row(
-                children: [
-                  const Icon(Icons.stars, size: 22, color: Color(0xFFFFB300)),
-                  const SizedBox(width: 6),
-                  const Text(
-                    '特別クーポン',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFFB300).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '${coupons.length}枚',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFFB300),
+          data: (coupons) {
+            if (coupons.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 30),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.stars,
+                          size: 22, color: Color(0xFFFFB300)),
+                      const SizedBox(width: 6),
+                      const Text(
+                        '特別クーポン',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFB300).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          '${coupons.length}枚',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFFB300),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 300,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: coupons.length,
-                itemBuilder: (context, index) {
-                  final coupon = coupons[index];
-                  return _buildSpecialCouponCard(context, ref, coupon);
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-          ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 300,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: coupons.length,
+                    itemBuilder: (context, index) {
+                      final coupon = coupons[index];
+                      return _buildSpecialCouponCard(context, ref, coupon);
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
         );
-      },
-      loading: () => const SizedBox.shrink(),
-      error: (_, __) => const SizedBox.shrink(),
-    );
   }
 
-  Widget _buildSpecialCouponCard(BuildContext context, WidgetRef ref, model.Coupon coupon) {
+  Widget _buildSpecialCouponCard(
+      BuildContext context, WidgetRef ref, model.Coupon coupon) {
     String formatEndDate() {
       final date = coupon.validUntil;
       try {
@@ -1943,7 +2049,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.local_offer, size: 40, color: Colors.white),
+                              Icon(Icons.local_offer,
+                                  size: 40, color: Colors.white),
                               SizedBox(height: 4),
                               Text(
                                 '100円OFF',
@@ -2013,26 +2120,26 @@ class _HomeViewState extends ConsumerState<HomeView> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: ref.watch(storeNameProvider(coupon.storeId)).when(
-                  data: (storeName) => Text(
-                    storeName ?? '店舗名なし',
-                    style: const TextStyle(fontSize: 9),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  loading: () => const Text(
-                    '読み込み中...',
-                    style: TextStyle(fontSize: 9),
-                    textAlign: TextAlign.center,
-                  ),
-                  error: (_, __) => Text(
-                    coupon.storeId,
-                    style: const TextStyle(fontSize: 9),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                      data: (storeName) => Text(
+                        storeName ?? '店舗名なし',
+                        style: const TextStyle(fontSize: 9),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      loading: () => const Text(
+                        '読み込み中...',
+                        style: TextStyle(fontSize: 9),
+                        textAlign: TextAlign.center,
+                      ),
+                      error: (_, __) => Text(
+                        coupon.storeId,
+                        style: const TextStyle(fontSize: 9),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
               ),
               const SizedBox(height: 3),
             ],
@@ -2042,7 +2149,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-  Widget _buildCouponSection(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildCouponSection(
+      BuildContext context, WidgetRef ref, String userId) {
     return Column(
       children: [
         Padding(
@@ -2084,43 +2192,43 @@ class _HomeViewState extends ConsumerState<HomeView> {
         SizedBox(
           height: 300,
           child: ref.watch(availableCouponsProvider(userId)).when(
-            data: (coupons) {
-              if (coupons.isEmpty) {
-                return const Center(
+                data: (coupons) {
+                  if (coupons.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        '利用可能なクーポンがありません',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: coupons.length,
+                    itemBuilder: (context, index) {
+                      final coupon = coupons[index];
+                      return _buildCouponCard(context, ref, coupon);
+                    },
+                  );
+                },
+                loading: () => Center(
+                  child: _buildLoadingIndicatorWithLabel(
+                    'HOME: coupons loading',
+                    color: const Color(0xFFFF6B35),
+                  ),
+                ),
+                error: (error, _) => const Center(
                   child: Text(
-                    '利用可能なクーポンがありません',
+                    'クーポンの取得に失敗しました',
                     style: TextStyle(
                       fontSize: 16,
-                      color: Colors.grey,
+                      color: Colors.red,
                     ),
                   ),
-                );
-              }
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: coupons.length,
-                itemBuilder: (context, index) {
-                  final coupon = coupons[index];
-                  return _buildCouponCard(context, ref, coupon);
-                },
-              );
-            },
-            loading: () => Center(
-              child: _buildLoadingIndicatorWithLabel(
-                'HOME: coupons loading',
-                color: const Color(0xFFFF6B35),
-              ),
-            ),
-            error: (error, _) => const Center(
-              child: Text(
-                'クーポンの取得に失敗しました',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.red,
                 ),
               ),
-            ),
-          ),
         ),
       ],
     );
@@ -2162,78 +2270,79 @@ class _HomeViewState extends ConsumerState<HomeView> {
         SizedBox(
           height: 300,
           child: ref.watch(unifiedHomePostsProvider).when(
-            data: (posts) {
-              if (posts.isEmpty) {
-                return const Center(
+                data: (posts) {
+                  if (posts.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.article, size: 48, color: Colors.grey),
+                          SizedBox(height: 8),
+                          Text(
+                            '投稿がありません',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: posts.length,
+                    itemBuilder: (context, index) {
+                      final post = posts[index];
+                      return _buildPostCard(context, post);
+                    },
+                  );
+                },
+                loading: () => Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.article, size: 48, color: Colors.grey),
-                      SizedBox(height: 8),
-                      Text(
-                        '投稿がありません',
+                      _buildLoadingIndicatorWithLabel(
+                        'HOME: posts loading',
+                        color: const Color(0xFFFF6B35),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '投稿を読み込み中...',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 12,
                           color: Colors.grey,
                         ),
                       ),
                     ],
                   ),
-                );
-              }
-              return ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: posts.length,
-                itemBuilder: (context, index) {
-                  final post = posts[index];
-                  return _buildPostCard(context, post);
-                },
-              );
-            },
-            loading: () => Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _buildLoadingIndicatorWithLabel(
-                    'HOME: posts loading',
-                    color: const Color(0xFFFF6B35),
+                ),
+                error: (error, _) => Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline,
+                          size: 48, color: Colors.grey),
+                      const SizedBox(height: 8),
+                      const Text(
+                        '投稿の取得に失敗しました',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'データが存在しない可能性があります',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '投稿を読み込み中...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            error: (error, _) => Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '投稿の取得に失敗しました',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'データが存在しない可能性があります',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ),
       ],
     );
@@ -2244,7 +2353,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     String formatEndDate() {
       final endDate = coupon.validUntil;
       if (endDate == null) return '期限不明';
-      
+
       try {
         final date = endDate is DateTime ? endDate : endDate.toDate();
         if (date.year >= 2100) {
@@ -2254,7 +2363,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
         final today = DateTime(now.year, now.month, now.day);
         final tomorrow = today.add(const Duration(days: 1));
         final couponDate = DateTime(date.year, date.month, date.day);
-        
+
         String dateText;
         if (couponDate.isAtSameMomentAs(today)) {
           dateText = '今日';
@@ -2263,7 +2372,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
         } else {
           dateText = '${date.month}月${date.day}日';
         }
-        
+
         return '$dateText ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}まで';
       } catch (e) {
         return '期限不明';
@@ -2274,7 +2383,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     String getDiscountText() {
       final discountType = coupon.discountType ?? 'percentage';
       final discountValue = coupon.discountValue ?? 0.0;
-      
+
       if (discountType == 'percentage') {
         return '${discountValue.toInt()}%OFF';
       } else if (discountType == 'fixed_amount') {
@@ -2385,7 +2494,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
                       // 割引情報
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 3),
                         margin: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFF6B35).withOpacity(0.1),
@@ -2411,27 +2521,28 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       // 店舗名
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: ref.watch(storeNameProvider(coupon.storeId)).when(
-                              data: (storeName) => Text(
-                                storeName ?? '店舗名なし',
-                                style: const TextStyle(fontSize: 9),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              loading: () => const Text(
-                                '読み込み中...',
-                                style: TextStyle(fontSize: 9),
-                                textAlign: TextAlign.center,
-                              ),
-                              error: (_, __) => Text(
-                                coupon.storeId ?? '店舗名なし',
-                                style: const TextStyle(fontSize: 9),
-                                textAlign: TextAlign.center,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
+                        child:
+                            ref.watch(storeNameProvider(coupon.storeId)).when(
+                                  data: (storeName) => Text(
+                                    storeName ?? '店舗名なし',
+                                    style: const TextStyle(fontSize: 9),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  loading: () => const Text(
+                                    '読み込み中...',
+                                    style: TextStyle(fontSize: 9),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  error: (_, __) => Text(
+                                    coupon.storeId ?? '店舗名なし',
+                                    style: const TextStyle(fontSize: 9),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
                       ),
 
                       const SizedBox(height: 3),
@@ -2490,12 +2601,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Future<List<int>> _fetchHomeCouponStampStatus(dynamic coupon) async {
     final storeId = coupon.storeId as String?;
     final couponId = coupon.id as String?;
-    final requiredStamps = await _fetchHomeRequiredStampCount(storeId, couponId, coupon);
+    final requiredStamps =
+        await _fetchHomeRequiredStampCount(storeId, couponId, coupon);
     final userStamps = await _fetchHomeUserStampCount(storeId);
     return [requiredStamps, userStamps];
   }
 
-  Future<int> _fetchHomeRequiredStampCount(String? storeId, String? couponId, dynamic coupon) async {
+  Future<int> _fetchHomeRequiredStampCount(
+      String? storeId, String? couponId, dynamic coupon) async {
     try {
       final conditions = coupon.conditions;
       if (conditions is Map && conditions['requiredStampCount'] is num) {
@@ -2503,7 +2616,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
       }
     } catch (_) {}
 
-    if (storeId == null || storeId.isEmpty || couponId == null || couponId.isEmpty) {
+    if (storeId == null ||
+        storeId.isEmpty ||
+        couponId == null ||
+        couponId.isEmpty) {
       return 0;
     }
 
@@ -2551,11 +2667,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
         final date = post.createdAt;
         final now = DateTime.now();
         final difference = now.difference(date).inDays;
-        
+
         if (difference == 0) return '今日';
         if (difference == 1) return '昨日';
         if (difference < 7) return '${difference}日前';
-        
+
         return '${date.month}月${date.day}日';
       } catch (e) {
         return '日付不明';
@@ -2652,12 +2768,16 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       color: Colors.grey,
                     ),
             ),
-            
+
             // カテゴリバッジ
             Builder(builder: (context) {
               final isInstagram = post.source == 'instagram';
-              final badgeColor = isInstagram ? const Color(0xFFE1306C) : const Color(0xFFFF6B35);
-              final badgeText = isInstagram ? 'Instagram' : (post.storeCategory ?? post.category ?? '未分類');
+              final badgeColor = isInstagram
+                  ? const Color(0xFFE1306C)
+                  : const Color(0xFFFF6B35);
+              final badgeText = isInstagram
+                  ? 'Instagram'
+                  : (post.storeCategory ?? post.category ?? '未分類');
               return Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 margin: const EdgeInsets.symmetric(horizontal: 10),
@@ -2697,9 +2817,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 ),
               ),
             ),
-            
+
             const Divider(),
-            
+
             // 店舗名
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -2711,9 +2831,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            
+
             const SizedBox(height: 5),
-            
+
             // 投稿日
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -2728,7 +2848,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 5),
           ],
         ),
@@ -2821,7 +2941,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
                           color: isLogin ? Colors.white : Colors.grey,
                         );
                       },
-                      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                      frameBuilder:
+                          (context, child, frame, wasSynchronouslyLoaded) {
                         if (wasSynchronouslyLoaded) return child;
                         return AnimatedOpacity(
                           opacity: frame == null ? 0 : 1,
@@ -2855,7 +2976,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
     );
   }
 
-
   Widget _buildNotLoggedInView(BuildContext context) {
     return SafeArea(
       child: SingleChildScrollView(
@@ -2868,12 +2988,12 @@ class _HomeViewState extends ConsumerState<HomeView> {
               'assets/images/groumap_icon.png',
               width: 200,
               height: 200,
-              errorBuilder: (context, error, stackTrace) => 
+              errorBuilder: (context, error, stackTrace) =>
                   const Icon(Icons.location_on, size: 200, color: Colors.blue),
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // アプリ名
             const Text(
               'ぐるまっぷ',
@@ -2883,9 +3003,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 color: Colors.blue,
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // サブタイトル
             const Text(
               '近くの店舗を見つけて、ポイントを獲得しよう！',
@@ -2895,34 +3015,34 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ),
               textAlign: TextAlign.center,
             ),
-            
+
             const SizedBox(height: 48),
-            
+
             // 機能説明
             _buildFeatureCard(
               icon: Icons.map,
               title: '地図で店舗検索',
               description: '現在地から近くの店舗を簡単に見つけられます',
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             _buildFeatureCard(
               icon: Icons.qr_code,
               title: 'QRコードでポイント獲得',
               description: '店舗でQRコードをスキャンしてポイントを獲得',
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             _buildFeatureCard(
               icon: Icons.card_giftcard,
               title: 'ポイントでお得に',
               description: '獲得したポイントで商品を割引価格で購入',
             ),
-            
+
             const SizedBox(height: 48),
-            
+
             // ログインボタン
             CustomButton(
               text: 'ログイン',
@@ -2930,9 +3050,9 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 Navigator.of(context).pushNamed('/signin');
               },
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // 新規登録ボタン
             CustomButton(
               text: '新規登録',
@@ -2996,5 +3116,4 @@ class _HomeViewState extends ConsumerState<HomeView> {
       ),
     );
   }
-
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/pill_tab_bar.dart';
+import '../../services/coin_service.dart';
 import '../../services/mission_service.dart';
 import '../../providers/badge_provider.dart';
 
@@ -47,6 +49,8 @@ class _MissionsViewState extends State<MissionsView> {
   bool _isLoading = true;
   int _userCoins = 0;
   bool _isClaiming = false;
+  DateTime? _coinExpiresAt;
+  bool _isCoinExpired = false;
 
   final MissionService _missionService = MissionService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -94,16 +98,19 @@ class _MissionsViewState extends State<MissionsView> {
         _missionService.getDailyMissions(user.uid),
         _missionService.getLoginStreak(user.uid),
         _missionService.getMissionProgress(user.uid),
-        _missionService.getUserCoins(user.uid),
+        _missionService.getCoinStatus(user.uid),
         _loadUnvisitedStores(user.uid),
       ]);
 
       if (!mounted) return;
+      final coinStatus = results[3] as CoinStatus;
       setState(() {
         _dailyMissionData = results[0] as Map<String, dynamic>;
         _loginStreak = results[1] as int;
         _missionProgress = results[2] as Map<String, dynamic>;
-        _userCoins = results[3] as int;
+        _userCoins = coinStatus.availableCoins;
+        _coinExpiresAt = coinStatus.expiresAt;
+        _isCoinExpired = coinStatus.isExpired;
         _unvisitedStores = results[4] as List<Map<String, dynamic>>;
         _isLoading = false;
         // 新規登録ミッション未達成なら「新規登録」タブを初期選択
@@ -157,9 +164,12 @@ class _MissionsViewState extends State<MissionsView> {
 
   List<_MissionItem> get _dailyMissions {
     return [
-      _buildDailyMission('app_open', 'アプリを開く', '今日アプリを起動する', 1, Icons.phone_android),
-      _buildDailyMission('recommendation_view', 'レコメンドを見る', '今日のおすすめ店舗を確認する', 1, Icons.recommend),
-      _buildDailyMission('feed_view', '投稿を1件見る', '投稿の詳細を1件閲覧する', 1, Icons.article),
+      _buildDailyMission(
+          'app_open', 'アプリを開く', '今日アプリを起動する', 1, Icons.phone_android),
+      _buildDailyMission('recommendation_view', 'レコメンドを見る', '今日のおすすめ店舗を確認する', 1,
+          Icons.recommend),
+      _buildDailyMission(
+          'feed_view', '投稿を1件見る', '投稿の詳細を1件閲覧する', 1, Icons.article),
     ];
   }
 
@@ -191,9 +201,12 @@ class _MissionsViewState extends State<MissionsView> {
 
   List<_MissionItem> get _loginBonusMissions {
     return [
-      _buildLoginMission('login_3', '3日連続ログイン', '3日間連続でアプリにログイン', 2, 3, Icons.calendar_today),
-      _buildLoginMission('login_7', '7日連続ログイン', '7日間連続でアプリにログイン', 5, 7, Icons.date_range),
-      _buildLoginMission('login_30', '30日連続ログイン', '30日間連続でアプリにログイン', 10, 30, Icons.event_available),
+      _buildLoginMission(
+          'login_3', '3日連続ログイン', '3日間連続でアプリにログイン', 2, 3, Icons.calendar_today),
+      _buildLoginMission(
+          'login_7', '7日連続ログイン', '7日間連続でアプリにログイン', 5, 7, Icons.date_range),
+      _buildLoginMission('login_30', '30日連続ログイン', '30日間連続でアプリにログイン', 10, 30,
+          Icons.event_available),
     ];
   }
 
@@ -225,11 +238,16 @@ class _MissionsViewState extends State<MissionsView> {
 
   List<_MissionItem> get _registrationMissions {
     return [
-      _buildRegistrationMission('profile_completed', 'プロフィール完成', 'プロフィール情報をすべて入力する', 5, Icons.person),
-      _buildRegistrationMission('first_map', 'マップ初利用', '初めてマップ画面を開く', 3, Icons.explore),
-      _buildRegistrationMission('first_favorite', 'お気に入り登録', '初めて店舗をお気に入りに追加', 3, Icons.favorite),
-      _buildRegistrationMission('first_store_detail', '店舗詳細閲覧', '初めて店舗詳細画面を表示', 2, Icons.storefront),
-      _buildRegistrationMission('first_stamp', 'スタンプ初獲得', 'お店に行ってスタンプを1つ獲得する', 2, Icons.approval),
+      _buildRegistrationMission(
+          'profile_completed', 'プロフィール完成', 'プロフィール情報をすべて入力する', 5, Icons.person),
+      _buildRegistrationMission(
+          'first_map', 'マップ初利用', '初めてマップ画面を開く', 3, Icons.explore),
+      _buildRegistrationMission(
+          'first_favorite', 'お気に入り登録', '初めて店舗をお気に入りに追加', 3, Icons.favorite),
+      _buildRegistrationMission(
+          'first_store_detail', '店舗詳細閲覧', '初めて店舗詳細画面を表示', 2, Icons.storefront),
+      _buildRegistrationMission(
+          'first_stamp', 'スタンプ初獲得', 'お店に行ってスタンプを1つ獲得する', 2, Icons.approval),
     ];
   }
 
@@ -346,6 +364,8 @@ class _MissionsViewState extends State<MissionsView> {
               break;
           }
           _userCoins += mission.coinReward;
+          _coinExpiresAt = CoinService.calculateExpiryDate(DateTime.now());
+          _isCoinExpired = false;
         });
         _showCoinRewardPopup(mission);
       }
@@ -470,25 +490,80 @@ class _MissionsViewState extends State<MissionsView> {
     );
   }
 
-  // ========== UI ==========
+  Widget _buildCoinBalanceCard() {
+    final expiryText = _buildCoinExpiryText();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFC107), width: 1.5),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.monetization_on,
+                  color: Color(0xFFFFC107), size: 28),
+              const SizedBox(width: 8),
+              Text(
+                '所持コイン: $_userCoins',
+                style:
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          if (expiryText != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              expiryText,
+              style: TextStyle(
+                fontSize: 12,
+                color:
+                    _isCoinExpired ? const Color(0xFFD32F2F) : Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ]
+        ],
+      ),
+    );
+  }
+
+  String? _buildCoinExpiryText() {
+    if (_coinExpiresAt == null) {
+      return _userCoins > 0 ? '有効期限: 未設定' : null;
+    }
+    final dateText =
+        '${_coinExpiresAt!.year}/${_coinExpiresAt!.month.toString().padLeft(2, '0')}/${_coinExpiresAt!.day.toString().padLeft(2, '0')}';
+    if (_isCoinExpired) {
+      return '有効期限: $dateText（期限切れ）';
+    }
+    return '有効期限: $dateText まで';
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
-      appBar: AppBar(
+      appBar: CommonHeader(
+        title: const Text('ミッション'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
-        title: const Text('ミッション'),
-        centerTitle: true,
-        elevation: 0,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFFF6B35),
+              ),
+            )
           : Column(
               children: [
                 _buildCoinBalanceCard(),
                 const SizedBox(height: 12),
+                // タブバー
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: PillTabBar(
@@ -500,19 +575,19 @@ class _MissionsViewState extends State<MissionsView> {
                       });
                     },
                     activeColor: const Color(0xFF2A8B8B),
-                    disabledIndices: _isRegistrationComplete
-                        ? const {}
-                        : const {0, 1},
+                    disabledIndices:
+                        _isRegistrationComplete ? const {} : const {0, 1},
                   ),
                 ),
                 const SizedBox(height: 8),
+                // タブ説明
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    _currentTabDescription,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 12,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _currentTabDescription,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                     ),
                   ),
                 ),
@@ -526,13 +601,18 @@ class _MissionsViewState extends State<MissionsView> {
                             padding: const EdgeInsets.only(bottom: 24),
                             children: [
                               // 新規登録タブ＆未達成時のガイドメッセージ
-                              if (_selectedTabIndex == 2 && !_isRegistrationComplete)
+                              if (_selectedTabIndex == 2 &&
+                                  !_isRegistrationComplete)
                                 Container(
-                                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
                                   padding: const EdgeInsets.all(16),
                                   decoration: BoxDecoration(
                                     gradient: const LinearGradient(
-                                      colors: [Color(0xFFFF6B35), Color(0xFFFF8F00)],
+                                      colors: [
+                                        Color(0xFFFF6B35),
+                                        Color(0xFFFF8F00)
+                                      ],
                                       begin: Alignment.centerLeft,
                                       end: Alignment.centerRight,
                                     ),
@@ -540,11 +620,13 @@ class _MissionsViewState extends State<MissionsView> {
                                   ),
                                   child: Row(
                                     children: [
-                                      const Icon(Icons.flag, color: Colors.white, size: 28),
+                                      const Icon(Icons.flag,
+                                          color: Colors.white, size: 28),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             const Text(
                                               'まずは新規登録ミッションを完了しよう!',
@@ -558,7 +640,8 @@ class _MissionsViewState extends State<MissionsView> {
                                             Text(
                                               'すべてのミッションを達成すると、デイリーミッションやログインボーナスが解放されます',
                                               style: TextStyle(
-                                                color: Colors.white.withOpacity(0.9),
+                                                color: Colors.white
+                                                    .withOpacity(0.9),
                                                 fontSize: 12,
                                               ),
                                             ),
@@ -575,30 +658,6 @@ class _MissionsViewState extends State<MissionsView> {
                 ),
               ],
             ),
-    );
-  }
-
-  Widget _buildCoinBalanceCard() {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFC107), width: 1.5),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.monetization_on,
-              color: Color(0xFFFFC107), size: 28),
-          const SizedBox(width: 8),
-          Text(
-            '所持コイン: $_userCoins',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
     );
   }
 
@@ -671,8 +730,7 @@ class _MissionsViewState extends State<MissionsView> {
               ),
             ),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.25),
                 borderRadius: BorderRadius.circular(20),
@@ -752,8 +810,7 @@ class _MissionsViewState extends State<MissionsView> {
             ),
           ),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(20),
@@ -824,8 +881,7 @@ class _MissionsViewState extends State<MissionsView> {
             ),
           ),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
               color: Colors.grey[300],
               borderRadius: BorderRadius.circular(20),
@@ -902,7 +958,8 @@ class _MissionsViewState extends State<MissionsView> {
             child: Center(
               child: Column(
                 children: [
-                  Icon(Icons.check_circle_outline, size: 64, color: Colors.grey[300]),
+                  Icon(Icons.check_circle_outline,
+                      size: 64, color: Colors.grey[300]),
                   const SizedBox(height: 16),
                   Text(
                     'すべての店舗を訪問済みです',
@@ -945,18 +1002,20 @@ class _MissionsViewState extends State<MissionsView> {
               color: const Color(0xFFFF6B35).withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: store['iconImageUrl'] != null && (store['iconImageUrl'] as String).isNotEmpty
+            child: store['iconImageUrl'] != null &&
+                    (store['iconImageUrl'] as String).isNotEmpty
                 ? ClipOval(
                     child: Image.network(
                       store['iconImageUrl'] as String,
                       width: 48,
                       height: 48,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.storefront, color: Color(0xFFFF6B35), size: 24),
+                      errorBuilder: (_, __, ___) => const Icon(Icons.storefront,
+                          color: Color(0xFFFF6B35), size: 24),
                     ),
                   )
-                : const Icon(Icons.storefront, color: Color(0xFFFF6B35), size: 24),
+                : const Icon(Icons.storefront,
+                    color: Color(0xFFFF6B35), size: 24),
           ),
           const SizedBox(width: 12),
           // 店舗情報
@@ -966,7 +1025,8 @@ class _MissionsViewState extends State<MissionsView> {
               children: [
                 Text(
                   store['storeName'] as String,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1033,7 +1093,8 @@ class _MissionsViewState extends State<MissionsView> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.monetization_on, color: Color(0xFFFFC107), size: 20),
+                  Icon(Icons.monetization_on,
+                      color: Color(0xFFFFC107), size: 20),
                   SizedBox(width: 6),
                   Text(
                     '-10 コイン',
@@ -1056,7 +1117,8 @@ class _MissionsViewState extends State<MissionsView> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFF6B35),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
             ),
             onPressed: () {
               Navigator.of(context).pop();
@@ -1121,7 +1183,8 @@ class _MissionsViewState extends State<MissionsView> {
                   ),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.local_offer, color: Colors.white, size: 40),
+                child: const Icon(Icons.local_offer,
+                    color: Colors.white, size: 40),
               ),
               const SizedBox(height: 20),
               const Text(

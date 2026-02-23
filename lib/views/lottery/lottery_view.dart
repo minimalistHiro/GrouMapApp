@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:confetti/confetti.dart';
 import 'dart:math';
 import '../../providers/badge_provider.dart';
+import '../../services/coin_service.dart';
 
 class LotteryView extends StatefulWidget {
   const LotteryView({super.key});
@@ -12,7 +14,8 @@ class LotteryView extends StatefulWidget {
   State<LotteryView> createState() => _LotteryViewState();
 }
 
-class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin {
+class _LotteryViewState extends State<LotteryView>
+    with TickerProviderStateMixin {
   // Firebase関連
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -231,8 +234,11 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
     try {
       final userDoc = await _firestore.collection('users').doc(user.uid).get();
       if (mounted && userDoc.exists) {
+        final coinStatus = CoinService.resolveCoinStatusFromUserData(
+          userDoc.data(),
+        );
         setState(() {
-          _userCoins = (userDoc.data()?['coins'] as num?)?.toInt() ?? 0;
+          _userCoins = coinStatus.availableCoins;
         });
       }
     } catch (e) {
@@ -247,7 +253,8 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
 
     try {
       final today = DateTime.now();
-      final dateString = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final dateString =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
       final doc = await _firestore
           .collection('lottery_history')
@@ -316,7 +323,7 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
     do {
       _predeterminedResult3 = random.nextInt(10);
     } while (_predeterminedResult3 == _predeterminedResult1 ||
-             _predeterminedResult3 == _predeterminedResult2);
+        _predeterminedResult3 == _predeterminedResult2);
   }
 
   // スロットを開始する（確認ポップアップ付き）
@@ -363,7 +370,8 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            const Icon(Icons.monetization_on, color: Color(0xFFFFC107), size: 28),
+            const Icon(Icons.monetization_on,
+                color: Color(0xFFFFC107), size: 28),
             const SizedBox(width: 8),
             const Text('コイン使用確認'),
           ],
@@ -386,7 +394,8 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.monetization_on, color: Color(0xFFFFC107), size: 20),
+                  const Icon(Icons.monetization_on,
+                      color: Color(0xFFFFC107), size: 20),
                   const SizedBox(width: 8),
                   Text(
                     '所持コイン: $_userCoins → ${_userCoins - 1}',
@@ -414,7 +423,8 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFF6B35),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
             ),
             child: const Text('スタート'),
           ),
@@ -507,7 +517,8 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
 
     try {
       final today = DateTime.now();
-      final dateString = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final dateString =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
 
       int coinsEarned = 0;
       int couponCount = 0;
@@ -544,16 +555,36 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
 
         if (!userDoc.exists) return;
 
-        final currentCoins = (userDoc.data()?['coins'] as num?)?.toInt() ?? 0;
+        final userData = userDoc.data() ?? {};
+        final now = DateTime.now();
+        final currentCoins = CoinService.resolveAvailableCoinsFromUserData(
+          userData,
+          now: now,
+        );
 
         if (currentCoins < 1) {
           throw Exception('コインが不足しています');
         }
 
         // コイン更新
-        transaction.update(userRef, {
-          'coins': currentCoins + coinsDelta,
-        });
+        if (coinsDelta >= 0) {
+          transaction.update(
+            userRef,
+            CoinService.buildCoinEarnUpdate(
+              currentCoins: currentCoins,
+              earnedCoins: coinsDelta,
+              earnedAt: now,
+            ),
+          );
+        } else {
+          transaction.update(
+            userRef,
+            CoinService.buildCoinSpendUpdate(
+              currentCoins: currentCoins,
+              spentCoins: coinsDelta.abs(),
+            ),
+          );
+        }
 
         // スロット履歴を保存
         final historyRef = _firestore.collection('lottery_history').doc();
@@ -599,832 +630,898 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_showCongratulationsPopup && !_showSilverCongratulationsPopup && !_showLosePopup,
+      canPop: !_showCongratulationsPopup &&
+          !_showSilverCongratulationsPopup &&
+          !_showLosePopup,
       child: Scaffold(
-      backgroundColor: _showGoldenAnimation
-          ? Color.lerp(
-              const Color(0xFFF5F5F5),
-              Colors.grey[800]!,
-              _backgroundDimAnimation.value,
-            )
-          : _showSilverAnimation
+        backgroundColor: _showGoldenAnimation
             ? Color.lerp(
                 const Color(0xFFF5F5F5),
                 Colors.grey[800]!,
-                _silverBackgroundDimAnimation.value,
+                _backgroundDimAnimation.value,
               )
-            : const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        title: const Text(
-          'スロット',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
+            : _showSilverAnimation
+                ? Color.lerp(
+                    const Color(0xFFF5F5F5),
+                    Colors.grey[800]!,
+                    _silverBackgroundDimAnimation.value,
+                  )
+                : const Color(0xFFF5F5F5),
+        appBar: CommonHeader(
+          title: const Text(
+            'スロット',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
           ),
+          backgroundColor: const Color(0xFFFF6B35),
+          foregroundColor: Colors.white,
+          elevation: 0,
         ),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Stack(
-        children: [
-          // メインコンテンツ
-          SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            child: Container(
-              width: double.infinity,
-              constraints: BoxConstraints(
-                minHeight: MediaQuery.of(context).size.height - kToolbarHeight,
-              ),
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-              const SizedBox(height: 10),
-
-              // タイトル画像 - トップ配置
-              Container(
-                constraints: const BoxConstraints(maxWidth: 340),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFC107).withOpacity(0.4),
-                      spreadRadius: 2,
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Stack(
-                    children: [
-                      Image.asset(
-                        'assets/images/daily_slot_button.png',
-                        width: 340,
-                        fit: BoxFit.fitWidth,
-                      ),
-                      Positioned(
-                        bottom: 6,
-                        left: 0,
-                        right: 0,
-                        child: Text(
-                          '${DateTime.now().year}年${DateTime.now().month.toString().padLeft(2, '0')}月${DateTime.now().day.toString().padLeft(2, '0')}日まで',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withOpacity(0.7),
-                                offset: const Offset(1, 1),
-                                blurRadius: 3,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // 賞品テーブル
-              Container(
+        body: Stack(
+          children: [
+            // メインコンテンツ
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Container(
                 width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A2E),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFFFC107), width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFFFC107).withOpacity(0.3),
-                      blurRadius: 8,
-                      spreadRadius: 1,
-                    ),
-                  ],
+                constraints: BoxConstraints(
+                  minHeight:
+                      MediaQuery.of(context).size.height - kToolbarHeight,
                 ),
-                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                padding: const EdgeInsets.all(20),
                 child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // 1等
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            '1等',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A1A2E),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'コイン × 20',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFFFD700),
-                          ),
-                        ),
-                      ],
-                    ),
                     const SizedBox(height: 10),
-                    // 2等
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFC0C0C0), Color(0xFF909090)],
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            '2等',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A1A2E),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'コイン × 10',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFC0C0C0),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    // ハズレ
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white24,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'ハズレ',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text(
-                          'コイン × 0',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
 
-              const SizedBox(height: 20),
-
-              // コイン残高表示
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFFFC107), width: 2),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.monetization_on, color: Color(0xFFFFC107), size: 24),
-                    const SizedBox(width: 8),
-                    Text(
-                      '所持コイン: $_userCoins',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF333333),
+                    // タイトル画像 - トップ配置
+                    Container(
+                      constraints: const BoxConstraints(maxWidth: 340),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFFC107).withOpacity(0.4),
+                            spreadRadius: 2,
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 30),
-
-              // スロットマシン
-              AnimatedBuilder(
-                animation: _glowAnimation,
-                builder: (context, child) {
-                  return Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // 1等時の追加の明るいリング
-                      if (_showGoldenAnimation)
-                        AnimatedBuilder(
-                          animation: _goldenGlowAnimation,
-                          builder: (context, child) {
-                            return Container(
-                              width: 440,
-                              height: 240,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(25),
-                                border: Border.all(
-                                  color: Colors.amber.withOpacity(
-                                    ((sin(_goldenGlowAnimation.value * 20) + 1) / 2) * 0.8
-                                  ),
-                                  width: 4,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.amber.withOpacity(
-                                      ((sin(_goldenGlowAnimation.value * 20) + 1) / 2) * 0.5
-                                    ),
-                                    spreadRadius: 10,
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 0),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      // 2等時の追加の明るいリング
-                      if (_showSilverAnimation)
-                        AnimatedBuilder(
-                          animation: _silverGlowAnimation,
-                          builder: (context, child) {
-                            return Container(
-                              width: 440,
-                              height: 240,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(25),
-                                border: Border.all(
-                                  color: Colors.grey[400]!.withOpacity(
-                                    ((sin(_silverGlowAnimation.value * 20) + 1) / 2) * 0.8
-                                  ),
-                                  width: 4,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.grey[400]!.withOpacity(
-                                      ((sin(_silverGlowAnimation.value * 20) + 1) / 2) * 0.5
-                                    ),
-                                    spreadRadius: 10,
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 0),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                      // メインのスロットマシン
-                      Container(
-                        width: 400,
-                        height: 200,
-                    decoration: BoxDecoration(
-                      color: _showGoldenAnimation || _showSilverAnimation ? Colors.black : Colors.black87,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _showGoldenAnimation
-                          ? Color.lerp(
-                              const Color(0xFFFFD700),
-                              Colors.white,
-                              (sin(_goldenGlowAnimation.value * 10) + 1) / 2,
-                            )!
-                          : _showSilverAnimation
-                            ? Color.lerp(
-                                const Color(0xFFC0C0C0),
-                                Colors.white,
-                                (sin(_silverGlowAnimation.value * 10) + 1) / 2,
-                              )!
-                            : _showWinAnimation
-                                ? Color.lerp(
-                                    const Color(0xFFFF6B35),
-                                    Colors.yellow,
-                                    _glowAnimation.value,
-                                  )!
-                                : const Color(0xFFFF6B35),
-                        width: _showGoldenAnimation || _showSilverAnimation ? 6 : 4,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          spreadRadius: 2,
-                          blurRadius: 10,
-                          offset: const Offset(0, 5),
-                        ),
-                        if (_showGoldenAnimation)
-                          BoxShadow(
-                            color: const Color(0xFFFFD700).withOpacity(
-                              ((sin(_goldenGlowAnimation.value * 10) + 1) / 2) * 0.9
-                            ),
-                            spreadRadius: _goldenGlowAnimation.value * 25,
-                            blurRadius: _goldenGlowAnimation.value * 50,
-                            offset: const Offset(0, 0),
-                          ),
-                        if (_showSilverAnimation)
-                          BoxShadow(
-                            color: const Color(0xFFC0C0C0).withOpacity(
-                              ((sin(_silverGlowAnimation.value * 10) + 1) / 2) * 0.9
-                            ),
-                            spreadRadius: _silverGlowAnimation.value * 25,
-                            blurRadius: _silverGlowAnimation.value * 50,
-                            offset: const Offset(0, 0),
-                          ),
-                        if (_showWinAnimation && !_showGoldenAnimation && !_showSilverAnimation)
-                          BoxShadow(
-                            color: Colors.yellow.withOpacity(_glowAnimation.value * 0.8),
-                            spreadRadius: _glowAnimation.value * 15,
-                            blurRadius: _glowAnimation.value * 30,
-                            offset: const Offset(0, 0),
-                          ),
-                      ],
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
                           children: [
-                            _buildSlotReel(_slot1Animation, _result1, 1, _slot1Stopped),
-                            Container(
-                              width: 2,
-                              height: 120,
-                              color: const Color(0xFFFF6B35),
+                            Image.asset(
+                              'assets/images/daily_slot_button.png',
+                              width: 340,
+                              fit: BoxFit.fitWidth,
                             ),
-                            _buildSlotReel(_slot2Animation, _result2, 2, _slot2Stopped),
-                            Container(
-                              width: 2,
-                              height: 120,
-                              color: const Color(0xFFFF6B35),
+                            Positioned(
+                              bottom: 6,
+                              left: 0,
+                              right: 0,
+                              child: Text(
+                                '${DateTime.now().year}年${DateTime.now().month.toString().padLeft(2, '0')}月${DateTime.now().day.toString().padLeft(2, '0')}日まで',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black.withOpacity(0.7),
+                                      offset: const Offset(1, 1),
+                                      blurRadius: 3,
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            _buildSlotReel(_slot3Animation, _result3, 3, _slot3Stopped),
                           ],
                         ),
                       ),
-                    ],
-                  );
-                },
-              ),
+                    ),
 
-              const SizedBox(height: 20),
+                    const SizedBox(height: 12),
 
-              // 停止ボタン
-              if (_showStopButtons)
-                Column(
-                  children: [
-                    const Text(
-                      '各スロットを停止してください',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF6B35),
+                    // 賞品テーブル
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.symmetric(horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1A1A2E),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                            color: const Color(0xFFFFC107), width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFFFFC107).withOpacity(0.3),
+                            blurRadius: 8,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 14, horizontal: 16),
+                      child: Column(
+                        children: [
+                          // 1等
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFFFFD700),
+                                      Color(0xFFFFA500)
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  '1等',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1A1A2E),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'コイン × 20',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFFFD700),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          // 2等
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFFC0C0C0),
+                                      Color(0xFF909090)
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  '2等',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1A1A2E),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'コイン × 10',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFC0C0C0),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          // ハズレ
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white24,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'ハズレ',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white70,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'コイン × 0',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 15),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildStopButton(1, _slot1Stopped),
-                        _buildStopButton(2, _slot2Stopped),
-                        _buildStopButton(3, _slot3Stopped),
+
+                    const SizedBox(height: 20),
+
+                    // コイン残高表示
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: const Color(0xFFFFC107), width: 2),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.monetization_on,
+                              color: Color(0xFFFFC107), size: 24),
+                          const SizedBox(width: 8),
+                          Text(
+                            '所持コイン: $_userCoins',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF333333),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 30),
+
+                    // スロットマシン
+                    AnimatedBuilder(
+                      animation: _glowAnimation,
+                      builder: (context, child) {
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // 1等時の追加の明るいリング
+                            if (_showGoldenAnimation)
+                              AnimatedBuilder(
+                                animation: _goldenGlowAnimation,
+                                builder: (context, child) {
+                                  return Container(
+                                    width: 440,
+                                    height: 240,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(25),
+                                      border: Border.all(
+                                        color: Colors.amber.withOpacity(
+                                            ((sin(_goldenGlowAnimation.value *
+                                                            20) +
+                                                        1) /
+                                                    2) *
+                                                0.8),
+                                        width: 4,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.amber.withOpacity(
+                                              ((sin(_goldenGlowAnimation.value *
+                                                              20) +
+                                                          1) /
+                                                      2) *
+                                                  0.5),
+                                          spreadRadius: 10,
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 0),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            // 2等時の追加の明るいリング
+                            if (_showSilverAnimation)
+                              AnimatedBuilder(
+                                animation: _silverGlowAnimation,
+                                builder: (context, child) {
+                                  return Container(
+                                    width: 440,
+                                    height: 240,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(25),
+                                      border: Border.all(
+                                        color: Colors.grey[400]!.withOpacity(
+                                            ((sin(_silverGlowAnimation.value *
+                                                            20) +
+                                                        1) /
+                                                    2) *
+                                                0.8),
+                                        width: 4,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.grey[400]!.withOpacity(
+                                              ((sin(_silverGlowAnimation.value *
+                                                              20) +
+                                                          1) /
+                                                      2) *
+                                                  0.5),
+                                          spreadRadius: 10,
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 0),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            // メインのスロットマシン
+                            Container(
+                              width: 400,
+                              height: 200,
+                              decoration: BoxDecoration(
+                                color:
+                                    _showGoldenAnimation || _showSilverAnimation
+                                        ? Colors.black
+                                        : Colors.black87,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: _showGoldenAnimation
+                                      ? Color.lerp(
+                                          const Color(0xFFFFD700),
+                                          Colors.white,
+                                          (sin(_goldenGlowAnimation.value *
+                                                      10) +
+                                                  1) /
+                                              2,
+                                        )!
+                                      : _showSilverAnimation
+                                          ? Color.lerp(
+                                              const Color(0xFFC0C0C0),
+                                              Colors.white,
+                                              (sin(_silverGlowAnimation.value *
+                                                          10) +
+                                                      1) /
+                                                  2,
+                                            )!
+                                          : _showWinAnimation
+                                              ? Color.lerp(
+                                                  const Color(0xFFFF6B35),
+                                                  Colors.yellow,
+                                                  _glowAnimation.value,
+                                                )!
+                                              : const Color(0xFFFF6B35),
+                                  width: _showGoldenAnimation ||
+                                          _showSilverAnimation
+                                      ? 6
+                                      : 4,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    spreadRadius: 2,
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                  if (_showGoldenAnimation)
+                                    BoxShadow(
+                                      color: const Color(0xFFFFD700)
+                                          .withOpacity(
+                                              ((sin(_goldenGlowAnimation.value *
+                                                              10) +
+                                                          1) /
+                                                      2) *
+                                                  0.9),
+                                      spreadRadius:
+                                          _goldenGlowAnimation.value * 25,
+                                      blurRadius:
+                                          _goldenGlowAnimation.value * 50,
+                                      offset: const Offset(0, 0),
+                                    ),
+                                  if (_showSilverAnimation)
+                                    BoxShadow(
+                                      color: const Color(0xFFC0C0C0)
+                                          .withOpacity(
+                                              ((sin(_silverGlowAnimation.value *
+                                                              10) +
+                                                          1) /
+                                                      2) *
+                                                  0.9),
+                                      spreadRadius:
+                                          _silverGlowAnimation.value * 25,
+                                      blurRadius:
+                                          _silverGlowAnimation.value * 50,
+                                      offset: const Offset(0, 0),
+                                    ),
+                                  if (_showWinAnimation &&
+                                      !_showGoldenAnimation &&
+                                      !_showSilverAnimation)
+                                    BoxShadow(
+                                      color: Colors.yellow.withOpacity(
+                                          _glowAnimation.value * 0.8),
+                                      spreadRadius: _glowAnimation.value * 15,
+                                      blurRadius: _glowAnimation.value * 30,
+                                      offset: const Offset(0, 0),
+                                    ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  _buildSlotReel(_slot1Animation, _result1, 1,
+                                      _slot1Stopped),
+                                  Container(
+                                    width: 2,
+                                    height: 120,
+                                    color: const Color(0xFFFF6B35),
+                                  ),
+                                  _buildSlotReel(_slot2Animation, _result2, 2,
+                                      _slot2Stopped),
+                                  Container(
+                                    width: 2,
+                                    height: 120,
+                                    color: const Color(0xFFFF6B35),
+                                  ),
+                                  _buildSlotReel(_slot3Animation, _result3, 3,
+                                      _slot3Stopped),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // 停止ボタン
+                    if (_showStopButtons)
+                      Column(
+                        children: [
+                          const Text(
+                            '各スロットを停止してください',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFFF6B35),
+                            ),
+                          ),
+                          const SizedBox(height: 15),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildStopButton(1, _slot1Stopped),
+                              _buildStopButton(2, _slot2Stopped),
+                              _buildStopButton(3, _slot3Stopped),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+
+                    // スピンボタン
+                    ElevatedButton(
+                      onPressed: _canSpin && !_isSpinning ? _startSlots : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _canSpin && !_isSpinning
+                            ? const Color(0xFFFF6B35)
+                            : Colors.grey,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 50, vertical: 20),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        elevation: 5,
+                      ),
+                      child: Text(
+                        _isSpinning
+                            ? '各スロットを停止してください'
+                            : _canSpin
+                                ? 'スタート！（1コイン）'
+                                : '明日また挑戦！',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    const SizedBox(height: 30),
+
+                    // 状態表示
+                    if (!_canSpin && !_showResult) ...[
+                      Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: Colors.orange[100],
+                          borderRadius: BorderRadius.circular(10),
+                          border:
+                              Border.all(color: Colors.orange.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          '今日はもうスピンしました！\n明日また挑戦してください。',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.orange[800],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+
+            // 紙吹雪アニメーション
+            if (_showWinAnimation)
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _confettiController,
+                  blastDirection: 90 * (3.14159 / 180),
+                  blastDirectionality: BlastDirectionality.explosive,
+                  particleDrag: 0.02,
+                  emissionFrequency: 0.05,
+                  numberOfParticles: 240,
+                  gravity: 0.2,
+                  shouldLoop: false,
+                  maxBlastForce: 25,
+                  minBlastForce: 8,
+                  colors: const [
+                    Colors.red,
+                    Colors.blue,
+                    Colors.green,
+                    Colors.yellow,
+                    Colors.purple,
+                    Colors.orange,
+                    Colors.pink,
+                    Colors.cyan,
+                    Colors.amber,
+                  ],
+                ),
+              ),
+
+            // 1等専用: 金色の紙吹雪アニメーション
+            if (_showGoldenAnimation)
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _goldenConfettiController,
+                  blastDirection: 90 * (3.14159 / 180),
+                  blastDirectionality: BlastDirectionality.explosive,
+                  particleDrag: 0.01,
+                  emissionFrequency: 0.03,
+                  numberOfParticles: 360,
+                  gravity: 0.15,
+                  shouldLoop: false,
+                  maxBlastForce: 30,
+                  minBlastForce: 10,
+                  colors: const [
+                    Color(0xFFFFD700),
+                    Color(0xFFFFE55C),
+                    Color(0xFFFFC72C),
+                    Color(0xFFFFB347),
+                    Color(0xFFDAA520),
+                    Color(0xFFB8860B),
+                  ],
+                ),
+              ),
+
+            // 2等専用: シルバーの紙吹雪アニメーション
+            if (_showSilverAnimation)
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _silverConfettiController,
+                  blastDirection: 90 * (3.14159 / 180),
+                  blastDirectionality: BlastDirectionality.explosive,
+                  particleDrag: 0.01,
+                  emissionFrequency: 0.03,
+                  numberOfParticles: 360,
+                  gravity: 0.15,
+                  shouldLoop: false,
+                  maxBlastForce: 30,
+                  minBlastForce: 10,
+                  colors: const [
+                    Color(0xFFC0C0C0),
+                    Color(0xFFD3D3D3),
+                    Color(0xFFA9A9A9),
+                    Color(0xFFDCDCDC),
+                    Color(0xFFB0C4DE),
+                    Color(0xFF708090),
+                  ],
+                ),
+              ),
+
+            // 1等専用: おめでとうポップアップ（モーダル）
+            if (_showCongratulationsPopup) ...[
+              const ModalBarrier(
+                dismissible: false,
+                color: Colors.transparent,
+              ),
+              Center(
+                child: Container(
+                  width: 320,
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFFFD700),
+                        Color(0xFFFFA500),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-
-              // スピンボタン
-              ElevatedButton(
-                onPressed: _canSpin && !_isSpinning ? _startSlots : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _canSpin && !_isSpinning
-                      ? const Color(0xFFFF6B35)
-                      : Colors.grey,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 20),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        spreadRadius: 5,
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
                   ),
-                  elevation: 5,
-                ),
-                child: Text(
-                  _isSpinning
-                      ? '各スロットを停止してください'
-                      : _canSpin
-                          ? 'スタート！（1コイン）'
-                          : '明日また挑戦！',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        '🎉',
+                        style: TextStyle(fontSize: 40),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        '1等当選おめでとう！',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'コイン×20 獲得！',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          _stopGoldenAnimation();
+                          Navigator.of(context).pop();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFFFF6B35),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 30, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          '確認',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
+            ],
 
-              const SizedBox(height: 20),
-
-              const SizedBox(height: 30),
-
-              // 状態表示
-              if (!_canSpin && !_showResult) ...[
-                Container(
-                  padding: const EdgeInsets.all(15),
+            // 2等専用: おめでとうポップアップ（モーダル）
+            if (_showSilverCongratulationsPopup) ...[
+              const ModalBarrier(
+                dismissible: false,
+                color: Colors.transparent,
+              ),
+              Center(
+                child: Container(
+                  width: 320,
+                  padding: const EdgeInsets.symmetric(vertical: 24),
                   decoration: BoxDecoration(
-                    color: Colors.orange[100],
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    '今日はもうスピンしました！\n明日また挑戦してください。',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.orange[800],
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFFC0C0C0),
+                        Color(0xFF808080),
+                      ],
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ],
-                ],
-              ),
-            ),
-          ),
-
-          // 紙吹雪アニメーション
-          if (_showWinAnimation)
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConfettiWidget(
-                confettiController: _confettiController,
-                blastDirection: 90 * (3.14159 / 180),
-                blastDirectionality: BlastDirectionality.explosive,
-                particleDrag: 0.02,
-                emissionFrequency: 0.05,
-                numberOfParticles: 240,
-                gravity: 0.2,
-                shouldLoop: false,
-                maxBlastForce: 25,
-                minBlastForce: 8,
-                colors: const [
-                  Colors.red,
-                  Colors.blue,
-                  Colors.green,
-                  Colors.yellow,
-                  Colors.purple,
-                  Colors.orange,
-                  Colors.pink,
-                  Colors.cyan,
-                  Colors.amber,
-                ],
-              ),
-            ),
-
-          // 1等専用: 金色の紙吹雪アニメーション
-          if (_showGoldenAnimation)
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConfettiWidget(
-                confettiController: _goldenConfettiController,
-                blastDirection: 90 * (3.14159 / 180),
-                blastDirectionality: BlastDirectionality.explosive,
-                particleDrag: 0.01,
-                emissionFrequency: 0.03,
-                numberOfParticles: 360,
-                gravity: 0.15,
-                shouldLoop: false,
-                maxBlastForce: 30,
-                minBlastForce: 10,
-                colors: const [
-                  Color(0xFFFFD700),
-                  Color(0xFFFFE55C),
-                  Color(0xFFFFC72C),
-                  Color(0xFFFFB347),
-                  Color(0xFFDAA520),
-                  Color(0xFFB8860B),
-                ],
-              ),
-            ),
-
-          // 2等専用: シルバーの紙吹雪アニメーション
-          if (_showSilverAnimation)
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConfettiWidget(
-                confettiController: _silverConfettiController,
-                blastDirection: 90 * (3.14159 / 180),
-                blastDirectionality: BlastDirectionality.explosive,
-                particleDrag: 0.01,
-                emissionFrequency: 0.03,
-                numberOfParticles: 360,
-                gravity: 0.15,
-                shouldLoop: false,
-                maxBlastForce: 30,
-                minBlastForce: 10,
-                colors: const [
-                  Color(0xFFC0C0C0),
-                  Color(0xFFD3D3D3),
-                  Color(0xFFA9A9A9),
-                  Color(0xFFDCDCDC),
-                  Color(0xFFB0C4DE),
-                  Color(0xFF708090),
-                ],
-              ),
-            ),
-
-          // 1等専用: おめでとうポップアップ（モーダル）
-          if (_showCongratulationsPopup) ...[
-            const ModalBarrier(
-              dismissible: false,
-              color: Colors.transparent,
-            ),
-            Center(
-              child: Container(
-                width: 320,
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFFFD700),
-                      Color(0xFFFFA500),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        spreadRadius: 5,
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      spreadRadius: 5,
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      '🎉',
-                      style: TextStyle(fontSize: 40),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      '1等当選おめでとう！',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        '🎉',
+                        style: TextStyle(fontSize: 40),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'コイン×20 獲得！',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        _stopGoldenAnimation();
-                        Navigator.of(context).pop();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFFFF6B35),
-                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
+                      const SizedBox(height: 10),
+                      const Text(
+                        '2等当選おめでとう！',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                        elevation: 2,
+                        textAlign: TextAlign.center,
                       ),
-                      child: const Text(
-                        '確認',
+                      const SizedBox(height: 10),
+                      Text(
+                        'コイン×10 獲得！',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          _stopSilverAnimation();
+                          Navigator.of(context).pop();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFFFF6B35),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 30, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          '確認',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          // 2等専用: おめでとうポップアップ（モーダル）
-          if (_showSilverCongratulationsPopup) ...[
-            const ModalBarrier(
-              dismissible: false,
-              color: Colors.transparent,
-            ),
-            Center(
-              child: Container(
-                width: 320,
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFFC0C0C0),
-                      Color(0xFF808080),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      spreadRadius: 5,
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      '🎉',
-                      style: TextStyle(fontSize: 40),
+              ),
+            ],
+
+            // ハズレ専用: ポップアップ（モーダル）
+            if (_showLosePopup) ...[
+              ModalBarrier(
+                dismissible: false,
+                color: Colors.black.withOpacity(0.3),
+              ),
+              Center(
+                child: Container(
+                  width: 320,
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF757575),
+                        Color(0xFF424242),
+                      ],
                     ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      '2等当選おめでとう！',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        spreadRadius: 5,
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'コイン×10 獲得！',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white.withOpacity(0.9),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        '😢',
+                        style: TextStyle(fontSize: 40),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        _stopSilverAnimation();
-                        Navigator.of(context).pop();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFFFF6B35),
-                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'ハズレ',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
-                        elevation: 2,
+                        textAlign: TextAlign.center,
                       ),
-                      child: const Text(
-                        '確認',
+                      const SizedBox(height: 10),
+                      Text(
+                        'コインは獲得できませんでした\nまた明日挑戦してください！',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _showLosePopup = false;
+                          });
+                          Navigator.of(context).pop();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFFFF6B35),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 30, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(25),
+                          ),
+                          elevation: 2,
+                        ),
+                        child: const Text(
+                          '確認',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          // ハズレ専用: ポップアップ（モーダル）
-          if (_showLosePopup) ...[
-            ModalBarrier(
-              dismissible: false,
-              color: Colors.black.withOpacity(0.3),
-            ),
-            Center(
-              child: Container(
-                width: 320,
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF757575),
-                      Color(0xFF424242),
                     ],
                   ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      spreadRadius: 5,
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      '😢',
-                      style: TextStyle(fontSize: 40),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'ハズレ',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'コインは獲得できませんでした\nまた明日挑戦してください！',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          _showLosePopup = false;
-                        });
-                        Navigator.of(context).pop();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: const Color(0xFFFF6B35),
-                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(25),
-                        ),
-                        elevation: 2,
-                      ),
-                      child: const Text(
-                        '確認',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
                 ),
               ),
-            ),
+            ],
           ],
-        ],
-      ),
+        ),
       ),
     );
   }
 
   // スロットリールを構築（リアルなスクロールアニメーション）
-  Widget _buildSlotReel(Animation<double> animation, int result, int slotNumber, bool isStopped) {
+  Widget _buildSlotReel(
+      Animation<double> animation, int result, int slotNumber, bool isStopped) {
     return AnimatedBuilder(
       animation: animation,
       builder: (context, child) {
@@ -1440,21 +1537,23 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
               color: isStopped ? Colors.green : const Color(0xFFFF6B35),
               width: isStopped ? 3 : 2,
             ),
-            boxShadow: isStopped ? [
-              BoxShadow(
-                color: Colors.green.withOpacity(0.3),
-                spreadRadius: 1,
-                blurRadius: 5,
-                offset: const Offset(0, 2),
-              ),
-            ] : [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                spreadRadius: 1,
-                blurRadius: 3,
-                offset: const Offset(0, 1),
-              ),
-            ],
+            boxShadow: isStopped
+                ? [
+                    BoxShadow(
+                      color: Colors.green.withOpacity(0.3),
+                      spreadRadius: 1,
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      spreadRadius: 1,
+                      blurRadius: 3,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
@@ -1464,7 +1563,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                   _buildScrollingNumbers(animation, slotNumber)
                 else
                   _buildStaticNumber(result, isStopped),
-
                 if (isStopped)
                   const Positioned(
                     top: 5,
@@ -1475,7 +1573,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                       size: 20,
                     ),
                   ),
-
                 Positioned.fill(
                   child: Container(
                     decoration: BoxDecoration(
@@ -1484,9 +1581,13 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          shouldAnimate ? Colors.white.withOpacity(0.2) : Colors.transparent,
+                          shouldAnimate
+                              ? Colors.white.withOpacity(0.2)
+                              : Colors.transparent,
                           Colors.transparent,
-                          shouldAnimate ? Colors.black.withOpacity(0.1) : Colors.transparent,
+                          shouldAnimate
+                              ? Colors.black.withOpacity(0.1)
+                              : Colors.transparent,
                         ],
                         stops: const [0.0, 0.5, 1.0],
                       ),
@@ -1551,7 +1652,6 @@ class _LotteryViewState extends State<LotteryView> with TickerProviderStateMixin
                   ),
                 ),
               ),
-
           Positioned(
             top: 0,
             left: 0,

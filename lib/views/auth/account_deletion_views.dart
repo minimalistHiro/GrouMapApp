@@ -174,7 +174,7 @@ class _AccountDeletionProcessingViewState extends ConsumerState<AccountDeletionP
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFBF6F2),
       appBar: const CommonHeader(
         title: '退会処理中',
         showBack: false,
@@ -224,7 +224,7 @@ class AccountDeletionCompleteView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFBF6F2),
       appBar: const CommonHeader(
         title: '退会完了',
         showBack: false,

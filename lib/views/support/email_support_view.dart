@@ -189,7 +189,7 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
       appBar: const CommonHeader(
         title: 'メールサポート',
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFBF6F2),
       body: Stack(
         children: [
           DismissKeyboard(

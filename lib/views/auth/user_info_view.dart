@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/custom_button.dart';
@@ -46,8 +47,8 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: CommonHeader(
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
         elevation: 0,

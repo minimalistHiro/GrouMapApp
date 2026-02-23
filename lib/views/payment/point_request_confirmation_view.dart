@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -40,7 +41,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('ポイント付与リクエスト確認'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

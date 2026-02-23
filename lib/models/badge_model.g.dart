@@ -45,6 +45,7 @@ const _$BadgeTypeEnumMap = {
   BadgeType.storesVisited: 'stores_visited',
   BadgeType.specialEvents: 'special_events',
   BadgeType.categoryVisit: 'category_visit',
+  BadgeType.dayVisit: 'day_visit',
   BadgeType.mapOpened: 'map_opened',
   BadgeType.storeDetailViewed: 'store_detail_viewed',
   BadgeType.profileCompleted: 'profile_completed',

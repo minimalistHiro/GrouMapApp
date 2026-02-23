@@ -49,6 +49,8 @@ enum BadgeType {
   specialEvents,
   @JsonValue('category_visit')
   categoryVisit,
+  @JsonValue('day_visit')
+  dayVisit,
   @JsonValue('map_opened')
   mapOpened,
   @JsonValue('store_detail_viewed')

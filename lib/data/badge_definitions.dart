@@ -14,7 +14,7 @@ const Map<String, List<String>> kCategoryGroupMap = {
   'shokudo_other': ['ビュッフェ', '食堂', '料理旅館', 'その他'],
 };
 
-/// アプリ内蔵バッジ定義（全141個）
+/// アプリ内蔵バッジ定義（全162個）
 /// バッジ画像は assets/images/badges/{badgeId}.png に配置
 const List<BadgeModel> kBadgeDefinitions = [
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -141,6 +141,45 @@ const List<BadgeModel> kBadgeDefinitions = [
   BadgeModel(badgeId: 'category_shokudo_other_visit_3', name: '食堂通', description: '食堂・その他の店舗に3回来店', iconUrl: 'category_shokudo_other_visit_3.png', type: BadgeType.categoryVisit, requiredValue: 3, rarity: BadgeRarity.rare, category: '食堂・その他', categoryGroupKey: 'shokudo_other'),
   BadgeModel(badgeId: 'category_shokudo_other_visit_4', name: '食堂マニア', description: '食堂・その他の店舗に4回来店', iconUrl: 'category_shokudo_other_visit_4.png', type: BadgeType.categoryVisit, requiredValue: 4, rarity: BadgeRarity.epic, category: '食堂・その他', categoryGroupKey: 'shokudo_other'),
   BadgeModel(badgeId: 'category_shokudo_other_visit_5', name: '食堂マスター', description: '食堂・その他の店舗に5回来店', iconUrl: 'category_shokudo_other_visit_5.png', type: BadgeType.categoryVisit, requiredValue: 5, rarity: BadgeRarity.legendary, category: '食堂・その他', categoryGroupKey: 'shokudo_other'),
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // 曜日別利用（dayVisit）21個
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // 月曜日（monday）
+  BadgeModel(badgeId: 'day_monday_visit_1', name: '月曜デビュー', description: '月曜日に初めて来店', iconUrl: 'day_monday_visit_1.png', type: BadgeType.dayVisit, requiredValue: 1, rarity: BadgeRarity.common, category: '曜日別利用', categoryGroupKey: 'monday'),
+  BadgeModel(badgeId: 'day_monday_visit_2', name: '月曜リピーター', description: '月曜日に2回来店', iconUrl: 'day_monday_visit_2.png', type: BadgeType.dayVisit, requiredValue: 2, rarity: BadgeRarity.rare, category: '曜日別利用', categoryGroupKey: 'monday'),
+  BadgeModel(badgeId: 'day_monday_visit_3', name: '月曜マスター', description: '月曜日に3回来店', iconUrl: 'day_monday_visit_3.png', type: BadgeType.dayVisit, requiredValue: 3, rarity: BadgeRarity.epic, category: '曜日別利用', categoryGroupKey: 'monday'),
+
+  // 火曜日（tuesday）
+  BadgeModel(badgeId: 'day_tuesday_visit_1', name: '火曜デビュー', description: '火曜日に初めて来店', iconUrl: 'day_tuesday_visit_1.png', type: BadgeType.dayVisit, requiredValue: 1, rarity: BadgeRarity.common, category: '曜日別利用', categoryGroupKey: 'tuesday'),
+  BadgeModel(badgeId: 'day_tuesday_visit_2', name: '火曜リピーター', description: '火曜日に2回来店', iconUrl: 'day_tuesday_visit_2.png', type: BadgeType.dayVisit, requiredValue: 2, rarity: BadgeRarity.rare, category: '曜日別利用', categoryGroupKey: 'tuesday'),
+  BadgeModel(badgeId: 'day_tuesday_visit_3', name: '火曜マスター', description: '火曜日に3回来店', iconUrl: 'day_tuesday_visit_3.png', type: BadgeType.dayVisit, requiredValue: 3, rarity: BadgeRarity.epic, category: '曜日別利用', categoryGroupKey: 'tuesday'),
+
+  // 水曜日（wednesday）
+  BadgeModel(badgeId: 'day_wednesday_visit_1', name: '水曜デビュー', description: '水曜日に初めて来店', iconUrl: 'day_wednesday_visit_1.png', type: BadgeType.dayVisit, requiredValue: 1, rarity: BadgeRarity.common, category: '曜日別利用', categoryGroupKey: 'wednesday'),
+  BadgeModel(badgeId: 'day_wednesday_visit_2', name: '水曜リピーター', description: '水曜日に2回来店', iconUrl: 'day_wednesday_visit_2.png', type: BadgeType.dayVisit, requiredValue: 2, rarity: BadgeRarity.rare, category: '曜日別利用', categoryGroupKey: 'wednesday'),
+  BadgeModel(badgeId: 'day_wednesday_visit_3', name: '水曜マスター', description: '水曜日に3回来店', iconUrl: 'day_wednesday_visit_3.png', type: BadgeType.dayVisit, requiredValue: 3, rarity: BadgeRarity.epic, category: '曜日別利用', categoryGroupKey: 'wednesday'),
+
+  // 木曜日（thursday）
+  BadgeModel(badgeId: 'day_thursday_visit_1', name: '木曜デビュー', description: '木曜日に初めて来店', iconUrl: 'day_thursday_visit_1.png', type: BadgeType.dayVisit, requiredValue: 1, rarity: BadgeRarity.common, category: '曜日別利用', categoryGroupKey: 'thursday'),
+  BadgeModel(badgeId: 'day_thursday_visit_2', name: '木曜リピーター', description: '木曜日に2回来店', iconUrl: 'day_thursday_visit_2.png', type: BadgeType.dayVisit, requiredValue: 2, rarity: BadgeRarity.rare, category: '曜日別利用', categoryGroupKey: 'thursday'),
+  BadgeModel(badgeId: 'day_thursday_visit_3', name: '木曜マスター', description: '木曜日に3回来店', iconUrl: 'day_thursday_visit_3.png', type: BadgeType.dayVisit, requiredValue: 3, rarity: BadgeRarity.epic, category: '曜日別利用', categoryGroupKey: 'thursday'),
+
+  // 金曜日（friday）
+  BadgeModel(badgeId: 'day_friday_visit_1', name: '金曜デビュー', description: '金曜日に初めて来店', iconUrl: 'day_friday_visit_1.png', type: BadgeType.dayVisit, requiredValue: 1, rarity: BadgeRarity.common, category: '曜日別利用', categoryGroupKey: 'friday'),
+  BadgeModel(badgeId: 'day_friday_visit_2', name: '金曜リピーター', description: '金曜日に2回来店', iconUrl: 'day_friday_visit_2.png', type: BadgeType.dayVisit, requiredValue: 2, rarity: BadgeRarity.rare, category: '曜日別利用', categoryGroupKey: 'friday'),
+  BadgeModel(badgeId: 'day_friday_visit_3', name: '金曜マスター', description: '金曜日に3回来店', iconUrl: 'day_friday_visit_3.png', type: BadgeType.dayVisit, requiredValue: 3, rarity: BadgeRarity.epic, category: '曜日別利用', categoryGroupKey: 'friday'),
+
+  // 土曜日（saturday）
+  BadgeModel(badgeId: 'day_saturday_visit_1', name: '土曜デビュー', description: '土曜日に初めて来店', iconUrl: 'day_saturday_visit_1.png', type: BadgeType.dayVisit, requiredValue: 1, rarity: BadgeRarity.common, category: '曜日別利用', categoryGroupKey: 'saturday'),
+  BadgeModel(badgeId: 'day_saturday_visit_2', name: '土曜リピーター', description: '土曜日に2回来店', iconUrl: 'day_saturday_visit_2.png', type: BadgeType.dayVisit, requiredValue: 2, rarity: BadgeRarity.rare, category: '曜日別利用', categoryGroupKey: 'saturday'),
+  BadgeModel(badgeId: 'day_saturday_visit_3', name: '土曜マスター', description: '土曜日に3回来店', iconUrl: 'day_saturday_visit_3.png', type: BadgeType.dayVisit, requiredValue: 3, rarity: BadgeRarity.epic, category: '曜日別利用', categoryGroupKey: 'saturday'),
+
+  // 日曜日（sunday）
+  BadgeModel(badgeId: 'day_sunday_visit_1', name: '日曜デビュー', description: '日曜日に初めて来店', iconUrl: 'day_sunday_visit_1.png', type: BadgeType.dayVisit, requiredValue: 1, rarity: BadgeRarity.common, category: '曜日別利用', categoryGroupKey: 'sunday'),
+  BadgeModel(badgeId: 'day_sunday_visit_2', name: '日曜リピーター', description: '日曜日に2回来店', iconUrl: 'day_sunday_visit_2.png', type: BadgeType.dayVisit, requiredValue: 2, rarity: BadgeRarity.rare, category: '曜日別利用', categoryGroupKey: 'sunday'),
+  BadgeModel(badgeId: 'day_sunday_visit_3', name: '日曜マスター', description: '日曜日に3回来店', iconUrl: 'day_sunday_visit_3.png', type: BadgeType.dayVisit, requiredValue: 3, rarity: BadgeRarity.epic, category: '曜日別利用', categoryGroupKey: 'sunday'),
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // アクション系バッジ 60個
@@ -270,6 +309,8 @@ String badgeTypeDisplayName(BadgeType type) {
       return 'イベント';
     case BadgeType.categoryVisit:
       return 'カテゴリ別来店';
+    case BadgeType.dayVisit:
+      return '曜日別利用';
     case BadgeType.mapOpened:
       return 'マップ閲覧';
     case BadgeType.storeDetailViewed:

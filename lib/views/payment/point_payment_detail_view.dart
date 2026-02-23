@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../main_navigation_view.dart';
 import '../../widgets/stamp_card_widget.dart';
+import '../../services/coin_service.dart';
 import '../../services/mission_service.dart';
+import '../../providers/badge_provider.dart';
 
 class PointPaymentDetailView extends StatefulWidget {
   final String storeId;
@@ -72,8 +75,8 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat();
-    _shineAnim = Tween<double>(begin: -1.0, end: 2.0)
-        .animate(CurvedAnimation(parent: _shineController, curve: Curves.linear));
+    _shineAnim = Tween<double>(begin: -1.0, end: 2.0).animate(
+        CurvedAnimation(parent: _shineController, curve: Curves.linear));
     _loadStampData();
     _loadUsedCouponTitles();
     _loadTransactionId();
@@ -187,7 +190,8 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
 
         final validUntil = _parseValidUntil(data['validUntil']);
         final noExpiry = data['noExpiry'] == true;
-        final isNoExpiry = noExpiry || (validUntil != null && validUntil.year >= 2100);
+        final isNoExpiry =
+            noExpiry || (validUntil != null && validUntil.year >= 2100);
         if (!isNoExpiry && (validUntil == null || !validUntil.isAfter(now))) {
           return false;
         }
@@ -346,8 +350,12 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       if (eventsSnap.docs.isEmpty) return;
 
       final data = eventsSnap.docs.first.data();
-      final stampsAdded = (data['stampsAdded'] is num) ? (data['stampsAdded'] as num).toInt() : 0;
-      final stampsAfter = (data['stampsAfter'] is num) ? (data['stampsAfter'] as num).toInt() : _stamps;
+      final stampsAdded = (data['stampsAdded'] is num)
+          ? (data['stampsAdded'] as num).toInt()
+          : 0;
+      final stampsAfter = (data['stampsAfter'] is num)
+          ? (data['stampsAfter'] as num).toInt()
+          : _stamps;
       if (stampsAdded <= 0) return;
       if (stampsAfter <= 0) return;
 
@@ -358,6 +366,19 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
 
       // 新規登録ミッション: スタンプ初獲得
       MissionService().markRegistrationMission(userId, 'first_stamp');
+
+      // 曜日別訪問バッジカウンター
+      const dayNames = [
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+        'sunday'
+      ];
+      final dayName = dayNames[DateTime.now().weekday - 1];
+      BadgeService().incrementBadgeCounter(userId, 'dayVisit_$dayName');
 
       // 来店ボーナス: +1コイン付与（二重付与防止）
       await _awardVisitCoinBonus(userId, eventsSnap.docs.first);
@@ -390,9 +411,20 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
         // 二重付与チェック
         if (eventSnap.data()?['coinBonusAwarded'] == true) return;
 
-        final currentCoins =
-            (userDoc.data()?['coins'] as num?)?.toInt() ?? 0;
-        transaction.update(userRef, {'coins': currentCoins + 1});
+        final userData = userDoc.data() ?? {};
+        final now = DateTime.now();
+        final currentCoins = CoinService.resolveAvailableCoinsFromUserData(
+          userData,
+          now: now,
+        );
+        transaction.update(
+          userRef,
+          CoinService.buildCoinEarnUpdate(
+            currentCoins: currentCoins,
+            earnedCoins: 1,
+            earnedAt: now,
+          ),
+        );
         transaction.update(eventRef, {'coinBonusAwarded': true});
       });
 
@@ -405,8 +437,8 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: CommonHeader(
         title: const Text('スタンプ押印画面'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
@@ -621,7 +653,9 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
                               '残り$remaining枚',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: needsStamps ? Colors.grey[500] : Colors.green,
+                                color: needsStamps
+                                    ? Colors.grey[500]
+                                    : Colors.green,
                               ),
                             ),
                           const SizedBox(width: 12),
@@ -632,7 +666,9 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
                                   : '期限: ${validUntil.month}/${validUntil.day} ${validUntil.hour.toString().padLeft(2, '0')}:${validUntil.minute.toString().padLeft(2, '0')}',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: needsStamps ? Colors.grey[500] : Colors.grey,
+                                color: needsStamps
+                                    ? Colors.grey[500]
+                                    : Colors.grey,
                               ),
                             ),
                         ],
@@ -719,7 +755,6 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       ],
     );
   }
-
 
   Widget _buildDetailRowMultiline(String label, String value) {
     return Row(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../providers/feedback_provider.dart';
@@ -56,7 +57,7 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
     final authState = ref.watch(authProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('フィードバック'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
 import '../legal/privacy_policy_view.dart';
 import '../legal/terms_view.dart';
@@ -18,13 +19,8 @@ class _TermsPrivacyConsentViewState extends State<TermsPrivacyConsentView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('利用規約・プライバシーポリシー'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: const CommonHeader(title: '利用規約・プライバシーポリシー'),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {

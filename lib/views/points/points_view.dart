@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/point_provider.dart';
@@ -34,7 +35,7 @@ class _PointsViewState extends ConsumerState<PointsView>
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('ポイント'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

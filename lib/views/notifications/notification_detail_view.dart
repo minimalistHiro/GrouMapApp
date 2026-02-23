@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/notification_model.dart' as model;
 import '../../providers/notification_provider.dart';
@@ -18,7 +19,7 @@ class NotificationDetailView extends ConsumerWidget {
     });
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('通知詳細'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

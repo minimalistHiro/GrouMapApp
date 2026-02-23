@@ -208,7 +208,7 @@ class UserStatsCard extends ConsumerWidget {
           ref.watch(userStoreProgressProvider(userId)).when(
             data: (stats) {
               Widget buildDivider() => Container(width: 1, height: 36, color: Colors.grey[300]);
-              Widget buildStatItem(String label, int value) {
+              Widget buildStatItem(String label, int value, String condition) {
                 return Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -230,6 +230,15 @@ class UserStatsCard extends ConsumerWidget {
                         ),
                         textAlign: TextAlign.center,
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        condition,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[500],
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ],
                   ),
                 );
@@ -237,9 +246,9 @@ class UserStatsCard extends ConsumerWidget {
 
               return Row(
                 children: [
-                  buildStatItem('開拓済み', stats.newPioneerCount),
+                  buildStatItem('開拓済み', stats.newPioneerCount, '(スタンプ1〜9個)'),
                   buildDivider(),
-                  buildStatItem('スタンプ満了', stats.stamp10StoreCount),
+                  buildStatItem('スタンプ満了', stats.stamp10StoreCount, '(スタンプ10個以上)'),
                 ],
               );
             },

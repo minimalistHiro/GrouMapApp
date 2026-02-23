@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.notifyFollowersOnNewCoupon = exports.notifyFollowersOnNewPost = exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.syncStoreOwnerFlags = exports.setStoreOwnerFlagOnCreate = exports.notifyFollowersOnNewCoupon = exports.notifyFollowersOnNewPost = exports.expireCoinsScheduled = exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.verifyEmailChangeOtp = exports.requestEmailChangeOtp = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -1450,6 +1450,139 @@ exports.requestEmailOtp = (0, https_1.onCall)({
     }
     return { success: true };
 });
+exports.requestEmailChangeOtp = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE],
+}, async (request) => {
+    var _a, _b, _c, _d;
+    if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new https_1.HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    const uid = request.auth.uid;
+    const newEmail = String((_c = (_b = request.data) === null || _b === void 0 ? void 0 : _b.newEmail) !== null && _c !== void 0 ? _c : '').trim().toLowerCase();
+    if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        throw new https_1.HttpsError('invalid-argument', '有効なメールアドレスを入力してください');
+    }
+    const userRecord = await auth.getUser(uid);
+    const currentEmail = userRecord.email;
+    if (currentEmail && currentEmail.toLowerCase() === newEmail) {
+        throw new https_1.HttpsError('invalid-argument', '現在のメールアドレスと同じです');
+    }
+    try {
+        await auth.getUserByEmail(newEmail);
+        throw new https_1.HttpsError('already-exists', 'このメールアドレスは既に使用されています');
+    }
+    catch (e) {
+        if (e instanceof https_1.HttpsError)
+            throw e;
+        const firebaseError = e;
+        if (firebaseError.code !== 'auth/user-not-found') {
+            throw new https_1.HttpsError('internal', 'メールアドレスの確認に失敗しました');
+        }
+    }
+    const otpRef = db.collection(EMAIL_OTP_COLLECTION).doc(uid);
+    const otpSnapshot = await otpRef.get();
+    if (otpSnapshot.exists) {
+        const existing = otpSnapshot.data();
+        const lastSentAt = (_d = existing.lastSentAt) === null || _d === void 0 ? void 0 : _d.toDate();
+        if (lastSentAt && Date.now() - lastSentAt.getTime() < 60 * 1000) {
+            throw new https_1.HttpsError('resource-exhausted', '認証コードは1分以内に再送信できません');
+        }
+    }
+    const code = createOtp();
+    const codeHash = hashOtp(code, uid);
+    const expiresAt = firestore_2.Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000));
+    await otpRef.set({
+        codeHash,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: firestore_2.Timestamp.fromDate(new Date()),
+        updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        targetEmail: newEmail,
+        purpose: 'emailChange',
+    }, { merge: true });
+    try {
+        const smtpConfig = getSmtpConfig();
+        const transporter = nodemailer_1.default.createTransport({
+            host: smtpConfig.host,
+            port: smtpConfig.port,
+            secure: smtpConfig.secure,
+            auth: smtpConfig.auth,
+        });
+        await transporter.sendMail({
+            from: smtpConfig.from,
+            to: newEmail,
+            subject: '【Groumap】メールアドレス変更 認証コードのお知らせ',
+            text: buildOtpEmailText(code),
+        });
+    }
+    catch (error) {
+        await otpRef.delete();
+        console.error('Failed to send email change OTP:', error);
+        throw new https_1.HttpsError('internal', '認証コードの送信に失敗しました');
+    }
+    return { success: true };
+});
+exports.verifyEmailChangeOtp = (0, https_1.onCall)({ region: 'asia-northeast1' }, async (request) => {
+    var _a, _b, _c, _d, _e;
+    if (!((_a = request.auth) === null || _a === void 0 ? void 0 : _a.uid)) {
+        throw new https_1.HttpsError('unauthenticated', 'ログインが必要です');
+    }
+    const uid = request.auth.uid;
+    const code = String((_c = (_b = request.data) === null || _b === void 0 ? void 0 : _b.code) !== null && _c !== void 0 ? _c : '').trim();
+    if (!/^\d{6}$/.test(code)) {
+        throw new https_1.HttpsError('invalid-argument', '6桁の認証コードを入力してください');
+    }
+    const otpRef = db.collection(EMAIL_OTP_COLLECTION).doc(uid);
+    const otpSnapshot = await otpRef.get();
+    if (!otpSnapshot.exists) {
+        throw new https_1.HttpsError('not-found', '認証コードが見つかりません。再送信してください');
+    }
+    const data = otpSnapshot.data();
+    if (data.purpose !== 'emailChange' || !data.targetEmail) {
+        throw new https_1.HttpsError('failed-precondition', 'メールアドレス変更用の認証コードではありません');
+    }
+    const expiresAt = (_d = data.expiresAt) === null || _d === void 0 ? void 0 : _d.toDate();
+    if (!expiresAt || expiresAt.getTime() < Date.now()) {
+        await otpRef.delete();
+        throw new https_1.HttpsError('failed-precondition', '認証コードの有効期限が切れています');
+    }
+    const attempts = (_e = data.attempts) !== null && _e !== void 0 ? _e : 0;
+    if (attempts >= 5) {
+        throw new https_1.HttpsError('resource-exhausted', '認証コードの試行回数が上限に達しました');
+    }
+    const codeHash = hashOtp(code, uid);
+    if (codeHash !== data.codeHash) {
+        await otpRef.update({
+            attempts: firestore_2.FieldValue.increment(1),
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        });
+        throw new https_1.HttpsError('invalid-argument', '認証コードが正しくありません');
+    }
+    const targetEmail = data.targetEmail;
+    try {
+        await auth.getUserByEmail(targetEmail);
+        await otpRef.delete();
+        throw new https_1.HttpsError('already-exists', 'このメールアドレスは既に使用されています');
+    }
+    catch (e) {
+        if (e instanceof https_1.HttpsError)
+            throw e;
+        const firebaseError = e;
+        if (firebaseError.code !== 'auth/user-not-found') {
+            throw new https_1.HttpsError('internal', 'メールアドレスの確認に失敗しました');
+        }
+    }
+    await auth.updateUser(uid, { email: targetEmail });
+    await Promise.all([
+        otpRef.delete(),
+        db.collection(USERS_COLLECTION).doc(uid).set({
+            email: targetEmail,
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        }, { merge: true }),
+    ]);
+    return { verified: true, email: targetEmail };
+});
 exports.calculatePointRequestRates = (0, firestore_1.onDocumentWritten)({
     document: 'point_requests/{storeId}/{userId}/award_request',
     region: 'asia-northeast1',
@@ -2333,6 +2466,53 @@ exports.syncInstagramPostsScheduled = (0, scheduler_1.onSchedule)({
     }
     console.log(`Instagram sync finished: stores=${processed}, posts=${total}`);
 });
+exports.expireCoinsScheduled = (0, scheduler_1.onSchedule)({
+    region: 'asia-northeast1',
+    schedule: 'every day 03:30',
+    timeZone: 'Asia/Tokyo',
+}, async () => {
+    const now = firestore_2.Timestamp.now();
+    const BATCH_SIZE = 400;
+    let expiredUsers = 0;
+    let cleanedUsers = 0;
+    while (true) {
+        const snapshot = await db
+            .collection(USERS_COLLECTION)
+            .where('coinExpiresAt', '<=', now)
+            .limit(BATCH_SIZE)
+            .get();
+        if (snapshot.empty)
+            break;
+        const batch = db.batch();
+        let updates = 0;
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            const currentCoins = asInt(data['coins'], 0);
+            if (currentCoins > 0) {
+                batch.update(doc.ref, {
+                    coins: 0,
+                    coinExpiredAt: firestore_2.FieldValue.serverTimestamp(),
+                    updatedAt: firestore_2.FieldValue.serverTimestamp(),
+                });
+                expiredUsers += 1;
+                updates += 1;
+                continue;
+            }
+            batch.update(doc.ref, {
+                coinExpiresAt: firestore_2.FieldValue.delete(),
+            });
+            cleanedUsers += 1;
+            updates += 1;
+        }
+        if (updates > 0) {
+            await batch.commit();
+        }
+        if (snapshot.size < BATCH_SIZE) {
+            break;
+        }
+    }
+    console.log(`[expireCoinsScheduled] expiredUsers=${expiredUsers}, cleanedUsers=${cleanedUsers}`);
+});
 // チェックイン統計の更新（オプション）- 一時的に無効化
 // export const updateCheckInStats = onDocumentCreated(
 //   {
@@ -2473,5 +2653,80 @@ exports.notifyFollowersOnNewCoupon = (0, firestore_1.onDocumentCreated)({
         }));
     }
     console.log(`[notifyFollowersOnNewCoupon] Notified ${followersSnap.size} followers for store ${storeId}`);
+});
+// 店舗作成時にisOwnerフラグを自動設定
+// 作成者がisOwnerユーザーの場合、店舗ドキュメントにisOwner=trueを設定
+exports.setStoreOwnerFlagOnCreate = (0, firestore_1.onDocumentCreated)({
+    document: 'stores/{storeId}',
+    region: 'asia-northeast1',
+}, async (event) => {
+    var _a, _b, _c, _d;
+    const data = (_a = event.data) === null || _a === void 0 ? void 0 : _a.data();
+    if (!data)
+        return;
+    // 既にisOwner=trueなら何もしない
+    if (data['isOwner'] === true)
+        return;
+    const createdBy = (_c = ((_b = data['createdBy']) !== null && _b !== void 0 ? _b : data['ownerId'])) === null || _c === void 0 ? void 0 : _c.toString();
+    if (!createdBy)
+        return;
+    try {
+        const userDoc = await db.collection(USERS_COLLECTION).doc(createdBy).get();
+        const userData = userDoc.data();
+        if ((userData === null || userData === void 0 ? void 0 : userData.isOwner) === true) {
+            await ((_d = event.data) === null || _d === void 0 ? void 0 : _d.ref.update({ isOwner: true }));
+            console.log(`[setStoreOwnerFlagOnCreate] isOwner=true を設定: ${event.params.storeId} (createdBy: ${createdBy})`);
+        }
+    }
+    catch (e) {
+        console.error(`[setStoreOwnerFlagOnCreate] Error:`, e);
+    }
+});
+// 既存店舗のisOwnerフラグ一括同期（ワンタイム実行用）
+exports.syncStoreOwnerFlags = (0, https_1.onCall)({ region: 'asia-northeast1' }, async (request) => {
+    var _a, _b;
+    // isOwner権限チェック
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', '認証が必要です');
+    }
+    const callerDoc = await db.collection(USERS_COLLECTION).doc(request.auth.uid).get();
+    const callerData = callerDoc.data();
+    if ((callerData === null || callerData === void 0 ? void 0 : callerData.isOwner) !== true) {
+        throw new https_1.HttpsError('permission-denied', 'isOwner権限が必要です');
+    }
+    // isOwner=true の全ユーザーIDを取得
+    const ownerUsersSnapshot = await db
+        .collection(USERS_COLLECTION)
+        .where('isOwner', '==', true)
+        .get();
+    const ownerUserIds = new Set(ownerUsersSnapshot.docs.map((doc) => doc.id));
+    console.log(`[syncStoreOwnerFlags] isOwnerユーザー数: ${ownerUserIds.size}`);
+    // 全店舗を確認し、createdBy/ownerIdがisOwnerユーザーならフラグ設定
+    const storesSnapshot = await db.collection('stores').get();
+    let updatedCount = 0;
+    const BATCH_SIZE = 500;
+    let batch = db.batch();
+    let batchCount = 0;
+    for (const storeDoc of storesSnapshot.docs) {
+        const storeData = storeDoc.data();
+        if (storeData['isOwner'] === true)
+            continue;
+        const createdBy = (_b = ((_a = storeData['createdBy']) !== null && _a !== void 0 ? _a : storeData['ownerId'])) === null || _b === void 0 ? void 0 : _b.toString();
+        if (createdBy && ownerUserIds.has(createdBy)) {
+            batch.update(storeDoc.ref, { isOwner: true });
+            updatedCount++;
+            batchCount++;
+            if (batchCount >= BATCH_SIZE) {
+                await batch.commit();
+                batch = db.batch();
+                batchCount = 0;
+            }
+        }
+    }
+    if (batchCount > 0) {
+        await batch.commit();
+    }
+    console.log(`[syncStoreOwnerFlags] ${updatedCount}件の店舗を更新しました`);
+    return { updatedCount };
 });
 //# sourceMappingURL=index.js.map

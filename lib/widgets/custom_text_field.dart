@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_ui.dart';
+
 class CustomTextField extends StatelessWidget {
   final TextEditingController? controller;
   final String? labelText;
@@ -52,24 +54,24 @@ class CustomTextField extends StatelessWidget {
         labelStyle: const TextStyle(color: Colors.black87),
         hintStyle: const TextStyle(color: Colors.grey),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.grey),
+          borderRadius: BorderRadius.circular(AppUi.controlRadius),
+          borderSide: const BorderSide(color: AppUi.border),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.grey),
+          borderRadius: BorderRadius.circular(AppUi.controlRadius),
+          borderSide: const BorderSide(color: AppUi.border),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.blue, width: 2),
+          borderRadius: BorderRadius.circular(AppUi.controlRadius),
+          borderSide: const BorderSide(color: AppUi.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.red),
+          borderRadius: BorderRadius.circular(AppUi.controlRadius),
+          borderSide: const BorderSide(color: AppUi.error),
         ),
         focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Colors.red, width: 2),
+          borderRadius: BorderRadius.circular(AppUi.controlRadius),
+          borderSide: const BorderSide(color: AppUi.error, width: 2),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,

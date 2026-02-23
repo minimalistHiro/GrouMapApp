@@ -124,6 +124,15 @@ class _DailyRecommendationViewState
         if (isActive == false || isApproved == false) {
           continue;
         }
+
+        // isOwner店舗を除外（店舗ドキュメントのフラグで判定）
+        final rawIsOwner = data['isOwner'];
+        final isOwnerStore = rawIsOwner == true ||
+            rawIsOwner?.toString().toLowerCase() == 'true';
+        if (isOwnerStore) {
+          continue;
+        }
+
         stores.add(_toStoreDetailStore(doc.id, data));
       }
 

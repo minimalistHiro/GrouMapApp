@@ -233,6 +233,34 @@ class AuthService {
     });
   }
 
+  // メールアドレス変更用OTPを新メールアドレスに送信
+  Future<void> sendEmailChangeOtp(String newEmail) async {
+    return await _retryOperation(() async {
+      try {
+        final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+        final callable = functions.httpsCallable('requestEmailChangeOtp');
+        await callable.call({'newEmail': newEmail});
+      } catch (e) {
+        debugPrint('Send email change OTP error: $e');
+        throw _handleAuthError(e, 'メールアドレス変更コード送信');
+      }
+    });
+  }
+
+  // メールアドレス変更用OTPを検証してメールアドレスを更新
+  Future<void> verifyEmailChangeOtp(String code) async {
+    return await _retryOperation(() async {
+      try {
+        final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+        final callable = functions.httpsCallable('verifyEmailChangeOtp');
+        await callable.call({'code': code});
+      } catch (e) {
+        debugPrint('Verify email change OTP error: $e');
+        throw _handleAuthError(e, 'メールアドレス変更コード確認');
+      }
+    });
+  }
+
   // メール認証状態を確認
   Future<bool> isEmailVerified() async {
     try {

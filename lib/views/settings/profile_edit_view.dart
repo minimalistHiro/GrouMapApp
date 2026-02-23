@@ -45,25 +45,10 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
   // 新規フィールド
   String? _currentUsername; // 保存済みのusername（変更検知用）
   String? _selectedOccupation;
-  List<String> _selectedInterestCategories = [];
 
   final List<String> _occupations = [
     '学生', '会社員', '公務員', '自営業', 'フリーランス',
     'パート・アルバイト', '主婦・主夫', 'その他',
-  ];
-
-  static const List<String> _allCategories = [
-    'カフェ・喫茶店', 'レストラン', '居酒屋', '和食', '日本料理',
-    '海鮮', '寿司', 'そば', 'うどん', 'うなぎ',
-    '焼き鳥', 'とんかつ', '串揚げ', '天ぷら',
-    'お好み焼き', 'もんじゃ焼き', 'しゃぶしゃぶ', '鍋',
-    '焼肉', 'ホルモン', 'ラーメン', '中華料理', '餃子',
-    '韓国料理', 'タイ料理', 'カレー', '洋食', 'フレンチ',
-    'スペイン料理', 'ビストロ', 'パスタ', 'ピザ',
-    'ステーキ', 'ハンバーグ', 'ハンバーガー',
-    'ビュッフェ', '食堂', 'パン・サンドイッチ',
-    'スイーツ', 'ケーキ', 'タピオカ',
-    'バー・お酒', 'スナック', '料理旅館', '沖縄料理', 'その他',
   ];
 
   final List<String> _genders = ['男性', '女性', 'その他', '回答しない'];
@@ -119,10 +104,6 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
         _currentUsername = _usernameController.text.isNotEmpty ? _usernameController.text : null;
         _bioController.text = (data['bio'] ?? '').toString();
         _selectedOccupation = (data['occupation'] as String?)?.isNotEmpty == true ? data['occupation'] : null;
-        final interests = data['interestCategories'];
-        if (interests is List) {
-          _selectedInterestCategories = interests.cast<String>().toList();
-        }
 
         if (_selectedPrefecture != null) {
           await _loadCitiesForPrefecture(_selectedPrefecture!);
@@ -186,7 +167,6 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
         'username': newUsername.isNotEmpty ? newUsername : null,
         'bio': _bioController.text.trim(),
         'occupation': _selectedOccupation,
-        'interestCategories': _selectedInterestCategories,
         'updatedAt': FieldValue.serverTimestamp(),
       };
       if (!isGoogleUser) {
@@ -817,50 +797,6 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                   ),
                 if (_selectedPrefecture != null) const SizedBox(height: 16),
 
-                // 興味のあるカテゴリ
-                const Text(
-                  '興味のあるカテゴリ',
-                  style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _allCategories.map((category) {
-                    final isSelected = _selectedInterestCategories.contains(category);
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          if (isSelected) {
-                            _selectedInterestCategories.remove(category);
-                          } else {
-                            _selectedInterestCategories.add(category);
-                          }
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: isSelected ? const Color(0xFFFF6B35) : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isSelected ? const Color(0xFFFF6B35) : Colors.grey.shade300,
-                          ),
-                        ),
-                        child: Text(
-                          category,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isSelected ? Colors.white : Colors.black87,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
                 if (!isGoogleUser) ...[
                   const Text('プロフィール画像（任意）', style: TextStyle(fontSize: 14, color: Colors.grey, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
@@ -901,7 +837,7 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
           ),
         ),
       ),
-      backgroundColor: const Color(0xFFF7F7F7),
+      backgroundColor: const Color(0xFFFBF6F2),
     );
   }
 }

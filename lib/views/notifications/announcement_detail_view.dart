@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
@@ -19,7 +20,7 @@ class AnnouncementDetailView extends ConsumerWidget {
     });
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('お知らせ詳細'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

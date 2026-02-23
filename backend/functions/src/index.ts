@@ -820,6 +820,8 @@ type EmailOtpRecord = {
   expiresAt?: Timestamp;
   attempts?: number;
   lastSentAt?: Timestamp;
+  targetEmail?: string;
+  purpose?: string;
 };
 
 async function getUserFcmTokens(userId: string): Promise<string[]> {
@@ -1748,6 +1750,169 @@ export const requestEmailOtp = onCall(
     }
 
     return { success: true };
+  }
+);
+
+export const requestEmailChangeOtp = onCall(
+  {
+    region: 'asia-northeast1',
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE],
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'ログインが必要です');
+    }
+
+    const uid = request.auth.uid;
+    const newEmail = String(request.data?.newEmail ?? '').trim().toLowerCase();
+
+    if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+      throw new HttpsError('invalid-argument', '有効なメールアドレスを入力してください');
+    }
+
+    const userRecord = await auth.getUser(uid);
+    const currentEmail = userRecord.email;
+
+    if (currentEmail && currentEmail.toLowerCase() === newEmail) {
+      throw new HttpsError('invalid-argument', '現在のメールアドレスと同じです');
+    }
+
+    try {
+      await auth.getUserByEmail(newEmail);
+      throw new HttpsError('already-exists', 'このメールアドレスは既に使用されています');
+    } catch (e: unknown) {
+      if (e instanceof HttpsError) throw e;
+      const firebaseError = e as { code?: string };
+      if (firebaseError.code !== 'auth/user-not-found') {
+        throw new HttpsError('internal', 'メールアドレスの確認に失敗しました');
+      }
+    }
+
+    const otpRef = db.collection(EMAIL_OTP_COLLECTION).doc(uid);
+    const otpSnapshot = await otpRef.get();
+    if (otpSnapshot.exists) {
+      const existing = otpSnapshot.data() as EmailOtpRecord;
+      const lastSentAt = existing.lastSentAt?.toDate();
+      if (lastSentAt && Date.now() - lastSentAt.getTime() < 60 * 1000) {
+        throw new HttpsError('resource-exhausted', '認証コードは1分以内に再送信できません');
+      }
+    }
+
+    const code = createOtp();
+    const codeHash = hashOtp(code, uid);
+    const expiresAt = Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000));
+
+    await otpRef.set(
+      {
+        codeHash,
+        expiresAt,
+        attempts: 0,
+        lastSentAt: Timestamp.fromDate(new Date()),
+        updatedAt: FieldValue.serverTimestamp(),
+        targetEmail: newEmail,
+        purpose: 'emailChange',
+      },
+      { merge: true }
+    );
+
+    try {
+      const smtpConfig = getSmtpConfig();
+      const transporter = nodemailer.createTransport({
+        host: smtpConfig.host,
+        port: smtpConfig.port,
+        secure: smtpConfig.secure,
+        auth: smtpConfig.auth,
+      });
+
+      await transporter.sendMail({
+        from: smtpConfig.from,
+        to: newEmail,
+        subject: '【Groumap】メールアドレス変更 認証コードのお知らせ',
+        text: buildOtpEmailText(code),
+      });
+    } catch (error) {
+      await otpRef.delete();
+      console.error('Failed to send email change OTP:', error);
+      throw new HttpsError('internal', '認証コードの送信に失敗しました');
+    }
+
+    return { success: true };
+  }
+);
+
+export const verifyEmailChangeOtp = onCall(
+  { region: 'asia-northeast1' },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'ログインが必要です');
+    }
+
+    const uid = request.auth.uid;
+    const code = String(request.data?.code ?? '').trim();
+    if (!/^\d{6}$/.test(code)) {
+      throw new HttpsError('invalid-argument', '6桁の認証コードを入力してください');
+    }
+
+    const otpRef = db.collection(EMAIL_OTP_COLLECTION).doc(uid);
+    const otpSnapshot = await otpRef.get();
+    if (!otpSnapshot.exists) {
+      throw new HttpsError('not-found', '認証コードが見つかりません。再送信してください');
+    }
+
+    const data = otpSnapshot.data() as EmailOtpRecord;
+
+    if (data.purpose !== 'emailChange' || !data.targetEmail) {
+      throw new HttpsError('failed-precondition', 'メールアドレス変更用の認証コードではありません');
+    }
+
+    const expiresAt = data.expiresAt?.toDate();
+    if (!expiresAt || expiresAt.getTime() < Date.now()) {
+      await otpRef.delete();
+      throw new HttpsError('failed-precondition', '認証コードの有効期限が切れています');
+    }
+
+    const attempts = data.attempts ?? 0;
+    if (attempts >= 5) {
+      throw new HttpsError('resource-exhausted', '認証コードの試行回数が上限に達しました');
+    }
+
+    const codeHash = hashOtp(code, uid);
+    if (codeHash !== data.codeHash) {
+      await otpRef.update({
+        attempts: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      throw new HttpsError('invalid-argument', '認証コードが正しくありません');
+    }
+
+    const targetEmail = data.targetEmail;
+
+    try {
+      await auth.getUserByEmail(targetEmail);
+      await otpRef.delete();
+      throw new HttpsError('already-exists', 'このメールアドレスは既に使用されています');
+    } catch (e: unknown) {
+      if (e instanceof HttpsError) throw e;
+      const firebaseError = e as { code?: string };
+      if (firebaseError.code !== 'auth/user-not-found') {
+        throw new HttpsError('internal', 'メールアドレスの確認に失敗しました');
+      }
+    }
+
+    await auth.updateUser(uid, { email: targetEmail });
+
+    await Promise.all([
+      otpRef.delete(),
+      db.collection(USERS_COLLECTION).doc(uid).set(
+        {
+          email: targetEmail,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      ),
+    ]);
+
+    return { verified: true, email: targetEmail };
   }
 );
 
@@ -2848,6 +3013,66 @@ export const syncInstagramPostsScheduled = onSchedule(
   },
 );
 
+export const expireCoinsScheduled = onSchedule(
+  {
+    region: 'asia-northeast1',
+    schedule: 'every day 03:30',
+    timeZone: 'Asia/Tokyo',
+  },
+  async () => {
+    const now = Timestamp.now();
+    const BATCH_SIZE = 400;
+    let expiredUsers = 0;
+    let cleanedUsers = 0;
+
+    while (true) {
+      const snapshot = await db
+        .collection(USERS_COLLECTION)
+        .where('coinExpiresAt', '<=', now)
+        .limit(BATCH_SIZE)
+        .get();
+
+      if (snapshot.empty) break;
+
+      const batch = db.batch();
+      let updates = 0;
+      for (const doc of snapshot.docs) {
+        const data = doc.data() as Record<string, unknown>;
+        const currentCoins = asInt(data['coins'], 0);
+
+        if (currentCoins > 0) {
+          batch.update(doc.ref, {
+            coins: 0,
+            coinExpiredAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          expiredUsers += 1;
+          updates += 1;
+          continue;
+        }
+
+        batch.update(doc.ref, {
+          coinExpiresAt: FieldValue.delete(),
+        });
+        cleanedUsers += 1;
+        updates += 1;
+      }
+
+      if (updates > 0) {
+        await batch.commit();
+      }
+
+      if (snapshot.size < BATCH_SIZE) {
+        break;
+      }
+    }
+
+    console.log(
+      `[expireCoinsScheduled] expiredUsers=${expiredUsers}, cleanedUsers=${cleanedUsers}`,
+    );
+  },
+);
+
 // チェックイン統計の更新（オプション）- 一時的に無効化
 // export const updateCheckInStats = onDocumentCreated(
 //   {
@@ -3008,5 +3233,92 @@ export const notifyFollowersOnNewCoupon = onDocumentCreated(
     console.log(
       `[notifyFollowersOnNewCoupon] Notified ${followersSnap.size} followers for store ${storeId}`,
     );
+  },
+);
+
+// 店舗作成時にisOwnerフラグを自動設定
+// 作成者がisOwnerユーザーの場合、店舗ドキュメントにisOwner=trueを設定
+export const setStoreOwnerFlagOnCreate = onDocumentCreated(
+  {
+    document: 'stores/{storeId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    const data = event.data?.data() as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    // 既にisOwner=trueなら何もしない
+    if (data['isOwner'] === true) return;
+
+    const createdBy = (data['createdBy'] ?? data['ownerId'])?.toString();
+    if (!createdBy) return;
+
+    try {
+      const userDoc = await db.collection(USERS_COLLECTION).doc(createdBy).get();
+      const userData = userDoc.data() as Record<string, unknown> | undefined;
+      if (userData?.isOwner === true) {
+        await event.data?.ref.update({ isOwner: true });
+        console.log(`[setStoreOwnerFlagOnCreate] isOwner=true を設定: ${event.params.storeId} (createdBy: ${createdBy})`);
+      }
+    } catch (e) {
+      console.error(`[setStoreOwnerFlagOnCreate] Error:`, e);
+    }
+  },
+);
+
+// 既存店舗のisOwnerフラグ一括同期（ワンタイム実行用）
+export const syncStoreOwnerFlags = onCall(
+  { region: 'asia-northeast1' },
+  async (request) => {
+    // isOwner権限チェック
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', '認証が必要です');
+    }
+    const callerDoc = await db.collection(USERS_COLLECTION).doc(request.auth.uid).get();
+    const callerData = callerDoc.data() as Record<string, unknown> | undefined;
+    if (callerData?.isOwner !== true) {
+      throw new HttpsError('permission-denied', 'isOwner権限が必要です');
+    }
+
+    // isOwner=true の全ユーザーIDを取得
+    const ownerUsersSnapshot = await db
+      .collection(USERS_COLLECTION)
+      .where('isOwner', '==', true)
+      .get();
+    const ownerUserIds = new Set(ownerUsersSnapshot.docs.map((doc) => doc.id));
+    console.log(`[syncStoreOwnerFlags] isOwnerユーザー数: ${ownerUserIds.size}`);
+
+    // 全店舗を確認し、createdBy/ownerIdがisOwnerユーザーならフラグ設定
+    const storesSnapshot = await db.collection('stores').get();
+    let updatedCount = 0;
+
+    const BATCH_SIZE = 500;
+    let batch = db.batch();
+    let batchCount = 0;
+
+    for (const storeDoc of storesSnapshot.docs) {
+      const storeData = storeDoc.data() as Record<string, unknown>;
+      if (storeData['isOwner'] === true) continue;
+
+      const createdBy = (storeData['createdBy'] ?? storeData['ownerId'])?.toString();
+      if (createdBy && ownerUserIds.has(createdBy)) {
+        batch.update(storeDoc.ref, { isOwner: true });
+        updatedCount++;
+        batchCount++;
+
+        if (batchCount >= BATCH_SIZE) {
+          await batch.commit();
+          batch = db.batch();
+          batchCount = 0;
+        }
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    console.log(`[syncStoreOwnerFlags] ${updatedCount}件の店舗を更新しました`);
+    return { updatedCount };
   },
 );

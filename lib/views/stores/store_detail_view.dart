@@ -359,6 +359,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
+      // 更新前のスタンプ数を保持
+      final previousStamps = (_userStamps?['stamps'] as int?) ?? 0;
+
       // スタンプ数を0-10の範囲に制限
       final clampedStamps = newStampCount.clamp(0, 10);
 
@@ -385,6 +388,13 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           'totalSpending': _userStamps?['totalSpending'] ?? 0.0,
         };
       });
+
+      // 曜日別訪問バッジカウンター（スタンプ追加時のみ）
+      if (clampedStamps > previousStamps) {
+        const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        final dayName = dayNames[DateTime.now().weekday - 1];
+        BadgeService().incrementBadgeCounter(user.uid, 'dayVisit_$dayName');
+      }
 
       // スタンプカード完成時の通知
       if (clampedStamps >= 10) {
@@ -466,7 +476,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   Widget build(BuildContext context) {
     final storeName = _getStringValue(widget.store['name'], '店舗詳細');
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(title: storeName),
       body: Column(
         children: [

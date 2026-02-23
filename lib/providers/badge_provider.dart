@@ -193,6 +193,42 @@ class BadgeService {
     }
   }
 
+  // 曜日別利用バッジの条件をチェックして付与
+  Future<void> _checkAndAwardDayVisitBadge(String userId, String dayKey, int currentValue) async {
+    try {
+      final matchingBadges = kBadgeDefinitions
+          .where((b) => b.type == BadgeType.dayVisit && b.categoryGroupKey == dayKey && b.requiredValue <= currentValue)
+          .toList();
+
+      for (final badge in matchingBadges) {
+        final badgeRef = _firestore
+            .collection('user_badges')
+            .doc(userId)
+            .collection('badges')
+            .doc(badge.badgeId);
+
+        final existingBadge = await badgeRef.get();
+
+        if (!existingBadge.exists) {
+          await badgeRef.set({
+            'userId': userId,
+            'badgeId': badge.badgeId,
+            'name': badge.name,
+            'description': badge.description,
+            'iconUrl': badge.iconUrl,
+            'rarity': badge.rarity.name,
+            'unlockedAt': FieldValue.serverTimestamp(),
+            'progress': currentValue,
+            'requiredValue': badge.requiredValue,
+            'isNew': true,
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking day visit badge: $e');
+    }
+  }
+
   // バッジを新規フラグを解除
   Future<void> markBadgeAsSeen(String userId, String badgeId) async {
     try {
@@ -307,13 +343,19 @@ class BadgeService {
       final newValue = (snapshot.data()?['currentValue'] as num?)?.toInt() ?? 0;
 
       // counterKeyに対応するBadgeTypeを特定
-      final badgeType = BadgeType.values.cast<BadgeType?>().firstWhere(
-        (e) => e?.name == counterKey,
-        orElse: () => null,
-      );
+      // 曜日別利用の場合: counterKey = 'dayVisit_monday' 等
+      if (counterKey.startsWith('dayVisit_')) {
+        final dayKey = counterKey.replaceFirst('dayVisit_', '');
+        await _checkAndAwardDayVisitBadge(userId, dayKey, newValue);
+      } else {
+        final badgeType = BadgeType.values.cast<BadgeType?>().firstWhere(
+          (e) => e?.name == counterKey,
+          orElse: () => null,
+        );
 
-      if (badgeType != null) {
-        await _checkAndAwardBadge(userId, badgeType, newValue);
+        if (badgeType != null) {
+          await _checkAndAwardBadge(userId, badgeType, newValue);
+        }
       }
     } catch (e) {
       debugPrint('Error incrementing badge counter ($counterKey): $e');
@@ -398,6 +440,12 @@ class BadgeService {
         }
       }
 
+      // 曜日別利用カウント（badge_progressから取得）
+      final Map<String, int> dayVisitCounts = {};
+      for (final day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']) {
+        dayVisitCounts[day] = badgeProgressMap['dayVisit_$day'] ?? 0;
+      }
+
       // 4. 全バッジ定義と比較、新規バッジを付与
       final newlyAwarded = <Map<String, dynamic>>[];
       final batch = _firestore.batch();
@@ -409,6 +457,8 @@ class BadgeService {
         int currentValue;
         if (badge.type == BadgeType.categoryVisit) {
           currentValue = categoryVisitCounts[badge.categoryGroupKey] ?? 0;
+        } else if (badge.type == BadgeType.dayVisit) {
+          currentValue = dayVisitCounts[badge.categoryGroupKey] ?? 0;
         } else {
           currentValue = currentValues[badge.type.name] ?? 0;
         }

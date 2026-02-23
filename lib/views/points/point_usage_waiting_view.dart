@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../payment/point_payment_detail_view.dart';
@@ -36,8 +37,8 @@ class _PointUsageWaitingViewState extends State<PointUsageWaitingView> {
         .doc('usage_request');
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: CommonHeader(
         title: const Text('店舗側の入力待ち'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

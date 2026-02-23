@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_ui.dart';
+
 class CustomSwitchListTile extends StatelessWidget {
   const CustomSwitchListTile({
     super.key,
@@ -22,7 +24,7 @@ class CustomSwitchListTile extends StatelessWidget {
       value: value,
       onChanged: onChanged,
       activeColor: Colors.white,
-      activeTrackColor: const Color(0xFFFF6B35),
+      activeTrackColor: AppUi.primary,
       inactiveThumbColor: Colors.white,
       inactiveTrackColor: const Color(0xFFE0E0E0),
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../payment/point_payment_detail_view.dart';
 import '../../providers/auth_provider.dart';
@@ -13,7 +14,7 @@ class TransactionHistoryView extends ConsumerWidget {
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('取引履歴'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

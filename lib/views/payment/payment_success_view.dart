@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import '../../models/store_model.dart';
 import '../../models/point_transaction_model.dart';
 import '../main_navigation_view.dart';
@@ -18,8 +19,8 @@ class PaymentSuccessView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: CommonHeader(
         title: const Text('支払い完了'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

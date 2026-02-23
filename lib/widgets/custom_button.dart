@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_ui.dart';
+
 class CustomButton extends StatelessWidget {
   final String text;
   final VoidCallback? onPressed;
@@ -36,8 +38,8 @@ class CustomButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: backgroundColor ?? const Color(0xFFFF6B35),
-          foregroundColor: textColor ?? Colors.white,
+          backgroundColor: backgroundColor ?? AppUi.primary,
+          foregroundColor: textColor ?? AppUi.onPrimary,
           side: borderColor != null ? BorderSide(color: borderColor!) : null,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(borderRadius ?? 999),

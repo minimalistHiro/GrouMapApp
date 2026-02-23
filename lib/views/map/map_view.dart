@@ -255,39 +255,23 @@ class _MapViewState extends ConsumerState<MapView> {
   Future<void> _loadStoresFromDatabase() async {
     try {
       print('店舗データの読み込みを開始...');
-      final QuerySnapshot snapshot =
-          await FirebaseFirestore.instance.collection('stores').get();
-      final ownerUsersBoolSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('isOwner', isEqualTo: true)
+      final QuerySnapshot snapshot = await FirebaseFirestore.instance
+          .collection('stores')
+          .where('isActive', isEqualTo: true)
+          .where('isApproved', isEqualTo: true)
           .get();
-      final ownerUsersStringSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('isOwner', isEqualTo: 'true')
-          .get();
-      final ownerUserIds = <String>{
-        ...ownerUsersBoolSnapshot.docs.map((doc) => doc.id),
-        ...ownerUsersStringSnapshot.docs.map((doc) => doc.id),
-      };
       print('取得したドキュメント数: ${snapshot.docs.length}');
-      print('isOwner=true ユーザー数: ${ownerUserIds.length}');
 
       final List<Map<String, dynamic>> stores = [];
 
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        // isOwner店舗を除外（店舗ドキュメントのフラグで判定）
         final rawIsOwner = data['isOwner'];
-        final hasOwnerFlag = rawIsOwner == true ||
+        final isOwnerStore = rawIsOwner == true ||
             rawIsOwner?.toString().toLowerCase() == 'true';
-        final createdBy = (data['createdBy'] ?? data['ownerId'])?.toString();
-        final isOwnerByCreator =
-            createdBy != null && ownerUserIds.contains(createdBy);
-        final isOwnerStore = hasOwnerFlag || isOwnerByCreator;
-        print(
-            '店舗データ: ${doc.id} - isActive: ${data['isActive']}, isApproved: ${data['isApproved']}');
         if (isOwnerStore) {
-          print(
-              'isOwner=true のため除外: ${doc.id} (storeFlag: $hasOwnerFlag, createdBy: $createdBy, creatorOwner: $isOwnerByCreator)');
+          print('isOwner=true のため除外: ${doc.id}');
           continue;
         }
 
@@ -1440,7 +1424,7 @@ class _MapViewState extends ConsumerState<MapView> {
               }
             },
             markers: _markers,
-            myLocationEnabled: false,
+            myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
             onTap: (point) async {

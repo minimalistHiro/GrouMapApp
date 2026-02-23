@@ -1,11 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'coin_service.dart';
 
 class MissionService {
   final FirebaseFirestore _firestore;
+  final CoinService _coinService;
 
   MissionService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        _coinService = CoinService(
+          firestore: firestore ?? FirebaseFirestore.instance,
+        );
 
   String get _todayString {
     final now = DateTime.now();
@@ -83,13 +88,22 @@ class MissionService {
           throw Exception('既に受け取り済み');
         }
 
-        final currentCoins =
-            (userDoc.data()?['coins'] as num?)?.toInt() ?? 0;
+        final userData = userDoc.data() ?? {};
+        final now = DateTime.now();
+        final currentCoins = CoinService.resolveAvailableCoinsFromUserData(
+          userData,
+          now: now,
+        );
 
         // コイン加算 + claimed マーク
-        transaction.update(userRef, {
-          'coins': currentCoins + coinReward,
-        });
+        transaction.update(
+          userRef,
+          CoinService.buildCoinEarnUpdate(
+            currentCoins: currentCoins,
+            earnedCoins: coinReward,
+            earnedAt: now,
+          ),
+        );
         transaction.update(dailyRef, {
           claimedKey: true,
         });
@@ -156,8 +170,7 @@ class MissionService {
   /// ログインストリーク取得
   Future<int> getLoginStreak(String userId) async {
     try {
-      final userDoc =
-          await _firestore.collection('users').doc(userId).get();
+      final userDoc = await _firestore.collection('users').doc(userId).get();
       if (!userDoc.exists) return 0;
       return (userDoc.data()?['loginStreak'] as num?)?.toInt() ?? 0;
     } catch (e) {
@@ -186,10 +199,18 @@ class MissionService {
           throw Exception('既に受け取り済み');
         }
 
-        final currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
+        final now = DateTime.now();
+        final currentCoins = CoinService.resolveAvailableCoinsFromUserData(
+          userData,
+          now: now,
+        );
 
         transaction.update(userRef, {
-          'coins': currentCoins + coinReward,
+          ...CoinService.buildCoinEarnUpdate(
+            currentCoins: currentCoins,
+            earnedCoins: coinReward,
+            earnedAt: now,
+          ),
           'missionProgress.$claimedKey': true,
         });
       });
@@ -272,10 +293,18 @@ class MissionService {
           throw Exception('既に受け取り済み');
         }
 
-        final currentCoins = (userData['coins'] as num?)?.toInt() ?? 0;
+        final now = DateTime.now();
+        final currentCoins = CoinService.resolveAvailableCoinsFromUserData(
+          userData,
+          now: now,
+        );
 
         transaction.update(userRef, {
-          'coins': currentCoins + coinReward,
+          ...CoinService.buildCoinEarnUpdate(
+            currentCoins: currentCoins,
+            earnedCoins: coinReward,
+            earnedAt: now,
+          ),
           'missionProgress.$claimedKey': true,
         });
       });
@@ -290,11 +319,9 @@ class MissionService {
   /// ミッション全体進捗を取得
   Future<Map<String, dynamic>> getMissionProgress(String userId) async {
     try {
-      final userDoc =
-          await _firestore.collection('users').doc(userId).get();
+      final userDoc = await _firestore.collection('users').doc(userId).get();
       if (!userDoc.exists) return {};
-      return (userDoc.data()?['missionProgress']
-              as Map<String, dynamic>?) ??
+      return (userDoc.data()?['missionProgress'] as Map<String, dynamic>?) ??
           {};
     } catch (e) {
       debugPrint('ミッション進捗取得エラー: $e');
@@ -356,14 +383,19 @@ class MissionService {
   /// ユーザーのコイン残高を取得
   Future<int> getUserCoins(String userId) async {
     try {
-      final userDoc =
-          await _firestore.collection('users').doc(userId).get();
-      if (!userDoc.exists) return 0;
-      return (userDoc.data()?['coins'] as num?)?.toInt() ?? 0;
+      return await _coinService.getAvailableCoins(
+        userId,
+        expireIfNeeded: true,
+      );
     } catch (e) {
       debugPrint('コイン残高取得エラー: $e');
       return 0;
     }
+  }
+
+  /// ユーザーのコイン状態（残高・有効期限）を取得
+  Future<CoinStatus> getCoinStatus(String userId) async {
+    return _coinService.getCoinStatus(userId, expireIfNeeded: true);
   }
 
   // ========== コイン交換（未訪問店舗クーポン） ==========
@@ -384,7 +416,8 @@ class MissionService {
   }
 
   /// コイン10枚で未訪問店舗の100円引きクーポンを取得
-  Future<bool> exchangeCoinForCoupon(String userId, String storeId, String storeName) async {
+  Future<bool> exchangeCoinForCoupon(
+      String userId, String storeId, String storeName) async {
     try {
       final userRef = _firestore.collection('users').doc(userId);
       final couponRef = _firestore.collection('user_coupons').doc();
@@ -393,18 +426,26 @@ class MissionService {
         final userDoc = await transaction.get(userRef);
         if (!userDoc.exists) throw Exception('ユーザーが存在しません');
 
-        final currentCoins = (userDoc.data()?['coins'] as num?)?.toInt() ?? 0;
+        final userData = userDoc.data() ?? {};
+        final now = DateTime.now();
+        final currentCoins = CoinService.resolveAvailableCoinsFromUserData(
+          userData,
+          now: now,
+        );
         if (currentCoins < 10) {
           throw Exception('コインが不足しています');
         }
 
-        final now = DateTime.now();
         final validUntil = now.add(const Duration(days: 30));
 
         // コイン消費
-        transaction.update(userRef, {
-          'coins': currentCoins - 10,
-        });
+        transaction.update(
+          userRef,
+          CoinService.buildCoinSpendUpdate(
+            currentCoins: currentCoins,
+            spentCoins: 10,
+          ),
+        );
 
         // クーポン作成
         transaction.set(couponRef, {

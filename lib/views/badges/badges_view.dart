@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/badge_provider.dart';
@@ -29,8 +30,8 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     final authState = ref.watch(authStateProvider);
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: CommonHeader(
         title: const Text('バッジ一覧'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,
@@ -138,7 +139,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
           crossAxisCount: 4,
           crossAxisSpacing: 8,
           mainAxisSpacing: 8,
-          childAspectRatio: 0.8,
+          childAspectRatio: 0.7,
         ),
         itemCount: badges.length,
         itemBuilder: (context, index) {
@@ -188,11 +189,11 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
             ),
             const SizedBox(height: 8),
             Text(
-              isEarned ? badge.name : '？？？',
+              badge.name,
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: FontWeight.bold,
-                color: isEarned ? Colors.black87 : Colors.grey[400],
+                color: isEarned ? Colors.black87 : Colors.grey[700],
               ),
               textAlign: TextAlign.center,
               maxLines: 2,
@@ -260,7 +261,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
             ),
             const SizedBox(height: 12),
             Text(
-              isEarned ? badge.name : '？？？',
+              badge.name,
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 18,
@@ -279,7 +280,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
         ),
         content: SingleChildScrollView(
           child: Text(
-            isEarned ? badge.description : '条件を達成してバッジを獲得しよう！',
+            badge.description,
             style: const TextStyle(fontSize: 14),
           ),
         ),

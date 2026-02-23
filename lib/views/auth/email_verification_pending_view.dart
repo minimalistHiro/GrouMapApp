@@ -54,7 +54,7 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
     );
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFFBF6F2),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),

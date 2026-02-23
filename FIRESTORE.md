@@ -15,6 +15,7 @@
   - `description`: 説明
   - `storeId`: 店舗ID
   - `storeName`: 店舗名
+  - `couponType`: クーポンタイプ（`discount`=割引 / `gift`=プレゼント / `special_offer`=特別オファー。スタンプ達成特典（requiredStampCount > 0）の場合は `discount` のみ許可）
   - `discountType`: 割引種別（割合/固定額/固定価格）
   - `discountValue`: 割引値
   - `validUntil`: 有効期限
@@ -53,6 +54,8 @@
   - `expiresAt`: 有効期限
   - `attempts`: 試行回数
   - `lastSentAt`: 最終送信日時
+  - `targetEmail`: メール変更時の新メールアドレス（メール変更用OTP時のみ）
+  - `purpose`: OTP用途（`registration` = 新規登録時 / `emailChange` = メールアドレス変更時）
   - `updatedAt`: 更新日時
 
 ### account_deletion_requests
@@ -150,8 +153,8 @@
   - `storeCampaignStartDate`: 店舗紹介開始日
   - `storeCampaignEndDate`: 店舗紹介終了日
   - `storeCampaignPoints`: 店舗紹介付与ポイント
-  - `lotteryCampaignStartDate`: スロットキャンペーン開始日
-  - `lotteryCampaignEndDate`: スロットキャンペーン終了日
+  - `lotteryCampaignStartDate`: スロットキャンペーン開始日（※スロット機能廃止に伴い利用停止）
+  - `lotteryCampaignEndDate`: スロットキャンペーン終了日（※スロット機能廃止に伴い利用停止）
   - `maintenanceStartDate`: メンテナンス開始日
   - `maintenanceEndDate`: メンテナンス終了日
   - `maintenanceStartTime`: メンテ開始時刻
@@ -249,8 +252,8 @@
   - `imageUrls`: 画像URL配列
   - `imageCount`: 画像数
 
-### lottery_history
-- `lottery_history/{lotteryId}`: スロット履歴
+### lottery_history（廃止）
+- `lottery_history/{lotteryId}`: スロット履歴（※スロット機能廃止に伴い新規書き込み停止。既存データは参照用に残存）
   - `userId`: ユーザーUID
   - `date`: 日付（yyyy-MM-dd）
   - `result`: 等級ラベル（`1等`/`2等`/`ハズレ`）
@@ -308,6 +311,7 @@
   - `storeName`: 店舗名
   - `title`: タイトル
   - `description`: 説明
+  - `couponType`: クーポンタイプ（`discount` / `gift` / `special_offer`）
   - `discountType`: 割引種別
   - `discountValue`: 割引値
   - `validUntil`: 有効期限
@@ -436,7 +440,8 @@
   - `rejectedAt`: 拒否日時
   - `rejectedBy`: 拒否者UID
   - `pendingRequestNotifiedAt`: 未承認店舗通知送信済み日時
-  - 表示ルール（ユーザーアプリ）: マップ/店舗一覧は `isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` または `createdBy` の `users.isOwner=true` に該当する店舗は非表示
+  - `isOwner`: オーナー専用フラグ（trueの場合ユーザーアプリで非表示）。Cloud Functions `setStoreOwnerFlagOnCreate` により、isOwnerユーザーが店舗を作成した場合に自動設定
+  - 表示ルール（ユーザーアプリ）: マップ/店舗一覧/おすすめ店舗/デイリーレコメンドは `isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` の店舗は非表示。認証状態に依存せず店舗ドキュメントの `isOwner` フラグのみで判定
   - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）
   - `socialMedia`: SNSリンク（`instagram`, `x`, `facebook`, `website`）
   - `instagramAuth`: Instagram連携情報（Functions用）
@@ -496,6 +501,16 @@
     - `system`: システム通知の有効フラグ
     - `promotions`: プロモーション通知の有効フラグ
     - `updatedAt`: 更新日時
+  - `subscription`: 契約情報（Map）
+    - `planId`: プランID（`basic` / `premium`。デフォルト: `basic`）
+    - `status`: 契約ステータス（`trialing` = 無料期間中 / `active` = 有料契約中 / `canceled` = 解約済み / `past_due` = 支払い遅延。デフォルト: `trialing`）
+    - `startDate`: 契約開始日時（Timestamp、店舗承認時に設定）
+    - `currentPeriodEnd`: 現在の請求期間終了日（Timestamp、有料契約時のみ。無料期間中はnull）
+    - `stripeCustomerId`: Stripe顧客ID（String、Stripe連携後に設定。nullable）
+    - `stripeSubscriptionId`: StripeサブスクリプションID（String、Stripe連携後に設定。nullable）
+    - `paymentMethodBrand`: 支払いカードブランド（String、例: `visa`。nullable）
+    - `paymentMethodLast4`: 支払いカード下4桁（String、例: `1234`。nullable）
+    - `cancelAtPeriodEnd`: 期間終了時に解約するフラグ（bool、デフォルト: false）
   - `iconImageUrl`: アイコン画像
   - `storeImageUrl`: 店舗画像
   - `createdBy`: 作成者UID
@@ -575,7 +590,7 @@
 ### badge_progress
 - `badge_progress/{userId}_{counterKey}`: バッジ進捗カウンター（アクション系バッジの累積回数を記録）
   - `userId`: ユーザーUID
-  - `badgeType`: カウンターキー（BadgeType名: `mapOpened`, `storeDetailViewed`, `favoriteAdded`, `slotPlayed`, `slotWin`, `couponUsed`, `likeGiven`, `commentPosted`, `followUser`, `coinsEarned`, `missionCompleted`, `recommendViewed`, `stampCardCompleted`, `specialEvents`）
+  - `badgeType`: カウンターキー（BadgeType名: `mapOpened`, `storeDetailViewed`, `favoriteAdded`, `slotPlayed`（廃止）, `slotWin`（廃止）, `couponUsed`, `likeGiven`, `commentPosted`, `followUser`, `coinsEarned`, `missionCompleted`, `recommendViewed`, `stampCardCompleted`, `specialEvents`, 曜日別: `dayVisit_monday`, `dayVisit_tuesday`, `dayVisit_wednesday`, `dayVisit_thursday`, `dayVisit_friday`, `dayVisit_saturday`, `dayVisit_sunday`）
   - `currentValue`: 現在値（`FieldValue.increment(1)` でアトミック更新）
   - `lastUpdated`: 最終更新日時
 - 書き込みタイミング: 各アクション実行時に `BadgeService().incrementBadgeCounter()` で自動記録
@@ -680,6 +695,9 @@
   - `lastUpdatedByStoreId`: 更新店舗ID
   - `isActive`: 利用中フラグ
   - `coins`: コイン残高
+  - `coinLastEarnedAt`: コイン最終獲得日時（Timestamp）
+  - `coinExpiresAt`: コイン有効期限（最終獲得日+180日、Timestamp）
+  - `coinExpiredAt`: コイン失効処理日時（Timestamp）
   - `loginStreak`: 連続ログイン日数（int）
   - `lastLoginDate`: 連続ログイン判定用の最終ログイン日（yyyy-MM-dd）
   - `missionProgress`: ミッション進捗（Map）

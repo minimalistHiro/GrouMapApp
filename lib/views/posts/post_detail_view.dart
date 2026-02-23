@@ -408,7 +408,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const CommonHeader(title: '投稿'),
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFFBF6F2),
       body: SafeArea(
         child: CustomScrollView(
           slivers: [

@@ -203,19 +203,29 @@ final storeNameProvider = FutureProvider.family<String?, String>((ref, storeId) 
   }
 });
 
-// 全店舗一覧を取得するプロバイダー
+// 全店舗一覧を取得するプロバイダー（isOwner店舗を除外）
 final storesProvider = StreamProvider<List<StoreModel>>((ref) async* {
   try {
     yield* FirebaseFirestore.instance
         .collection('stores')
+        .where('isActive', isEqualTo: true)
+        .where('isApproved', isEqualTo: true)
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        return StoreModel.fromJson({
-          'storeId': doc.id,
-          ...doc.data(),
-        });
-      }).toList();
+      return snapshot.docs
+          .where((doc) {
+            final data = doc.data();
+            final rawIsOwner = data['isOwner'];
+            return rawIsOwner != true &&
+                rawIsOwner?.toString().toLowerCase() != 'true';
+          })
+          .map((doc) {
+            return StoreModel.fromJson({
+              'storeId': doc.id,
+              ...doc.data(),
+            });
+          })
+          .toList();
     });
   } catch (e) {
     print('店舗一覧取得エラー: $e');

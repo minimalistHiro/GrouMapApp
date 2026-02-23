@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ContactView extends StatelessWidget {
@@ -23,7 +24,7 @@ class ContactView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('お問い合わせ'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/ranking_provider.dart';
 import '../../models/ranking_model.dart';
@@ -26,7 +27,7 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
     final rankingData = ref.watch(rankingDataProvider(query));
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('ランキング'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

@@ -187,7 +187,7 @@ class _LiveChatViewState extends State<LiveChatView> {
     if (user == null) {
       return Scaffold(
         appBar: const CommonHeader(title: 'ライブチャット'),
-        backgroundColor: Colors.grey[50],
+        backgroundColor: const Color(0xFFFBF6F2),
         body: const Center(
           child: Text('ログインが必要です'),
         ),
@@ -198,7 +198,7 @@ class _LiveChatViewState extends State<LiveChatView> {
       appBar: const CommonHeader(
         title: 'ライブチャット',
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFBF6F2),
       body: DismissKeyboard(
         child: _buildChatBody(user),
       ),

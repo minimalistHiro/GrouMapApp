@@ -9,12 +9,15 @@ import 'package:http/http.dart' as http;
 import '../../providers/auth_provider.dart';
 import '../../providers/badge_provider.dart';
 import '../settings/profile_edit_view.dart';
+import '../settings/interest_category_view.dart';
 import '../settings/password_change_view.dart';
+import '../settings/email_change_view.dart';
 import '../settings/notification_settings_view.dart';
 import '../legal/privacy_policy_view.dart';
 import '../legal/terms_view.dart';
 import '../support/help_view.dart';
 import '../feedback/feedback_view.dart';
+import '../settings/app_info_view.dart';
 import '../main_navigation_view.dart';
 import '../auth/account_deletion_views.dart';
 import '../../widgets/user_stats_card.dart';
@@ -266,10 +269,15 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   ],
                 ),
 
-                // プロフィール完成度カード
-                if (_userData != null && _calcProfileCompletion(_userData!) < 1.0) ...[
+                // プロフィール完成度カード（2段階）
+                if (_userData != null && _calcBasicProfileCompletion(_userData!) < 1.0) ...[
+                  // パターン1: 基本プロフィール未完成
                   const SizedBox(height: 16),
                   _buildProfileCompletionCard(context, _userData!),
+                ] else if (_userData != null && !_isInterestCategorySet(_userData!)) ...[
+                  // パターン2: 基本プロフィール完成済み＆興味カテゴリ未設定
+                  const SizedBox(height: 16),
+                  _buildInterestCategoryPromptCard(context),
                 ],
 
                 const SizedBox(height: 24),
@@ -277,7 +285,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 // 設定セクション（SettingsView と同様）
                 _buildSectionTitle('アカウント'),
                 _buildSettingsMenuContainer(context, [
-                  if (_userData == null || _calcProfileCompletion(_userData!) >= 1.0)
+                  if (_userData == null || _calcBasicProfileCompletion(_userData!) >= 1.0)
                     _buildMenuItem(
                       icon: Icons.person,
                       title: 'プロフィール編集',
@@ -286,6 +294,19 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const ProfileEditView()),
+                        );
+                        _loadUserData();
+                      },
+                    ),
+                  if (_userData != null && _calcBasicProfileCompletion(_userData!) >= 1.0)
+                    _buildMenuItem(
+                      icon: Icons.category,
+                      title: '興味カテゴリ設定',
+                      subtitle: 'あなたの興味のあるジャンルを設定',
+                      onTap: () async {
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const InterestCategoryView()),
                         );
                         _loadUserData();
                       },
@@ -299,6 +320,18 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const PasswordChangeView()),
+                        );
+                      },
+                    ),
+                  if (canChangePassword)
+                    _buildMenuItem(
+                      icon: Icons.email,
+                      title: 'メールアドレス変更',
+                      subtitle: 'ログインメールアドレスを変更',
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const EmailChangeView()),
                         );
                       },
                     ),
@@ -346,6 +379,12 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     title: 'プライバシーポリシー',
                     subtitle: '個人情報の取り扱いについて',
                     onTap: () => _showPrivacyPolicy(context),
+                  ),
+                  _buildMenuItem(
+                    icon: Icons.info_outline,
+                    title: 'アプリについて',
+                    subtitle: 'バージョン情報・開発者情報',
+                    onTap: () => _showAppInfo(context),
                   ),
                 ]),
 
@@ -716,9 +755,11 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   }
 
   // =============== Profile Completion ===============
-  double _calcProfileCompletion(Map<String, dynamic> data) {
+
+  /// 基本プロフィール完成度（興味カテゴリ・自己紹介を除く7項目）
+  double _calcBasicProfileCompletion(Map<String, dynamic> data) {
     int filled = 0;
-    const total = 9;
+    const total = 7;
 
     if (data['displayName'] is String && (data['displayName'] as String).trim().isNotEmpty) filled++;
     if (data['birthDate'] != null) filled++;
@@ -726,15 +767,76 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     if (data['prefecture'] is String && (data['prefecture'] as String).isNotEmpty) filled++;
     if (data['city'] is String && (data['city'] as String).isNotEmpty) filled++;
     if (data['occupation'] is String && (data['occupation'] as String).isNotEmpty) filled++;
-    if (data['bio'] is String && (data['bio'] as String).trim().isNotEmpty) filled++;
-    if (data['interestCategories'] is List && (data['interestCategories'] as List).isNotEmpty) filled++;
     if (data['profileImageUrl'] is String && (data['profileImageUrl'] as String).isNotEmpty) filled++;
 
     return filled / total;
   }
 
+  /// 興味カテゴリが設定済みかどうか
+  bool _isInterestCategorySet(Map<String, dynamic> data) {
+    return data['interestCategories'] is List && (data['interestCategories'] as List).isNotEmpty;
+  }
+
+  Widget _buildInterestCategoryPromptCard(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFF6B35).withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '興味カテゴリを設定しよう！',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFFF6B35),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'あなたに合ったお店が見つかりやすくなります',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const InterestCategoryView()),
+                );
+                _loadUserData();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B35),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: const Text(
+                '興味カテゴリを設定する',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProfileCompletionCard(BuildContext context, Map<String, dynamic> data) {
-    final completion = _calcProfileCompletion(data);
+    final completion = _calcBasicProfileCompletion(data);
     final percent = (completion * 100).round();
 
     return Container(
@@ -960,6 +1062,14 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => const PrivacyPolicyView(),
+      ),
+    );
+  }
+
+  void _showAppInfo(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const AppInfoView(),
       ),
     );
   }

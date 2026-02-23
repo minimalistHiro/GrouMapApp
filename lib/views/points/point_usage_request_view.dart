@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -84,8 +85,8 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
     final availablePoints = balanceAsync.value?.availablePoints ?? 0;
 
     return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: CommonHeader(
         title: const Text('ポイント利用入力'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

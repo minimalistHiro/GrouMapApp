@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/auth_provider.dart';
@@ -111,7 +112,7 @@ class _PasswordChangeViewState extends ConsumerState<PasswordChangeView> {
     final canChange = _canChangePassword(user);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: CommonHeader(
         title: const Text('パスワード変更'),
         backgroundColor: const Color(0xFFFF6B35),
         foregroundColor: Colors.white,

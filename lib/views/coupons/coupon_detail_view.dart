@@ -315,7 +315,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const CommonHeader(title: 'クーポン'),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: const Color(0xFFFBF6F2),
       body: CustomScrollView(
         slivers: [
           // クーポン画像ヘッダー
