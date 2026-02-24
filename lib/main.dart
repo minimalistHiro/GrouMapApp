@@ -4,11 +4,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'firebase_options.dart';
 import 'views/home_view.dart';
 import 'views/auth/sign_in_view.dart';
 import 'views/auth/terms_privacy_consent_view.dart';
 import 'views/auth/email_verification_pending_view.dart';
+import 'views/auth/welcome_view.dart';
 import 'views/main_navigation_view.dart';
 import 'providers/auth_provider.dart';
 import 'services/push_notification_service.dart';
@@ -16,14 +18,16 @@ import 'widgets/app_update_gate.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  // Firebase初期化完了までスプラッシュスクリーンを保持
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
   // Web用のCORS設定
   if (kIsWeb) {
     // Web用の画像読み込み設定
     debugPrint('Running on web platform');
   }
-  
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -33,8 +37,10 @@ void main() async {
     debugPrint('Firebase initialization error: $e');
     // エラーが発生してもアプリは起動する
   }
-  
-  
+
+  // スプラッシュスクリーンを解除
+  FlutterNativeSplash.remove();
+
   runApp(const ProviderScope(child: MyApp()));
 }
 
@@ -85,7 +91,8 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
     _pushNotificationService = ref.read(pushNotificationServiceProvider);
     _pushNotificationService.initialize();
 
-    _authStateSubscription = ref.listenManual(authStateProvider, (previous, next) {
+    _authStateSubscription =
+        ref.listenManual(authStateProvider, (previous, next) {
       if (next is AsyncData<User?>) {
         final user = next.value;
         if (user != null) {
@@ -107,14 +114,15 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authStateProvider);
     final emailVerificationStatus = ref.watch(emailVerificationStatusProvider);
-    
+
     return authState.when(
       data: (user) {
         if (user != null) {
           return emailVerificationStatus.when(
             data: (isVerified) {
               if (!isVerified) {
-                return const EmailVerificationPendingView(autoSendOnLoad: false);
+                return const EmailVerificationPendingView(
+                    autoSendOnLoad: false);
               }
               return MainNavigationView(
                 key: ValueKey('user:${user.uid}'),
@@ -125,13 +133,12 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
                 child: CircularProgressIndicator(),
               ),
             ),
-            error: (_, __) => const EmailVerificationPendingView(autoSendOnLoad: false),
+            error: (_, __) =>
+                const EmailVerificationPendingView(autoSendOnLoad: false),
           );
         } else {
-          debugPrint('AuthWrapper: User not logged in, showing MainNavigationView');
-          return const MainNavigationView(
-            key: ValueKey('guest'),
-          );
+          debugPrint('AuthWrapper: User not logged in, showing WelcomeView');
+          return const WelcomeView();
         }
       },
       loading: () => const Scaffold(

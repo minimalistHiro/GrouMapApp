@@ -17,6 +17,39 @@ class MissionService {
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
+  // ========== 共通アクション報酬制御 ==========
+
+  /// 日次アクション報酬の実行枠を取得（同一actionKeyは1日1回のみtrue）
+  /// 既存の daily_missions ドキュメントを利用して日付単位で制御する
+  Future<bool> acquireDailyActionRewardSlot(
+      String userId, String actionKey) async {
+    try {
+      final docRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('daily_missions')
+          .doc(_todayString);
+
+      return await _firestore.runTransaction<bool>((transaction) async {
+        final snapshot = await transaction.get(docRef);
+        final data = snapshot.data() ?? {};
+
+        if (data[actionKey] == true) {
+          return false;
+        }
+
+        transaction.set(docRef, {
+          actionKey: true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        return true;
+      });
+    } catch (e) {
+      debugPrint('日次アクション報酬枠の取得エラー($actionKey): $e');
+      return false;
+    }
+  }
+
   // ========== デイリーミッション ==========
 
   /// デイリーミッション達成をマーク（冪等）

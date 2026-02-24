@@ -18,8 +18,8 @@ import '../legal/terms_view.dart';
 import '../support/help_view.dart';
 import '../feedback/feedback_view.dart';
 import '../settings/app_info_view.dart';
-import '../main_navigation_view.dart';
 import '../auth/account_deletion_views.dart';
+import '../auth/welcome_view.dart';
 import '../../widgets/user_stats_card.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
@@ -55,7 +55,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 _userData = userData;
                 _isLoadingUserData = false;
               });
-              
             } else {
               setState(() {
                 _isLoadingUserData = false;
@@ -85,18 +84,19 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   Future<String?> _loadImageAsBase64(String imageUrl) async {
     try {
       print('画像をBase64で読み込み開始: $imageUrl');
-      
+
       // CORS制限を回避するためのプロキシ経由での読み込み
       final proxyUrl = 'https://cors-anywhere.herokuapp.com/$imageUrl';
-      
+
       final response = await http.get(
         Uri.parse(proxyUrl),
         headers: {
           'Origin': 'https://your-app-domain.com', // 実際のドメインに変更
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
       ).timeout(const Duration(seconds: 10));
-      
+
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
         final base64String = base64Encode(bytes);
@@ -104,13 +104,13 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
         return base64String;
       } else {
         print('プロキシ経由の画像読み込みが失敗: ${response.statusCode}');
-        
+
         // プロキシが失敗した場合は直接読み込みを試行
         return await _loadImageDirectly(imageUrl);
       }
     } catch (e) {
       print('プロキシ経由の画像読み込みエラー: $e');
-      
+
       // プロキシが失敗した場合は直接読み込みを試行
       return await _loadImageDirectly(imageUrl);
     }
@@ -119,23 +119,26 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   Future<String?> _loadImageDirectly(String imageUrl) async {
     try {
       print('直接画像読み込みを試行: $imageUrl');
-      
+
       // Firebase Storageの場合は特別なヘッダーを設定
       final headers = <String, String>{
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       };
-      
+
       // Firebase Storageの場合はCORSヘッダーを追加
       if (imageUrl.contains('firebasestorage.googleapis.com')) {
         headers['Origin'] = 'https://your-app-domain.com';
         headers['Referer'] = 'https://your-app-domain.com';
       }
-      
-      final response = await http.get(
-        Uri.parse(imageUrl),
-        headers: headers,
-      ).timeout(const Duration(seconds: 15));
-      
+
+      final response = await http
+          .get(
+            Uri.parse(imageUrl),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 15));
+
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
         final base64String = base64Encode(bytes);
@@ -197,10 +200,12 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                                   Expanded(
                                     child: ElevatedButton(
                                       onPressed: () {
-                                        Navigator.of(context).pushNamed('/signin');
+                                        Navigator.of(context)
+                                            .pushNamed('/signin');
                                       },
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFFFF6B35),
+                                        backgroundColor:
+                                            const Color(0xFFFF6B35),
                                         foregroundColor: Colors.white,
                                       ),
                                       child: const Text('ログイン'),
@@ -210,215 +215,230 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                                   Expanded(
                                     child: OutlinedButton(
                                       onPressed: () {
-                                        Navigator.of(context).pushNamed('/signup');
+                                        Navigator.of(context)
+                                            .pushNamed('/signup');
                                       },
                                       style: OutlinedButton.styleFrom(
-                                        foregroundColor: const Color(0xFFFF6B35),
-                                        side: const BorderSide(color: Color(0xFFFF6B35)),
+                                        foregroundColor:
+                                            const Color(0xFFFF6B35),
+                                        side: const BorderSide(
+                                            color: Color(0xFFFF6B35)),
                                       ),
                                       child: const Text('新規アカウント作成'),
                                     ),
                                   ),
                                 ],
                               ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          final canChangePassword = user.providerData.any(
-            (provider) => provider.providerId == 'password',
-          );
-
-          if (_isLoadingUserData) {
-            return const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
-              ),
-            );
-          }
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              children: [
-                // ユーザー情報（カードなし）
-                Column(
-                  children: [
-                    _buildUserAvatar(user, _userData),
-                    const SizedBox(height: 16),
-                    Text(
-                      (_userData?['displayName'] is String &&
-                              (_userData?['displayName'] as String).trim().isNotEmpty)
-                          ? (_userData?['displayName'] as String).trim()
-                          : (user.displayName?.trim().isNotEmpty == true
-                              ? user.displayName!.trim()
-                              : 'ユーザー'),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    UserStatsCard(userId: user.uid),
                   ],
                 ),
+              );
+            }
 
-                // プロフィール完成度カード（2段階）
-                if (_userData != null && _calcBasicProfileCompletion(_userData!) < 1.0) ...[
-                  // パターン1: 基本プロフィール未完成
-                  const SizedBox(height: 16),
-                  _buildProfileCompletionCard(context, _userData!),
-                ] else if (_userData != null && !_isInterestCategorySet(_userData!)) ...[
-                  // パターン2: 基本プロフィール完成済み＆興味カテゴリ未設定
-                  const SizedBox(height: 16),
-                  _buildInterestCategoryPromptCard(context),
+            final canChangePassword = user.providerData.any(
+              (provider) => provider.providerId == 'password',
+            );
+
+            if (_isLoadingUserData) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFFFF6B35),
+                ),
+              );
+            }
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  // ユーザー情報（カードなし）
+                  Column(
+                    children: [
+                      _buildUserAvatar(user, _userData),
+                      const SizedBox(height: 16),
+                      Text(
+                        (_userData?['displayName'] is String &&
+                                (_userData?['displayName'] as String)
+                                    .trim()
+                                    .isNotEmpty)
+                            ? (_userData?['displayName'] as String).trim()
+                            : (user.displayName?.trim().isNotEmpty == true
+                                ? user.displayName!.trim()
+                                : 'ユーザー'),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      UserStatsCard(userId: user.uid),
+                    ],
+                  ),
+
+                  // プロフィール完成度カード（2段階）
+                  if (_userData != null &&
+                      _calcBasicProfileCompletion(_userData!) < 1.0) ...[
+                    // パターン1: 基本プロフィール未完成
+                    const SizedBox(height: 16),
+                    _buildProfileCompletionCard(context, _userData!),
+                  ] else if (_userData != null &&
+                      !_isInterestCategorySet(_userData!)) ...[
+                    // パターン2: 基本プロフィール完成済み＆興味カテゴリ未設定
+                    const SizedBox(height: 16),
+                    _buildInterestCategoryPromptCard(context),
+                  ],
+
+                  const SizedBox(height: 24),
+
+                  // 設定セクション（SettingsView と同様）
+                  _buildSectionTitle('アカウント'),
+                  _buildSettingsMenuContainer(context, [
+                    if (_userData == null ||
+                        _calcBasicProfileCompletion(_userData!) >= 1.0)
+                      _buildMenuItem(
+                        icon: Icons.person,
+                        title: 'プロフィール編集',
+                        subtitle: 'アイコンや表示名を変更',
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const ProfileEditView()),
+                          );
+                          _loadUserData();
+                        },
+                      ),
+                    if (_userData != null &&
+                        _calcBasicProfileCompletion(_userData!) >= 1.0)
+                      _buildMenuItem(
+                        icon: Icons.category,
+                        title: '興味カテゴリ設定',
+                        subtitle: 'あなたの興味のあるジャンルを設定',
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    const InterestCategoryView()),
+                          );
+                          _loadUserData();
+                        },
+                      ),
+                    if (canChangePassword)
+                      _buildMenuItem(
+                        icon: Icons.lock,
+                        title: 'パスワード変更',
+                        subtitle: 'ログインパスワードを変更',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    const PasswordChangeView()),
+                          );
+                        },
+                      ),
+                    if (canChangePassword)
+                      _buildMenuItem(
+                        icon: Icons.email,
+                        title: 'メールアドレス変更',
+                        subtitle: 'ログインメールアドレスを変更',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const EmailChangeView()),
+                          );
+                        },
+                      ),
+                  ]),
+
+                  const SizedBox(height: 24),
+
+                  _buildSectionTitle('通知'),
+                  _buildSettingsMenuContainer(context, [
+                    _buildMenuItem(
+                      icon: Icons.notifications,
+                      title: '通知設定',
+                      subtitle: 'プッシュ通知・メール通知の設定',
+                      onTap: () => _openNotificationSettings(context),
+                    ),
+                  ]),
+
+                  const SizedBox(height: 24),
+
+                  // 店舗管理セクションは表示しない
+
+                  _buildSectionTitle('サポート'),
+                  _buildSettingsMenuContainer(context, [
+                    _buildMenuItem(
+                      icon: Icons.help,
+                      title: 'ヘルプ・サポート',
+                      subtitle: 'よくある質問やサポート',
+                      trailing: _buildLiveChatUnreadTrailing(),
+                      onTap: () => _showHelp(context),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.chat_bubble_outline,
+                      title: 'フィードバック',
+                      subtitle: 'ご意見・不具合の報告',
+                      onTap: () => _openFeedback(context),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.description,
+                      title: '利用規約',
+                      subtitle: 'サービス利用規約を確認',
+                      onTap: () => _showTerms(context),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.policy,
+                      title: 'プライバシーポリシー',
+                      subtitle: '個人情報の取り扱いについて',
+                      onTap: () => _showPrivacyPolicy(context),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.info_outline,
+                      title: 'アプリについて',
+                      subtitle: 'バージョン情報・開発者情報',
+                      onTap: () => _showAppInfo(context),
+                    ),
+                  ]),
+
+                  const SizedBox(height: 24),
+
+                  _buildSectionTitle('アカウント'),
+                  _buildSettingsMenuContainer(context, [
+                    _buildMenuItem(
+                      icon: Icons.logout,
+                      title: 'ログアウト',
+                      subtitle: 'アカウントからログアウト',
+                      onTap: () => _showLogoutDialog(context, ref),
+                      isDestructive: true,
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.delete_forever,
+                      title: '退会する',
+                      subtitle: 'アカウントを完全に削除',
+                      onTap: () => _showDeleteAccountDialog(context),
+                      isDestructive: true,
+                    ),
+                  ]),
+                  const SizedBox(height: 24),
                 ],
-
-                const SizedBox(height: 24),
-
-                // 設定セクション（SettingsView と同様）
-                _buildSectionTitle('アカウント'),
-                _buildSettingsMenuContainer(context, [
-                  if (_userData == null || _calcBasicProfileCompletion(_userData!) >= 1.0)
-                    _buildMenuItem(
-                      icon: Icons.person,
-                      title: 'プロフィール編集',
-                      subtitle: 'アイコンや表示名を変更',
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const ProfileEditView()),
-                        );
-                        _loadUserData();
-                      },
-                    ),
-                  if (_userData != null && _calcBasicProfileCompletion(_userData!) >= 1.0)
-                    _buildMenuItem(
-                      icon: Icons.category,
-                      title: '興味カテゴリ設定',
-                      subtitle: 'あなたの興味のあるジャンルを設定',
-                      onTap: () async {
-                        await Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const InterestCategoryView()),
-                        );
-                        _loadUserData();
-                      },
-                    ),
-                  if (canChangePassword)
-                    _buildMenuItem(
-                      icon: Icons.lock,
-                      title: 'パスワード変更',
-                      subtitle: 'ログインパスワードを変更',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const PasswordChangeView()),
-                        );
-                      },
-                    ),
-                  if (canChangePassword)
-                    _buildMenuItem(
-                      icon: Icons.email,
-                      title: 'メールアドレス変更',
-                      subtitle: 'ログインメールアドレスを変更',
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (context) => const EmailChangeView()),
-                        );
-                      },
-                    ),
-                ]),
-
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('通知'),
-                _buildSettingsMenuContainer(context, [
-                  _buildMenuItem(
-                    icon: Icons.notifications,
-                    title: '通知設定',
-                    subtitle: 'プッシュ通知・メール通知の設定',
-                    onTap: () => _openNotificationSettings(context),
-                  ),
-                ]),
-
-                const SizedBox(height: 24),
-
-                // 店舗管理セクションは表示しない
-
-                _buildSectionTitle('サポート'),
-                _buildSettingsMenuContainer(context, [
-                  _buildMenuItem(
-                    icon: Icons.help,
-                    title: 'ヘルプ・サポート',
-                    subtitle: 'よくある質問やサポート',
-                    trailing: _buildLiveChatUnreadTrailing(),
-                    onTap: () => _showHelp(context),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.chat_bubble_outline,
-                    title: 'フィードバック',
-                    subtitle: 'ご意見・不具合の報告',
-                    onTap: () => _openFeedback(context),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.description,
-                    title: '利用規約',
-                    subtitle: 'サービス利用規約を確認',
-                    onTap: () => _showTerms(context),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.policy,
-                    title: 'プライバシーポリシー',
-                    subtitle: '個人情報の取り扱いについて',
-                    onTap: () => _showPrivacyPolicy(context),
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.info_outline,
-                    title: 'アプリについて',
-                    subtitle: 'バージョン情報・開発者情報',
-                    onTap: () => _showAppInfo(context),
-                  ),
-                ]),
-
-                const SizedBox(height: 24),
-
-                _buildSectionTitle('アカウント'),
-                _buildSettingsMenuContainer(context, [
-                  _buildMenuItem(
-                    icon: Icons.logout,
-                    title: 'ログアウト',
-                    subtitle: 'アカウントからログアウト',
-                    onTap: () => _showLogoutDialog(context, ref),
-                    isDestructive: true,
-                  ),
-                  _buildMenuItem(
-                    icon: Icons.delete_forever,
-                    title: '退会する',
-                    subtitle: 'アカウントを完全に削除',
-                    onTap: () => _showDeleteAccountDialog(context),
-                    isDestructive: true,
-                  ),
-                ]),
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(),
+              ),
+            );
+          },
+          loading: () => const Center(
+            child: CircularProgressIndicator(),
+          ),
+          error: (error, _) => Center(
+            child: Text('エラー: $error'),
+          ),
         ),
-        error: (error, _) => Center(
-          child: Text('エラー: $error'),
-        ),
-      ),
       ),
     );
   }
@@ -427,7 +447,9 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     final Color defaultAvatarColor = Colors.grey.withOpacity(0.1);
     // Firestoreから取得したprofileImageUrlを優先し、なければFirebase AuthのphotoURLを使用
     String? imageUrl;
-    if (userData != null && userData['profileImageUrl'] != null && userData['profileImageUrl'].toString().isNotEmpty) {
+    if (userData != null &&
+        userData['profileImageUrl'] != null &&
+        userData['profileImageUrl'].toString().isNotEmpty) {
       imageUrl = userData['profileImageUrl'];
     } else if (user.photoURL != null && user.photoURL!.isNotEmpty) {
       imageUrl = user.photoURL;
@@ -447,7 +469,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             ),
     );
   }
-
 
   Widget _buildImageWidget(String imageUrl) {
     // CORS制限を回避する画像表示方法
@@ -487,33 +508,34 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   Widget _buildFirebaseStorageImage(String imageUrl) {
     // Firebase Storageの画像を直接表示
     print('Firebase Storage画像を直接表示: $imageUrl');
-    
+
     return _buildSimpleWebImage(imageUrl);
   }
 
   Future<String?> _loadImageWithCorsFix(String imageUrl) async {
     try {
       print('CORS修正で画像読み込み開始: $imageUrl');
-      
+
       // 1. 複数のプロキシサービスを試行
       final proxyServices = [
         'https://api.allorigins.win/raw?url=',
         'https://cors-anywhere.herokuapp.com/',
         'https://thingproxy.freeboard.io/fetch/',
       ];
-      
+
       for (final proxy in proxyServices) {
         try {
           final proxyUrl = '$proxy$imageUrl';
           print('プロキシ試行: $proxyUrl');
-          
+
           final response = await http.get(
             Uri.parse(proxyUrl),
             headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             },
           ).timeout(const Duration(seconds: 8));
-          
+
           if (response.statusCode == 200) {
             final bytes = response.bodyBytes;
             final base64String = base64Encode(bytes);
@@ -525,13 +547,15 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           continue;
         }
       }
-      
+
       // 2. 直接読み込みを試行（ヘッダーなし）
       try {
-        final directResponse = await http.get(
-          Uri.parse(imageUrl),
-        ).timeout(const Duration(seconds: 5));
-        
+        final directResponse = await http
+            .get(
+              Uri.parse(imageUrl),
+            )
+            .timeout(const Duration(seconds: 5));
+
         if (directResponse.statusCode == 200) {
           final bytes = directResponse.bodyBytes;
           final base64String = base64Encode(bytes);
@@ -541,7 +565,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       } catch (e) {
         print('直接読み込みでエラー: $e');
       }
-      
+
       print('すべての画像読み込み方法が失敗');
       return null;
     } catch (e) {
@@ -553,7 +577,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   Widget _buildSimpleWebImage(String imageUrl) {
     // Flutter WebでシンプルなImage.networkを使用
     print('シンプルなWeb画像表示開始: $imageUrl');
-    
+
     return Container(
       width: 80,
       height: 80,
@@ -602,7 +626,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             ),
           );
         }
-        
+
         if (snapshot.hasData && snapshot.data != null) {
           return Image.memory(
             base64Decode(snapshot.data!),
@@ -611,7 +635,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             fit: BoxFit.cover,
           );
         }
-        
+
         // エラー時は直接Image.networkを試行
         return _buildDirectWebImage(imageUrl);
       },
@@ -624,11 +648,11 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
       // 1. 直接読み込み（Firebase Storageは直接読み込める）
       final directResult = await _loadImageDirectly(imageUrl);
       if (directResult != null) return directResult;
-      
+
       // 2. プロキシ経由での読み込み
       final result = await _loadImageAsBase64(imageUrl);
       if (result != null) return result;
-      
+
       // 3. 代替プロキシサービス
       return await _loadImageWithAlternativeProxy(imageUrl);
     } catch (e) {
@@ -640,15 +664,17 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   Future<String?> _loadImageWithAlternativeProxy(String imageUrl) async {
     try {
       // 代替のCORSプロキシサービス
-      final proxyUrl = 'https://api.allorigins.win/raw?url=${Uri.encodeComponent(imageUrl)}';
-      
+      final proxyUrl =
+          'https://api.allorigins.win/raw?url=${Uri.encodeComponent(imageUrl)}';
+
       final response = await http.get(
         Uri.parse(proxyUrl),
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
       ).timeout(const Duration(seconds: 10));
-      
+
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
         final base64String = base64Encode(bytes);
@@ -689,10 +715,16 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   }
 
   Widget _buildStatsRow(String userId, WidgetRef ref) {
-    final userDocAsync = ref.watch(StreamProvider.family<DocumentSnapshot<Map<String, dynamic>>?, String>((ref, uid) {
-      return FirebaseFirestore.instance.collection('users').doc(uid).snapshots();
+    final userDocAsync = ref.watch(
+        StreamProvider.family<DocumentSnapshot<Map<String, dynamic>>?, String>(
+            (ref, uid) {
+      return FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .snapshots();
     })(userId));
-    final newBadgeCountAsync = ref.watch(FutureProvider.family<int, String>((ref, userId) async {
+    final newBadgeCountAsync =
+        ref.watch(FutureProvider.family<int, String>((ref, userId) async {
       final badgeService = ref.read(badgeProvider);
       return await badgeService.getNewBadgeCount(userId);
     })(userId));
@@ -761,20 +793,26 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     int filled = 0;
     const total = 7;
 
-    if (data['displayName'] is String && (data['displayName'] as String).trim().isNotEmpty) filled++;
+    if (data['displayName'] is String &&
+        (data['displayName'] as String).trim().isNotEmpty) filled++;
     if (data['birthDate'] != null) filled++;
-    if (data['gender'] is String && (data['gender'] as String).isNotEmpty) filled++;
-    if (data['prefecture'] is String && (data['prefecture'] as String).isNotEmpty) filled++;
+    if (data['gender'] is String && (data['gender'] as String).isNotEmpty)
+      filled++;
+    if (data['prefecture'] is String &&
+        (data['prefecture'] as String).isNotEmpty) filled++;
     if (data['city'] is String && (data['city'] as String).isNotEmpty) filled++;
-    if (data['occupation'] is String && (data['occupation'] as String).isNotEmpty) filled++;
-    if (data['profileImageUrl'] is String && (data['profileImageUrl'] as String).isNotEmpty) filled++;
+    if (data['occupation'] is String &&
+        (data['occupation'] as String).isNotEmpty) filled++;
+    if (data['profileImageUrl'] is String &&
+        (data['profileImageUrl'] as String).isNotEmpty) filled++;
 
     return filled / total;
   }
 
   /// 興味カテゴリが設定済みかどうか
   bool _isInterestCategorySet(Map<String, dynamic> data) {
-    return data['interestCategories'] is List && (data['interestCategories'] as List).isNotEmpty;
+    return data['interestCategories'] is List &&
+        (data['interestCategories'] as List).isNotEmpty;
   }
 
   Widget _buildInterestCategoryPromptCard(BuildContext context) {
@@ -812,7 +850,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
               onPressed: () async {
                 await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const InterestCategoryView()),
+                  MaterialPageRoute(
+                      builder: (context) => const InterestCategoryView()),
                 );
                 _loadUserData();
               },
@@ -835,7 +874,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     );
   }
 
-  Widget _buildProfileCompletionCard(BuildContext context, Map<String, dynamic> data) {
+  Widget _buildProfileCompletionCard(
+      BuildContext context, Map<String, dynamic> data) {
     final completion = _calcBasicProfileCompletion(data);
     final percent = (completion * 100).round();
 
@@ -868,7 +908,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     value: completion,
                     minHeight: 10,
                     backgroundColor: Colors.grey.shade200,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
                   ),
                 ),
               ),
@@ -898,7 +939,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
               onPressed: () async {
                 await Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const ProfileEditView()),
+                  MaterialPageRoute(
+                      builder: (context) => const ProfileEditView()),
                 );
                 _loadUserData();
               },
@@ -936,7 +978,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     );
   }
 
-  Widget _buildSettingsMenuContainer(BuildContext context, List<Widget> children) {
+  Widget _buildSettingsMenuContainer(
+      BuildContext context, List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -955,7 +998,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     bool isDestructive = false,
   }) {
     return ListTile(
-      leading: Icon(icon, color: isDestructive ? Colors.red : const Color(0xFFFF6B35)),
+      leading: Icon(icon,
+          color: isDestructive ? Colors.red : const Color(0xFFFF6B35)),
       title: Text(
         title,
         style: TextStyle(
@@ -1109,9 +1153,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
         Navigator.of(context).pop();
         Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(
-            builder: (context) => const MainNavigationView(
-              key: ValueKey('guest'),
-            ),
+            builder: (context) => const WelcomeView(),
           ),
           (route) => false,
         );
@@ -1148,12 +1190,12 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 ),
               );
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
             child: const Text('退会する'),
           ),
         ],
       ),
     );
   }
-
 }

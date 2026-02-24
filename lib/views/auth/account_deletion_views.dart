@@ -5,16 +5,18 @@ import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
-import '../main_navigation_view.dart';
+import 'welcome_view.dart';
 
 class AccountDeletionProcessingView extends ConsumerStatefulWidget {
   const AccountDeletionProcessingView({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<AccountDeletionProcessingView> createState() => _AccountDeletionProcessingViewState();
+  ConsumerState<AccountDeletionProcessingView> createState() =>
+      _AccountDeletionProcessingViewState();
 }
 
-class _AccountDeletionProcessingViewState extends ConsumerState<AccountDeletionProcessingView> {
+class _AccountDeletionProcessingViewState
+    extends ConsumerState<AccountDeletionProcessingView> {
   bool _started = false;
 
   @override
@@ -33,7 +35,8 @@ class _AccountDeletionProcessingViewState extends ConsumerState<AccountDeletionP
 
       if (deleted == true) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const AccountDeletionCompleteView()),
+          MaterialPageRoute(
+              builder: (context) => const AccountDeletionCompleteView()),
           (route) => false,
         );
         return;
@@ -58,11 +61,13 @@ class _AccountDeletionProcessingViewState extends ConsumerState<AccountDeletionP
         return;
       }
 
-      await authService.reauthenticateWithPassword(email: email, password: password);
+      await authService.reauthenticateWithPassword(
+          email: email, password: password);
       await authService.deleteAccount();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => const AccountDeletionCompleteView()),
+        MaterialPageRoute(
+            builder: (context) => const AccountDeletionCompleteView()),
         (route) => false,
       );
     } catch (e) {
@@ -209,9 +214,7 @@ class _AccountDeletionProcessingViewState extends ConsumerState<AccountDeletionP
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (context) => const MainNavigationView(
-          key: ValueKey('guest'),
-        ),
+        builder: (context) => const WelcomeView(),
       ),
       (route) => false,
     );
@@ -265,9 +268,7 @@ class AccountDeletionCompleteView extends StatelessWidget {
                 onPressed: () {
                   Navigator.of(context).pushAndRemoveUntil(
                     MaterialPageRoute(
-                      builder: (context) => const MainNavigationView(
-                        key: ValueKey('guest'),
-                      ),
+                      builder: (context) => const WelcomeView(),
                     ),
                     (route) => false,
                   );

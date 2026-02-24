@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../main_navigation_view.dart';
 import 'sign_in_view.dart';
 import 'terms_privacy_consent_view.dart';
 
@@ -9,7 +10,8 @@ class WelcomeView extends StatefulWidget {
   State<WelcomeView> createState() => _WelcomeViewState();
 }
 
-class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin {
+class _WelcomeViewState extends State<WelcomeView>
+    with TickerProviderStateMixin {
   late AnimationController _logoController;
   late AnimationController _fadeController;
   late Animation<double> _logoAnimation;
@@ -18,17 +20,17 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    
+
     _logoController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-    
+
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    
+
     // シンプルで安全なアニメーション
     _logoAnimation = Tween<double>(
       begin: 0.0,
@@ -37,7 +39,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
       parent: _logoController,
       curve: Curves.easeOutCubic, // 安全なカーブ
     ));
-    
+
     _fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -45,7 +47,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
       parent: _fadeController,
       curve: Curves.easeInOut,
     ));
-    
+
     _startAnimations();
   }
 
@@ -54,7 +56,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
     if (mounted) {
       _logoController.forward();
     }
-    
+
     await Future.delayed(const Duration(milliseconds: 800));
     if (mounted) {
       _fadeController.forward();
@@ -71,32 +73,32 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE75B41), // ぐるまっぷ ブランドカラー
+      backgroundColor: const Color(0xFFFBF6F2),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
               const Spacer(flex: 2),
-              
+
               // ロゴとサービス名
               _buildLogoSection(),
-              
+
               const Spacer(flex: 1),
-              
+
               // 説明文
               _buildDescriptionSection(),
-              
+
               const Spacer(flex: 1),
-              
+
               // ボタンセクション
               _buildButtonSection(),
-              
+
               const Spacer(flex: 1),
-              
+
               // フッター
               _buildFooter(),
-              
+
               const SizedBox(height: 40),
             ],
           ),
@@ -108,39 +110,24 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
   Widget _buildLogoSection() {
     return Column(
       children: [
-        // ロゴアイコン
+        // ロゴ画像
         AnimatedBuilder(
           animation: _logoAnimation,
           builder: (context, child) {
             return Transform.scale(
               scale: _logoAnimation.value,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Image.asset(
-                  'assets/images/groumap_icon.png',
-                  width: 60,
-                  height: 60,
-                  fit: BoxFit.contain,
-                ),
+              child: Image.asset(
+                'assets/images/splash_logo.png',
+                width: 220,
+                height: 220,
+                fit: BoxFit.contain,
               ),
             );
           },
         ),
-        
-        const SizedBox(height: 24),
-        
+
+        const SizedBox(height: 12),
+
         // サービス名
         AnimatedBuilder(
           animation: _logoAnimation,
@@ -154,7 +141,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                   style: TextStyle(
                     fontSize: 48,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: Color(0xFFFF6B35),
                     letterSpacing: 2.0,
                   ),
                 ),
@@ -162,9 +149,9 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
             );
           },
         ),
-        
+
         const SizedBox(height: 8),
-        
+
         // サブタイトル
         AnimatedBuilder(
           animation: _logoAnimation,
@@ -174,10 +161,10 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
               child: Opacity(
                 opacity: _logoAnimation.value,
                 child: const Text(
-                  'グルメとつながる、新しい体験',
+                  '"知らなかった小さな名店"に出会う地図',
                   style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
+                    fontSize: 15,
+                    color: Colors.black54,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -190,23 +177,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
   }
 
   Widget _buildDescriptionSection() {
-    return AnimatedBuilder(
-      animation: _fadeAnimation,
-      builder: (context, child) {
-        return Opacity(
-          opacity: _fadeAnimation.value,
-          child: const Text(
-            'お気に入りのお店でポイントを貯めて、\n特別なクーポンやスタンプをゲット！',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.white,
-              height: 1.5,
-            ),
-          ),
-        );
-      },
-    );
+    return const SizedBox.shrink();
   }
 
   Widget _buildButtonSection() {
@@ -230,10 +201,10 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFFE75B41), // ぐるまっぷ ブランドカラー
-                    elevation: 8,
-                    shadowColor: Colors.black.withOpacity(0.3),
+                    backgroundColor: const Color(0xFFFF6B35),
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    shadowColor: Colors.black26,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(999),
                     ),
@@ -247,9 +218,9 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 16),
-              
+
               // ログインボタン
               SizedBox(
                 width: double.infinity,
@@ -263,8 +234,8 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                     );
                   },
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white, width: 2),
+                    foregroundColor: const Color(0xFFFF6B35),
+                    side: const BorderSide(color: Color(0xFFFF6B35), width: 2),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(999),
                     ),
@@ -276,6 +247,47 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // ログインせずに開始ボタン
+              SizedBox(
+                width: double.infinity,
+                height: 40,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pushReplacement(
+                      MaterialPageRoute(
+                        builder: (context) => const MainNavigationView(
+                          key: ValueKey('guest'),
+                        ),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.blue,
+                  ),
+                  child: const Text(
+                    'ログインせずに開始',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              const Text(
+                '一部機能はログインが必要です',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
             ],
@@ -296,7 +308,7 @@ class _WelcomeViewState extends State<WelcomeView> with TickerProviderStateMixin
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 12,
-              color: Colors.white60,
+              color: Colors.black45,
               height: 1.4,
             ),
           ),

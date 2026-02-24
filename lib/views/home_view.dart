@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -164,9 +165,14 @@ class HomeView extends ConsumerStatefulWidget {
 class _HomeViewState extends ConsumerState<HomeView> {
   static _HomeViewState? _instance;
   late final PageController _referralPageController;
+  late final PageController _recommendedPageController;
   Timer? _referralTimer;
+  Timer? _recommendedTimer;
   int _referralPageIndex = 0;
   int _referralPageCount = 0;
+  int _recommendedPageIndex = 0;
+  int _recommendedPageCount = 0;
+  bool _isRecommendedPageUserInteracting = false;
   // バッジポップアップはmain_navigation_viewに移管済み
   static const bool _showDebugLoadingLabels = false;
   bool _isRecommendedStoresLoading = true;
@@ -292,6 +298,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     super.initState();
     _instance = this;
     _referralPageController = PageController(initialPage: 0);
+    _recommendedPageController = PageController(initialPage: 0);
     _referralTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (!_referralPageController.hasClients) {
         return;
@@ -306,6 +313,20 @@ class _HomeViewState extends ConsumerState<HomeView> {
         curve: Curves.easeInOut,
       );
     });
+    _recommendedTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (!_recommendedPageController.hasClients) {
+        return;
+      }
+      if (_recommendedPageCount <= 1 || _isRecommendedPageUserInteracting) {
+        return;
+      }
+      final nextPage = (_recommendedPageIndex + 1) % _recommendedPageCount;
+      _recommendedPageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 
   @override
@@ -314,8 +335,38 @@ class _HomeViewState extends ConsumerState<HomeView> {
       _instance = null;
     }
     _referralTimer?.cancel();
+    _recommendedTimer?.cancel();
     _referralPageController.dispose();
+    _recommendedPageController.dispose();
     super.dispose();
+  }
+
+  void _scheduleRecommendedPageCountUpdate(int count) {
+    final normalizedCount = count < 0 ? 0 : count;
+    final needsUpdate = _recommendedPageCount != normalizedCount ||
+        (normalizedCount == 0 && _recommendedPageIndex != 0) ||
+        (normalizedCount > 0 && _recommendedPageIndex >= normalizedCount);
+    if (!needsUpdate) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      var safeIndex = _recommendedPageIndex;
+      if (normalizedCount == 0) {
+        safeIndex = 0;
+      } else if (safeIndex >= normalizedCount) {
+        safeIndex = normalizedCount - 1;
+      }
+      setState(() {
+        _recommendedPageCount = normalizedCount;
+        _recommendedPageIndex = safeIndex;
+      });
+      if (_recommendedPageController.hasClients && normalizedCount > 0) {
+        _recommendedPageController.jumpToPage(safeIndex);
+      }
+    });
   }
 
   @override
@@ -421,6 +472,13 @@ class _HomeViewState extends ConsumerState<HomeView> {
                       const SizedBox(height: 12),
                     ],
 
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child:
+                          _buildStatsCapsules(context, ref, isLoggedIn, userId),
+                    ),
+                    const SizedBox(height: 12),
+
                     _buildRecommendedStoresSection(context),
                     const SizedBox(height: 12),
 
@@ -464,23 +522,23 @@ class _HomeViewState extends ConsumerState<HomeView> {
         _refreshClaimableMissions(userId);
       },
       child: Container(
-        width: 80,
-        height: 80,
+        width: 72,
+        height: 72,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
               color: isActive
-                  ? const Color(0xFF2A8B8B).withOpacity(0.5)
-                  : Colors.grey.withOpacity(0.3),
-              blurRadius: 16,
-              spreadRadius: 2,
+                  ? const Color(0xFFFFC107).withOpacity(0.28)
+                  : Colors.grey.withOpacity(0.2),
+              blurRadius: 12,
+              spreadRadius: 1,
               offset: const Offset(0, 4),
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(isActive ? 0.3 : 0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
+              color: Colors.black.withOpacity(isActive ? 0.18 : 0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
@@ -489,10 +547,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
             gradient: LinearGradient(
               colors: isActive
                   ? const [
-                      Color(0xFF1A7A7A),
-                      Color(0xFF2A8B8B),
-                      Color(0xFF4DB6AC),
-                      Color(0xFF6BD4C8),
+                      Color(0xFFFF8F00),
+                      Color(0xFFFFA000),
+                      Color(0xFFFFB300),
+                      Color(0xFFFFC107),
                     ]
                   : const [
                       Color(0xFF9E9E9E),
@@ -503,14 +561,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
             ),
             shape: BoxShape.circle,
             border: Border.all(
-              color: Colors.white.withOpacity(isActive ? 0.35 : 0.2),
+              color: Colors.white.withOpacity(isActive ? 0.3 : 0.2),
               width: 2,
             ),
           ),
           child: Icon(
             Icons.monetization_on,
             color: isActive ? Colors.white : Colors.white.withOpacity(0.6),
-            size: 38,
+            size: 34,
           ),
         ),
       ),
@@ -1203,28 +1261,28 @@ class _HomeViewState extends ConsumerState<HomeView> {
           children: [
             Expanded(
               child: _buildStatCapsule(
-                icon: Icons.monetization_on,
-                iconColor: const Color(0xFFFFC107),
-                label: 'コイン',
                 value: coinCount,
+                label: 'コイン',
+                icon: Icons.attach_money_rounded,
+                iconBackgroundColor: const Color(0xFFE65100),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Expanded(
               child: _buildStatCapsule(
-                icon: Icons.military_tech,
-                iconColor: const Color(0xFF5C6BC0),
-                label: 'バッジ',
                 value: badgeCount,
+                label: 'バッジ',
+                icon: Icons.workspace_premium_rounded,
+                iconBackgroundColor: const Color(0xFFFFA000),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Expanded(
               child: _buildStatCapsule(
-                icon: Icons.local_activity,
-                iconColor: const Color(0xFFFF6B35),
-                label: 'スタンプ',
                 value: stampCount,
+                label: 'スタンプ',
+                icon: Icons.check_rounded,
+                iconBackgroundColor: const Color(0xFF00897B),
               ),
             ),
           ],
@@ -1262,38 +1320,54 @@ class _HomeViewState extends ConsumerState<HomeView> {
   }
 
   Widget _buildStatCapsule({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
     required String value,
+    required String label,
+    required IconData icon,
+    required Color iconBackgroundColor,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      height: 42,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE0E0E0)),
+        borderRadius: BorderRadius.circular(21),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 16, color: iconColor),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 11,
-              color: Colors.black54,
-              fontWeight: FontWeight.w500,
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: iconBackgroundColor,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              size: 9,
+              color: Colors.white,
             ),
           ),
           const SizedBox(width: 4),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Colors.black87,
-              fontWeight: FontWeight.bold,
+          Flexible(
+            child: Text(
+              '$value $label',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 11,
+                height: 1.1,
+                letterSpacing: 0.0,
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -1311,11 +1385,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Column(
         children: [
-          // 統計カプセルバー（コイン・バッジ・スタンプ）
-          _buildStatsCapsules(context, ref, isLoggedIn, userId),
-
-          const SizedBox(height: 12),
-
           // メニューグリッド
           _buildMenuGrid(context, ref, isLoggedIn),
 
@@ -1452,12 +1521,14 @@ class _HomeViewState extends ConsumerState<HomeView> {
     setState(() {
       _isRecommendedStoresLoading = true;
       _recommendedStoresError = null;
+      _isRecommendedPageUserInteracting = false;
     });
 
     try {
       final currentPosition = await _tryGetCurrentPosition();
-      final visitedStoreIds =
-          user == null ? <String>{} : await _loadVisitedStoreIds(user.uid);
+      final userStoreStampCounts = user == null
+          ? <String, int>{}
+          : await _loadUserStoreStampCounts(user.uid);
 
       final snapshot = await FirebaseFirestore.instance
           .collection('stores')
@@ -1468,10 +1539,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
       final List<Map<String, dynamic>> stores = [];
       for (final doc in snapshot.docs) {
-        if (visitedStoreIds.contains(doc.id)) {
-          continue;
-        }
         final data = doc.data();
+        final userStamps = userStoreStampCounts[doc.id] ?? 0;
 
         // isOwner店舗を除外（店舗ドキュメントのフラグで判定）
         final rawIsOwner = data['isOwner'];
@@ -1497,6 +1566,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
           'phoneNumber': data['phoneNumber'] ?? '',
           'phone': data['phone'] ?? '',
           'businessHours': data['businessHours'],
+          'scheduleOverrides': data['scheduleOverrides'],
+          'isRegularHoliday': data['isRegularHoliday'] ?? false,
           'location': data['location'],
           'tags': data['tags'],
           'socialMedia': data['socialMedia'],
@@ -1509,7 +1580,8 @@ class _HomeViewState extends ConsumerState<HomeView> {
           'distanceMeters': distanceMeters,
           'distance': _formatDistance(distanceMeters),
           'stampTotal': 10,
-          'stampCurrent': 0,
+          'stampCurrent': userStamps.clamp(0, 10),
+          'userStamps': userStamps,
         });
       }
 
@@ -1524,32 +1596,62 @@ class _HomeViewState extends ConsumerState<HomeView> {
         return 0;
       });
 
+      final unvisitedStores = stores
+          .where((store) => ((store['userStamps'] as int?) ?? 0) <= 0)
+          .toList();
+      final inProgressStores = stores.where((store) {
+        final stamps = (store['userStamps'] as int?) ?? 0;
+        return stamps >= 1 && stamps <= 9;
+      }).toList();
+      final completedStores = stores
+          .where((store) => ((store['userStamps'] as int?) ?? 0) >= 10)
+          .toList();
+
+      final recommendedCandidates = unvisitedStores.isNotEmpty
+          ? unvisitedStores
+          : (inProgressStores.isNotEmpty ? inProgressStores : completedStores);
+      final selectedStores = recommendedCandidates.take(5).toList();
+
       if (!mounted) return;
       setState(() {
-        _recommendedStores = stores.take(7).toList();
+        _recommendedStores = selectedStores;
         _isRecommendedStoresLoading = false;
       });
+      _scheduleRecommendedPageCountUpdate(selectedStores.length);
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isRecommendedStoresLoading = false;
         _recommendedStoresError = e.toString();
       });
+      _scheduleRecommendedPageCountUpdate(0);
     }
   }
 
-  Future<Set<String>> _loadVisitedStoreIds(String userId) async {
+  Future<Map<String, int>> _loadUserStoreStampCounts(String userId) async {
     try {
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
           .collection('stores')
           .get();
-      return snapshot.docs.map((doc) => doc.id).toSet();
+
+      final stampCounts = <String, int>{};
+      for (final doc in snapshot.docs) {
+        final stamps = _parseUserStampCount(doc.data()['stamps']);
+        stampCounts[doc.id] = stamps < 0 ? 0 : stamps;
+      }
+      return stampCounts;
     } catch (e) {
-      debugPrint('Failed to load visited stores: $e');
-      return <String>{};
+      debugPrint('Failed to load user store stamps: $e');
+      return <String, int>{};
     }
+  }
+
+  int _parseUserStampCount(dynamic value) {
+    if (value is num) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 
   Future<Position?> _tryGetCurrentPosition() async {
@@ -1594,50 +1696,148 @@ class _HomeViewState extends ConsumerState<HomeView> {
     return '${(distanceMeters / 1000).toStringAsFixed(1)}km';
   }
 
+  String _buildRecommendedImageUrl(Map<String, dynamic> store) {
+    final storeImageUrl = (store['storeImageUrl'] as String?)?.trim() ?? '';
+    if (storeImageUrl.isNotEmpty) {
+      return storeImageUrl;
+    }
+    return (store['backgroundImageUrl'] as String?)?.trim() ?? '';
+  }
+
+  String _buildRecommendedCategoryLabel(Map<String, dynamic> store) {
+    final category = (store['category'] as String?)?.trim() ?? '';
+    final subCategory = (store['subCategory'] as String?)?.trim() ?? '';
+    if (category.isNotEmpty && subCategory.isNotEmpty) {
+      return '$category・$subCategory';
+    }
+    if (category.isNotEmpty) {
+      return category;
+    }
+    if (subCategory.isNotEmpty) {
+      return subCategory;
+    }
+    return 'カテゴリ未設定';
+  }
+
+  String _buildRecommendedStampLabel(int userStamps) {
+    if (userStamps <= 0) {
+      return '未訪問';
+    }
+    if (userStamps >= 10) {
+      return '満了';
+    }
+    return 'スタンプ $userStamps/10';
+  }
+
+  Color _buildRecommendedStampBackgroundColor(int userStamps) {
+    if (userStamps <= 0) {
+      return const Color(0xFFFFEEE4);
+    }
+    if (userStamps >= 10) {
+      return const Color(0xFFE9F7EF);
+    }
+    return const Color(0xFFFFF3E7);
+  }
+
+  Color _buildRecommendedStampTextColor(int userStamps) {
+    if (userStamps <= 0) {
+      return const Color(0xFFE16F3D);
+    }
+    if (userStamps >= 10) {
+      return const Color(0xFF1F8A4D);
+    }
+    return const Color(0xFFFF6B35);
+  }
+
+  String _buildRecommendedDistanceLabel(Map<String, dynamic> store) {
+    final distance = (store['distance'] as String?)?.trim() ?? '';
+    if (distance.isEmpty) {
+      return '--';
+    }
+    return distance;
+  }
+
   Widget _buildRecommendedStoresSection(BuildContext context) {
     final visibleStores = _recommendedStores;
 
-    return SizedBox(
-      height: 250,
-      child: _isRecommendedStoresLoading
-          ? Center(
-              child: _buildLoadingIndicatorWithLabel(
-                'HOME: recommended stores loading',
-                color: const Color(0xFFFF6B35),
-              ),
-            )
-          : _recommendedStoresError != null
-              ? const Center(
-                  child: Text(
-                    'おすすめ店舗の取得に失敗しました',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.red,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '今日のレコメンド',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 280,
+            child: _isRecommendedStoresLoading
+                ? Center(
+                    child: _buildLoadingIndicatorWithLabel(
+                      'HOME: recommended stores loading',
+                      color: const Color(0xFFFF6B35),
                     ),
-                  ),
-                )
-              : visibleStores.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'おすすめ店舗がありません',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
+                  )
+                : _recommendedStoresError != null
+                    ? const Center(
+                        child: Text(
+                          'おすすめ店舗の取得に失敗しました',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.red,
+                          ),
                         ),
-                      ),
-                    )
-                  : ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: visibleStores.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        return _buildRecommendedStoreCard(
-                          context,
-                          visibleStores[index],
-                        );
-                      },
-                    ),
+                      )
+                    : visibleStores.isEmpty
+                        ? const Center(
+                            child: Text(
+                              'おすすめ店舗がありません',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          )
+                        : NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              if (notification is ScrollStartNotification &&
+                                  notification.dragDetails != null) {
+                                _isRecommendedPageUserInteracting = true;
+                              } else if (notification
+                                      is ScrollEndNotification ||
+                                  (notification is UserScrollNotification &&
+                                      notification.direction ==
+                                          ScrollDirection.idle)) {
+                                _isRecommendedPageUserInteracting = false;
+                              }
+                              return false;
+                            },
+                            child: PageView.builder(
+                              controller: _recommendedPageController,
+                              itemCount: visibleStores.length,
+                              onPageChanged: (index) {
+                                if (!mounted || _recommendedPageIndex == index) {
+                                  return;
+                                }
+                                setState(() {
+                                  _recommendedPageIndex = index;
+                                });
+                              },
+                              itemBuilder: (context, index) {
+                                return _buildRecommendedStoreCard(
+                                  context,
+                                  visibleStores[index],
+                                );
+                              },
+                            ),
+                          ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1645,164 +1845,161 @@ class _HomeViewState extends ConsumerState<HomeView> {
     BuildContext context,
     Map<String, dynamic> store,
   ) {
-    final stampTotal = store['stampTotal'] as int? ?? 10;
-    final stampCurrent = store['stampCurrent'] as int? ?? 0;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => StoreDetailView(store: store),
-            ),
-          );
-        },
-        child: Container(
-          width: 240,
-          decoration: BoxDecoration(
-            color: Colors.white,
+    final userStamps = _parseUserStampCount(store['userStamps']);
+    final stampLabel = _buildRecommendedStampLabel(userStamps);
+    final stampBackgroundColor = _buildRecommendedStampBackgroundColor(
+      userStamps,
+    );
+    final stampTextColor = _buildRecommendedStampTextColor(userStamps);
+    final categoryLabel = _buildRecommendedCategoryLabel(store);
+    final distanceLabel = _buildRecommendedDistanceLabel(store);
+    final storeName = (store['name'] as String?)?.trim().isNotEmpty == true
+        ? (store['name'] as String).trim()
+        : '店舗名';
+    final imageUrl = _buildRecommendedImageUrl(store);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableHeight =
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 280.0;
+        final imageHeight = (availableHeight * 0.56).clamp(150.0, 190.0);
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
             borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(16),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => StoreDetailView(store: store),
                 ),
-                child: Stack(
-                  children: [
-                    Container(
-                      height: 120,
-                      width: double.infinity,
-                      color: Colors.grey[300],
-                      child: store['storeImageUrl'] != null &&
-                              (store['storeImageUrl'] as String).isNotEmpty
-                          ? Image.network(
-                              store['storeImageUrl'] as String,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return const Center(
-                                  child: Icon(
-                                    Icons.store,
-                                    size: 40,
-                                    color: Colors.grey,
-                                  ),
-                                );
-                              },
-                            )
-                          : const Center(
-                              child: Icon(
-                                Icons.store,
-                                size: 40,
-                                color: Colors.grey,
-                              ),
-                            ),
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 10,
+              );
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    height: imageHeight,
+                    width: double.infinity,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(16),
+                      ),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          store['genre'] as String? ?? 'ジャンル',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFFF6B35),
-                          ),
-                        ),
+                        color: Colors.grey[300],
+                        child: imageUrl.isNotEmpty
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Center(
+                                    child: Icon(
+                                      Icons.store,
+                                      size: 40,
+                                      color: Colors.grey,
+                                    ),
+                                  );
+                                },
+                              )
+                            : const Center(
+                                child: Icon(
+                                  Icons.store,
+                                  size: 40,
+                                  color: Colors.grey,
+                                ),
+                              ),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            store['name'] as String? ?? '店舗名',
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: stampBackgroundColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  stampLabel,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: stampTextColor,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  categoryLabel,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF5A5A5A),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            storeName,
                             style: const TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          store['distance'] as String? ?? '',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      store['description'] as String? ?? '',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      height: 18,
-                      child: Row(
-                        children: List.generate(stampTotal, (index) {
-                          final isActive = index < stampCurrent;
-                          return Container(
-                            width: 16,
-                            height: 16,
-                            margin: EdgeInsets.only(
-                                right: index == stampTotal - 1 ? 0 : 6),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: isActive
-                                  ? const Color(0xFFFF6B35).withOpacity(0.2)
-                                  : Colors.grey[200],
-                              border: Border.all(
-                                color: isActive
-                                    ? const Color(0xFFFF6B35)
-                                    : Colors.grey[300]!,
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.location_on,
+                                size: 16,
+                                color: Color(0xFF6D6D6D),
                               ),
-                            ),
-                            child: isActive
-                                ? const Icon(
-                                    Icons.check,
-                                    size: 11,
-                                    color: Color(0xFFFF6B35),
-                                  )
-                                : null,
-                          );
-                        }),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  '現在地から $distanceLabel',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF6D6D6D),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

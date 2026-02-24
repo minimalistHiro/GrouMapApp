@@ -441,8 +441,15 @@
   - `rejectedBy`: 拒否者UID
   - `pendingRequestNotifiedAt`: 未承認店舗通知送信済み日時
   - `isOwner`: オーナー専用フラグ（trueの場合ユーザーアプリで非表示）。Cloud Functions `setStoreOwnerFlagOnCreate` により、isOwnerユーザーが店舗を作成した場合に自動設定
-  - 表示ルール（ユーザーアプリ）: マップ/店舗一覧/おすすめ店舗/デイリーレコメンドは `isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` の店舗は非表示。認証状態に依存せず店舗ドキュメントの `isOwner` フラグのみで判定
+  - 表示ルール（ユーザーアプリ）: マップ/店舗一覧/おすすめ店舗/デイリーレコメンド/ミッションのコイン交換一覧は `isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` の店舗は非表示。認証状態に依存せず店舗ドキュメントの `isOwner` フラグのみで判定
   - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）
+  - `scheduleOverrides`: 日付別スケジュール上書き（`Map<yyyy-MM-dd, Map>`）
+    - 各エントリのキー: `yyyy-MM-dd` 形式の日付文字列
+    - `type`: 種別（`closed`=臨時休業 / `open`=臨時営業 / `special_hours`=時間変更）
+    - `note`: メモ（任意）
+    - `open`: 開始時刻（`HH:mm`形式。`open`/`special_hours` の場合のみ）
+    - `close`: 終了時刻（`HH:mm`形式。`open`/`special_hours` の場合のみ）
+    - 判定優先順位: `scheduleOverrides[今日]` → `isRegularHoliday` → `businessHours[曜日]`
   - `socialMedia`: SNSリンク（`instagram`, `x`, `facebook`, `website`）
   - `instagramAuth`: Instagram連携情報（Functions用）
     - `instagramUserId`: InstagramビジネスアカウントID
@@ -714,7 +721,7 @@
     - `login_3_claimed`: 3日連続ログインボーナス受取済みフラグ（bool）
     - `login_7_claimed`: 7日連続ログインボーナス受取済みフラグ（bool）
     - `login_30_claimed`: 30日連続ログインボーナス受取済みフラグ（bool）
-  - `showTutorial`: チュートリアル表示
+  - `showTutorial`: 初回オンボーディングチュートリアル表示フラグ（初期値 `true`、`TutorialView` の完了/スキップで `false`）
   - `readNotifications`: 既読通知ID配列
   - `stores/{storeId}`: スタンプ/来店情報
     - `stamps`: スタンプ数
@@ -776,6 +783,7 @@
     - `maxDistanceKm`: 最大距離km（number、null=制限なし）
     - `updatedAt`: 更新日時
   - `daily_missions/{yyyy-MM-dd}`: デイリーミッション（日付ごと）
+    - `map_open`: マップ画面オープン報酬の当日付与済みフラグ（bool、マップ関連報酬の1日1回制御用）
     - `app_open`: アプリを開く達成フラグ（bool）
     - `app_open_claimed`: アプリを開く報酬受取済みフラグ（bool）
     - `recommendation_view`: レコメンドを見る達成フラグ（bool）

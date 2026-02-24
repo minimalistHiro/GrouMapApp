@@ -38,6 +38,11 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
         ? Map<String, dynamic>.from(rawBusinessHours)
         : null;
 
+    final rawScheduleOverrides = data['scheduleOverrides'];
+    final scheduleOverrides = rawScheduleOverrides is Map
+        ? Map<String, dynamic>.from(rawScheduleOverrides)
+        : null;
+
     final rawTags = data['tags'];
     final tags = rawTags is List
         ? rawTags.map((tag) => tag.toString()).toList()
@@ -72,6 +77,8 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
       'phone': phone,
       'phoneNumber': phoneNumber,
       'businessHours': businessHours,
+      'scheduleOverrides': scheduleOverrides,
+      'isRegularHoliday': data['isRegularHoliday'] ?? false,
       'location': location,
       'tags': tags,
       'socialMedia': socialMedia,
