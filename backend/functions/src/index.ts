@@ -947,7 +947,7 @@ function hashOtp(code: string, uid: string): string {
 
 function buildOtpEmailText(code: string): string {
   return [
-    'Groumapをご利用いただきありがとうございます。',
+    'ぐるまっぷをご利用いただきありがとうございます。',
     '以下の6桁の認証コードをアプリに入力してください。',
     '',
     `認証コード: ${code}`,
@@ -955,7 +955,7 @@ function buildOtpEmailText(code: string): string {
     '',
     'このメールに心当たりがない場合は、破棄してください。',
     '',
-    'Groumap サポート',
+    'ぐるまっぷ サポート',
   ].join('\n');
 }
 
@@ -1740,7 +1740,7 @@ export const requestEmailOtp = onCall(
       await transporter.sendMail({
         from: smtpConfig.from,
         to: email,
-        subject: '【Groumap】メール認証コードのお知らせ',
+        subject: '【ぐるまっぷ】メール認証コードのお知らせ',
         text: buildOtpEmailText(code),
       });
     } catch (error) {
@@ -1827,7 +1827,7 @@ export const requestEmailChangeOtp = onCall(
       await transporter.sendMail({
         from: smtpConfig.from,
         to: newEmail,
-        subject: '【Groumap】メールアドレス変更 認証コードのお知らせ',
+        subject: '【ぐるまっぷ】メールアドレス変更 認証コードのお知らせ',
         text: buildOtpEmailText(code),
       });
     } catch (error) {

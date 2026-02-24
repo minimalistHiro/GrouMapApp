@@ -1,0 +1,17 @@
+flutter_native_splash:
+  # 背景色（UI/UXルールの画面背景色）
+  color: "#FBF6F2"
+
+  # スプラッシュロゴ画像
+  image: assets/images/splash_logo.png
+
+  # Android 12以降の設定
+  android_12:
+    color: "#FBF6F2"
+    image: assets/images/splash_logo.png
+
+  # iOS設定
+  ios: true
+
+  # Web設定（不要）
+  web: false

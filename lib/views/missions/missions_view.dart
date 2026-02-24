@@ -144,6 +144,8 @@ class _MissionsViewState extends State<MissionsView> {
         final data = doc.data();
         // isActiveもチェック（他の画面と同様）
         if (data['isActive'] != true) continue;
+        // isOwner店舗はユーザー向け一覧に表示しない（FIRESTORE.mdの表示ルール）
+        if (data['isOwner'] == true) continue;
         if (!visitedIds.contains(doc.id)) {
           unvisited.add({
             'storeId': doc.id,
@@ -401,7 +403,7 @@ class _MissionsViewState extends State<MissionsView> {
                   height: 72,
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xFF2A8B8B), Color(0xFF4DB6AC)],
+                      colors: [Color(0xFFFFA000), Color(0xFFFFC107)],
                       begin: Alignment.bottomLeft,
                       end: Alignment.topRight,
                     ),
@@ -465,7 +467,7 @@ class _MissionsViewState extends State<MissionsView> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF2A8B8B), Color(0xFF4DB6AC)],
+                        colors: [Color(0xFFFFA000), Color(0xFFFFC107)],
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                       ),
@@ -548,9 +550,9 @@ class _MissionsViewState extends State<MissionsView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
-      appBar: CommonHeader(
-        title: const Text('ミッション'),
-        backgroundColor: const Color(0xFFFF6B35),
+      appBar: const CommonHeader(
+        title: Text('ミッション'),
+        backgroundColor: Color(0xFFFF6B35),
         foregroundColor: Colors.white,
       ),
       body: _isLoading
@@ -574,7 +576,7 @@ class _MissionsViewState extends State<MissionsView> {
                         _selectedTabIndex = index;
                       });
                     },
-                    activeColor: const Color(0xFF2A8B8B),
+                    activeColor: const Color(0xFFFF8F00),
                     disabledIndices:
                         _isRegistrationComplete ? const {} : const {0, 1},
                   ),
@@ -681,14 +683,14 @@ class _MissionsViewState extends State<MissionsView> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF2A8B8B), Color(0xFF4DB6AC)],
+            colors: [Color(0xFFFF8F00), Color(0xFFFFB300)],
             begin: Alignment.bottomLeft,
             end: Alignment.topRight,
           ),
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF2A8B8B).withOpacity(0.3),
+              color: const Color(0xFFFFA000).withOpacity(0.28),
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -766,8 +768,8 @@ class _MissionsViewState extends State<MissionsView> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            const Color(0xFF2A8B8B).withOpacity(0.5),
-            const Color(0xFF4DB6AC).withOpacity(0.5),
+            const Color(0xFFFF8F00).withOpacity(0.55),
+            const Color(0xFFFFB300).withOpacity(0.55),
           ],
           begin: Alignment.bottomLeft,
           end: Alignment.topRight,

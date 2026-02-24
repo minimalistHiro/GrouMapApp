@@ -19,6 +19,7 @@ import 'posts/posts_view.dart';
 import 'payment/point_payment_detail_view.dart';
 import 'stamps/daily_recommendation_view.dart';
 import 'stamps/badge_awarded_view.dart';
+import 'tutorial/tutorial_view.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
   final int initialIndex;
@@ -82,6 +83,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   static bool _dailyBadgeCheckDone = false;
   // セッション中に表示済みのバッジIDを記録（重複表示防止）
   static final Set<String> _shownBadgeIds = {};
+  // チュートリアル表示済みかどうか（セッション内1回のみ）
+  static bool _tutorialShown = false;
 
   @override
   void initState() {
@@ -622,6 +625,19 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   }
 
   Future<void> _maybeShowDailyRecommendation(String userId, Map<String, dynamic> userData) async {
+    // チュートリアル: 新規ユーザーの初回のみ最優先で表示
+    if (!_tutorialShown && userData['showTutorial'] == true) {
+      _tutorialShown = true;
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (context) => TutorialView(userId: userId),
+        ),
+      );
+      if (!mounted) return;
+    }
+
     if (_dailyRecommendationShown) return;
 
     // ログイン統計・ミッション処理（セッション中、ユーザーごとに1回のみ）

@@ -264,11 +264,11 @@
 
 | バッジID | 名前 | 獲得条件 | レア度 |
 |----------|------|----------|--------|
-| map_opened_1 | マップデビュー | マップ画面を初めて開く | common |
-| map_opened_5 | マップウォーカー | マップ画面を5回開く | common |
-| map_opened_10 | マップナビゲーター | マップ画面を10回開く | rare |
-| map_opened_25 | マップエクスプローラー | マップ画面を25回開く | epic |
-| map_opened_50 | マップマスター | マップ画面を50回開く | legendary |
+| map_opened_1 | マップデビュー | マップ画面を初めて開く（1日1回カウント） | common |
+| map_opened_5 | マップウォーカー | マップ画面を別日に5回開く（1日1回カウント） | common |
+| map_opened_10 | マップナビゲーター | マップ画面を別日に10回開く（1日1回カウント） | rare |
+| map_opened_25 | マップエクスプローラー | マップ画面を別日に25回開く（1日1回カウント） | epic |
+| map_opened_50 | マップマスター | マップ画面を別日に50回開く（1日1回カウント） | legendary |
 
 ### 店舗詳細閲覧（storeDetailViewed）
 
@@ -439,7 +439,7 @@
   - 旧バッジ（ローカル定義に存在しない `isNew: true` のバッジ）は自動的に `isNew: false` に更新しクリーンアップ
 - 曜日別利用バッジ（dayVisit）: `incrementBadgeCounter('dayVisit_{曜日}')` で曜日ごとにカウント。日次包括チェックでも判定。カウンターキーは `dayVisit_monday` ～ `dayVisit_sunday`
 - トリガー実装状況: **実装済み**（13箇所 + 曜日別利用2箇所）
-  - マップ画面表示 (`mapOpened`): `lib/views/map/map_view.dart`
+  - マップ画面表示 (`mapOpened`): `lib/views/map/map_view.dart`（`daily_missions/{yyyy-MM-dd}.map_open` で1日1回のみ加算）
   - 店舗詳細表示 (`storeDetailViewed`): `lib/views/stores/store_detail_view.dart`
   - お気に入り登録 (`favoriteAdded`): `lib/views/stores/store_detail_view.dart`
   - スロットプレイ (`slotPlayed`): `lib/views/lottery/lottery_view.dart`（※スロット機能廃止に伴い実質無効）

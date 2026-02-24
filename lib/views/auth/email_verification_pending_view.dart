@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
-import '../home_view.dart';
 import '../main_navigation_view.dart';
 import 'user_info_view.dart';
 
@@ -234,7 +234,9 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
     try {
       await ref.read(authServiceProvider).verifyEmailOtp(code);
       if (mounted) {
-        final nextView = widget.goToUserInfoAfterVerify
+        final needsUserInfo = await _needsUserInfoAfterVerify();
+        if (!mounted) return;
+        final nextView = needsUserInfo
             ? const UserInfoView()
             : const MainNavigationView();
         Navigator.of(context).pushAndRemoveUntil(
@@ -256,6 +258,43 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
           _isVerifying = false;
         });
       }
+    }
+  }
+
+  Future<bool> _needsUserInfoAfterVerify() async {
+    if (widget.goToUserInfoAfterVerify) {
+      return true;
+    }
+
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        return false;
+      }
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+      final data = doc.data();
+      if (data == null) {
+        return true;
+      }
+
+      final birthDate = data['birthDate'];
+      final displayNameRaw = data['displayName'];
+      final displayName = displayNameRaw is String ? displayNameRaw.trim() : '';
+      final isGoogleUser = currentUser.providerData
+          .any((provider) => provider.providerId == 'google.com');
+
+      final hasBirthDate = birthDate != null;
+      final hasDisplayName = displayName.isNotEmpty;
+      final needsDisplayName = !isGoogleUser && !hasDisplayName;
+
+      return !hasBirthDate || needsDisplayName;
+    } catch (e) {
+      debugPrint('ユーザー情報入力判定エラー: $e');
+      return false;
     }
   }
 

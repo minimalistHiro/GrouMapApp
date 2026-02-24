@@ -106,11 +106,19 @@ class _MapViewState extends ConsumerState<MapView> {
   void _markMapMissions() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final missionService = MissionService();
-    missionService.markRegistrationMission(user.uid, 'first_map');
+    unawaited(_grantMapOpenReward(user.uid));
+  }
 
-    // バッジカウンター: マップ画面表示
-    BadgeService().incrementBadgeCounter(user.uid, 'mapOpened');
+  Future<void> _grantMapOpenReward(String userId) async {
+    final missionService = MissionService();
+    final shouldGrant =
+        await missionService.acquireDailyActionRewardSlot(userId, 'map_open');
+    if (!shouldGrant) return;
+
+    await missionService.markRegistrationMission(userId, 'first_map');
+
+    // バッジカウンター: マップ画面表示（1日1回）
+    await BadgeService().incrementBadgeCounter(userId, 'mapOpened');
   }
 
   @override
@@ -305,6 +313,9 @@ class _MapViewState extends ConsumerState<MapView> {
           final businessHours = data['businessHours'] is Map
               ? Map<String, dynamic>.from(data['businessHours'] as Map)
               : null;
+          final scheduleOverrides = data['scheduleOverrides'] is Map
+              ? Map<String, dynamic>.from(data['scheduleOverrides'] as Map)
+              : null;
           final socialMedia = data['socialMedia'] is Map
               ? Map<String, dynamic>.from(data['socialMedia'] as Map)
               : <String, dynamic>{};
@@ -331,6 +342,8 @@ class _MapViewState extends ConsumerState<MapView> {
               'phoneNumber': phoneNumber,
               'phone': phone, // store_detail_view.dartで使用
               'businessHours': businessHours,
+              'scheduleOverrides': scheduleOverrides,
+              'isRegularHoliday': data['isRegularHoliday'] ?? false,
               'location': normalizedLocation, // 位置情報
               'socialMedia': socialMedia,
               'tags': tags,
@@ -1225,9 +1238,33 @@ class _MapViewState extends ConsumerState<MapView> {
     });
   }
 
-  // 「営業中」かどうかを判定
+  // 「営業中」かどうかを判定（scheduleOverrides優先）
   bool _isStoreOpenNow(Map<String, dynamic> store) {
     try {
+      final now = DateTime.now();
+
+      // scheduleOverrides を最優先でチェック
+      final rawOverrides = store['scheduleOverrides'];
+      if (rawOverrides is Map) {
+        final todayKey =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+            '${now.day.toString().padLeft(2, '0')}';
+        final override = rawOverrides[todayKey];
+        if (override is Map) {
+          final type = (override['type'] as String?) ?? '';
+          if (type == 'closed') return false;
+          if (type == 'open' || type == 'special_hours') {
+            final openStr = (override['open'] as String?) ?? '';
+            final closeStr = (override['close'] as String?) ?? '';
+            return _isWithinTimeRange(openStr, closeStr, now);
+          }
+        }
+      }
+
+      // 不定休チェック
+      if (store['isRegularHoliday'] == true) return false;
+
+      // 通常の businessHours で判定
       final businessHours = store['businessHours'];
       if (businessHours == null || businessHours is! Map) return false;
 
@@ -1241,7 +1278,6 @@ class _MapViewState extends ConsumerState<MapView> {
         'saturday',
         'sunday',
       ];
-      final now = DateTime.now();
       // Dartのweekdayは 1=Mon..7=Sun → 0=Mon..6=Sun に変換
       final int mondayFirstIndex = now.weekday == 7 ? 6 : now.weekday - 1;
       final String keyToday = days[mondayFirstIndex];
@@ -1254,31 +1290,90 @@ class _MapViewState extends ConsumerState<MapView> {
 
       final String openStr = (today['open'] ?? '').toString();
       final String closeStr = (today['close'] ?? '').toString();
-      if (openStr.isEmpty || closeStr.isEmpty) return false;
-
-      int toMinutes(String hhmm) {
-        final parts = hhmm.split(':');
-        if (parts.length != 2) return -1;
-        final h = int.tryParse(parts[0]) ?? 0;
-        final m = int.tryParse(parts[1]) ?? 0;
-        return h * 60 + m;
-      }
-
-      final int openM = toMinutes(openStr);
-      final int closeM = toMinutes(closeStr);
-      if (openM < 0 || closeM < 0) return false;
-
-      final int nowM = now.hour * 60 + now.minute;
-      if (openM <= closeM) {
-        // 同日内
-        return nowM >= openM && nowM < closeM;
-      } else {
-        // 深夜跨ぎ（例: 20:00〜02:00）
-        return nowM >= openM || nowM < closeM;
-      }
+      return _isWithinTimeRange(openStr, closeStr, now);
     } catch (_) {
       return false;
     }
+  }
+
+  // 時間範囲内かを判定するヘルパー（深夜跨ぎ対応）
+  bool _isWithinTimeRange(String openStr, String closeStr, DateTime now) {
+    if (openStr.isEmpty || closeStr.isEmpty) return false;
+
+    int toMinutes(String hhmm) {
+      final parts = hhmm.split(':');
+      if (parts.length != 2) return -1;
+      final h = int.tryParse(parts[0]) ?? 0;
+      final m = int.tryParse(parts[1]) ?? 0;
+      return h * 60 + m;
+    }
+
+    final int openM = toMinutes(openStr);
+    final int closeM = toMinutes(closeStr);
+    if (openM < 0 || closeM < 0) return false;
+
+    final int nowM = now.hour * 60 + now.minute;
+    if (openM <= closeM) {
+      return nowM >= openM && nowM < closeM;
+    } else {
+      // 深夜跨ぎ（例: 20:00〜02:00）
+      return nowM >= openM || nowM < closeM;
+    }
+  }
+
+  // 今日の営業時間文字列を返す（scheduleOverrides優先）
+  String _getTodayHours(Map<String, dynamic> store) {
+    final now = DateTime.now();
+
+    // scheduleOverrides を最優先でチェック
+    final rawOverrides = store['scheduleOverrides'];
+    if (rawOverrides is Map) {
+      final todayKey =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+          '${now.day.toString().padLeft(2, '0')}';
+      final override = rawOverrides[todayKey];
+      if (override is Map) {
+        final type = (override['type'] as String?) ?? '';
+        final open = (override['open'] as String?) ?? '';
+        final close = (override['close'] as String?) ?? '';
+        if (type == 'closed') return '臨時休業';
+        if ((type == 'open' || type == 'special_hours') &&
+            open.isNotEmpty &&
+            close.isNotEmpty) {
+          return '$open〜$close';
+        }
+      }
+    }
+
+    // 不定休で scheduleOverride なし → 定休日として表示
+    if (store['isRegularHoliday'] == true) return '定休日';
+
+    // businessHours フォールバック
+    final businessHours = store['businessHours'];
+    if (businessHours is! Map) return '';
+
+    const days = [
+      'monday',
+      'tuesday',
+      'wednesday',
+      'thursday',
+      'friday',
+      'saturday',
+      'sunday',
+    ];
+    final int mondayFirstIndex = now.weekday == 7 ? 6 : now.weekday - 1;
+    final dayData =
+        (businessHours[days[mondayFirstIndex]] as Map?)
+            ?.cast<String, dynamic>();
+    if (dayData == null) return '';
+
+    final isOpen = dayData['isOpen'] == true;
+    if (!isOpen) return '定休日';
+
+    final openStr = (dayData['open'] ?? '').toString();
+    final closeStr = (dayData['close'] ?? '').toString();
+    if (openStr.isEmpty || closeStr.isEmpty) return '';
+    return '$openStr〜$closeStr';
   }
 
   // 詳細フィルターの適用チェック
@@ -1615,7 +1710,19 @@ class _MapViewState extends ConsumerState<MapView> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  isOpenNow ? '営業中' : '営業時間外',
+                                  () {
+                                    final hours =
+                                        _getTodayHours(selectedStore);
+                                    if (isOpenNow) {
+                                      return hours.isNotEmpty
+                                          ? '営業中  $hours'
+                                          : '営業中';
+                                    } else {
+                                      return hours.isNotEmpty
+                                          ? hours
+                                          : '営業時間外';
+                                    }
+                                  }(),
                                   style: TextStyle(
                                     color: isOpenNow
                                         ? Colors.green[600]
@@ -1623,6 +1730,8 @@ class _MapViewState extends ConsumerState<MapView> {
                                     fontSize: 11,
                                     fontWeight: FontWeight.w500,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),

@@ -6,6 +6,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../providers/auth_provider.dart';
 import '../main_navigation_view.dart';
+import '../tutorial/tutorial_view.dart';
 
 class UserInfoView extends ConsumerStatefulWidget {
   const UserInfoView({Key? key}) : super(key: key);
@@ -107,8 +108,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                     },
                   ),
 
-                if (!_isGoogleUser())
-                  const SizedBox(height: 16),
+                if (!_isGoogleUser()) const SizedBox(height: 16),
 
                 // 生年月日選択
                 const Text(
@@ -130,7 +130,8 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 16),
                         ),
                         items: _yearOptions.map((year) {
                           return DropdownMenuItem<int>(
@@ -157,7 +158,8 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 16),
                         ),
                         items: _monthOptions.map((month) {
                           return DropdownMenuItem<int>(
@@ -184,7 +186,8 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                           filled: true,
                           fillColor: Colors.white,
                           border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 16),
                         ),
                         items: _dayOptions.map((day) {
                           return DropdownMenuItem<int>(
@@ -192,15 +195,16 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                             child: Text('$day'),
                           );
                         }).toList(),
-                        onChanged: (_selectedYear == null || _selectedMonth == null)
-                            ? null
-                            : (int? newValue) {
-                                setState(() {
-                                  _showBirthDateError = false;
-                                  _selectedDay = newValue;
-                                  _updateSelectedDate();
-                                });
-                              },
+                        onChanged:
+                            (_selectedYear == null || _selectedMonth == null)
+                                ? null
+                                : (int? newValue) {
+                                    setState(() {
+                                      _showBirthDateError = false;
+                                      _selectedDay = newValue;
+                                      _updateSelectedDate();
+                                    });
+                                  },
                       ),
                     ),
                   ],
@@ -227,7 +231,8 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
                     filled: true,
                     fillColor: Colors.white,
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   ),
                   items: _genders.map((String gender) {
                     return DropdownMenuItem<String>(
@@ -267,7 +272,8 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
 
   List<int> get _yearOptions {
     final currentYear = DateTime.now().year;
-    return List.generate(currentYear - 1900 + 1, (index) => currentYear - index);
+    return List.generate(
+        currentYear - 1900 + 1, (index) => currentYear - index);
   }
 
   List<int> get _monthOptions {
@@ -278,7 +284,8 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
     if (_selectedYear == null || _selectedMonth == null) {
       return [];
     }
-    final daysInMonth = DateUtils.getDaysInMonth(_selectedYear!, _selectedMonth!);
+    final daysInMonth =
+        DateUtils.getDaysInMonth(_selectedYear!, _selectedMonth!);
     return List.generate(daysInMonth, (index) => index + 1);
   }
 
@@ -290,7 +297,9 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   }
 
   void _updateSelectedDate() {
-    if (_selectedYear != null && _selectedMonth != null && _selectedDay != null) {
+    if (_selectedYear != null &&
+        _selectedMonth != null &&
+        _selectedDay != null) {
       _selectedDate = DateTime(_selectedYear!, _selectedMonth!, _selectedDay!);
       _showBirthDateError = false;
     } else {
@@ -353,8 +362,17 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
         );
 
         if (!mounted) return;
-        Navigator.of(context).pushReplacement(
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (context) => TutorialView(userId: currentUser.uid),
+          ),
+        );
+
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const MainNavigationView()),
+          (route) => false,
         );
       } catch (e) {
         if (!mounted) return;
@@ -374,6 +392,7 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
   bool _isGoogleUser() {
     final currentUser = ref.read(authServiceProvider).currentUser;
     if (currentUser == null) return false;
-    return currentUser.providerData.any((provider) => provider.providerId == 'google.com');
+    return currentUser.providerData
+        .any((provider) => provider.providerId == 'google.com');
   }
 }

@@ -1015,7 +1015,10 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   Widget _buildBusinessStatusChip() {
     final businessHours =
         widget.store['businessHours'] as Map<String, dynamic>?;
-    if (businessHours == null) {
+    final isRegularHoliday = widget.store['isRegularHoliday'] == true;
+
+    // 不定休 or businessHours ある場合に表示
+    if (businessHours == null && !isRegularHoliday) {
       return const SizedBox.shrink();
     }
 
@@ -2308,25 +2311,127 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   // 営業時間表示を構築
+  // 今後14日以内の scheduleOverrides を日付順で返す
+  List<MapEntry<String, Map<String, dynamic>>> _getUpcomingOverrides() {
+    final rawOverrides = widget.store['scheduleOverrides'];
+    if (rawOverrides is! Map) return [];
+    final today = DateTime.now();
+    final deadline = today.add(const Duration(days: 14));
+    final entries = <MapEntry<String, Map<String, dynamic>>>[];
+    rawOverrides.forEach((k, v) {
+      final d = DateTime.tryParse(k.toString());
+      if (d != null &&
+          !d.isBefore(DateTime(today.year, today.month, today.day)) &&
+          d.isBefore(deadline) &&
+          v is Map) {
+        entries.add(MapEntry(k.toString(), Map<String, dynamic>.from(v)));
+      }
+    });
+    entries.sort((a, b) => a.key.compareTo(b.key));
+    return entries;
+  }
+
   Widget _buildBusinessHoursDisplay() {
     final businessHours =
         widget.store['businessHours'] as Map<String, dynamic>?;
-    if (businessHours == null) return const SizedBox.shrink();
+    final isRegularHoliday = widget.store['isRegularHoliday'] == true;
+
+    // 不定休で businessHours もない場合は最小限の表示
+    if (businessHours == null && !isRegularHoliday) {
+      return const SizedBox.shrink();
+    }
 
     final statusInfo = _getBusinessStatus(businessHours);
-    final dayNames = {
-      'monday': '月',
-      'tuesday': '火',
-      'wednesday': '水',
-      'thursday': '木',
-      'friday': '金',
-      'saturday': '土',
-      'sunday': '日',
-    };
+
+    final upcomingOverrides = _getUpcomingOverrides();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // 今後14日以内のスケジュール変更バナー
+        if (upcomingOverrides.isNotEmpty) ...[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.amber[300]!),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline,
+                        size: 16, color: Colors.amber[800]),
+                    const SizedBox(width: 6),
+                    Text(
+                      '今後のスケジュール変更',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber[900],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ...upcomingOverrides.map((entry) {
+                  final d = DateTime.parse(entry.key);
+                  final type = entry.value['type'] as String? ?? '';
+                  final note = entry.value['note'] as String? ?? '';
+                  final open = entry.value['open'] as String? ?? '';
+                  final close = entry.value['close'] as String? ?? '';
+                  final weekdays = ['月', '火', '水', '木', '金', '土', '日'];
+                  final dateStr =
+                      '${d.month}/${d.day}（${weekdays[d.weekday - 1]}）';
+                  String typeLabel;
+                  IconData typeIcon;
+                  Color iconColor;
+                  switch (type) {
+                    case 'closed':
+                      typeLabel = '臨時休業';
+                      typeIcon = Icons.cancel;
+                      iconColor = Colors.red;
+                      break;
+                    case 'open':
+                      typeLabel = isRegularHoliday ? '通常営業' : '臨時営業';
+                      typeIcon = Icons.check_circle;
+                      iconColor = Colors.green;
+                      break;
+                    default:
+                      typeLabel = '時間変更';
+                      typeIcon = Icons.schedule;
+                      iconColor = Colors.blue;
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      children: [
+                        Icon(typeIcon, size: 14, color: iconColor),
+                        const SizedBox(width: 6),
+                        Text('$dateStr  $typeLabel',
+                            style: const TextStyle(fontSize: 13)),
+                        if ((type == 'open' || type == 'special_hours') &&
+                            open.isNotEmpty &&
+                            close.isNotEmpty)
+                          Text('  $open〜$close',
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey)),
+                        if (note.isNotEmpty)
+                          Text('  $note',
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                }),
+              ],
+            ),
+          ),
+        ],
+
         Row(
           children: [
             const Expanded(
@@ -2355,7 +2460,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             ),
           ],
         ),
-        if (_isBusinessHoursExpanded)
+        if (_isBusinessHoursExpanded && (businessHours != null || isRegularHoliday))
           Container(
             decoration: BoxDecoration(
               color: Colors.grey[50],
@@ -2363,26 +2468,106 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               border: Border.all(color: Colors.grey[300]!),
             ),
             child: Column(
-              children: dayNames.entries.map((entry) {
-                final dayKey = entry.key;
-                final dayName = entry.value;
-                final dayData = businessHours[dayKey] as Map<String, dynamic>?;
-
-                if (dayData == null) return const SizedBox.shrink();
-
-                final isOpen = _getBoolValue(dayData['isOpen'], false);
-                final openTime = _getStringValue(dayData['open'], '');
-                final closeTime = _getStringValue(dayData['close'], '');
-
-                // 今日の曜日をハイライト
+              children: List.generate(7, (i) {
                 final now = DateTime.now();
-                final todayIndex = now.weekday - 1; // Monday = 0, Sunday = 6
-                final dayIndex = dayNames.keys.toList().indexOf(dayKey);
-                final isToday = dayIndex == todayIndex;
+                final targetDate =
+                    DateTime(now.year, now.month, now.day).add(
+                  Duration(days: i),
+                );
+                final isToday = i == 0;
+
+                // scheduleOverrides のキー（YYYY-MM-DD）
+                final dateKey =
+                    '${targetDate.year}-'
+                    '${targetDate.month.toString().padLeft(2, '0')}-'
+                    '${targetDate.day.toString().padLeft(2, '0')}';
+
+                // 曜日情報
+                const dayKeys = [
+                  'monday',
+                  'tuesday',
+                  'wednesday',
+                  'thursday',
+                  'friday',
+                  'saturday',
+                  'sunday',
+                ];
+                const weekdayLabels = ['月', '火', '水', '木', '金', '土', '日'];
+                final weekdayIndex = targetDate.weekday - 1;
+                final dayKey = dayKeys[weekdayIndex];
+                final dayLabel = weekdayLabels[weekdayIndex];
+
+                // 表示内容の決定（scheduleOverrides 優先）
+                final rawOverrides = widget.store['scheduleOverrides'];
+                final overrideEntry = (rawOverrides is Map)
+                    ? rawOverrides[dateKey] as Map?
+                    : null;
+
+                String timeText;
+                IconData rowIcon;
+                Color rowColor;
+                bool isHoliday = false;
+                String? specialLabel;
+
+                if (overrideEntry != null) {
+                  final type = overrideEntry['type'] as String? ?? '';
+                  final open = overrideEntry['open'] as String? ?? '';
+                  final close = overrideEntry['close'] as String? ?? '';
+                  if (type == 'closed') {
+                    timeText = '臨時休業';
+                    rowIcon = Icons.cancel;
+                    rowColor = Colors.red;
+                    isHoliday = true;
+                    specialLabel = '臨時';
+                  } else if (type == 'open') {
+                    // 不定休の場合は「通常営業」、それ以外は「臨時営業」
+                    final openLabel = isRegularHoliday ? '通常営業' : '臨時営業';
+                    timeText = '$openLabel  $open〜$close';
+                    rowIcon = Icons.check_circle;
+                    rowColor = Colors.green;
+                    specialLabel = isRegularHoliday ? null : '臨時';
+                  } else {
+                    // special_hours
+                    timeText = '$open〜$close';
+                    rowIcon = Icons.schedule;
+                    rowColor = Colors.blue;
+                    specialLabel = '変更';
+                  }
+                } else if (isRegularHoliday) {
+                  // 不定休で scheduleOverride なし → 定休日
+                  timeText = '定休日';
+                  rowIcon = Icons.close;
+                  rowColor = Colors.red[600]!;
+                  isHoliday = true;
+                } else {
+                  // 通常の businessHours を参照
+                  final dayData =
+                      businessHours?[dayKey] as Map<String, dynamic>?;
+                  final isOpen =
+                      _getBoolValue(dayData?['isOpen'], false);
+                  if (!isOpen) {
+                    timeText = '定休日';
+                    rowIcon = Icons.close;
+                    rowColor = Colors.red[600]!;
+                    isHoliday = true;
+                  } else {
+                    final openTime =
+                        _getStringValue(dayData?['open'], '');
+                    final closeTime =
+                        _getStringValue(dayData?['close'], '');
+                    timeText = '$openTime - $closeTime';
+                    rowIcon = Icons.access_time;
+                    rowColor = Colors.green[600]!;
+                  }
+                }
+
+                // 日付テキスト："2/24(火)" 形式
+                final dateLabelStr =
+                    '${targetDate.month}/${targetDate.day}($dayLabel)';
 
                 return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: isToday
                         ? const Color(0xFFFF6B35).withOpacity(0.1)
@@ -2391,90 +2576,132 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                   ),
                   child: Row(
                     children: [
-                      // 曜日表示
+                      // 曜日円アイコン
                       Container(
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
                           color: isToday
                               ? const Color(0xFFFF6B35)
-                              : isOpen
-                                  ? Colors.green.withOpacity(0.1)
-                                  : Colors.grey.withOpacity(0.1),
+                              : isHoliday
+                                  ? Colors.grey.withOpacity(0.1)
+                                  : Colors.green.withOpacity(0.1),
                           shape: BoxShape.circle,
                           border: Border.all(
                             color: isToday
                                 ? const Color(0xFFFF6B35)
-                                : isOpen
-                                    ? Colors.green.withOpacity(0.3)
-                                    : Colors.grey.withOpacity(0.3),
+                                : isHoliday
+                                    ? Colors.grey.withOpacity(0.3)
+                                    : Colors.green.withOpacity(0.3),
                             width: 1.5,
                           ),
                         ),
                         child: Center(
                           child: Text(
-                            dayName,
+                            dayLabel,
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                               color: isToday
                                   ? Colors.white
-                                  : isOpen
-                                      ? Colors.green[700]
-                                      : Colors.grey[600],
+                                  : isHoliday
+                                      ? Colors.grey[600]
+                                      : Colors.green[700],
                             ),
                           ),
                         ),
                       ),
 
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 10),
 
-                      // 営業時間表示
+                      // 日付テキスト
+                      SizedBox(
+                        width: 64,
+                        child: Text(
+                          dateLabelStr,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isToday
+                                ? const Color(0xFFFF6B35)
+                                : Colors.grey[600],
+                            fontWeight: isToday
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+
+                      // 営業時間テキスト
                       Expanded(
                         child: Row(
                           children: [
-                            Icon(
-                              isOpen ? Icons.access_time : Icons.close,
-                              color:
-                                  isOpen ? Colors.green[600] : Colors.red[600],
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              isOpen ? '$openTime - $closeTime' : '定休日',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color:
-                                    isOpen ? Colors.black87 : Colors.red[600],
+                            Icon(rowIcon, color: rowColor, size: 16),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                timeText,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: isHoliday
+                                      ? rowColor
+                                      : Colors.black87,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
                       ),
 
-                      // 今日のマーク
-                      if (isToday)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFF6B35),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            '今日',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                      // 特別ラベル & 今日バッジ
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (specialLabel != null)
+                            Container(
+                              margin: const EdgeInsets.only(right: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: rowColor.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: rowColor.withOpacity(0.4)),
+                              ),
+                              child: Text(
+                                specialLabel,
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  color: rowColor,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
+                          if (isToday)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFF6B35),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                '今日',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 );
-              }).toList(),
+              }),
             ),
           )
         else
@@ -2501,8 +2728,14 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     );
   }
 
+  // 今日の日付キー（yyyy-MM-dd）を返す
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
   ({String label, Color color}) _getBusinessStatus(
-    Map<String, dynamic> businessHours,
+    Map<String, dynamic>? businessHours,
   ) {
     final dayKeys = [
       'monday',
@@ -2514,6 +2747,39 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       'sunday',
     ];
     final now = DateTime.now();
+
+    // 不定休フラグを先に取得
+    final isRegularHoliday = widget.store['isRegularHoliday'] == true;
+
+    // 1. scheduleOverrides を最優先でチェック
+    final rawOverrides = widget.store['scheduleOverrides'];
+    if (rawOverrides is Map) {
+      final todayKey = _todayKey();
+      final override = rawOverrides[todayKey];
+      if (override is Map) {
+        final type = override['type'] as String? ?? '';
+        if (type == 'closed') {
+          return (label: '臨時休業', color: Colors.red);
+        }
+        if (type == 'open' || type == 'special_hours') {
+          final openTime = override['open'] as String? ?? '';
+          final closeTime = override['close'] as String? ?? '';
+          // 不定休の場合、type='open' は通常営業なので prefix なし
+          return _evaluateTimeRange(openTime, closeTime, now,
+              prefix: (type == 'open' && !isRegularHoliday) ? '臨時営業' : null);
+        }
+      }
+    }
+
+    // 2. 不定休（isRegularHoliday）→ scheduleOverride なし → 定休日
+    if (isRegularHoliday) {
+      return (label: '定休日', color: Colors.grey);
+    }
+
+    // 3. 通常の businessHours で判定
+    if (businessHours == null) {
+      return (label: '営業時間外', color: Colors.red);
+    }
     final dayKey = dayKeys[now.weekday - 1];
     final dayData = businessHours[dayKey] as Map<String, dynamic>?;
     if (dayData == null) {
@@ -2522,11 +2788,21 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
     final isOpen = _getBoolValue(dayData['isOpen'], false);
     if (!isOpen) {
-      return (label: '営業時間外', color: Colors.red);
+      return (label: '定休日', color: Colors.grey);
     }
 
     final openTime = _getStringValue(dayData['open'], '');
     final closeTime = _getStringValue(dayData['close'], '');
+    return _evaluateTimeRange(openTime, closeTime, now);
+  }
+
+  // 時間帯から営業ステータスを評価する共通ロジック
+  ({String label, Color color}) _evaluateTimeRange(
+    String openTime,
+    String closeTime,
+    DateTime now, {
+    String? prefix,
+  }) {
     final openDateTime = _parseTimeForToday(openTime, now);
     final closeDateTime = _parseTimeForToday(closeTime, now);
     if (openDateTime == null || closeDateTime == null) {
@@ -2544,7 +2820,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       if (remaining <= const Duration(hours: 1)) {
         return (label: 'まもなく営業終了', color: Colors.amber[700]!);
       }
-      return (label: '営業中', color: Colors.green[700]!);
+      final label = prefix != null ? '$prefix・営業中' : '営業中';
+      return (label: label, color: Colors.green[700]!);
     }
 
     if (now.isBefore(start)) {

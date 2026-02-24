@@ -230,7 +230,8 @@
   - ユーザー用アプリの店舗詳細・マップフィルターに反映
   - Firestoreに `stores/{storeId}` の `regularHolidays` / `temporaryClosures` フィールドとして保存
 - **配置先**: SettingsView の店舗情報セクション内に追加
-- **状態**: [ ] 未着手
+- **実装メモ（2026-02-24）**: `scheduleOverrides` フィールドをstoresドキュメントに追加し、カレンダーUIで管理する方式で実装済み。マップの `_isStoreOpenNow()` が `scheduleOverrides`・`isRegularHoliday` を考慮するよう対応済み（2026-02-24）。店舗詳細の営業時間セクションも今週7日間の日付付き表示（scheduleOverrides優先）に変更済み（2026-02-24）
+- **状態**: [x] 完了（2026-02-24）
 
 ### B-3. 分析データのエクスポート機能の追加（旧 店舗用 #2）
 - **優先度**: 中
