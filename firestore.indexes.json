@@ -302,6 +302,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "referral_uses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "referredUserId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

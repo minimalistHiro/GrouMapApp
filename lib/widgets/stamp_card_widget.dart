@@ -9,6 +9,7 @@ class StampCardWidget extends StatelessWidget {
   final int stamps;
   final int maxStamps;
   final int? displayStamps;
+  final int completedCards;
   final bool isLoading;
   final bool isSyncing;
   final String? errorMessage;
@@ -23,6 +24,7 @@ class StampCardWidget extends StatelessWidget {
     required this.stamps,
     this.maxStamps = 10,
     this.displayStamps,
+    this.completedCards = 0,
     this.isLoading = false,
     this.isSyncing = false,
     this.errorMessage,
@@ -225,21 +227,43 @@ class StampCardWidget extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6B35),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '$_effectiveDisplayStamps/$maxStamps',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF9C27B0),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '${completedCards + 1}枚目',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6B35),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          '$_effectiveDisplayStamps/$maxStamps',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

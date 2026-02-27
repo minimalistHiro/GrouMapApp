@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/common_header.dart';
+import '../auth/account_deletion_views.dart';
 import 'email_support_view.dart';
 import 'phone_support_view.dart';
 import 'live_chat_view.dart';
@@ -27,7 +28,7 @@ class HelpView extends StatelessWidget {
             const SizedBox(height: 24),
 
             // よくある質問セクション
-            _buildFAQSection(),
+            _buildFAQSection(context),
 
             const SizedBox(height: 24),
 
@@ -95,7 +96,7 @@ class HelpView extends StatelessWidget {
     );
   }
 
-  Widget _buildFAQSection() {
+  Widget _buildFAQSection(BuildContext context) {
     final faqs = [
       {
         'question': 'ポイントはどこで貯められますか？',
@@ -126,12 +127,13 @@ class HelpView extends StatelessWidget {
     return _buildSection(
       title: 'よくある質問',
       icon: Icons.quiz,
-      children: faqs
-          .map((faq) => _buildFAQItem(
-                question: faq['question']!,
-                answer: faq['answer']!,
-              ))
-          .toList(),
+      children: [
+        ...faqs.map((faq) => _buildFAQItem(
+              question: faq['question']!,
+              answer: faq['answer']!,
+            )),
+        _buildWithdrawalFAQItem(context),
+      ],
     );
   }
 
@@ -155,6 +157,56 @@ class HelpView extends StatelessWidget {
               color: Colors.grey,
               height: 1.4,
             ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWithdrawalFAQItem(BuildContext context) {
+    return ExpansionTile(
+      title: const Text(
+        '退会するには？',
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: Colors.black87,
+        ),
+      ),
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'アカウントを削除（退会）するには、以下のボタンから手続きを行ってください。退会するとすべてのデータが削除され、元に戻すことはできません。',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AccountDeletionReasonView(),
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  foregroundColor: Colors.red,
+                ),
+                child: const Text(
+                  '退会するにはこちら',
+                  style: TextStyle(
+                    fontSize: 13,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],

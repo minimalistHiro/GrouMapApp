@@ -37,9 +37,14 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       widget.coupon.conditions != null &&
       widget.coupon.conditions!['coinExchange'] == true;
 
+  bool get _isStampRewardCoupon =>
+      widget.coupon.conditions != null &&
+      widget.coupon.conditions!['stampReward'] == true;
+
   // クーポン詳細を開いた際に閲覧数をインクリメント
   Future<void> _incrementViewCount() async {
     if (_isCoinExchangeCoupon) return;
+    if (_isStampRewardCoupon) return;
     try {
       final storeId = widget.coupon.storeId;
       if (storeId.isEmpty) {
@@ -63,8 +68,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
 
   Future<void> _loadStampInfo() async {
     try {
-      // coin_exchangeクーポンの場合はuser_couponsから使用済みチェックのみ
-      if (_isCoinExchangeCoupon) {
+      // coin_exchange / stamp_reward クーポンはuser_couponsから使用済みチェックのみ
+      if (_isCoinExchangeCoupon || _isStampRewardCoupon) {
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           final userCouponDoc = await FirebaseFirestore.instance
@@ -175,8 +180,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     setState(() => _isUsing = true);
 
     try {
-      // coin_exchangeクーポンの場合はuser_couponsを直接更新
-      if (_isCoinExchangeCoupon) {
+      // coin_exchange / stamp_reward クーポンはuser_couponsを直接更新
+      if (_isCoinExchangeCoupon || _isStampRewardCoupon) {
         await FirebaseFirestore.instance
             .collection('user_coupons')
             .doc(widget.coupon.id)
@@ -493,33 +498,62 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             ),
             const SizedBox(height: 16),
 
-            // 必要スタンプ数（目立つ表示）
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withOpacity(0.35)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.stars, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  Text(
-                    _isStampInfoLoading
-                        ? '必要スタンプ: 読み込み中...'
-                        : '必要スタンプ: $_requiredStampCount',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.orange,
+            // 必要スタンプ数（stamp_reward は達成済みのため非表示）
+            if (!_isStampRewardCoupon) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.withOpacity(0.35)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.stars, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isStampInfoLoading
+                          ? '必要スタンプ: 読み込み中...'
+                          : '必要スタンプ: $_requiredStampCount',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
+            // stamp_reward の場合は達成済みバッジを表示
+            if (_isStampRewardCoupon) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF9C27B0).withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFF9C27B0).withOpacity(0.35)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.emoji_events, color: Color(0xFF9C27B0)),
+                    SizedBox(width: 8),
+                    Text(
+                      'スタンプカード達成で獲得したクーポンです',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF9C27B0),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // 割引情報とタイプ
             Wrap(
@@ -612,23 +646,24 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             ),
             const SizedBox(height: 12),
 
-            // 必要スタンプ数
-            _buildDetailRow(
-              icon: Icons.stars,
-              label: '必要スタンプ',
-              value: _isStampInfoLoading ? '読み込み中...' : '$_requiredStampCount',
-              valueColor: Colors.orange[700]!,
-            ),
-            const SizedBox(height: 12),
-
-            // 現在のスタンプ数
-            _buildDetailRow(
-              icon: Icons.verified,
-              label: '現在のスタンプ',
-              value: _isStampInfoLoading ? '読み込み中...' : '$_userStampCount',
-              valueColor: Colors.blueGrey[700]!,
-            ),
-            const SizedBox(height: 12),
+            // 必要スタンプ数（stamp_reward は不要）
+            if (!_isStampRewardCoupon) ...[
+              _buildDetailRow(
+                icon: Icons.stars,
+                label: '必要スタンプ',
+                value: _isStampInfoLoading ? '読み込み中...' : '$_requiredStampCount',
+                valueColor: Colors.orange[700]!,
+              ),
+              const SizedBox(height: 12),
+              // 現在のスタンプ数
+              _buildDetailRow(
+                icon: Icons.verified,
+                label: '現在のスタンプ',
+                value: _isStampInfoLoading ? '読み込み中...' : '$_userStampCount',
+                valueColor: Colors.blueGrey[700]!,
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // 残り枚数
             if (!widget.coupon.noUsageLimit) ...[

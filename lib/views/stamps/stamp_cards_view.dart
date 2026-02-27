@@ -107,17 +107,17 @@ class _StampCardsViewState extends State<StampCardsView> {
         }
         
         // ユーザーのスタンプデータを取得
-        final stamps = userStoreData['stamps'] as int? ?? 0;
+        final rawStamps = userStoreData['stamps'] as int? ?? 0;
         final lastVisited = userStoreData['lastVisited'];
         final totalSpendingRaw = userStoreData['totalSpending'];
         final totalSpending = (totalSpendingRaw is num) ? totalSpendingRaw.toDouble() : 0.0;
-        
+
         stampCards.add({
           'storeId': storeId,
           'storeName': storeData['name'] ?? '店舗名なし',
           'storeCategory': storeData['category'] ?? 'その他',
           'iconImageUrl': storeData['iconImageUrl'],
-          'stamps': stamps,
+          'stamps': rawStamps,
           'lastVisited': lastVisited,
           'totalSpending': totalSpending,
           'isActive': isActive,
@@ -307,14 +307,18 @@ class _StampCardsViewState extends State<StampCardsView> {
   }
 
   Widget _buildStampCard(Map<String, dynamic> stampCard) {
+    final rawStamps = stampCard['stamps'] as int;
+    final completedCards = rawStamps ~/ 10;
+    final currentCycleStamps = rawStamps % 10;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: StampCardWidget(
         storeName: stampCard['storeName'] as String,
         storeCategory: stampCard['storeCategory'] as String,
         iconImageUrl: stampCard['iconImageUrl'] as String?,
-        stamps: stampCard['stamps'] as int,
+        stamps: currentCycleStamps,
         maxStamps: 10,
+        completedCards: completedCards,
       ),
     );
   }

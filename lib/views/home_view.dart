@@ -1263,8 +1263,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
               child: _buildStatCapsule(
                 value: coinCount,
                 label: 'コイン',
-                icon: Icons.attach_money_rounded,
-                iconBackgroundColor: const Color(0xFFE65100),
+                imagePath: 'assets/images/icon_coin.png',
               ),
             ),
             const SizedBox(width: 6),
@@ -1272,8 +1271,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
               child: _buildStatCapsule(
                 value: badgeCount,
                 label: 'バッジ',
-                icon: Icons.workspace_premium_rounded,
-                iconBackgroundColor: const Color(0xFFFFA000),
+                imagePath: 'assets/images/icon_badge.png',
               ),
             ),
             const SizedBox(width: 6),
@@ -1281,8 +1279,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
               child: _buildStatCapsule(
                 value: stampCount,
                 label: 'スタンプ',
-                icon: Icons.check_rounded,
-                iconBackgroundColor: const Color(0xFF00897B),
+                imagePath: 'assets/images/icon_stamp.png',
               ),
             ),
           ],
@@ -1322,8 +1319,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Widget _buildStatCapsule({
     required String value,
     required String label,
-    required IconData icon,
-    required Color iconBackgroundColor,
+    required String imagePath,
   }) {
     return Container(
       height: 42,
@@ -1342,18 +1338,11 @@ class _HomeViewState extends ConsumerState<HomeView> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 14,
-            height: 14,
-            decoration: BoxDecoration(
-              color: iconBackgroundColor,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              icon,
-              size: 9,
-              color: Colors.white,
-            ),
+          Image.asset(
+            imagePath,
+            width: 20,
+            height: 20,
+            fit: BoxFit.contain,
           ),
           const SizedBox(width: 4),
           Flexible(
@@ -1474,44 +1463,35 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
   Widget _buildMenuGrid(BuildContext context, WidgetRef ref, bool isLoggedIn) {
     final menuItems = [
-      {'icon': Icons.local_activity, 'label': 'スタンプ'},
-      {'icon': Icons.military_tech, 'label': 'バッジ'},
-      {'icon': Icons.store, 'label': '店舗一覧'},
-      {'icon': Icons.card_giftcard, 'label': 'クーポン'},
+      {'icon': 'assets/images/icon_stamp.png', 'label': 'スタンプ'},
+      {'icon': 'assets/images/icon_badge.png', 'label': 'バッジ'},
+      {'icon': 'assets/images/icon_store.png', 'label': '店舗一覧'},
+      {'icon': 'assets/images/icon_coupon.png', 'label': 'クーポン'},
     ];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            height: 80,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF6B35),
-              borderRadius: BorderRadius.circular(20),
+      child: Row(
+        children: menuItems.map((item) {
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: _buildMenuButton(
+                context,
+                item['label'] as String,
+                item['icon'] as String,
+                true,
+                isImage: true,
+                iconSize: 30,
+                fontSize: 11,
+                buttonSize: 60,
+                iconContainerColor: Colors.white,
+                fallbackIconColor: const Color(0xFFFF6B35),
+                labelColor: const Color(0xFF3D3D3D),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: menuItems.map((item) {
-                return Expanded(
-                  child: _buildMenuButton(
-                    context,
-                    item['label'] as String,
-                    item['icon'] as IconData,
-                    true,
-                    iconSize: 26.0,
-                    fontSize: 10.0,
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-        ],
+          );
+        }).toList(),
       ),
     );
   }
@@ -1760,84 +1740,93 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Widget _buildRecommendedStoresSection(BuildContext context) {
     final visibleStores = _recommendedStores;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 30),
+          child: Text(
             '今日のレコメンド',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 280,
-            child: _isRecommendedStoresLoading
-                ? Center(
-                    child: _buildLoadingIndicatorWithLabel(
-                      'HOME: recommended stores loading',
-                      color: const Color(0xFFFF6B35),
-                    ),
-                  )
-                : _recommendedStoresError != null
-                    ? const Center(
-                        child: Text(
-                          'おすすめ店舗の取得に失敗しました',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.red,
-                          ),
+        ),
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 280,
+                child: _isRecommendedStoresLoading
+                    ? Center(
+                        child: _buildLoadingIndicatorWithLabel(
+                          'HOME: recommended stores loading',
+                          color: const Color(0xFFFF6B35),
                         ),
                       )
-                    : visibleStores.isEmpty
+                    : _recommendedStoresError != null
                         ? const Center(
                             child: Text(
-                              'おすすめ店舗がありません',
+                              'おすすめ店舗の取得に失敗しました',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.grey,
+                                color: Colors.red,
                               ),
                             ),
                           )
-                        : NotificationListener<ScrollNotification>(
-                            onNotification: (notification) {
-                              if (notification is ScrollStartNotification &&
-                                  notification.dragDetails != null) {
-                                _isRecommendedPageUserInteracting = true;
-                              } else if (notification
-                                      is ScrollEndNotification ||
-                                  (notification is UserScrollNotification &&
-                                      notification.direction ==
-                                          ScrollDirection.idle)) {
-                                _isRecommendedPageUserInteracting = false;
-                              }
-                              return false;
-                            },
-                            child: PageView.builder(
-                              controller: _recommendedPageController,
-                              itemCount: visibleStores.length,
-                              onPageChanged: (index) {
-                                if (!mounted || _recommendedPageIndex == index) {
-                                  return;
-                                }
-                                setState(() {
-                                  _recommendedPageIndex = index;
-                                });
-                              },
-                              itemBuilder: (context, index) {
-                                return _buildRecommendedStoreCard(
-                                  context,
-                                  visibleStores[index],
-                                );
-                              },
-                            ),
-                          ),
+                        : visibleStores.isEmpty
+                            ? const Center(
+                                child: Text(
+                                  'おすすめ店舗がありません',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              )
+                            : NotificationListener<ScrollNotification>(
+                                onNotification: (notification) {
+                                  if (notification is ScrollStartNotification &&
+                                      notification.dragDetails != null) {
+                                    _isRecommendedPageUserInteracting = true;
+                                  } else if (notification
+                                          is ScrollEndNotification ||
+                                      (notification is UserScrollNotification &&
+                                          notification.direction ==
+                                              ScrollDirection.idle)) {
+                                    _isRecommendedPageUserInteracting = false;
+                                  }
+                                  return false;
+                                },
+                                child: PageView.builder(
+                                  controller: _recommendedPageController,
+                                  itemCount: visibleStores.length,
+                                  onPageChanged: (index) {
+                                    if (!mounted ||
+                                        _recommendedPageIndex == index) {
+                                      return;
+                                    }
+                                    setState(() {
+                                      _recommendedPageIndex = index;
+                                    });
+                                  },
+                                  itemBuilder: (context, index) {
+                                    return _buildRecommendedStoreCard(
+                                      context,
+                                      visibleStores[index],
+                                    );
+                                  },
+                                ),
+                              ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -2106,66 +2095,65 @@ class _HomeViewState extends ConsumerState<HomeView> {
       return const SizedBox.shrink();
     }
 
-    return ref.watch(coinExchangeCouponsProvider(userId)).when(
-          data: (coupons) {
-            if (coupons.isEmpty) {
-              return const SizedBox.shrink();
-            }
-            return Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 30),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.stars,
-                          size: 22, color: Color(0xFFFFB300)),
-                      const SizedBox(width: 6),
-                      const Text(
-                        '特別クーポン',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Spacer(),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFB300).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '${coupons.length}枚',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFFFFB300),
-                          ),
-                        ),
-                      ),
-                    ],
+    final coinCoupons = ref.watch(coinExchangeCouponsProvider(userId)).asData?.value ?? [];
+    final stampCoupons = ref.watch(stampRewardCouponsProvider(userId)).asData?.value ?? [];
+    final allCoupons = [...coinCoupons, ...stampCoupons];
+
+    if (allCoupons.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 30),
+          child: Row(
+            children: [
+              const Icon(Icons.stars,
+                  size: 22, color: Color(0xFFFFB300)),
+              const SizedBox(width: 6),
+              const Text(
+                '特別クーポン',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFB300).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '${allCoupons.length}枚',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFFB300),
                   ),
                 ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  height: 300,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: coupons.length,
-                    itemBuilder: (context, index) {
-                      final coupon = coupons[index];
-                      return _buildSpecialCouponCard(context, ref, coupon);
-                    },
-                  ),
-                ),
-                const SizedBox(height: 12),
-              ],
-            );
-          },
-          loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
-        );
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 300,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: allCoupons.length,
+            itemBuilder: (context, index) {
+              final coupon = allCoupons[index];
+              return _buildSpecialCouponCard(context, ref, coupon);
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
   }
 
   Widget _buildSpecialCouponCard(
@@ -3061,6 +3049,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
     bool isImage = false,
     double? iconSize,
     double? fontSize,
+    double? buttonSize,
+    Color? iconContainerColor,
+    Color? fallbackIconColor,
+    Color? labelColor,
   }) {
     return GestureDetector(
       onTap: () {
@@ -3122,46 +3114,63 @@ class _HomeViewState extends ConsumerState<HomeView> {
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            SizedBox(
-              height: iconSize ?? 24,
-              width: iconSize ?? 24,
-              child: isImage
-                  ? Image.asset(
-                      icon as String,
-                      width: iconSize ?? 24,
-                      height: iconSize ?? 24,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.monetization_on,
-                          size: iconSize ?? 24,
-                          color: isLogin ? Colors.white : Colors.grey,
-                        );
-                      },
-                      frameBuilder:
-                          (context, child, frame, wasSynchronouslyLoaded) {
-                        if (wasSynchronouslyLoaded) return child;
-                        return AnimatedOpacity(
-                          opacity: frame == null ? 0 : 1,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOut,
-                          child: child,
-                        );
-                      },
-                    )
-                  : Icon(
-                      icon,
-                      size: iconSize ?? 24,
-                      color: isLogin ? Colors.white : Colors.grey,
-                    ),
+            Container(
+              width: buttonSize ?? 56,
+              height: buttonSize ?? 56,
+              decoration: BoxDecoration(
+                color: isLogin
+                    ? (iconContainerColor ?? Colors.white)
+                    : Colors.grey.shade200,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: SizedBox(
+                height: iconSize ?? 24,
+                width: iconSize ?? 24,
+                child: isImage
+                    ? Image.asset(
+                        icon as String,
+                        width: iconSize ?? 24,
+                        height: iconSize ?? 24,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.monetization_on,
+                            size: iconSize ?? 24,
+                            color: isLogin
+                                ? (fallbackIconColor ?? const Color(0xFFFF6B35))
+                                : Colors.grey,
+                          );
+                        },
+                        frameBuilder:
+                            (context, child, frame, wasSynchronouslyLoaded) {
+                          if (wasSynchronouslyLoaded) return child;
+                          return AnimatedOpacity(
+                            opacity: frame == null ? 0 : 1,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOut,
+                            child: child,
+                          );
+                        },
+                      )
+                    : Icon(
+                        icon,
+                        size: iconSize ?? 24,
+                        color: isLogin
+                            ? (fallbackIconColor ?? const Color(0xFFFF6B35))
+                            : Colors.grey,
+                      ),
+              ),
             ),
-            SizedBox(height: (iconSize ?? 24) * 0.2),
+            const SizedBox(height: 8),
             Text(
               title,
               style: TextStyle(
                 fontSize: fontSize ?? 10,
                 fontWeight: FontWeight.bold,
-                color: isLogin ? Colors.white : Colors.grey,
+                color: isLogin
+                    ? (labelColor ?? const Color(0xFF3D3D3D))
+                    : Colors.grey,
               ),
               textAlign: TextAlign.center,
               maxLines: 1,

@@ -11,9 +11,11 @@ import '../../widgets/icon_image_picker_field.dart';
 import '../../utils/icon_image_flow.dart';
 import 'user_icon_crop_view.dart';
 import '../../services/mission_service.dart';
+import 'interest_category_view.dart';
 
 class ProfileEditView extends ConsumerStatefulWidget {
-  const ProfileEditView({Key? key}) : super(key: key);
+  final bool showNextButton;
+  const ProfileEditView({Key? key, this.showNextButton = false}) : super(key: key);
 
   @override
   ConsumerState<ProfileEditView> createState() => _ProfileEditViewState();
@@ -202,7 +204,13 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
           backgroundColor: Colors.green,
         ),
       );
-      Navigator.of(context).pop(true);
+      if (widget.showNextButton) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const InterestCategoryView()),
+        );
+      } else {
+        Navigator.of(context).pop(true);
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -823,7 +831,7 @@ class _ProfileEditViewState extends ConsumerState<ProfileEditView> {
                 SizedBox(
                   width: double.infinity,
                   child: CustomButton(
-                    text: '保存',
+                    text: widget.showNextButton ? '次へ' : '保存',
                     onPressed: _isSaving ? null : _save,
                     isLoading: _isSaving,
                     backgroundColor: const Color(0xFFFF6B35),

@@ -60,17 +60,28 @@
 
 ### account_deletion_requests
 - `account_deletion_requests/{requestId}`: アカウント削除申請
-  - `storeId`: 対象店舗ID
-  - `storeName`: 店舗名（表示用）
-  - `storeIconImageUrl`: 店舗アイコンURL（表示用、nullable）
-  - `storeCategory`: 店舗カテゴリ（表示用）
   - `userId`: 申請者UID
   - `reason`: 退会理由
-  - `status`: 対応状況（pending/approved/rejected）
+  - `requestType`: 申請種別（`store` / `user`）
+  - `sourceApp`: 申請元アプリ（`store` / `user`）
+  - `status`: 対応状況（`pending` / `approved` / `rejected` / `completed`）
   - `createdAt`: 申請日時
   - `updatedAt`: 更新日時
   - `processedAt`: 処理日時（nullable）
   - `processedBy`: 処理した管理者UID（nullable）
+  - `readByOwnerAt`: オーナー既読日時（ユーザー退会理由時のみ、nullable）
+  - `readByOwnerUid`: 既読処理したオーナーUID（ユーザー退会理由時のみ、nullable）
+  - 店舗アカウント削除申請（`requestType = store`）:
+    - `storeId`: 対象店舗ID
+    - `storeName`: 店舗名（表示用）
+    - `storeIconImageUrl`: 店舗アイコンURL（表示用、nullable）
+    - `storeCategory`: 店舗カテゴリ（表示用）
+  - ユーザー退会理由記録（`requestType = user`）:
+    - `userDisplayName`: 表示名（表示用）
+    - `username`: ユーザーID（表示用、nullable）
+    - `userEmail`: メールアドレス（表示用、nullable）
+    - `userProfileImageUrl`: プロフィール画像URL（表示用、nullable）
+    - `status`: `completed`（閲覧専用記録）
 
 ### feedback
 - `feedback/{feedbackId}`: フィードバック
@@ -149,7 +160,8 @@
   - `levelPointReturnRateRanges`: レベル別還元率（`minLevel`, `maxLevel`, `rate`）
   - `friendCampaignStartDate`: 友達紹介開始日
   - `friendCampaignEndDate`: 友達紹介終了日
-  - `friendCampaignPoints`: 友達紹介付与ポイント
+  - `friendCampaignInviterPoints`: 招待者（招待した側）への付与コイン数（未設定時デフォルト: 5）
+  - `friendCampaignInviteePoints`: 被招待者（招待された側）への付与コイン数（未設定時デフォルト: 5）
   - `storeCampaignStartDate`: 店舗紹介開始日
   - `storeCampaignEndDate`: 店舗紹介終了日
   - `storeCampaignPoints`: 店舗紹介付与ポイント
@@ -180,8 +192,8 @@
   - `timestamp`: 発生日時
   - `createdAt`: 作成日時
 
-### point_ledger
-- `point_ledger/{ledgerId}`: 友達紹介ポイント台帳
+### point_ledger（廃止 — 友達紹介用途のみ）
+- `point_ledger/{ledgerId}`: 友達紹介ポイント台帳（※旧システム。友達紹介はコインシステムに移行し、新規書き込みは停止。既存データは参照用に残存）
   - `userId`: 付与対象UID
   - `amount`: 付与ポイント
   - `category`: ポイント種別
@@ -189,6 +201,17 @@
   - `relatedUserId`: 関連ユーザーUID
   - `refId`: 関連ドキュメントID
   - `createdAt`: 作成日時
+
+### referral_uses
+- `referral_uses/{useId}`: 友達紹介利用記録
+  - `referrerUserId`: 紹介者（招待した側）のUID
+  - `referredUserId`: 被紹介者（招待された側）のUID
+  - `usedCode`: 使用された紹介コード
+  - `plannedCoins`: 付与予定コイン（`{ inviter: N, invitee: M }`。登録時点の `owner_settings/current` の設定値を記録）
+  - `status`: 状態（`pending` = 初回スタンプ待ち / `awarded` = コイン付与済み）
+  - `createdAt`: 作成日時（referral_uses登録日）
+  - `awardedAt`: コイン付与日時（`awarded` 時に更新）
+- 複合インデックス: `[referredUserId ASC, status ASC]`（`firestore.indexes.json` に定義済み）
 
 ### point_requests
 - `point_requests/{storeId}/{userId}/award_request`: スタンプ押印リクエスト（ポイント付与は行わない）
@@ -459,6 +482,11 @@
   - `instagramSync`: Instagram同期情報
     - `lastSyncAt`: 最終同期日時
     - `lastSyncCount`: 最終同期取得件数
+  - `instagramSyncSettings`: Instagram定期同期設定
+    - `enabled`: 定期同期の有効フラグ（false の場合は手動同期のみ）
+    - `syncTime`: 毎日の同期時刻（`HH:mm`、`09:00〜21:00` の30分単位）
+    - `nextSyncAt`: 次回自動同期予定日時
+    - `updatedAt`: 設定更新日時
   - `tags`: タグ
   - `paymentMethods`: 利用可能な決済方法（カテゴリ別Map）
     - `cash`: 現金カテゴリ
@@ -565,19 +593,27 @@
 ### user_coupons
 - `user_coupons/{userCouponId}`: ユーザー取得クーポン
   - `userId`: ユーザーUID
-  - `couponId`: クーポンID
+  - `couponId`: クーポンID（参照元の `coupons/{storeId}/coupons/{couponId}` のID）
   - `obtainedAt`: 取得日時
   - `usedAt`: 使用日時（使用済みの場合）
   - `isUsed`: 使用済みフラグ
   - `storeId`: 店舗ID
   - `orderId`: 注文ID（任意）
-  - `storeName`: 店舗名（コイン交換クーポン時）
-  - `type`: クーポン種別（`coin_exchange` = コイン交換クーポン）
+  - `storeName`: 店舗名（コイン交換・スタンプ達成クーポン時）
+  - `type`: クーポン種別
+    - `coin_exchange`: コイン交換クーポン（コイン10枚→100円引き）
+    - `stamp_reward`: スタンプカード達成（10の倍数到達）時に自動付与されるクーポン
   - `title`: クーポン名（例: `100円引きクーポン`）
   - `discountValue`: 割引値（例: 100）
   - `discountType`: 割引種別（`fixed_amount` = 固定額）
   - `validFrom`: 有効開始日時（Timestamp）
-  - `validUntil`: 有効期限（Timestamp、コイン交換の場合は取得日+30日）
+  - `validUntil`: 有効期限（Timestamp）
+    - `coin_exchange`: 取得日+30日
+    - `stamp_reward`: null（`noExpiry: true` で有効期限なし）
+  - `noExpiry`: 有効期限なしフラグ（bool）
+    - `stamp_reward` の場合は `true`、`coin_exchange` の場合は `false`
+  - `couponType`: クーポンタイプ（`discount` など、`coupons` コレクションの値を引継ぎ）
+  - `requiredStampCount`: 0（`stamp_reward` の場合は付与済みのためスタンプ要件なし）
 
 ### user_achievement_events
 - `user_achievement_events/{userId}/events/{eventId}`: 実績イベント
@@ -664,11 +700,17 @@
   - `experience`: 経験値（廃止済み・既存データのみ）
   - `badgeCount`: 獲得バッジ数
   - `earnedBadges`: 獲得バッジID配列
-  - `referralCode`: 友達紹介コード
-  - `referralCount`: 招待数
-  - `referralEarnings`: 紹介獲得ポイント
-  - `referralEarningsPoints`: 紹介獲得ポイント合計
-  - `referralUsed`: 紹介コード利用済み
+  - `referralCode`: 友達紹介コード（8文字英数字・自動生成）
+  - `referralCount`: 自分が紹介した友達の人数
+  - `referralEarnings`: 紹介獲得ポイント（旧システム、現在は未使用）
+  - `referralEarningsPoints`: 紹介コイン獲得合計（紹介者が獲得したコイン累計）
+  - `referralUsed`: 友達の紹介コードを使って登録したかどうか（bool）
+  - `referralUsedAt`: 紹介コード適用日時（Timestamp）
+  - `referredBy`: 紹介者（招待した側）のUID（string、紹介コード適用後に設定）
+  - `referralCoinAwarded`: 紹介コインが初回スタンプ時に付与済みかどうか（bool、二重付与防止用）
+  - `friendCode`: ユーザーが入力した友達の紹介コード（string、processFriendReferral処理後は削除）
+  - `friendCodeStatus`: 紹介コード処理状態（`applied` = 適用済み / `invalid` = 無効）
+  - `friendCodeCheckedAt`: 紹介コード検証日時（Timestamp）
   - `storeReferralCode`: 店舗紹介コード
   - `storeReferralCount`: 店舗紹介数
   - `storeReferralEarnings`: 店舗紹介獲得ポイント
@@ -700,7 +742,8 @@
   - `lastLoginAt`: 最終ログイン
   - `lastUpdated`: 最終更新（ランキング用）
   - `lastUpdatedByStoreId`: 更新店舗ID
-  - `isActive`: 利用中フラグ
+  - `isActive`: 利用中フラグ（退会時に `false` にセット。Firebase Auth は削除済みだがFirestoreデータは保持）
+  - `deletedAt`: 退会日時（退会処理時にセット、退会前は存在しない）
   - `coins`: コイン残高
   - `coinLastEarnedAt`: コイン最終獲得日時（Timestamp）
   - `coinExpiresAt`: コイン有効期限（最終獲得日+180日、Timestamp）

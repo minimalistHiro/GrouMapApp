@@ -74,6 +74,16 @@ final coinExchangeCouponsProvider = StreamProvider.family<List<Coupon>, String>(
   });
 });
 
+// スタンプ達成クーポン一覧プロバイダー（未使用）
+final stampRewardCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, userId) {
+  final couponService = ref.watch(couponProvider);
+  return couponService.getStampRewardCoupons(userId)
+      .handleError((error) {
+    debugPrint('Stamp reward coupons provider error: $error');
+    return <Coupon>[];
+  });
+});
+
 // 使用済みクーポン一覧プロバイダー
 final usedCouponsProvider = StreamProvider.family<List<Coupon>, String>((ref, userId) {
   final couponService = ref.watch(couponProvider);
@@ -382,6 +392,55 @@ class CouponService {
       });
     } catch (e) {
       debugPrint('Error getting coin exchange coupons: $e');
+      return Stream.value([]);
+    }
+  }
+
+  // スタンプ達成クーポン一覧を取得（未使用）
+  Stream<List<Coupon>> getStampRewardCoupons(String userId) {
+    try {
+      if (userId.isEmpty || userId == 'guest') {
+        return Stream.value([]);
+      }
+      return _firestore
+          .collection('user_coupons')
+          .where('userId', isEqualTo: userId)
+          .where('type', isEqualTo: 'stamp_reward')
+          .where('isUsed', isEqualTo: false)
+          .snapshots()
+          .map((snapshot) {
+        final coupons = snapshot.docs.map((doc) {
+          final data = doc.data();
+          final obtainedAt = _parseTimestamp(data['obtainedAt']);
+          return Coupon(
+            id: doc.id,
+            storeId: data['storeId'] as String? ?? '',
+            title: data['title'] as String? ?? 'スタンプ達成クーポン',
+            description: '${data['storeName'] ?? '店舗'}でスタンプカードを達成して獲得したクーポンです。',
+            type: CouponType.discount,
+            discountValue: (data['discountValue'] as num?)?.toDouble() ?? 0.0,
+            discountType: data['discountType'] as String? ?? 'fixed_amount',
+            validFrom: obtainedAt,
+            validUntil: DateTime(2100),
+            usageLimit: 1,
+            usedCount: 0,
+            minOrderAmount: 0,
+            isActive: true,
+            createdAt: obtainedAt,
+            updatedAt: obtainedAt,
+            imageUrl: null,
+            noUsageLimit: true,
+            conditions: {'stampReward': true},
+          );
+        }).toList();
+        coupons.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return coupons;
+      }).handleError((error) {
+        debugPrint('Error getting stamp reward coupons: $error');
+        return <Coupon>[];
+      });
+    } catch (e) {
+      debugPrint('Error getting stamp reward coupons: $e');
       return Stream.value([]);
     }
   }

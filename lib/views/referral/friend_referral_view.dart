@@ -22,7 +22,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
   String? _error;
   int _referralCount = 0;
   int _totalEarnings = 0;
-  static const int _defaultRewardPoints = 100;
+  static const int _defaultRewardCoins = 5;
   ProviderSubscription<AsyncValue<User?>>? _authSubscription;
 
   @override
@@ -226,15 +226,15 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
       data: (settings) => _resolveCurrentSettings(settings),
       orElse: () => <String, dynamic>{},
     );
-    final inviterPoints = _resolveRewardPoints(
+    final inviterCoins = _resolveRewardPoints(
       ownerSettings,
       ['friendCampaignInviterPoints', 'friendCampaignUserPoints', 'friendCampaignPoints'],
-      _defaultRewardPoints,
+      _defaultRewardCoins,
     );
-    final inviteePoints = _resolveRewardPoints(
+    final inviteeCoins = _resolveRewardPoints(
       ownerSettings,
       ['friendCampaignInviteePoints', 'friendCampaignFriendPoints', 'friendCampaignPoints'],
-      _defaultRewardPoints,
+      _defaultRewardCoins,
     );
 
     return SingleChildScrollView(
@@ -268,7 +268,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
           const SizedBox(height: 24),
           
           // 特典情報
-          _buildRewardsInfo(inviterPoints, inviteePoints),
+          _buildRewardsInfo(inviterCoins, inviteeCoins),
         ],
       ),
     );
@@ -353,7 +353,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
           ),
           SizedBox(height: 12),
           Text(
-            '友達を招待してポイント獲得',
+            '友達を招待してコイン獲得',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
@@ -362,7 +362,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
           ),
           SizedBox(height: 8),
           Text(
-            '友達が紹介コードで登録すると、\nあなたも友達もポイントがもらえます',
+            '友達が紹介コードで登録し、\n初めてお店でスタンプを獲得すると\nあなたも友達もコインがもらえます',
             style: TextStyle(
               fontSize: 14,
               color: Colors.white70,
@@ -523,8 +523,8 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
               Expanded(
                 child: _buildStatItem(
                   icon: Icons.monetization_on,
-                  label: '獲得ポイント',
-                  value: '${_totalEarnings}pt',
+                  label: '獲得コイン',
+                  value: '${_totalEarnings}コイン',
                   color: Colors.green,
                 ),
               ),
@@ -630,8 +630,8 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
           
           _buildGuideStep(
             step: 4,
-            title: 'ポイントを獲得',
-            description: '登録完了後、あなたも友達もポイントがもらえます！',
+            title: 'コインを獲得',
+            description: '友達が初めてお店でスタンプを獲得した時点で、あなたも友達もコインがもらえます！',
             icon: Icons.card_giftcard,
           ),
         ],
@@ -718,7 +718,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
     );
   }
 
-  Widget _buildRewardsInfo(int inviterPoints, int inviteePoints) {
+  Widget _buildRewardsInfo(int inviterCoins, int inviteeCoins) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -748,22 +748,22 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
           
           _buildRewardItem(
             title: 'あなたの特典',
-            description: '友達1人につき${inviterPoints}ポイント獲得',
+            description: '友達1人につき${inviterCoins}コイン獲得',
             icon: Icons.stars,
             color: Colors.amber,
           ),
-          
+
           const SizedBox(height: 12),
-          
+
           _buildRewardItem(
             title: '友達の特典',
-            description: '登録時に${inviteePoints}ポイントをプレゼント',
+            description: '${inviteeCoins}コインをプレゼント',
             icon: Icons.card_giftcard,
             color: Colors.green,
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -774,7 +774,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
               ),
             ),
             child: const Text(
-              '※ 特典は友達がアプリで初回利用後に付与されます',
+              '※ コインは友達が初めてお店でスタンプを獲得した時点で付与されます',
               style: TextStyle(
                 fontSize: 12,
                 color: Color(0xFFFF6B35),

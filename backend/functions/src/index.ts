@@ -32,12 +32,14 @@ const EMAIL_OTP_COLLECTION = 'email_otp';
 const ANNOUNCEMENT_TOPIC = 'announcements';
 const OWNER_SETTINGS_COLLECTION = 'owner_settings';
 const REFERRAL_USES_COLLECTION = 'referral_uses';
-const POINT_LEDGER_COLLECTION = 'point_ledger';
 const USER_ACHIEVEMENT_EVENTS_COLLECTION = 'user_achievement_events';
 const RECOMMENDATION_IMPRESSIONS_COLLECTION = 'recommendation_impressions';
 const RECOMMENDATION_VISITS_COLLECTION = 'recommendation_visits';
 const MAX_STAMPS = 10;
 const INSTAGRAM_API_BASE = 'https://graph.facebook.com/v19.0';
+const DEFAULT_INSTAGRAM_SYNC_TIME = '09:00';
+const MIN_INSTAGRAM_SYNC_MINUTES = 9 * 60;
+const MAX_INSTAGRAM_SYNC_MINUTES = 21 * 60;
 
 type BadgeAward = {
   id: string;
@@ -75,6 +77,12 @@ type InstagramAuth = {
   accessToken: string;
   instagramUserId: string;
   username?: string;
+};
+
+type InstagramSyncSettings = {
+  enabled: boolean;
+  syncTime: string;
+  nextSyncAt: Date | null;
 };
 
 function stripUndefined<T extends Record<string, unknown>>(value: T): T {
@@ -367,15 +375,25 @@ async function syncInstagramPostsForStore(params: {
     mediaItems,
   });
 
-  await db.collection('stores').doc(storeId).set(
-    {
-      instagramSync: {
-        lastSyncAt: FieldValue.serverTimestamp(),
-        lastSyncCount: count,
-      },
+  const syncSettings = getInstagramSyncSettings(storeData);
+  const nextSyncDate = syncSettings.enabled
+    ? buildNextInstagramSyncDate(new Date(), syncSettings.syncTime)
+    : null;
+
+  const updatePayload: Record<string, unknown> = {
+    instagramSync: {
+      lastSyncAt: FieldValue.serverTimestamp(),
+      lastSyncCount: count,
     },
-    { merge: true },
-  );
+    'instagramSyncSettings.enabled': syncSettings.enabled,
+    'instagramSyncSettings.syncTime': syncSettings.syncTime,
+    'instagramSyncSettings.nextSyncAt': nextSyncDate
+      ? Timestamp.fromDate(nextSyncDate)
+      : FieldValue.delete(),
+    'instagramSyncSettings.intervalMinutes': FieldValue.delete(),
+  };
+
+  await db.collection('stores').doc(storeId).set(updatePayload, { merge: true });
 
   return count;
 }
@@ -386,6 +404,141 @@ function asInt(value: unknown, fallback = 0): number {
     return Number.isNaN(parsed) ? fallback : parsed;
   }
   return fallback;
+}
+
+function parseInstagramSyncTime(value: string): { hour: number; minute: number } | null {
+  const match = /^([01]\d|2[0-3]):(00|30)$/.exec(value);
+  if (!match) return null;
+  const hour = Number.parseInt(match[1], 10);
+  const minute = Number.parseInt(match[2], 10);
+  return { hour, minute };
+}
+
+function toInstagramSyncMinutes(value: { hour: number; minute: number }): number {
+  return value.hour * 60 + value.minute;
+}
+
+function clampInstagramSyncMinutes(minutes: number): number {
+  return Math.min(MAX_INSTAGRAM_SYNC_MINUTES, Math.max(MIN_INSTAGRAM_SYNC_MINUTES, minutes));
+}
+
+function formatInstagramSyncTime(params: { hour: number; minute: number }): string {
+  const hour = params.hour.toString().padStart(2, '0');
+  const minute = params.minute.toString().padStart(2, '0');
+  return `${hour}:${minute}`;
+}
+
+function toInstagramSyncTimeFromDate(date: Date): string {
+  const totalMinutes = date.getHours() * 60 + date.getMinutes();
+  const rounded = Math.round(totalMinutes / 30) * 30;
+  const normalized = clampInstagramSyncMinutes(
+    ((rounded % (24 * 60)) + (24 * 60)) % (24 * 60),
+  );
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  return formatInstagramSyncTime({ hour, minute });
+}
+
+function normalizeInstagramSyncTime(value: unknown, fallbackDate?: Date | null): string {
+  const raw = toStringValue(value).trim();
+  const parsedRaw = parseInstagramSyncTime(raw);
+  if (parsedRaw) {
+    const normalized = clampInstagramSyncMinutes(toInstagramSyncMinutes(parsedRaw));
+    const hour = Math.floor(normalized / 60);
+    const minute = normalized % 60;
+    return formatInstagramSyncTime({ hour, minute });
+  }
+  if (fallbackDate) {
+    return toInstagramSyncTimeFromDate(fallbackDate);
+  }
+  return DEFAULT_INSTAGRAM_SYNC_TIME;
+}
+
+function isInstagramSyncTimeAllowed(syncTime: string): boolean {
+  const parsed = parseInstagramSyncTime(syncTime);
+  if (!parsed) return false;
+  const minutes = toInstagramSyncMinutes(parsed);
+  return minutes >= MIN_INSTAGRAM_SYNC_MINUTES && minutes <= MAX_INSTAGRAM_SYNC_MINUTES;
+}
+
+function toDateValue(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Timestamp) return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+  if (typeof value === 'object' && value !== null && 'toDate' in value) {
+    const toDate = (value as { toDate?: unknown }).toDate;
+    if (typeof toDate === 'function') {
+      const parsed = (toDate as () => Date)();
+      if (parsed instanceof Date && !Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+  }
+  return null;
+}
+
+function getInstagramSyncSettings(storeData: Record<string, unknown>): InstagramSyncSettings {
+  const settings = storeData['instagramSyncSettings'] as Record<string, unknown> | undefined;
+  const enabled = settings?.['enabled'] === false ? false : true;
+  const nextSyncAt = toDateValue(settings?.['nextSyncAt']);
+  const syncInfo = storeData['instagramSync'] as Record<string, unknown> | undefined;
+  const lastSyncAt = toDateValue(syncInfo?.['lastSyncAt']);
+  const syncTime = normalizeInstagramSyncTime(settings?.['syncTime'], nextSyncAt ?? lastSyncAt);
+  return {
+    enabled,
+    syncTime,
+    nextSyncAt,
+  };
+}
+
+function shouldRunInstagramSync(storeData: Record<string, unknown>, now: Date): boolean {
+  const settings = getInstagramSyncSettings(storeData);
+  if (!settings.enabled) {
+    return false;
+  }
+
+  if (settings.nextSyncAt) {
+    return settings.nextSyncAt.getTime() <= now.getTime();
+  }
+
+  const syncInfo = storeData['instagramSync'] as Record<string, unknown> | undefined;
+  const lastSyncAt = toDateValue(syncInfo?.['lastSyncAt']);
+  const todaySyncAt = buildTodayInstagramSyncDate(now, settings.syncTime);
+  if (now.getTime() < todaySyncAt.getTime()) {
+    return false;
+  }
+
+  if (!lastSyncAt) {
+    return true;
+  }
+  return lastSyncAt.getTime() < todaySyncAt.getTime();
+}
+
+function buildTodayInstagramSyncDate(base: Date, syncTime: string): Date {
+  const parsed = parseInstagramSyncTime(syncTime) ?? parseInstagramSyncTime(DEFAULT_INSTAGRAM_SYNC_TIME)!;
+  return new Date(
+    base.getFullYear(),
+    base.getMonth(),
+    base.getDate(),
+    parsed.hour,
+    parsed.minute,
+    0,
+    0,
+  );
+}
+
+function buildNextInstagramSyncDate(base: Date, syncTime: string): Date {
+  const todaySyncAt = buildTodayInstagramSyncDate(base, syncTime);
+  if (todaySyncAt.getTime() <= base.getTime()) {
+    todaySyncAt.setDate(todaySyncAt.getDate() + 1);
+  }
+  return todaySyncAt;
 }
 
 function startFromPeriod(period: string): Date {
@@ -648,11 +801,6 @@ async function checkAndAwardBadges(params: {
   return newlyAwarded;
 }
 
-type ReferralPoints = {
-  inviterPoints: number;
-  inviteePoints: number;
-};
-
 type ReturnRateRange = {
   minLevel?: number;
   maxLevel?: number;
@@ -752,33 +900,6 @@ function resolveCampaignBonus(settings: Record<string, unknown>): {
   return { bonusRate, campaignId };
 }
 
-async function resolveReferralPoints(): Promise<ReferralPoints> {
-  const settingsDoc = await db.collection(OWNER_SETTINGS_COLLECTION).doc('current').get();
-  const settings = (settingsDoc.data() as Record<string, unknown> | undefined) ?? {};
-
-  const readPoints = (keys: string[], fallback: number): number => {
-    for (const key of keys) {
-      const value = settings[key];
-      if (typeof value === 'number') return Math.floor(value);
-      if (typeof value === 'string') {
-        const parsed = Number.parseInt(value, 10);
-        if (!Number.isNaN(parsed)) return parsed;
-      }
-    }
-    return fallback;
-  };
-
-  return {
-    inviterPoints: readPoints(
-      ['friendCampaignInviterPoints', 'friendCampaignUserPoints', 'friendCampaignPoints'],
-      100,
-    ),
-    inviteePoints: readPoints(
-      ['friendCampaignInviteePoints', 'friendCampaignFriendPoints', 'friendCampaignPoints'],
-      100,
-    ),
-  };
-}
 
 type NotificationData = {
   userId?: string;
@@ -1156,21 +1277,18 @@ export const processAwardAchievement = onDocumentCreated(
       const userStoreSnap = await txn.get(userStoreRef);
       const userSnap = await txn.get(userRef);
       const currentStamps = asInt(userStoreSnap.data()?.['stamps'], 0);
-      const canAddStamp = currentStamps < MAX_STAMPS;
-      const stampsAdded = canAddStamp ? 1 : 0;
-      const nextStamps = canAddStamp ? currentStamps + 1 : currentStamps;
-      const cardCompleted = canAddStamp && nextStamps >= MAX_STAMPS && currentStamps < MAX_STAMPS;
+      const stampsAdded = 1; // 上限なし・累積加算（punchStampと同じロジック）
+      const nextStamps = currentStamps + 1;
+      const cardCompleted = nextStamps % MAX_STAMPS === 0; // 10の倍数到達で達成
 
-      if (stampsAdded > 0) {
-        txn.set(
-          userStoreRef,
-          {
-            stamps: nextStamps,
-            lastVisited: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
+      txn.set(
+        userStoreRef,
+        {
+          stamps: nextStamps,
+          lastVisited: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
 
       const pointsXp = pointsAwarded;
       const stampXp = stampsAdded > 0 ? experienceForStampPunch() : 0;
@@ -1289,8 +1407,14 @@ export const processFriendReferral = onDocumentWritten(
       return;
     }
 
-    const { inviterPoints, inviteePoints } = await resolveReferralPoints();
-    const now = new Date();
+    // コインシステムに移行: コインは初回スタンプ獲得時に付与（punchStamp で処理）
+    // owner_settings/current からコイン数を動的に取得
+    const ownerSettingsSnap = await db.collection('owner_settings').doc('current').get();
+    const ownerSettingsData = ownerSettingsSnap.data() ?? {};
+    const referralInviterCoins = typeof ownerSettingsData.friendCampaignInviterPoints === 'number'
+      ? ownerSettingsData.friendCampaignInviterPoints : 5;
+    const referralInviteeCoins = typeof ownerSettingsData.friendCampaignInviteePoints === 'number'
+      ? ownerSettingsData.friendCampaignInviteePoints : 5;
 
     await db.runTransaction(async (transaction) => {
       const userRef = db.collection(USERS_COLLECTION).doc(userId);
@@ -1315,116 +1439,36 @@ export const processFriendReferral = onDocumentWritten(
       );
       if (referrerCode !== friendCode) return;
 
-      const referredName =
-        typeof userData.displayName === 'string' ? userData.displayName.trim() : '';
-      const referrerName =
-        typeof referrerData.displayName === 'string' ? referrerData.displayName.trim() : '';
-      const safeReferredName = referredName.length === 0 ? '友達' : referredName;
-      const safeReferrerName = referrerName.length === 0 ? '友達' : referrerName;
-
+      // referral_uses に pending レコードを作成（初回スタンプ後に awarded に更新）
       const referralUseRef = db.collection(REFERRAL_USES_COLLECTION).doc();
       transaction.set(referralUseRef, {
         referrerUserId: referrerRef.id,
         referredUserId: userId,
         usedCode: friendCode,
-        awardedPoints: {
-          inviter: inviterPoints,
-          invitee: inviteePoints,
+        plannedCoins: {
+          inviter: referralInviterCoins,
+          invitee: referralInviteeCoins,
         },
-        status: 'awarded',
+        status: 'pending',
         createdAt: FieldValue.serverTimestamp(),
       });
 
+      // refereeのユーザードキュメント更新（コインは初回スタンプ獲得時に付与）
       transaction.update(userRef, {
         referredBy: referrerRef.id,
         referralUsed: true,
         referralUsedAt: FieldValue.serverTimestamp(),
+        referralCoinAwarded: false,
         friendCode: FieldValue.delete(),
         friendCodeStatus: 'applied',
         friendCodeCheckedAt: FieldValue.serverTimestamp(),
-        friendReferralPopupShown: false,
-        friendReferralPopup: {
-          points: inviteePoints,
-          referrerName: safeReferrerName,
-        },
-        specialPoints: FieldValue.increment(inviteePoints),
-        specialPointsTotal: FieldValue.increment(inviteePoints),
         updatedAt: FieldValue.serverTimestamp(),
       });
 
+      // referrerのユーザードキュメント更新（紹介数カウントのみ。コインは初回スタンプ時に付与）
       transaction.update(referrerRef, {
         referralCount: FieldValue.increment(1),
-        referralEarningsPoints: FieldValue.increment(inviterPoints),
-        specialPoints: FieldValue.increment(inviterPoints),
-        specialPointsTotal: FieldValue.increment(inviterPoints),
-        friendReferralPopupReferrerShown: false,
-        friendReferralPopupReferrer: {
-          points: inviterPoints,
-          referredName: safeReferredName,
-        },
         updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      const inviterLedgerRef = db.collection(POINT_LEDGER_COLLECTION).doc();
-      transaction.set(inviterLedgerRef, {
-        userId: referrerRef.id,
-        amount: inviterPoints,
-        category: 'special',
-        reason: 'friend_referral',
-        relatedUserId: userId,
-        refId: referralUseRef.id,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-
-      const inviteeLedgerRef = db.collection(POINT_LEDGER_COLLECTION).doc();
-      transaction.set(inviteeLedgerRef, {
-        userId,
-        amount: inviteePoints,
-        category: 'special',
-        reason: 'friend_referral',
-        relatedUserId: referrerRef.id,
-        refId: referralUseRef.id,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-
-      const referrerNotificationRef = referrerRef.collection('notifications').doc();
-      transaction.set(referrerNotificationRef, {
-        id: referrerNotificationRef.id,
-        userId: referrerRef.id,
-        title: '友達紹介ポイント獲得',
-        body: `${safeReferredName}さんがあなたの友達コードで登録し${inviterPoints}ポイント付与されました`,
-        type: 'social',
-        createdAt: now.toISOString(),
-        isRead: false,
-        isDelivered: true,
-        data: {
-          source: 'user',
-          reason: 'friend_referral',
-          referralUseId: referralUseRef.id,
-          points: inviterPoints,
-          referredUserId: userId,
-        },
-        tags: ['referral'],
-      });
-
-      const referredNotificationRef = userRef.collection('notifications').doc();
-      transaction.set(referredNotificationRef, {
-        id: referredNotificationRef.id,
-        userId,
-        title: '友達紹介ポイント獲得',
-        body: `${safeReferrerName}さんの友達コードで${inviteePoints}ポイント付与されました`,
-        type: 'social',
-        createdAt: now.toISOString(),
-        isRead: false,
-        isDelivered: true,
-        data: {
-          source: 'user',
-          reason: 'friend_referral',
-          referralUseId: referralUseRef.id,
-          points: inviteePoints,
-          referrerUserId: referrerRef.id,
-        },
-        tags: ['referral'],
       });
     });
   },
@@ -2466,10 +2510,9 @@ export const punchStamp = onCall(
       const targetStoreSnap = await txn.get(targetStoreRef);
       const storeUserStatsSnap = await txn.get(storeUserStatsRef);
       const currentStamps = asInt(targetStoreSnap.data()?.['stamps'], 0);
-      const canAddStamp = currentStamps < MAX_STAMPS;
-      const stampsAdded = canAddStamp ? 1 : 0;
-      const nextStamps = canAddStamp ? currentStamps + 1 : currentStamps;
-      const cardCompleted = canAddStamp && nextStamps >= MAX_STAMPS && currentStamps < MAX_STAMPS;
+      const stampsAdded = 1; // 上限なし・常に加算
+      const nextStamps = currentStamps + 1;
+      const cardCompleted = nextStamps % MAX_STAMPS === 0; // 10の倍数到達で達成
 
       const couponReads: Array<{
         couponId: string;
@@ -2515,34 +2558,33 @@ export const punchStamp = onCall(
         }
       }
 
-      if (stampsAdded > 0) {
-        txn.set(
-          targetStoreRef,
-          stripUndefined({
-            storeId,
-            storeName: storeName || undefined,
-            stamps: nextStamps,
-            lastVisited: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-          }),
-          { merge: true },
-        );
+      // 常にスタンプ加算（上限なし）
+      txn.set(
+        targetStoreRef,
+        stripUndefined({
+          storeId,
+          storeName: storeName || undefined,
+          stamps: nextStamps,
+          lastVisited: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }),
+        { merge: true },
+      );
 
-        const now = new Date();
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-          now.getDate(),
-        ).padStart(2, '0')}`;
-        const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayStr);
-        txn.set(
-          statsRef,
-          {
-            date: todayStr,
-            visitorCount: FieldValue.increment(1),
-            lastUpdated: FieldValue.serverTimestamp(),
-          },
-          { merge: true },
-        );
-      }
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+        now.getDate(),
+      ).padStart(2, '0')}`;
+      const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayStr);
+      txn.set(
+        statsRef,
+        {
+          date: todayStr,
+          visitorCount: FieldValue.increment(1),
+          lastUpdated: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
       if (storeUserStatsSnap.exists) {
         txn.set(
           storeUserStatsRef,
@@ -2788,6 +2830,172 @@ export const punchStamp = onCall(
       console.error('[punchStamp] auto-follow error:', e);
     }
 
+    // スタンプカード達成時のクーポン自動付与
+    if (result.cardCompleted) {
+      try {
+        const stampCoupons = await db
+          .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
+          .where('requiredStampCount', '>', 0)
+          .where('isActive', '==', true)
+          .get();
+
+        for (const couponDoc of stampCoupons.docs) {
+          const couponData = couponDoc.data();
+          // 発行枚数制限チェック
+          const noUsageLimit = couponData['noUsageLimit'] === true;
+          const usageLimit = asInt(couponData['usageLimit'], 0);
+          const usedCount = asInt(couponData['usedCount'], 0);
+          if (!noUsageLimit && usageLimit > 0 && usedCount >= usageLimit) continue;
+
+          const userCouponRef = db.collection('user_coupons').doc();
+          await userCouponRef.set({
+            userId,
+            couponId: couponDoc.id,
+            storeId,
+            storeName: couponData['storeName'] ?? '',
+            title: couponData['title'] ?? '',
+            obtainedAt: FieldValue.serverTimestamp(),
+            isUsed: false,
+            noExpiry: true,
+            validUntil: null,
+            type: 'stamp_reward',
+            discountValue: couponData['discountValue'] ?? 0,
+            discountType: couponData['discountType'] ?? 'fixed_amount',
+            couponType: couponData['couponType'] ?? 'discount',
+            requiredStampCount: 0,
+          });
+        }
+        console.log(`[punchStamp] Awarded stamp coupons for user ${userId}, store ${storeId}`);
+      } catch (e) {
+        console.error('[punchStamp] stamp coupon award error:', e);
+      }
+    }
+
+    // 友達紹介コイン付与（初回スタンプ時）
+    let referralCoinJustAwarded = false;
+    let referralReferredByUid: string | null = null;
+    let referralAwardedInviteeCoins = 5;
+    let referralAwardedInviterCoins = 5;
+    let pendingReferralDocRef: FirebaseFirestore.DocumentReference | null = null;
+    try {
+      // referral_uses から plannedCoins を取得（トランザクション前に実行）
+      const pendingReferralSnap = await db.collection(REFERRAL_USES_COLLECTION)
+        .where('referredUserId', '==', userId)
+        .where('status', '==', 'pending')
+        .limit(1)
+        .get();
+      if (!pendingReferralSnap.empty) {
+        pendingReferralDocRef = pendingReferralSnap.docs[0].ref;
+        const plannedCoins = pendingReferralSnap.docs[0].data()?.plannedCoins;
+        if (typeof plannedCoins?.invitee === 'number') {
+          referralAwardedInviteeCoins = plannedCoins.invitee;
+        }
+        if (typeof plannedCoins?.inviter === 'number') {
+          referralAwardedInviterCoins = plannedCoins.inviter;
+        }
+      }
+
+      await db.runTransaction(async (refTxn) => {
+        const refUserSnap = await refTxn.get(targetUserRef);
+        if (!refUserSnap.exists) return;
+        const refUserData = refUserSnap.data() as Record<string, unknown>;
+        const referredBy = typeof refUserData.referredBy === 'string' ? refUserData.referredBy : null;
+        const alreadyAwarded = refUserData.referralCoinAwarded === true;
+        if (!referredBy || alreadyAwarded) return;
+
+        const referrerRef = db.collection(USERS_COLLECTION).doc(referredBy);
+        const referrerSnap = await refTxn.get(referrerRef);
+        if (!referrerSnap.exists) return;
+
+        const refNow = new Date();
+        const refExpiresAt = new Date(refNow.getTime() + 180 * 24 * 60 * 60 * 1000);
+
+        refTxn.update(targetUserRef, {
+          coins: FieldValue.increment(referralAwardedInviteeCoins),
+          coinLastEarnedAt: Timestamp.fromDate(refNow),
+          coinExpiresAt: Timestamp.fromDate(refExpiresAt),
+          referralCoinAwarded: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        refTxn.update(referrerRef, {
+          coins: FieldValue.increment(referralAwardedInviterCoins),
+          coinLastEarnedAt: Timestamp.fromDate(refNow),
+          coinExpiresAt: Timestamp.fromDate(refExpiresAt),
+          referralEarningsPoints: FieldValue.increment(referralAwardedInviterCoins),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        referralCoinJustAwarded = true;
+        referralReferredByUid = referredBy;
+      });
+
+      if (referralCoinJustAwarded && referralReferredByUid) {
+        const refNow = new Date();
+
+        // referral_uses のステータスを 'awarded' に更新
+        if (pendingReferralDocRef) {
+          await pendingReferralDocRef.update({
+            status: 'awarded',
+            awardedAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        // 両者への通知
+        const [refereeUserDoc, referrerUserDoc] = await Promise.all([
+          db.collection(USERS_COLLECTION).doc(userId).get(),
+          db.collection(USERS_COLLECTION).doc(referralReferredByUid).get(),
+        ]);
+        const refereeName = typeof refereeUserDoc.data()?.displayName === 'string'
+          ? ((refereeUserDoc.data()!.displayName as string).trim() || '友達')
+          : '友達';
+        const referrerName = typeof referrerUserDoc.data()?.displayName === 'string'
+          ? ((referrerUserDoc.data()!.displayName as string).trim() || '友達')
+          : '友達';
+
+        const refereeNotifRef = targetUserRef.collection('notifications').doc();
+        await refereeNotifRef.set({
+          id: refereeNotifRef.id,
+          userId,
+          title: '友達紹介コイン獲得',
+          body: `${referrerName}さんのコードで登録し、${referralAwardedInviteeCoins}コインが付与されました`,
+          type: 'social',
+          createdAt: refNow.toISOString(),
+          isRead: false,
+          isDelivered: true,
+          data: {
+            source: 'user',
+            reason: 'friend_referral',
+            coins: referralAwardedInviteeCoins,
+          },
+          tags: ['referral'],
+        });
+
+        const referrerNotifRef = db.collection(USERS_COLLECTION).doc(referralReferredByUid).collection('notifications').doc();
+        await referrerNotifRef.set({
+          id: referrerNotifRef.id,
+          userId: referralReferredByUid,
+          title: '友達紹介コイン獲得',
+          body: `${refereeName}さんが初めてお店でスタンプを獲得し、${referralAwardedInviterCoins}コインが付与されました`,
+          type: 'social',
+          createdAt: refNow.toISOString(),
+          isRead: false,
+          isDelivered: true,
+          data: {
+            source: 'user',
+            reason: 'friend_referral',
+            coins: referralAwardedInviterCoins,
+          },
+          tags: ['referral'],
+        });
+
+        console.log(`[punchStamp] Referral coins awarded: referee=${userId} (${referralAwardedInviteeCoins}coins), referrer=${referralReferredByUid} (${referralAwardedInviterCoins}coins)`);
+      }
+    } catch (e) {
+      console.error('[punchStamp] referral coin award error:', e);
+    }
+
     return result;
   },
 );
@@ -2913,6 +3121,76 @@ export const exchangeInstagramAuthCode = onCall(
   },
 );
 
+export const updateInstagramSyncSettings = onCall(
+  {
+    region: 'asia-northeast1',
+    invoker: 'public',
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', 'ログインが必要です');
+    }
+
+    const storeId = toStringValue(request.data?.storeId).trim();
+    const enabled = request.data?.enabled === false ? false : true;
+    const rawSyncTime = toStringValue(request.data?.syncTime).trim();
+
+    if (!storeId) {
+      throw new HttpsError('invalid-argument', 'storeId が必要です');
+    }
+    if (rawSyncTime && !isInstagramSyncTimeAllowed(rawSyncTime)) {
+      throw new HttpsError(
+        'invalid-argument',
+        'syncTime は 09:00〜21:00 の30分単位（HH:mm）で指定してください',
+      );
+    }
+
+    const storeDoc = await db.collection('stores').doc(storeId).get();
+    if (!storeDoc.exists) {
+      throw new HttpsError('not-found', '店舗が見つかりません');
+    }
+
+    const storeData = storeDoc.data() as Record<string, unknown>;
+    const ownerId = toStringValue(storeData['ownerId'] ?? storeData['createdBy']);
+    const isAdmin = request.auth.token?.admin === true;
+    if (ownerId && request.auth.uid !== ownerId && !isAdmin) {
+      throw new HttpsError('permission-denied', '権限がありません');
+    }
+
+    const currentSettings =
+      (storeData['instagramSyncSettings'] as Record<string, unknown> | undefined) ?? {};
+    const currentNextSyncAt = toDateValue(currentSettings['nextSyncAt']);
+    const syncInfo = storeData['instagramSync'] as Record<string, unknown> | undefined;
+    const lastSyncAt = toDateValue(syncInfo?.['lastSyncAt']);
+
+    const syncTime = normalizeInstagramSyncTime(
+      rawSyncTime || currentSettings['syncTime'],
+      currentNextSyncAt ?? lastSyncAt,
+    );
+
+    const nextSyncDate = enabled
+      ? buildNextInstagramSyncDate(new Date(), syncTime)
+      : null;
+    const updatePayload: Record<string, unknown> = {
+      'instagramSyncSettings.enabled': enabled,
+      'instagramSyncSettings.syncTime': syncTime,
+      'instagramSyncSettings.updatedAt': FieldValue.serverTimestamp(),
+      'instagramSyncSettings.nextSyncAt': nextSyncDate
+        ? Timestamp.fromDate(nextSyncDate)
+        : FieldValue.delete(),
+      'instagramSyncSettings.intervalMinutes': FieldValue.delete(),
+    };
+    await storeDoc.ref.update(updatePayload);
+
+    return {
+      success: true,
+      enabled,
+      syncTime,
+      nextSyncAt: nextSyncDate ? nextSyncDate.toISOString() : null,
+    };
+  },
+);
+
 export const syncInstagramPosts = onCall(
   {
     region: 'asia-northeast1',
@@ -2976,6 +3254,7 @@ export const unlinkInstagramAuth = onCall(
       {
         instagramAuth: FieldValue.delete(),
         instagramSync: FieldValue.delete(),
+        instagramSyncSettings: FieldValue.delete(),
       },
       { merge: true },
     );
@@ -2987,18 +3266,23 @@ export const unlinkInstagramAuth = onCall(
 export const syncInstagramPostsScheduled = onSchedule(
   {
     region: 'asia-northeast1',
-    schedule: 'every 6 hours',
+    schedule: 'every 30 minutes',
     timeZone: 'Asia/Tokyo',
   },
   async () => {
-    const stores = await db.collection('stores').get();
+    const stores = await db
+      .collection('stores')
+      .where('instagramAuth.instagramUserId', '!=', '')
+      .get();
+    const now = new Date();
     let processed = 0;
     let total = 0;
 
     for (const doc of stores.docs) {
       const storeData = doc.data() as Record<string, unknown>;
-      const authInfo = getInstagramAuth(storeData);
-      if (!authInfo) continue;
+      if (!shouldRunInstagramSync(storeData, now)) {
+        continue;
+      }
 
       processed += 1;
       try {
@@ -3009,7 +3293,7 @@ export const syncInstagramPostsScheduled = onSchedule(
       }
     }
 
-    console.log(`Instagram sync finished: stores=${processed}, posts=${total}`);
+    console.log(`Instagram sync finished: stores=${processed}, posts=${total}, checked=${stores.size}`);
   },
 );
 

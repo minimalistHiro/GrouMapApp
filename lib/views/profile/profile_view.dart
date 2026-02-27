@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -18,7 +19,6 @@ import '../legal/terms_view.dart';
 import '../support/help_view.dart';
 import '../feedback/feedback_view.dart';
 import '../settings/app_info_view.dart';
-import '../auth/account_deletion_views.dart';
 import '../auth/welcome_view.dart';
 import '../../widgets/user_stats_card.dart';
 
@@ -419,13 +419,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                       onTap: () => _showLogoutDialog(context, ref),
                       isDestructive: true,
                     ),
-                    _buildMenuItem(
-                      icon: Icons.delete_forever,
-                      title: '退会する',
-                      subtitle: 'アカウントを完全に削除',
-                      onTap: () => _showDeleteAccountDialog(context),
-                      isDestructive: true,
-                    ),
                   ]),
                   const SizedBox(height: 24),
                 ],
@@ -791,7 +784,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
   /// 基本プロフィール完成度（興味カテゴリ・自己紹介を除く7項目）
   double _calcBasicProfileCompletion(Map<String, dynamic> data) {
     int filled = 0;
-    const total = 7;
+    const total = 6;
 
     if (data['displayName'] is String &&
         (data['displayName'] as String).trim().isNotEmpty) filled++;
@@ -803,8 +796,6 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     if (data['city'] is String && (data['city'] as String).isNotEmpty) filled++;
     if (data['occupation'] is String &&
         (data['occupation'] as String).isNotEmpty) filled++;
-    if (data['profileImageUrl'] is String &&
-        (data['profileImageUrl'] as String).isNotEmpty) filled++;
 
     return filled / total;
   }
@@ -940,7 +931,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const ProfileEditView()),
+                      builder: (context) => const ProfileEditView(showNextButton: true)),
                 );
                 _loadUserData();
               },
@@ -1168,34 +1159,4 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     }
   }
 
-  // 退会ダイアログ（SettingsView 削除に伴いこちらで提供）
-  void _showDeleteAccountDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('退会'),
-        content: const Text('退会しますか？この操作は取り消せません。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('キャンセル'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              if (!context.mounted) return;
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const AccountDeletionProcessingView(),
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red, foregroundColor: Colors.white),
-            child: const Text('退会する'),
-          ),
-        ],
-      ),
-    );
-  }
 }

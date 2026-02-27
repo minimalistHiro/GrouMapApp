@@ -362,8 +362,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       // 更新前のスタンプ数を保持
       final previousStamps = (_userStamps?['stamps'] as int?) ?? 0;
 
-      // スタンプ数を0-10の範囲に制限
-      final clampedStamps = newStampCount.clamp(0, 10);
+      // 累積カウント（上限なし）
+      final updatedStamps = newStampCount;
 
       // 新しい構造: users/{userId}/stores/{storeId} に保存
       await FirebaseFirestore.instance
@@ -372,7 +372,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           .collection('stores')
           .doc(widget.store['id'])
           .set({
-        'stamps': clampedStamps,
+        'stamps': updatedStamps,
         'lastVisited': DateTime.now(),
         'totalSpending': _userStamps?['totalSpending'] ?? 0.0,
         'updatedAt': FieldValue.serverTimestamp(),
@@ -383,21 +383,29 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       // ローカル状態を更新
       setState(() {
         _userStamps = {
-          'stamps': clampedStamps,
+          'stamps': updatedStamps,
           'lastVisited': DateTime.now(),
           'totalSpending': _userStamps?['totalSpending'] ?? 0.0,
         };
       });
 
       // 曜日別訪問バッジカウンター（スタンプ追加時のみ）
-      if (clampedStamps > previousStamps) {
-        const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+      if (updatedStamps > previousStamps) {
+        const dayNames = [
+          'monday',
+          'tuesday',
+          'wednesday',
+          'thursday',
+          'friday',
+          'saturday',
+          'sunday'
+        ];
         final dayName = dayNames[DateTime.now().weekday - 1];
         BadgeService().incrementBadgeCounter(user.uid, 'dayVisit_$dayName');
       }
 
-      // スタンプカード完成時の通知
-      if (clampedStamps >= 10) {
+      // スタンプカード達成時（10の倍数）の通知
+      if (updatedStamps > 0 && updatedStamps % 10 == 0) {
         // バッジカウンター: スタンプカード達成
         BadgeService().incrementBadgeCounter(user.uid, 'stampCardCompleted');
         _showStampCompletionDialog();
@@ -478,30 +486,48 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(title: storeName),
-      body: Column(
-        children: [
-          CustomTopTabBar(
-            tabs: const [
-              Tab(text: 'トップ'),
-              Tab(text: '店内'),
-              Tab(text: 'メニュー'),
-              Tab(text: '投稿'),
-            ],
-            controller: _tabController,
-          ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildTopTab(),
-                _buildInteriorTab(),
-                _buildMenuTab(),
-                _buildInstagramPostsTab(),
-              ],
+      body: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            SliverToBoxAdapter(
+              child: _buildStoreHeaderSection(),
             ),
-          ),
-        ],
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _StoreDetailTabBarDelegate(
+                tabBar: CustomTopTabBar(
+                  tabs: const [
+                    Tab(text: 'トップ'),
+                    Tab(text: '店内'),
+                    Tab(text: 'メニュー'),
+                    Tab(text: '投稿'),
+                  ],
+                  controller: _tabController,
+                ),
+              ),
+            ),
+          ];
+        },
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildTopTab(),
+            _buildInteriorTab(),
+            _buildMenuTab(),
+            _buildInstagramPostsTab(),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildStoreHeaderSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildStoreHeaderBanner(),
+        _buildStoreInfo(),
+      ],
     );
   }
 
@@ -510,8 +536,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStoreHeaderBanner(),
-          _buildStoreInfo(),
           _buildStampCard(),
           _buildStoreCouponsSection(),
           _buildStorePostsSection(),
@@ -706,7 +730,40 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     return SizedBox(
       height: 200,
       width: double.infinity,
-      child: _buildStoreBackground(),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: _buildStoreBackground(),
+          ),
+          Positioned(
+            left: 16,
+            bottom: 16,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 3),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: _buildStoreIcon(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -828,6 +885,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     final String category = _getStringValue(widget.store['category'], 'その他');
     final String subCategory = _getStringValue(widget.store['subCategory'], '');
     final String description = _getStringValue(widget.store['description'], '');
+    final String displayAddress = _getDisplayAddress();
     final bool hasSubCategory =
         subCategory.isNotEmpty && subCategory != category;
 
@@ -837,158 +895,145 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            _getStringValue(widget.store['name'], '店舗名なし'),
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
-              // 店舗アイコン
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: _getCategoryColor(category).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: _getCategoryColor(category).withOpacity(0.3),
-                    width: 2,
-                  ),
+              IconButton(
+                onPressed: (_isFavoriteLoading || _isUpdatingFavorite)
+                    ? null
+                    : _toggleFavorite,
+                icon: Icon(
+                  _isFavorite ? Icons.star : Icons.star_border,
+                  color: _isFavorite ? Colors.amber[700] : Colors.grey,
                 ),
-                child: _buildStoreIcon(),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: _isFavorite ? 'お気に入り解除' : 'お気に入り登録',
               ),
-              const SizedBox(width: 16),
-              // 店舗名とカテゴリ
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _getStringValue(widget.store['name'], '店舗名なし'),
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        IconButton(
-                          onPressed: (_isFavoriteLoading || _isUpdatingFavorite)
-                              ? null
-                              : _toggleFavorite,
-                          icon: Icon(
-                            _isFavorite ? Icons.star : Icons.star_border,
-                            color:
-                                _isFavorite ? Colors.amber[700] : Colors.grey,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          tooltip: _isFavorite ? 'お気に入り解除' : 'お気に入り登録',
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _isFavorite ? 'お気に入り登録済み' : 'お気に入り',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: _isFavorite
-                                ? Colors.amber[700]
-                                : Colors.grey[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        IconButton(
-                          onPressed:
-                              (_isFollowLoading || _isUpdatingFollow)
-                                  ? null
-                                  : _toggleFollow,
-                          icon: Icon(
-                            _isFollowing
-                                ? Icons.notifications_active
-                                : Icons.notifications_none,
-                            color: _isFollowing
-                                ? Colors.blue[700]
-                                : Colors.grey,
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          tooltip: _isFollowing
-                              ? 'フォロー解除'
-                              : 'フォローして通知を受け取る',
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          _isFollowing
-                              ? 'フォロー中'
-                              : 'フォローして通知を受け取る',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: _isFollowing
-                                ? Colors.blue[700]
-                                : Colors.grey[700],
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        _buildBusinessStatusChip(),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: _getCategoryColor(category).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color:
-                                  _getCategoryColor(category).withOpacity(0.3),
-                            ),
-                          ),
-                          child: Text(
-                            category,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: _getCategoryColor(category),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (hasSubCategory) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color:
-                                  _getCategoryColor(category).withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: _getCategoryColor(category)
-                                    .withOpacity(0.2),
-                              ),
-                            ),
-                            child: Text(
-                              subCategory,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: _getCategoryColor(category),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
+              const SizedBox(width: 8),
+              Text(
+                _isFavorite ? 'お気に入り登録済み' : 'お気に入り',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _isFavorite ? Colors.amber[700] : Colors.grey[700],
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              IconButton(
+                onPressed: (_isFollowLoading || _isUpdatingFollow)
+                    ? null
+                    : _toggleFollow,
+                icon: Icon(
+                  _isFollowing
+                      ? Icons.notifications_active
+                      : Icons.notifications_none,
+                  color: _isFollowing ? Colors.blue[700] : Colors.grey,
+                ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: _isFollowing ? 'フォロー解除' : 'フォローして通知を受け取る',
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _isFollowing ? 'フォロー中' : 'フォローして通知を受け取る',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _isFollowing ? Colors.blue[700] : Colors.grey[700],
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildBusinessStatusChip(),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _getCategoryColor(category).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: _getCategoryColor(category).withOpacity(0.3),
+                  ),
+                ),
+                child: Text(
+                  category,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: _getCategoryColor(category),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (hasSubCategory) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _getCategoryColor(category).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: _getCategoryColor(category).withOpacity(0.2),
+                    ),
+                  ),
+                  child: Text(
+                    subCategory,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _getCategoryColor(category),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          if (displayAddress.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              '住所',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.location_on, color: Colors.grey, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    displayAddress,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (widget.store['businessHours'] != null) ...[
+            const SizedBox(height: 16),
+            _buildBusinessHoursDisplay(),
+          ],
           if (description.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Text(
@@ -1042,7 +1087,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildStampCard() {
-    final stamps = (_userStamps?['stamps'] as int?) ?? 0;
+    final rawStamps = (_userStamps?['stamps'] as int?) ?? 0;
+    final completedCards = rawStamps ~/ 10;
+    final currentCycleStamps = rawStamps % 10;
     final storeName = _getStringValue(widget.store['name'], '店舗名');
     final storeCategory = _getStringValue(widget.store['category'], 'その他');
     final iconImageUrl = _getStringValue(widget.store['iconImageUrl'], '');
@@ -1053,8 +1100,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         storeName: storeName,
         storeCategory: storeCategory,
         iconImageUrl: iconImageUrl.isNotEmpty ? iconImageUrl : null,
-        stamps: stamps,
+        stamps: currentCycleStamps,
         maxStamps: 10,
+        completedCards: completedCards,
         isLoading: _isLoadingStamps,
       ),
     );
@@ -1250,7 +1298,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                     padding: EdgeInsets.zero,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
                       crossAxisSpacing: 2,
                       mainAxisSpacing: 2,
@@ -1442,7 +1491,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         // カテゴリごとのメニュー有無を判定
         final disabledIndices = <int>{};
         for (var i = 0; i < _menuCategories.length; i++) {
-          final hasItems = allItems.any((item) => item['category'] == _menuCategories[i]);
+          final hasItems =
+              allItems.any((item) => item['category'] == _menuCategories[i]);
           if (!hasItems) disabledIndices.add(i);
         }
 
@@ -1451,7 +1501,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             final firstEnabled = List.generate(_menuCategories.length, (i) => i)
-                .firstWhere((i) => !disabledIndices.contains(i), orElse: () => 0);
+                .firstWhere((i) => !disabledIndices.contains(i),
+                    orElse: () => 0);
             if (_menuCategoryIndex != firstEnabled) {
               setState(() => _menuCategoryIndex = firstEnabled);
             }
@@ -1501,7 +1552,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                       ? Center(
                           child: Text(
                             'このカテゴリにメニューはありません',
-                            style: TextStyle(color: Colors.grey[500], fontSize: 16),
+                            style: TextStyle(
+                                color: Colors.grey[500], fontSize: 16),
                           ),
                         )
                       : ListView.separated(
@@ -1520,8 +1572,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                                 : '';
 
                             return Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                               child: Row(
                                 children: [
                                   if (hasImage) ...[
@@ -1567,38 +1618,11 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   }
 
   Widget _buildStoreDetailsContent() {
-    final displayAddress = _getDisplayAddress();
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 住所
-          if (displayAddress.isNotEmpty) ...[
-            const Text(
-              '住所',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.location_on, color: Colors.grey, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    displayAddress,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-
           // 電話番号
           if (_getStringValue(widget.store['phone'], '').isNotEmpty) ...[
             const Text(
@@ -1620,12 +1644,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-          ],
-
-          // 営業時間
-          if (widget.store['businessHours'] != null) ...[
-            _buildBusinessHoursDisplay(),
             const SizedBox(height: 16),
           ],
 
@@ -1756,7 +1774,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     final parking = facilityInfo['parking'] as String? ?? 'none';
     final accessInfo = facilityInfo['accessInfo'] as String? ?? '';
     final takeout = facilityInfo['takeout'] as bool? ?? false;
-    final smokingPolicy = facilityInfo['smokingPolicy'] as String? ?? 'no_smoking';
+    final smokingPolicy =
+        facilityInfo['smokingPolicy'] as String? ?? 'no_smoking';
     final hasWifi = facilityInfo['hasWifi'] as bool? ?? false;
     final barrierFree = facilityInfo['barrierFree'] as bool? ?? false;
     final childFriendly = facilityInfo['childFriendly'] as bool? ?? false;
@@ -1790,7 +1809,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
     // サービスチップ（全項目を常に表示、利用可能/不可で色分け）
     final parkingActive = parking != 'none';
-    final smokingIcon = smokingPolicy == 'no_smoking' ? Icons.smoke_free : Icons.smoking_rooms;
+    final smokingIcon =
+        smokingPolicy == 'no_smoking' ? Icons.smoke_free : Icons.smoking_rooms;
     final serviceChips = <Widget>[
       _buildFacilityChip(
         icon: Icons.local_parking,
@@ -1935,9 +1955,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     final categoryData =
         (paymentMethods[category.key] as Map?)?.cast<String, dynamic>() ?? {};
 
-    final enabledItems = category.items
-        .where((item) => categoryData[item.key] == true)
-        .toList();
+    final enabledItems =
+        category.items.where((item) => categoryData[item.key] == true).toList();
 
     if (enabledItems.isEmpty) return const SizedBox.shrink();
 
@@ -1967,8 +1986,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             children: enabledItems
                 .map((item) => Chip(
                       label: Text(item.displayName),
-                      backgroundColor:
-                          const Color(0xFFFF6B35).withOpacity(0.1),
+                      backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
                       labelStyle: const TextStyle(fontSize: 12),
                     ))
                 .toList(),
@@ -2157,45 +2175,48 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   Widget _buildStoreIcon() {
     final iconImageUrl = _getStringValue(widget.store['iconImageUrl'], '');
     final category = _getStringValue(widget.store['category'], 'その他');
+    final categoryColor = _getCategoryColor(category);
 
     if (iconImageUrl.isNotEmpty) {
-      return ClipOval(
-        child: Image.network(
-          iconImageUrl,
-          width: 80,
-          height: 80,
-          fit: BoxFit.cover,
-          // 画像読み込みの設定
-          isAntiAlias: true,
-          filterQuality: FilterQuality.high,
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-                color: _getCategoryColor(category),
-                strokeWidth: 2,
-              ),
-            );
-          },
-          errorBuilder: (context, error, stackTrace) {
-            print('店舗アイコン画像の読み込みエラー: $error / url=$iconImageUrl');
-            return Icon(
+      return Image.network(
+        iconImageUrl,
+        fit: BoxFit.cover,
+        // 画像読み込みの設定
+        isAntiAlias: true,
+        filterQuality: FilterQuality.high,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+              color: categoryColor,
+              strokeWidth: 2,
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('店舗アイコン画像の読み込みエラー: $error / url=$iconImageUrl');
+          return Container(
+            color: categoryColor.withOpacity(0.1),
+            child: Icon(
               _getCategoryIcon(category),
-              color: _getCategoryColor(category),
+              color: categoryColor,
               size: 40,
-            );
-          },
-        ),
+            ),
+          );
+        },
       );
     } else {
-      return Icon(
-        _getCategoryIcon(category),
-        color: _getCategoryColor(category),
-        size: 40,
+      return Container(
+        color: categoryColor.withOpacity(0.1),
+        child: Icon(
+          _getCategoryIcon(category),
+          color: categoryColor,
+          size: 40,
+        ),
       );
     }
   }
@@ -2460,7 +2481,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             ),
           ],
         ),
-        if (_isBusinessHoursExpanded && (businessHours != null || isRegularHoliday))
+        if (_isBusinessHoursExpanded &&
+            (businessHours != null || isRegularHoliday))
           Container(
             decoration: BoxDecoration(
               color: Colors.grey[50],
@@ -2470,15 +2492,13 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             child: Column(
               children: List.generate(7, (i) {
                 final now = DateTime.now();
-                final targetDate =
-                    DateTime(now.year, now.month, now.day).add(
+                final targetDate = DateTime(now.year, now.month, now.day).add(
                   Duration(days: i),
                 );
                 final isToday = i == 0;
 
                 // scheduleOverrides のキー（YYYY-MM-DD）
-                final dateKey =
-                    '${targetDate.year}-'
+                final dateKey = '${targetDate.year}-'
                     '${targetDate.month.toString().padLeft(2, '0')}-'
                     '${targetDate.day.toString().padLeft(2, '0')}';
 
@@ -2543,18 +2563,15 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                   // 通常の businessHours を参照
                   final dayData =
                       businessHours?[dayKey] as Map<String, dynamic>?;
-                  final isOpen =
-                      _getBoolValue(dayData?['isOpen'], false);
+                  final isOpen = _getBoolValue(dayData?['isOpen'], false);
                   if (!isOpen) {
                     timeText = '定休日';
                     rowIcon = Icons.close;
                     rowColor = Colors.red[600]!;
                     isHoliday = true;
                   } else {
-                    final openTime =
-                        _getStringValue(dayData?['open'], '');
-                    final closeTime =
-                        _getStringValue(dayData?['close'], '');
+                    final openTime = _getStringValue(dayData?['open'], '');
+                    final closeTime = _getStringValue(dayData?['close'], '');
                     timeText = '$openTime - $closeTime';
                     rowIcon = Icons.access_time;
                     rowColor = Colors.green[600]!;
@@ -2566,8 +2583,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                     '${targetDate.month}/${targetDate.day}($dayLabel)';
 
                 return Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: isToday
                         ? const Color(0xFFFF6B35).withOpacity(0.1)
@@ -2624,9 +2641,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                             color: isToday
                                 ? const Color(0xFFFF6B35)
                                 : Colors.grey[600],
-                            fontWeight: isToday
-                                ? FontWeight.bold
-                                : FontWeight.normal,
+                            fontWeight:
+                                isToday ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ),
@@ -2643,9 +2659,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
-                                  color: isHoliday
-                                      ? rowColor
-                                      : Colors.black87,
+                                  color: isHoliday ? rowColor : Colors.black87,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -3215,5 +3229,33 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         ),
       ),
     );
+  }
+}
+
+class _StoreDetailTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _StoreDetailTabBarDelegate({
+    required this.tabBar,
+  });
+
+  final PreferredSizeWidget tabBar;
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return tabBar;
+  }
+
+  @override
+  bool shouldRebuild(covariant _StoreDetailTabBarDelegate oldDelegate) {
+    return oldDelegate.tabBar != tabBar;
   }
 }

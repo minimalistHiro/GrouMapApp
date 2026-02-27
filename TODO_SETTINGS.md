@@ -1,6 +1,6 @@
 # TODO リスト
 
-> 2026-02-22 作成 / 2026-02-23 更新（ビジネスモデル差分分析による未実装機能追加・法務仕様確定タスク追加） / 2026-02-23 更新（コイン有効期限処理の実装進捗を反映） / 2026-02-23 更新（営業導入準備ToDoを追加） / 2026-02-23 更新（A-4: Stripe Checkout方針・Firestoreスキーマ定義・契約情報画面改修の進捗反映、A-5: 無料期間全機能開放方針を備考追記）
+> 2026-02-22 作成 / 2026-02-23 更新（ビジネスモデル差分分析による未実装機能追加・法務仕様確定タスク追加） / 2026-02-23 更新（コイン有効期限処理の実装進捗を反映） / 2026-02-23 更新（営業導入準備ToDoを追加） / 2026-02-23 更新（A-4: Stripe Checkout方針・Firestoreスキーマ定義・契約情報画面改修の進捗反映、A-5: 無料期間全機能開放方針を備考追記） / 2026-02-26 更新（D-1: スタンプカード電子化移行システム追加） / 2026-02-26 更新（Instagram定期同期の時刻設定を実装完了へ反映） / 2026-02-26 更新（Instagram同期時刻保存バグ修正をInstagram定期同期完了メモに追記） / 2026-02-27 更新（友達紹介キャンペーン コイン数動的設定化を完了済みに追加） / 2026-02-27 更新（友達紹介コード登録時のウェルカムお知らせ自動配信を完了済みに追加） / 2026-02-27 更新（スタンプカード複数枚対応の累積ロジック修正・カード番号バッジ常時表示を完了済みに追加）
 
 ---
 
@@ -319,7 +319,42 @@
 
 ---
 
+## D. 将来実装 — ユーザー獲得・移行施策
+
+---
+
+### D-1. スタンプカード電子化移行システム
+- **優先度**: 中（加盟店数が安定してから）
+- **概要**: 物理スタンプカードを保有しているお客さんを対象に、アプリへの移行を促す仕組み。移行時にスタンプ引き継ぎ（またはボーナス付与）を行うことで、既存顧客の取り込みを狙う
+- **対象**: ユーザー用アプリ + 店舗用アプリ + Cloud Functions
+- **想定内容**:
+  - 店舗側: 移行コードの発行（QRコードまたは数字コード）、引き継ぐスタンプ数の入力
+  - ユーザー側: コード入力画面からスタンプを受け取る導線
+  - 移行スタンプに来店ボーナスは付与しない（実来店ではないため）
+  - 移行時に「アプリ移行ボーナスコイン」の付与も検討（任意）
+  - 不正防止: 同一ユーザー・同一店舗への二重移行を禁止
+- **備考**: 物理カードの残枚数確認ができないため、店舗スタッフが目視確認した上でコードを発行する運用を前提とする
+- **状態**: [ ] 未着手
+
+---
+
 ## 完了済み
+
+### ユーザー用アプリ: スタンプカード複数枚対応の累積ロジック修正 & カード番号バッジ常時表示
+- **完了日**: 2026-02-27
+- **内容**: `processAwardAchievement` Cloud Function のスタンプ付与ロジックを累積型に修正。旧仕様の `canAddStamp = currentStamps < MAX_STAMPS`（10でキャップ）を廃止し、`stampsAdded = 1`（上限なし）と `cardCompleted = nextStamps % MAX_STAMPS === 0`（10の倍数で達成）に統一。これにより `type: 'award'` トランザクション経由でも11枚目以降のスタンプが正しく加算される。また `StampCardWidget` のカード番号バッジ（「N枚目」紫バッジ）の表示条件を `completedCards > 0` から常時表示に変更し、1枚目から「1枚目」バッジが表示されるよう改善。Cloud Functions をビルド・デプロイ済み
+
+### ユーザー用アプリ: 友達紹介コード登録時のウェルカムお知らせ自動配信
+- **完了日**: 2026-02-27
+- **内容**: `UserInfoView` の `_handleNext()` に `_createReferralWelcomeNotification()` を追加。友達紹介コードを入力して登録したユーザーが初めてホーム画面に遷移する前に、`users/{uid}/notifications`（`type: social`・`tags: ['referral', 'welcome']`）のお知らせを自動作成。Firestoreで `users` コレクションから紹介者の `displayName` を取得し、`owner_settings/current` から付与コイン数を読み取る。本文に紹介者名・双方コイン数・スタンプ獲得4ステップ・コイン交換方法を記載。通知作成失敗時は登録フローをブロックせずサイレントに処理
+
+### 店舗用/ユーザー用アプリ: 友達紹介キャンペーン コイン数の動的設定化
+- **完了日**: 2026-02-27
+- **内容**: 店舗用アプリの `OwnerSettingsView`「友達紹介キャンペーン」セクションに招待者・被招待者それぞれのコイン数入力欄（1〜999の整数バリデーション付き）を追加。`OwnerSettingsModel` に `friendCampaignInviterCoins` / `friendCampaignInviteeCoins` フィールドを追加し、`owner_settings/current` の `friendCampaignInviterPoints` / `friendCampaignInviteePoints` として保存。Cloud Functions `processFriendReferral` が `owner_settings/current` から動的にコイン数を取得して `referral_uses.plannedCoins` に記録、`punchStamp` が `plannedCoins` を参照して付与するよう変更。ユーザーアプリの友達紹介ページは既存の `ownerSettingsProvider` 経由でリアルタイム反映
+
+### 店舗用アプリ: Instagram定期同期の時刻設定（毎日1回）
+- **完了日**: 2026-02-26
+- **内容**: `InstagramSyncView` に定期同期設定UIを追加。定期同期ON/OFF、毎日の同期時刻選択（`09:00〜21:00` の30分刻み）、次回自動同期表示に対応。Cloud Functions `updateInstagramSyncSettings` で `stores/{storeId}.instagramSyncSettings`（`enabled` / `syncTime` / `nextSyncAt` / `updatedAt`）を更新し、`syncInstagramPostsScheduled`（30分間隔実行）が設定時刻到達店舗のみ同期する仕様に統一。**2026-02-26 バグ修正**: 同関数内で `storeDoc.ref.set(updatePayload, { merge: true })` としていた箇所を `storeDoc.ref.update(updatePayload)` に修正。`set()` ではドット記法のキーがフィールドパスとして解釈されず、同期時刻がFirestoreのサブオブジェクトに保存されない問題を解消
 
 ### ユーザー用/店舗用アプリ: メールアドレス変更機能の追加
 - **完了日**: 2026-02-23
@@ -332,6 +367,26 @@
 ### ユーザー用/店舗用アプリ: スタンプ達成特典の値引型制限
 - **完了日**: 2026-02-23
 - **内容**: CreateCouponView に `couponType` フィールド追加（Firestore保存対応）。EditCouponView の `couponType` ドロップダウンに制限ロジック追加。`requiredStampCount > 0` の場合は「割引クーポン」のみ選択可、他タイプはグレーアウト＋ヘルプテキスト表示。既存データの自動補正（ソフトマイグレーション）対応
+
+### ユーザー用アプリ: 退会処理をデータ保持型に変更
+- **完了日**: 2026-02-24
+- **内容**: `deleteAccount()` の処理を変更。Firestoreデータ（サブコレクション・プロフィール画像）の削除を廃止し、`users/{userId}` に `isActive=false` / `deletedAt` をセットして退会済みとしてマーク。Firebase Auth アカウントのみ削除する仕様に変更
+
+### ユーザー用アプリ: 退会導線をHelpView＋退会理由入力へ移設
+- **完了日**: 2026-02-25
+- **内容**: `ProfileView` から「退会する」メニューを削除し、`HelpView` のFAQ「退会するには？」から退会導線を起動する構成へ変更。`AccountDeletionReasonView` を追加し、退会理由（10文字以上）送信後に `AccountDeletionProcessingView` で退会処理を実行するフローに整理。退会理由は `account_deletion_requests`（`requestType=user`）へ保存
+
+### 店舗用アプリ: ユーザー退会理由一覧の既読管理と未読バッジ
+- **完了日**: 2026-02-25
+- **内容**: `UserAccountDeletionReasonsView` を追加し、`requestType=user` の退会理由を一覧表示。未読（`readByOwnerAt=null`）項目を「既読にする」操作で更新可能にし、`SettingsView` の「ユーザー退会理由一覧」メニューに未読件数バッジを表示。`settingsTotalBadgeCountProvider` に未読件数を合算
+
+### 店舗用アプリ: 店舗稼働設定トグルUIを共通化
+- **完了日**: 2026-02-25
+- **内容**: `StoreActivationSettingsView` の `Switch` 直書きを廃止し、`CustomSwitchListTile` ベースの「店舗一覧に表示」トグルへ統一。状態文言を「公開中/非表示」に変更し、更新中はトグルを無効化
+
+### 店舗用アプリ: 店舗設定詳細にコイン交換100円引きクーポン利用枚数を追加
+- **完了日**: 2026-02-25
+- **内容**: `StoreSettingsDetailView` に「100円引きクーポン利用枚数」カードを追加し、`全来店記録` の上に大きく表示。`user_coupons` の `storeId` 一致かつ `type=coin_exchange` かつ `isUsed=true` をリアルタイム集計して表示
 
 ### 店舗用アプリ: パスワード変更画面の追加
 - **完了日**: 2026-02-22

@@ -241,15 +241,15 @@ class _MissionsViewState extends State<MissionsView> {
   List<_MissionItem> get _registrationMissions {
     return [
       _buildRegistrationMission(
-          'profile_completed', 'プロフィール完成', 'プロフィール情報をすべて入力する', 5, Icons.person),
+          'profile_completed', 'プロフィール完成', 'プロフィール情報をすべて入力する', 3, Icons.person),
       _buildRegistrationMission(
-          'first_map', 'マップ初利用', '初めてマップ画面を開く', 3, Icons.explore),
+          'first_map', 'マップ初利用', '初めてマップ画面を開く', 1, Icons.explore),
       _buildRegistrationMission(
-          'first_favorite', 'お気に入り登録', '初めて店舗をお気に入りに追加', 3, Icons.favorite),
+          'first_favorite', 'お気に入り登録', '初めて店舗をお気に入りに追加', 2, Icons.favorite),
       _buildRegistrationMission(
-          'first_store_detail', '店舗詳細閲覧', '初めて店舗詳細画面を表示', 2, Icons.storefront),
+          'first_store_detail', '店舗詳細閲覧', '初めて店舗詳細画面を表示', 1, Icons.storefront),
       _buildRegistrationMission(
-          'first_stamp', 'スタンプ初獲得', 'お店に行ってスタンプを1つ獲得する', 2, Icons.approval),
+          'first_stamp', 'スタンプ初獲得', 'お店に行ってスタンプを1つ獲得する', 3, Icons.approval),
     ];
   }
 
@@ -301,7 +301,7 @@ class _MissionsViewState extends State<MissionsView> {
       case 1:
         return '連続ログインでボーナスコインを獲得';
       case 2:
-        return '初回限定・合計最大15コイン';
+        return '初回限定・合計最大10コイン';
       case 3:
         return '10コインで未訪問店舗の100円引きクーポンを取得';
       default:
@@ -1146,7 +1146,16 @@ class _MissionsViewState extends State<MissionsView> {
     );
 
     if (success) {
-      await _loadAllMissionData();
+      // ローカル状態を即時更新（Firestore再取得のキャッシュ遅延を回避）
+      if (mounted) {
+        setState(() {
+          _userCoins -= 10;
+          _unvisitedStores
+              .removeWhere((s) => s['storeId'] == store['storeId']);
+        });
+      }
+      // バックグラウンドでFirestoreから最新データを取得（コイン有効期限等の更新）
+      _loadAllMissionData();
       if (mounted) {
         _showCouponObtainedPopup(store['storeName'] as String);
       }

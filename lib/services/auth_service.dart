@@ -37,7 +37,8 @@ class AuthService {
             throw Exception('Googleサインインがキャンセルされました');
           }
 
-          final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+          final GoogleSignInAuthentication googleAuth =
+              await googleUser.authentication;
           final credential = GoogleAuthProvider.credential(
             accessToken: googleAuth.accessToken,
             idToken: googleAuth.idToken,
@@ -45,7 +46,7 @@ class AuthService {
 
           userCredential = await _auth.signInWithCredential(credential);
         }
-        
+
         // 新規ユーザーの場合、基本情報を保存
         if (userCredential.additionalUserInfo?.isNewUser == true) {
           try {
@@ -61,7 +62,7 @@ class AuthService {
             debugPrint('Firestore save failed during Google sign in: $e');
           }
         }
-        
+
         return userCredential;
       } catch (e) {
         debugPrint('Google sign in error: $e');
@@ -86,8 +87,9 @@ class AuthService {
           accessToken: appleCredential.authorizationCode,
         );
 
-        final userCredential = await _auth.signInWithCredential(oauthCredential);
-        
+        final userCredential =
+            await _auth.signInWithCredential(oauthCredential);
+
         // 新規ユーザーの場合、基本情報を保存
         if (userCredential.additionalUserInfo?.isNewUser == true) {
           try {
@@ -103,7 +105,7 @@ class AuthService {
             debugPrint('Firestore save failed during Apple sign in: $e');
           }
         }
-        
+
         return userCredential;
       } catch (e) {
         debugPrint('Apple sign in error: $e');
@@ -124,7 +126,8 @@ class AuthService {
           email: email,
           password: password,
         );
-        debugPrint('AuthService: Email sign in successful: ${credential.user?.uid}');
+        debugPrint(
+            'AuthService: Email sign in successful: ${credential.user?.uid}');
         return credential;
       } catch (e) {
         debugPrint('AuthService: Email sign in error: $e');
@@ -143,14 +146,14 @@ class AuthService {
     return await _retryOperation(() async {
       try {
         debugPrint('Creating user with email: $email');
-        final UserCredential userCredential = 
+        final UserCredential userCredential =
             await _auth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
 
         debugPrint('User created successfully: ${userCredential.user?.uid}');
-        
+
         // 表示名を設定
         await userCredential.user?.updateDisplayName(displayName);
         debugPrint('Display name updated: $displayName');
@@ -209,7 +212,8 @@ class AuthService {
           throw Exception('ユーザーがログインしていません');
         }
 
-        final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+        final functions =
+            FirebaseFunctions.instanceFor(region: 'asia-northeast1');
         final callable = functions.httpsCallable('requestEmailOtp');
         await callable();
       } catch (e) {
@@ -223,7 +227,8 @@ class AuthService {
   Future<void> verifyEmailOtp(String code) async {
     return await _retryOperation(() async {
       try {
-        final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+        final functions =
+            FirebaseFunctions.instanceFor(region: 'asia-northeast1');
         final callable = functions.httpsCallable('verifyEmailOtp');
         await callable.call({'code': code});
       } catch (e) {
@@ -237,7 +242,8 @@ class AuthService {
   Future<void> sendEmailChangeOtp(String newEmail) async {
     return await _retryOperation(() async {
       try {
-        final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+        final functions =
+            FirebaseFunctions.instanceFor(region: 'asia-northeast1');
         final callable = functions.httpsCallable('requestEmailChangeOtp');
         await callable.call({'newEmail': newEmail});
       } catch (e) {
@@ -251,7 +257,8 @@ class AuthService {
   Future<void> verifyEmailChangeOtp(String code) async {
     return await _retryOperation(() async {
       try {
-        final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+        final functions =
+            FirebaseFunctions.instanceFor(region: 'asia-northeast1');
         final callable = functions.httpsCallable('verifyEmailChangeOtp');
         await callable.call({'code': code});
       } catch (e) {
@@ -324,20 +331,15 @@ class AuthService {
         final user = _auth.currentUser;
         if (user != null) {
           final userDocRef = _firestore.collection('users').doc(user.uid);
-          String? profileImageUrl;
-          try {
-            final doc = await userDocRef.get();
-            final data = doc.data();
-            if (data != null && data['profileImageUrl'] != null) {
-              profileImageUrl = data['profileImageUrl'].toString();
-            }
-          } catch (e) {
-            debugPrint('Fetch user profile image error: $e');
-          }
 
-          await _deleteUserSubcollections(userDocRef);
-          await _deleteProfileImageIfNeeded(profileImageUrl);
-          await userDocRef.delete();
+          // isActive を false にして退会済みとしてマーク
+          await userDocRef.set({
+            'isActive': false,
+            'deletedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+
+          // Firebase Auth アカウントを削除
           await user.delete();
           await Future.wait([
             _auth.signOut(),
@@ -347,6 +349,61 @@ class AuthService {
       } catch (e) {
         debugPrint('Account deletion error: $e');
         throw _handleAuthError(e, 'アカウント削除');
+      }
+    });
+  }
+
+  // ユーザー退会理由を記録
+  Future<void> submitUserAccountDeletionReason({
+    required String reason,
+  }) async {
+    return await _retryOperation(() async {
+      try {
+        final user = _auth.currentUser;
+        if (user == null) {
+          throw Exception('ユーザーがログインしていません');
+        }
+
+        final trimmedReason = reason.trim();
+        if (trimmedReason.isEmpty) {
+          throw Exception('退会理由を入力してください');
+        }
+        if (trimmedReason.length < 10) {
+          throw Exception('退会理由は10文字以上で入力してください');
+        }
+
+        final userDoc =
+            await _firestore.collection('users').doc(user.uid).get();
+        final userData = userDoc.data() ?? <String, dynamic>{};
+
+        final displayName = (userData['displayName'] as String?)?.trim();
+        final username = (userData['username'] as String?)?.trim();
+        final userEmail = user.email ?? (userData['email'] as String?);
+        final profileImage = (userData['profileImageUrl'] as String?)?.trim();
+
+        await _firestore.collection('account_deletion_requests').add({
+          'userId': user.uid,
+          'reason': trimmedReason,
+          'status': 'completed',
+          'requestType': 'user',
+          'sourceApp': 'user',
+          'readByOwnerAt': null,
+          'readByOwnerUid': null,
+          'userDisplayName': (displayName == null || displayName.isEmpty)
+              ? 'ユーザー'
+              : displayName,
+          'username': (username == null || username.isEmpty) ? null : username,
+          'userEmail': userEmail,
+          'userProfileImageUrl': (profileImage == null || profileImage.isEmpty)
+              ? null
+              : profileImage,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'processedAt': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        debugPrint('Submit account deletion reason error: $e');
+        throw _handleAuthError(e, '退会理由送信');
       }
     });
   }
@@ -367,6 +424,7 @@ class AuthService {
     await user.reauthenticateWithCredential(credential);
   }
 
+  // ignore: unused_element
   Future<void> _deleteProfileImageIfNeeded(String? imageUrl) async {
     if (imageUrl == null || imageUrl.isEmpty) return;
     if (!_isFirebaseStorageUrl(imageUrl)) return;
@@ -379,10 +437,13 @@ class AuthService {
   }
 
   bool _isFirebaseStorageUrl(String url) {
-    return url.contains('firebasestorage.googleapis.com') || url.contains('storage.googleapis.com');
+    return url.contains('firebasestorage.googleapis.com') ||
+        url.contains('storage.googleapis.com');
   }
 
-  Future<void> _deleteUserSubcollections(DocumentReference<Map<String, dynamic>> userDocRef) async {
+  // ignore: unused_element
+  Future<void> _deleteUserSubcollections(
+      DocumentReference<Map<String, dynamic>> userDocRef) async {
     final subcollectionNames = <String>[
       'stores',
       'used_coupons',
@@ -397,7 +458,8 @@ class AuthService {
     }
   }
 
-  Future<void> _deleteCollection(CollectionReference<Map<String, dynamic>> collectionRef) async {
+  Future<void> _deleteCollection(
+      CollectionReference<Map<String, dynamic>> collectionRef) async {
     while (true) {
       final snapshot = await collectionRef.limit(200).get();
       if (snapshot.docs.isEmpty) break;
@@ -434,15 +496,14 @@ class AuthService {
       debugPrint('User email: ${user.email}');
       debugPrint('Display name: $displayName');
       debugPrint('Auth provider: $authProvider');
-      
+
       // 紹介コードを生成
       final referralCode = _generateReferralCode(user.uid);
       final storeReferralCode = _generateStoreReferralCode(user.uid);
 
       // デフォルト表示名: 空の場合は「ユーザー」を設定
-      final effectiveDisplayName = displayName.trim().isNotEmpty
-          ? displayName
-          : 'ユーザー';
+      final effectiveDisplayName =
+          displayName.trim().isNotEmpty ? displayName : 'ユーザー';
 
       // デフォルトユーザーID: user_ + uidの先頭8文字（小文字）
       final defaultUsername = 'user_${user.uid.substring(0, 8).toLowerCase()}';
@@ -509,10 +570,10 @@ class AuthService {
       }
 
       debugPrint('User data to save: $userData');
-      
+
       await _firestore.collection('users').doc(user.uid).set(userData);
       debugPrint('User data saved to Firestore successfully');
-      
+
       // 保存確認のため、すぐに読み取りを試行
       final doc = await _firestore.collection('users').doc(user.uid).get();
       if (doc.exists) {
@@ -586,13 +647,13 @@ class AuthService {
       final user = _auth.currentUser;
       if (user != null) {
         final userDoc = _firestore.collection('users').doc(user.uid);
-        
+
         // 削除するフィールドを指定
         final fieldsToDelete = {
           'goldStamps': FieldValue.delete(),
           'friendcode': FieldValue.delete(),
         };
-        
+
         await userDoc.update(fieldsToDelete);
         debugPrint('User data cleaned up successfully');
       }
@@ -791,5 +852,6 @@ class AuthException implements Exception {
   });
 
   @override
-  String toString() => 'AuthException: $message (Code: $code, Operation: $operation)';
+  String toString() =>
+      'AuthException: $message (Code: $code, Operation: $operation)';
 }

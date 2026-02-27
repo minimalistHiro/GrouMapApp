@@ -5,10 +5,199 @@ import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/dismiss_keyboard.dart';
 import 'welcome_view.dart';
 
+class AccountDeletionReasonView extends ConsumerStatefulWidget {
+  const AccountDeletionReasonView({super.key});
+
+  @override
+  ConsumerState<AccountDeletionReasonView> createState() =>
+      _AccountDeletionReasonViewState();
+}
+
+class _AccountDeletionReasonViewState
+    extends ConsumerState<AccountDeletionReasonView> {
+  final TextEditingController _reasonController = TextEditingController();
+  bool _isSubmitting = false;
+  String? _validationMessage;
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitReasonAndProceed() async {
+    final validationMessage = _validateReason(_reasonController.text);
+    if (validationMessage != null) {
+      setState(() => _validationMessage = validationMessage);
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    try {
+      final authService = ref.read(authServiceProvider);
+      await authService.submitUserAccountDeletionReason(
+        reason: _reasonController.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const AccountDeletionProcessingView(),
+        ),
+      );
+    } catch (e) {
+      await _showErrorDialog('退会理由の送信に失敗しました。\n時間をおいて再度お試しください。\n\n$e');
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
+
+  String? _validateReason(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return '退会理由を入力してください';
+    }
+    if (trimmed.length < 10) {
+      return '退会理由は10文字以上で入力してください';
+    }
+    return null;
+  }
+
+  Future<void> _showErrorDialog(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('送信に失敗しました'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('閉じる'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFBF6F2),
+      appBar: const CommonHeader(
+        title: '退会理由の入力',
+      ),
+      body: DismissKeyboard(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.red.withOpacity(0.25)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, color: Colors.red),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '退会するとアカウントデータは元に戻せません。退会理由を入力後、退会処理を開始します。',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.black87,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                '退会理由',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _reasonController,
+                maxLines: 6,
+                minLines: 6,
+                onChanged: (_) {
+                  if (_validationMessage != null) {
+                    setState(() => _validationMessage = null);
+                  }
+                },
+                decoration: InputDecoration(
+                  hintText: '退会理由を入力してください（10文字以上）',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: const OutlineInputBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    borderSide:
+                        BorderSide(color: Color(0xFFFF6B35), width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.all(16),
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (_validationMessage != null)
+                Text(
+                  _validationMessage!,
+                  style: const TextStyle(
+                    color: Colors.red,
+                    fontSize: 12,
+                  ),
+                ),
+              const SizedBox(height: 18),
+              CustomButton(
+                text: _isSubmitting ? '送信中...' : '理由を送信して退会する',
+                onPressed: _isSubmitting ? null : _submitReasonAndProceed,
+                backgroundColor: Colors.red,
+                textColor: Colors.white,
+                isLoading: _isSubmitting,
+                borderRadius: 999,
+              ),
+              const SizedBox(height: 12),
+              CustomButton(
+                text: 'キャンセル',
+                onPressed:
+                    _isSubmitting ? null : () => Navigator.of(context).pop(),
+                backgroundColor: Colors.white,
+                textColor: const Color(0xFFFF6B35),
+                borderColor: const Color(0xFFFF6B35),
+                borderRadius: 999,
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class AccountDeletionProcessingView extends ConsumerStatefulWidget {
-  const AccountDeletionProcessingView({Key? key}) : super(key: key);
+  const AccountDeletionProcessingView({super.key});
 
   @override
   ConsumerState<AccountDeletionProcessingView> createState() =>
@@ -48,7 +237,8 @@ class _AccountDeletionProcessingViewState
       }
 
       final password = await _promptPassword();
-      if (!mounted || password == null || password.isEmpty) {
+      if (!mounted) return;
+      if (password == null || password.isEmpty) {
         Navigator.of(context).pop();
         return;
       }
@@ -178,13 +368,13 @@ class _AccountDeletionProcessingViewState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFBF6F2),
-      appBar: const CommonHeader(
+    return const Scaffold(
+      backgroundColor: Color(0xFFFBF6F2),
+      appBar: CommonHeader(
         title: '退会処理中',
         showBack: false,
       ),
-      body: const Center(
+      body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -222,7 +412,7 @@ class _AccountDeletionProcessingViewState
 }
 
 class AccountDeletionCompleteView extends StatelessWidget {
-  const AccountDeletionCompleteView({Key? key}) : super(key: key);
+  const AccountDeletionCompleteView({super.key});
 
   @override
   Widget build(BuildContext context) {
