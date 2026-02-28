@@ -37,8 +37,6 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('店舗紹介'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: _buildAuthRequired(context),
@@ -50,8 +48,6 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('店舗紹介'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: const Center(
@@ -65,8 +61,6 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('店舗紹介'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: Center(
@@ -126,8 +120,6 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('店舗紹介'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         elevation: 0,
       ),
       body: SingleChildScrollView(

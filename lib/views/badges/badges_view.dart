@@ -33,8 +33,6 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('バッジ一覧'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.filter_list),

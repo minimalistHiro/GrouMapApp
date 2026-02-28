@@ -29,8 +29,6 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('ランキング'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [

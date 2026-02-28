@@ -40,8 +40,6 @@ class _PointUsageWaitingViewState extends State<PointUsageWaitingView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('店舗側の入力待ち'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: requestRef.snapshots(),

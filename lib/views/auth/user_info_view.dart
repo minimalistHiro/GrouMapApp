@@ -89,8 +89,6 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         elevation: 0,
         automaticallyImplyLeading: false,
         title: const Text(

@@ -43,8 +43,6 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('ポイント付与リクエスト確認'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: _getRequestStream(),

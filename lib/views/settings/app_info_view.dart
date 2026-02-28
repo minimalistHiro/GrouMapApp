@@ -13,8 +13,6 @@ class AppInfoView extends StatelessWidget {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('アプリについて'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -56,12 +54,12 @@ class AppInfoView extends StatelessWidget {
         ),
         _buildInfoItem(
           label: 'バージョン',
-          value: '1.1.1',
+          value: '1.2.0',
           copyable: true,
         ),
         _buildInfoItem(
           label: '最終更新日',
-          value: '2026年2月23日',
+          value: '2026年3月1日',
           copyable: false,
         ),
       ],

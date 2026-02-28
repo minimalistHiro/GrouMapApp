@@ -440,11 +440,7 @@ class BadgeService {
         }
       }
 
-      // 曜日別利用カウント（badge_progressから取得）
-      final Map<String, int> dayVisitCounts = {};
-      for (final day in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']) {
-        dayVisitCounts[day] = badgeProgressMap['dayVisit_$day'] ?? 0;
-      }
+      // 曜日別利用バッジはスタンプ押印時のみ付与（ログインチェックでは対象外）
 
       // 4. 全バッジ定義と比較、新規バッジを付与
       final newlyAwarded = <Map<String, dynamic>>[];
@@ -454,11 +450,12 @@ class BadgeService {
       for (final badge in kBadgeDefinitions) {
         if (existingBadgeIds.contains(badge.badgeId)) continue;
 
+        // 曜日別利用バッジはスタンプ押印時にのみ付与するため、ここではスキップ
+        if (badge.type == BadgeType.dayVisit) continue;
+
         int currentValue;
         if (badge.type == BadgeType.categoryVisit) {
           currentValue = categoryVisitCounts[badge.categoryGroupKey] ?? 0;
-        } else if (badge.type == BadgeType.dayVisit) {
-          currentValue = dayVisitCounts[badge.categoryGroupKey] ?? 0;
         } else {
           currentValue = currentValues[badge.type.name] ?? 0;
         }

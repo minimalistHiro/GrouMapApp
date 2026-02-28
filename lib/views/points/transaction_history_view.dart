@@ -16,8 +16,6 @@ class TransactionHistoryView extends ConsumerWidget {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('取引履歴'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: authState.when(
         data: (user) {

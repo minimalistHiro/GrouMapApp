@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../stores/store_detail_view.dart';
 import '../../widgets/custom_button.dart';
+import '../../theme/app_ui.dart';
 import '../../models/map_filter_model.dart';
 import '../../services/map_filter_service.dart';
 import 'filter_settings_view.dart';
@@ -73,6 +74,7 @@ class _MapViewState extends ConsumerState<MapView> {
   bool _showOpenNowOnly = false; // 「営業中のみ」表示
   bool _categoryMode = false; // 「ジャンル別」表示（カテゴリーごとにアイコン）
   bool _pioneerMode = false; // 「開拓」表示（未開拓/開拓/常連 のスタンプ状況）
+  bool _showExplorationMode = false; // 「開拓・未開拓」ボーダー色表示
   String _selectedMode = 'none'; // 'none' | 'category' | 'pioneer'
 
   // 詳細フィルター
@@ -974,6 +976,7 @@ class _MapViewState extends ConsumerState<MapView> {
     required IconData? iconData,
     required Color? iconColor,
     required String storeIconUrl,
+    Color pinAccentColor = const Color(0xFFFF6B35),
   }) {
     final cachedFuture = _markerIconFutureCache[cacheKey];
     if (cachedFuture != null) {
@@ -997,6 +1000,7 @@ class _MapViewState extends ConsumerState<MapView> {
           iconColor: iconColor,
           image: image,
           devicePixelRatio: MediaQuery.of(context).devicePixelRatio,
+          pinAccentColor: pinAccentColor,
         );
         completer.complete(icon);
       } catch (_) {
@@ -1043,9 +1047,9 @@ class _MapViewState extends ConsumerState<MapView> {
     required Color? iconColor,
     required ui.Image? image,
     required double devicePixelRatio,
+    Color pinAccentColor = const Color(0xFFFF6B35),
   }) async {
     const double pinHeightScale = 1.4;
-    const Color grouMapOrange = Color(0xFFFF6B35);
     final double scaledSize = size * devicePixelRatio;
     final double scaledHeight = scaledSize * pinHeightScale;
     final double circleBorderWidth = borderWidth * devicePixelRatio * 2.4;
@@ -1096,11 +1100,11 @@ class _MapViewState extends ConsumerState<MapView> {
     canvas.drawShadow(
         pinPath, Colors.black.withOpacity(0.25), 4 * devicePixelRatio, true);
 
-    final Paint triangleFillPaint = Paint()..color = grouMapOrange;
+    final Paint triangleFillPaint = Paint()..color = pinAccentColor;
     canvas.drawPath(trianglePath, triangleFillPaint);
     if (borderWidth > 0) {
       final Paint triangleBorderPaint = Paint()
-        ..color = grouMapOrange
+        ..color = pinAccentColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = triangleBorderWidth;
       canvas.drawPath(trianglePath, triangleBorderPaint);
@@ -1127,7 +1131,7 @@ class _MapViewState extends ConsumerState<MapView> {
 
     if (borderWidth > 0) {
       final Paint circleBorderPaint = Paint()
-        ..color = grouMapOrange
+        ..color = pinAccentColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = circleBorderWidth;
       canvas.drawPath(circlePath, circleBorderPaint);
@@ -1193,8 +1197,20 @@ class _MapViewState extends ConsumerState<MapView> {
       final Color borderColor = visual.useImage ? Colors.black : Colors.white70;
       final Color iconColor = visual.iconColor ??
           (visual.useImage ? Colors.grey[700]! : Colors.white);
+
+      // 開拓・未開拓モード時のピンアクセント色
+      Color pinAccentColor = const Color(0xFFFF6B35);
+      if (_showExplorationMode) {
+        final stamps = _userStamps[storeId]?['stamps'] ?? 0;
+        if (stamps >= 1) {
+          pinAccentColor = const Color(0xFF2196F3); // 開拓済み = 青
+        } else {
+          pinAccentColor = const Color(0xFFBDBDBD); // 未開拓 = グレー
+        }
+      }
+
       final String cacheKey =
-          '${_selectedMode}|$flowerType|$category|$isExpanded|$storeIconUrl';
+          '${_selectedMode}|$flowerType|$category|$isExpanded|$storeIconUrl|${_showExplorationMode ? pinAccentColor.value : 0}';
       final BitmapDescriptor markerIcon = await _getMarkerIcon(
         cacheKey: cacheKey,
         size: size,
@@ -1204,6 +1220,7 @@ class _MapViewState extends ConsumerState<MapView> {
         iconData: visual.iconData,
         iconColor: iconColor,
         storeIconUrl: visual.useImage ? storeIconUrl : '',
+        pinAccentColor: pinAccentColor,
       );
 
       markers.add(
@@ -1539,6 +1556,9 @@ class _MapViewState extends ConsumerState<MapView> {
 
           // 検索バー
           _buildSearchBar(),
+
+          // 開拓・未開拓トグル
+          _buildExplorationToggle(),
 
           // 検索結果リスト
           if (_searchQuery.isNotEmpty) _buildSearchResults(),
@@ -1890,6 +1910,64 @@ class _MapViewState extends ConsumerState<MapView> {
     }
   }
 
+  Widget _buildExplorationToggle() {
+    final double topPadding = MediaQuery.of(context).padding.top;
+    const double searchTopOffset = 4;
+    const double searchHeight = 50;
+    const double toggleTopGap = 6;
+    return Positioned(
+      top: topPadding + searchTopOffset + searchHeight + toggleTopGap,
+      left: 20,
+      child: Container(
+        padding: const EdgeInsets.only(left: 10, right: 4, top: 4, bottom: 4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              '開拓・未開拓',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(width: 2),
+            SizedBox(
+              height: 28,
+              width: 44,
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: Switch(
+                  value: _showExplorationMode,
+                  onChanged: (val) async {
+                    setState(() {
+                      _showExplorationMode = val;
+                    });
+                    _markerIconFutureCache.clear();
+                    await _createMarkers();
+                  },
+                  activeColor: Colors.white,
+                  activeTrackColor: AppUi.primary,
+                  inactiveThumbColor: Colors.white,
+                  inactiveTrackColor: const Color(0xFFE0E0E0),
+                  trackOutlineColor:
+                      const WidgetStatePropertyAll(Colors.transparent),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSearchBar() {
     final double topPadding = MediaQuery.of(context).padding.top;
     const double searchTopOffset = 4;
@@ -2179,14 +2257,14 @@ class _MapViewState extends ConsumerState<MapView> {
     final double topPadding = MediaQuery.of(context).padding.top;
     const double searchTopOffset = 4;
     const double searchHeight = 50;
-    const double chipsTopGap = 6;
-    const double chipsHeight = 36;
+    const double toggleTopGap = 6;
+    const double toggleHeight = 36;
     const double controlsTopGap = 8;
     final double topY = topPadding +
         searchTopOffset +
         searchHeight +
-        chipsTopGap +
-        chipsHeight +
+        toggleTopGap +
+        toggleHeight +
         controlsTopGap;
 
     return Positioned(

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/posts_provider.dart';
 import '../../providers/coupon_provider.dart';
 import '../../models/coupon_model.dart' as model;
@@ -44,6 +46,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
   bool _isBusinessHoursExpanded = false;
   int _menuCategoryIndex = 0;
   static const _menuCategories = ['コース', '料理', 'ドリンク', 'デザート'];
+
+  // メニューオプショングループのキャッシュ
+  final Map<String, Map<String, dynamic>> _menuOptionGroupsCache = {};
 
   @override
   void initState() {
@@ -704,6 +709,48 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         );
       },
     );
+  }
+
+  /// メニューアイテムに紐づくオプショングループをFirestoreから取得してキャッシュする
+  void _fetchOptionGroupsIfNeeded(
+      String storeId, List<Map<String, dynamic>> menuItems) {
+    // 全メニューからユニークなoptionGroupIdsを収集
+    final allIds = <String>{};
+    for (final item in menuItems) {
+      final ids =
+          (item['optionGroupIds'] as List<dynamic>?)?.cast<String>() ?? [];
+      allIds.addAll(ids);
+    }
+
+    // キャッシュにないIDだけを取得対象にする
+    final missingIds =
+        allIds.where((id) => !_menuOptionGroupsCache.containsKey(id)).toList();
+    if (missingIds.isEmpty) return;
+
+    // Firestoreでは whereIn は最大30件
+    for (var i = 0; i < missingIds.length; i += 30) {
+      final batch = missingIds.sublist(
+          i, i + 30 > missingIds.length ? missingIds.length : i + 30);
+
+      FirebaseFirestore.instance
+          .collection('stores')
+          .doc(storeId)
+          .collection('menu_option_groups')
+          .where(FieldPath.documentId, whereIn: batch)
+          .get()
+          .then((snapshot) {
+        if (!mounted) return;
+        final newEntries = <String, Map<String, dynamic>>{};
+        for (final doc in snapshot.docs) {
+          newEntries[doc.id] = {'id': doc.id, ...doc.data()};
+        }
+        if (newEntries.isNotEmpty) {
+          setState(() {
+            _menuOptionGroupsCache.addAll(newEntries);
+          });
+        }
+      });
+    }
   }
 
   int _parseSortOrder(dynamic value) {
@@ -1488,6 +1535,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             .map((doc) => {'id': doc.id, ...doc.data() as Map<String, dynamic>})
             .toList();
 
+        // オプショングループを非同期で取得
+        _fetchOptionGroupsIfNeeded(storeId, allItems);
+
         // カテゴリごとのメニュー有無を判定
         final disabledIndices = <int>{};
         for (var i = 0; i < _menuCategories.length; i++) {
@@ -1571,9 +1621,51 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                                 ? '¥${price is double ? price.toInt() : price}'
                                 : '';
 
+                            // オプション情報を構築
+                            final optionGroupIds =
+                                (item['optionGroupIds'] as List<dynamic>?)
+                                        ?.cast<String>() ??
+                                    [];
+                            final overridesMap = (item[
+                                        'optionPriceOverrides']
+                                    as Map<String, dynamic>?) ??
+                                {};
+                            final optionTexts = <String>[];
+                            for (final gid in optionGroupIds) {
+                              final group = _menuOptionGroupsCache[gid];
+                              if (group != null) {
+                                final overrideList =
+                                    (overridesMap[gid]
+                                            as List<dynamic>?) ??
+                                        [];
+                                final defaultOpts =
+                                    (group['options'] as List<dynamic>?) ?? [];
+                                final choicesText = defaultOpts.map((opt) {
+                                  final name = opt['name'] ?? '';
+                                  final overrideOpt = overrideList
+                                      .cast<Map<String, dynamic>>()
+                                      .where((o) => o['name'] == name);
+                                  final mod = overrideOpt.isNotEmpty
+                                      ? (overrideOpt.first['priceModifier'] ??
+                                          0) as num
+                                      : (opt['priceModifier'] ?? 0) as num;
+                                  if (mod > 0) {
+                                    return '$name(+¥${mod.toInt()})';
+                                  }
+                                  return name;
+                                }).join('/');
+                                optionTexts.add(
+                                    '${group['name']}: $choicesText');
+                              }
+                            }
+
+                            final description =
+                                (item['description'] as String?) ?? '';
+
                             return Padding(
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   if (hasImage) ...[
                                     ClipRRect(
@@ -1592,9 +1684,38 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                                     const SizedBox(width: 12),
                                   ],
                                   Expanded(
-                                    child: Text(
-                                      item['name'] ?? 'メニュー名なし',
-                                      style: const TextStyle(fontSize: 16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          item['name'] ?? 'メニュー名なし',
+                                          style:
+                                              const TextStyle(fontSize: 16),
+                                        ),
+                                        if (description.isNotEmpty) ...[
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            description,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.grey[700],
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                        if (optionTexts.isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          ...optionTexts.map((text) => Text(
+                                                text,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey[600],
+                                                ),
+                                              )),
+                                        ],
+                                      ],
                                     ),
                                   ),
                                   Text(
@@ -2864,57 +2985,72 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     final socialMedia = widget.store['socialMedia'] as Map<String, dynamic>?;
     if (socialMedia == null) return const SizedBox.shrink();
 
-    final List<Widget> socialItems = [];
+    final website = _getStringValue(socialMedia['website'], '');
+    final x = _getStringValue(socialMedia['x'], '');
+    final instagram = _getStringValue(socialMedia['instagram'], '');
+    final facebook = _getStringValue(socialMedia['facebook'], '');
 
-    if (_getStringValue(socialMedia['website'], '').isNotEmpty) {
-      socialItems.add(
-          _buildSocialItem('ウェブサイト', socialMedia['website'], Icons.language));
+    final List<Widget> icons = [];
+
+    if (website.isNotEmpty) {
+      icons.add(_buildSocialIcon(
+        icon: const FaIcon(FontAwesomeIcons.globe, color: Colors.white, size: 22),
+        backgroundColor: const Color(0xFF607D8B),
+        url: website,
+      ));
     }
-    if (_getStringValue(socialMedia['instagram'], '').isNotEmpty) {
-      socialItems.add(_buildSocialItem(
-          'Instagram', socialMedia['instagram'], Icons.camera_alt));
+    if (x.isNotEmpty) {
+      icons.add(_buildSocialIcon(
+        icon: const FaIcon(FontAwesomeIcons.xTwitter, color: Colors.white, size: 22),
+        backgroundColor: Colors.black,
+        url: x,
+      ));
     }
-    if (_getStringValue(socialMedia['x'], '').isNotEmpty) {
-      socialItems.add(_buildSocialItem(
-          'X (Twitter)', socialMedia['x'], Icons.flutter_dash));
+    if (instagram.isNotEmpty) {
+      icons.add(_buildSocialIcon(
+        icon: const FaIcon(FontAwesomeIcons.instagram, color: Colors.white, size: 22),
+        backgroundColor: const Color(0xFFE1306C),
+        url: instagram,
+      ));
     }
-    if (_getStringValue(socialMedia['facebook'], '').isNotEmpty) {
-      socialItems.add(_buildSocialItem(
-          'Facebook', socialMedia['facebook'], Icons.facebook));
+    if (facebook.isNotEmpty) {
+      icons.add(_buildSocialIcon(
+        icon: const FaIcon(FontAwesomeIcons.facebook, color: Colors.white, size: 22),
+        backgroundColor: const Color(0xFF1877F2),
+        url: facebook,
+      ));
     }
 
-    return Column(
-      children: socialItems,
+    return Row(
+      children: [
+        for (int i = 0; i < icons.length; i++) ...[
+          icons[i],
+          if (i < icons.length - 1) const SizedBox(width: 12),
+        ],
+      ],
     );
   }
 
-  Widget _buildSocialItem(String label, String url, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.grey, size: 20),
-          const SizedBox(width: 8),
-          Text(
-            '$label: ',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                // URLを開く処理（実装が必要）
-              },
-              child: Text(
-                url,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.blue,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ),
-        ],
+  Widget _buildSocialIcon({
+    required Widget icon,
+    required Color backgroundColor,
+    required String url,
+  }) {
+    return GestureDetector(
+      onTap: () async {
+        final uri = Uri.tryParse(url);
+        if (uri != null && await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      },
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          shape: BoxShape.circle,
+        ),
+        child: Center(child: icon),
       ),
     );
   }

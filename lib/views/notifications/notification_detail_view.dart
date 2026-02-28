@@ -19,10 +19,9 @@ class NotificationDetailView extends ConsumerWidget {
     });
 
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: CommonHeader(
         title: const Text('通知詳細'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

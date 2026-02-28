@@ -59,8 +59,6 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('フィードバック'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: authState.when(
         data: (user) {

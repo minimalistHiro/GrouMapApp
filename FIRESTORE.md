@@ -420,6 +420,29 @@
   - `timestamp`: サーバー時刻
   - `createdAt`: 作成日時
 
+### stamp_migrations
+- `stamp_migrations/{migrationId}`: 物理スタンプカード移行記録
+  - ドキュメントID: `${storeId}_${userId}`（固定ID・二重移行防止のため）
+  - `migrationId`: ドキュメントID文字列（`${storeId}_${userId}` と同値）
+  - `userId`: 移行対象ユーザーUID
+  - `storeId`: 対象店舗ID
+  - `staffUserId`: 操作を行ったスタッフのUID
+  - `stampsBefore`: 移行前のデジタルスタンプ数
+  - `physicalStamps`: 物理カードのスタンプ数（店舗スタッフが目視確認して入力した値、1〜99）
+  - `stampsAfter`: 移行後の合計デジタルスタンプ数（`stampsBefore + physicalStamps`）
+  - `completedCards`: 今回の移行で達成したスタンプカード枚数（10の倍数を通過した回数）
+  - `createdAt`: 移行実行日時
+  - `note`: 備考（任意）
+- アクセス制御メモ（`firestore.rules`）:
+  - `allow write: if false` — Cloud Functions（`migrateStampCard`）のみ書き込み可能
+  - `allow read` — 認証済みかつ `isOwner()` / 移行対象ユーザー本人 / `isStoreMember(storeId)` のいずれかに該当する場合
+- 設計メモ:
+  - 1ユーザー×1店舗につき1ドキュメント（固定ID）で二重移行を防止
+  - Cloud Function がトランザクション内で `migrationDoc.exists` を確認し、存在すれば `already-exists` エラーをスロー
+  - 来店ボーナスコイン・`visitorCount`・`totalVisits` は付与しない（実来店ではないため）
+  - `completedCards > 0` の場合は `punchStamp` と同じロジックでスタンプ達成特典クーポンを付与
+- 複合インデックス: `[userId ASC, storeId ASC]`（`firestore.indexes.json` に定義済み）
+
 ### store_stats
 - `store_stats/{storeId}/daily/{yyyy-mm-dd}`: 日別店舗集計
   - `date`: 日付キー
@@ -455,7 +478,7 @@
   - `ownerId`: オーナーUID
   - `createdBy`: 店舗作成者UID（実運用での所有者参照キー）
   - `isRegularHoliday`: 不定休フラグ（true/false）
-  - `isActive`: 店舗公開フラグ（初期値false。5項目（店舗プロフィール・位置情報・メニュー・店内画像・決済方法）全完了で自動true。設定画面のトグルでも切り替え可能）
+  - `isActive`: 店舗公開フラグ（初期値はフィールド未設定。5項目（店舗プロフィール・位置情報・メニュー・店内画像・決済方法）全完了時に `isActive` フィールドが未設定の場合のみ自動 `true` に初期化。以降は設定画面のトグルで手動切り替え可能で、自動上書きは行わない）
   - `isApproved`: 承認フラグ（承認ボタンでtrue）
   - `approvalStatus`: 承認ステータス（`pending`/`approved`/`rejected`）
   - `approvedAt`: 承認日時
@@ -576,6 +599,24 @@
     - `imageUrl`: 画像URL
     - `isAvailable`: 提供中フラグ
     - `sortOrder`: 並び順
+    - `optionGroupIds`: 紐づくオプショングループIDの配列（任意）
+    - `optionPriceOverrides`: メニュー固有のオプション料金オーバーライド（任意、Map型）
+      - キー: オプショングループID
+      - 値: 選択肢の配列
+        - `name`: 選択肢名
+        - `priceModifier`: このメニューでの追加料金
+    - `createdAt`: 作成日時
+    - `updatedAt`: 更新日時
+  - `menu_option_groups/{groupId}`: メニューオプショングループ（サイズ・温度等の選択肢グループ）
+    - `id`: グループID
+    - `name`: グループ名（例: 「サイズ」「温度」）
+    - `isDefault`: デフォルトテンプレートから作成されたかどうか
+    - `perMenuPricing`: メニューごとに追加料金を設定するかどうか（boolean、デフォルト: false）
+    - `defaultTemplateId`: 元のテンプレートID（デフォルトの場合のみ）
+    - `options`: 選択肢の配列
+      - `name`: 選択肢名（例: 「大盛り」「アイス」）
+      - `priceModifier`: 追加料金（0以上の整数）
+    - `sortOrder`: 並び順
     - `createdAt`: 作成日時
     - `updatedAt`: 更新日時
   - `interior_images/{imageId}`: 店内画像
@@ -595,8 +636,8 @@
   - `userId`: ユーザーUID
   - `couponId`: クーポンID（参照元の `coupons/{storeId}/coupons/{couponId}` のID）
   - `obtainedAt`: 取得日時
-  - `usedAt`: 使用日時（使用済みの場合）
-  - `isUsed`: 使用済みフラグ
+  - `usedAt`: 使用日時（使用済みの場合。店舗スタッフによる使用処理時は `FieldValue.serverTimestamp()` で更新）
+  - `isUsed`: 使用済みフラグ（店舗スタッフが会計・スタンプフロー完了時に `true` に更新）
   - `storeId`: 店舗ID
   - `orderId`: 注文ID（任意）
   - `storeName`: 店舗名（コイン交換・スタンプ達成クーポン時）
@@ -614,6 +655,16 @@
     - `stamp_reward` の場合は `true`、`coin_exchange` の場合は `false`
   - `couponType`: クーポンタイプ（`discount` など、`coupons` コレクションの値を引継ぎ）
   - `requiredStampCount`: 0（`stamp_reward` の場合は付与済みのためスタンプ要件なし）
+  - `expiryNotified7d`: 7日前有効期限通知済みフラグ（bool、Cloud Functions `notifyCouponExpiryScheduled` がセット）
+  - `expiryNotified3d`: 3日前有効期限通知済みフラグ（bool、Cloud Functions `notifyCouponExpiryScheduled` がセット）
+- アクセス制御メモ（`firestore.rules`）:
+  - `allow read`: ユーザー本人（`resource.data.userId == request.auth.uid`）または `isStoreStaff()`（店舗スタッフ）
+  - `allow create`: ユーザー本人のみ（または未認証ゲスト）
+  - `allow update`: ユーザー本人、または `isUserCouponStoreUse()` 条件を満たす店舗スタッフ
+    - `isUserCouponStoreUse()`: `isStoreStaff()` かつ変更フィールドが `['isUsed', 'usedAt']` のみ かつ `isUsed` が `false → true` への変更
+  - `allow delete`: 禁止
+- 複合インデックス: `[userId ASC, storeId ASC, isUsed ASC]`（`firestore.indexes.json` に定義済み。店舗用アプリのQRスキャンフローで特定店舗・特定ユーザーの未使用特別クーポンを取得する際に使用）
+- 複合インデックス: `[type ASC, isUsed ASC, validUntil ASC]`（`firestore.indexes.json` に定義済み。`notifyCouponExpiryScheduled` で有効期限が近いコイン交換クーポンを検索する際に使用）
 
 ### user_achievement_events
 - `user_achievement_events/{userId}/events/{eventId}`: 実績イベント

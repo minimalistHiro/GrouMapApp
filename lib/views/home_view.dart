@@ -2109,9 +2109,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
           padding: const EdgeInsets.symmetric(horizontal: 30),
           child: Row(
             children: [
-              const Icon(Icons.stars,
-                  size: 22, color: Color(0xFFFFB300)),
-              const SizedBox(width: 6),
               const Text(
                 '特別クーポン',
                 style: TextStyle(
@@ -2223,7 +2220,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(7),
                   child: Image.asset(
-                    'assets/images/special_coupon_100yen.png',
+                    'assets/images/special_coupon_100yen.jpg',
                     width: 150,
                     height: 150,
                     fit: BoxFit.cover,

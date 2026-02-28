@@ -67,6 +67,8 @@ class _MissionsViewState extends State<MissionsView> {
   // コイン交換用: 未訪問店舗リスト
   List<Map<String, dynamic>> _unvisitedStores = [];
   bool _isExchanging = false;
+  // コイン交換済み店舗IDのローカルキャッシュ（_loadAllMissionData 後の復活防止用）
+  final Set<String> _exchangedStoreIds = {};
 
   /// 新規登録ミッションがすべて達成済み（claimed）かどうか
   bool get _isRegistrationComplete {
@@ -111,7 +113,10 @@ class _MissionsViewState extends State<MissionsView> {
         _userCoins = coinStatus.availableCoins;
         _coinExpiresAt = coinStatus.expiresAt;
         _isCoinExpired = coinStatus.isExpired;
-        _unvisitedStores = results[4] as List<Map<String, dynamic>>;
+        // コイン交換済み店舗はローカルキャッシュで除外（_loadAllMissionData 後の復活防止）
+        _unvisitedStores = (results[4] as List<Map<String, dynamic>>)
+            .where((s) => !_exchangedStoreIds.contains(s['storeId']))
+            .toList();
         _isLoading = false;
         // 新規登録ミッション未達成なら「新規登録」タブを初期選択
         if (!_isRegistrationComplete && _selectedTabIndex == 0) {
@@ -138,7 +143,17 @@ class _MissionsViewState extends State<MissionsView> {
       // 訪問済み店舗IDを取得
       final visitedIds = await _missionService.getVisitedStoreIds(userId);
 
-      // 差分が未訪問店舗
+      // コイン交換済み店舗IDを取得（アプリ再起動後も正しく除外するための永続化対応）
+      final exchangedSnap = await firestore
+          .collection('user_coupons')
+          .where('userId', isEqualTo: userId)
+          .where('type', isEqualTo: 'coin_exchange')
+          .get();
+      final exchangedStoreIds = exchangedSnap.docs
+          .map((doc) => doc.data()['storeId'] as String)
+          .toSet();
+
+      // 差分が未訪問かつコイン交換未済みの店舗
       final unvisited = <Map<String, dynamic>>[];
       for (final doc in storesSnap.docs) {
         final data = doc.data();
@@ -146,7 +161,7 @@ class _MissionsViewState extends State<MissionsView> {
         if (data['isActive'] != true) continue;
         // isOwner店舗はユーザー向け一覧に表示しない（FIRESTORE.mdの表示ルール）
         if (data['isOwner'] == true) continue;
-        if (!visitedIds.contains(doc.id)) {
+        if (!visitedIds.contains(doc.id) && !exchangedStoreIds.contains(doc.id)) {
           unvisited.add({
             'storeId': doc.id,
             'storeName': data['name'] ?? '不明な店舗',
@@ -398,22 +413,10 @@ class _MissionsViewState extends State<MissionsView> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
+                Image.asset(
+                  'assets/images/icon_coin.png',
                   width: 72,
                   height: 72,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFFFA000), Color(0xFFFFC107)],
-                      begin: Alignment.bottomLeft,
-                      end: Alignment.topRight,
-                    ),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.monetization_on,
-                    color: Colors.white,
-                    size: 40,
-                  ),
                 ),
                 const SizedBox(height: 20),
                 const Text(
@@ -445,8 +448,8 @@ class _MissionsViewState extends State<MissionsView> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.monetization_on,
-                          color: Color(0xFFFFC107), size: 28),
+                      Image.asset(
+                          'assets/images/icon_coin.png', width: 28, height: 28),
                       const SizedBox(width: 8),
                       Text(
                         '+${mission.coinReward} コイン',
@@ -507,8 +510,8 @@ class _MissionsViewState extends State<MissionsView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.monetization_on,
-                  color: Color(0xFFFFC107), size: 28),
+              Image.asset(
+                  'assets/images/icon_coin.png', width: 28, height: 28),
               const SizedBox(width: 8),
               Text(
                 '所持コイン: $_userCoins',
@@ -552,8 +555,6 @@ class _MissionsViewState extends State<MissionsView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: const CommonHeader(
         title: Text('ミッション'),
-        backgroundColor: Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: _isLoading
           ? const Center(
@@ -740,8 +741,8 @@ class _MissionsViewState extends State<MissionsView> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.monetization_on,
-                      color: Color(0xFFFFC107), size: 18),
+                  Image.asset(
+                      'assets/images/icon_coin.png', width: 18, height: 18),
                   const SizedBox(width: 4),
                   Text(
                     '+${mission.coinReward}',
@@ -891,8 +892,8 @@ class _MissionsViewState extends State<MissionsView> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.monetization_on,
-                    color: Color(0xFFFFC107), size: 18),
+                Image.asset(
+                    'assets/images/icon_coin.png', width: 18, height: 18),
                 const SizedBox(width: 4),
                 Text(
                   '+${mission.coinReward}',
@@ -1091,14 +1092,14 @@ class _MissionsViewState extends State<MissionsView> {
                 color: const Color(0xFFFFF8E1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.monetization_on,
-                      color: Color(0xFFFFC107), size: 20),
-                  SizedBox(width: 6),
-                  Text(
+                  Image.asset(
+                      'assets/images/icon_coin.png', width: 20, height: 20),
+                  const SizedBox(width: 6),
+                  const Text(
                     '-10 コイン',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
@@ -1150,12 +1151,11 @@ class _MissionsViewState extends State<MissionsView> {
       if (mounted) {
         setState(() {
           _userCoins -= 10;
+          _exchangedStoreIds.add(store['storeId'] as String);
           _unvisitedStores
               .removeWhere((s) => s['storeId'] == store['storeId']);
         });
       }
-      // バックグラウンドでFirestoreから最新データを取得（コイン有効期限等の更新）
-      _loadAllMissionData();
       if (mounted) {
         _showCouponObtainedPopup(store['storeName'] as String);
       }

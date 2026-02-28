@@ -136,8 +136,6 @@ class _EmailChangeViewState extends ConsumerState<EmailChangeView> {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('メールアドレス変更'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: Padding(

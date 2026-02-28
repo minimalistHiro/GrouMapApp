@@ -11,8 +11,6 @@ class PhoneSupportView extends StatelessWidget {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('電話サポート'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

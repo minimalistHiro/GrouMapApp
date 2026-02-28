@@ -38,8 +38,6 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('ポイントを使用'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: authState.when(
         data: (user) {

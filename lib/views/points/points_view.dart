@@ -37,8 +37,6 @@ class _PointsViewState extends ConsumerState<PointsView>
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('ポイント'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,

@@ -39,8 +39,6 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('ポイント利用確認'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: requestRef.snapshots(),

@@ -160,8 +160,6 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('友達紹介'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: authState.when(
         data: (user) {

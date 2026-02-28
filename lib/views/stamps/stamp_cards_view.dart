@@ -164,8 +164,6 @@ class _StampCardsViewState extends State<StampCardsView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('スタンプカード'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: body,
     );

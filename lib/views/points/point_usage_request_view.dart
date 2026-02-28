@@ -88,8 +88,6 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('ポイント利用入力'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: Column(
         children: [

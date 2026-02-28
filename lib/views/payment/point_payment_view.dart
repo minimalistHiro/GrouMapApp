@@ -414,8 +414,6 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('ポイント支払い'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),

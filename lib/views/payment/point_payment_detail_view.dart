@@ -361,7 +361,9 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
 
       _displayStamps = stampsAfter;
       _isSyncing = stampsAfter > _stamps;
-      _punchIndex = (stampsAfter - 1).clamp(0, _maxStamps - 1);
+      final cyclePosition = stampsAfter % _maxStamps;
+      // cyclePositionが0 = 10の倍数 = カード完了 → 最後のスタンプ（index 9）
+      _punchIndex = cyclePosition == 0 ? _maxStamps - 1 : cyclePosition - 1;
       _shouldAnimatePunch = true;
 
       // 新規登録ミッション: スタンプ初獲得
@@ -440,8 +442,6 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('スタンプ押印画面'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         automaticallyImplyLeading: false,
       ),
       body: Column(
@@ -838,19 +838,25 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
   }
 
   Widget _buildStampCard() {
+    final currentCycleStamps = _stamps % _maxStamps;
+    final currentCycleDisplay = _displayStamps % _maxStamps;
+    final completedCards = _stamps ~/ _maxStamps;
+    // コンプリートは10の倍数に到達した瞬間のみ表示
+    final justCompleted = _displayStamps > 0 && _displayStamps % _maxStamps == 0;
     return StampCardWidget(
       storeName: _storeName,
       storeCategory: _storeCategory,
       iconImageUrl: _iconImageUrl,
-      stamps: _stamps,
+      stamps: currentCycleStamps,
       maxStamps: _maxStamps,
-      displayStamps: _displayStamps,
+      displayStamps: justCompleted ? _maxStamps : currentCycleDisplay,
+      completedCards: justCompleted ? completedCards - 1 : completedCards,
       isLoading: _loading,
       isSyncing: _isSyncing,
       errorMessage: _error,
       punchIndex: _shouldAnimatePunch ? _punchIndex : null,
       scaleAnimation: _scaleAnim,
-      shineAnimation: _displayStamps >= _maxStamps ? _shineAnim : null,
+      shineAnimation: justCompleted ? _shineAnim : null,
     );
   }
 }

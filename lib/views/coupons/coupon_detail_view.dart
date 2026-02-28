@@ -1,19 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../models/coupon_model.dart' as model;
-import '../../providers/coupon_provider.dart';
 import '../../providers/store_provider.dart';
 import '../../widgets/common_header.dart';
-import '../../widgets/custom_button.dart';
-import '../../providers/badge_provider.dart';
 
 class CouponDetailView extends ConsumerStatefulWidget {
   final model.Coupon coupon;
 
-  const CouponDetailView({Key? key, required this.coupon}) : super(key: key);
+  const CouponDetailView({super.key, required this.coupon});
 
   @override
   ConsumerState<CouponDetailView> createState() => _CouponDetailViewState();
@@ -23,8 +19,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
   bool _isStampInfoLoading = true;
   int _requiredStampCount = 0;
   int _userStampCount = 0;
-  bool _isUsed = false;
-  bool _isUsing = false;
 
   @override
   void initState() {
@@ -68,24 +62,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
 
   Future<void> _loadStampInfo() async {
     try {
-      // coin_exchange / stamp_reward クーポンはuser_couponsから使用済みチェックのみ
+      // coin_exchange / stamp_reward クーポンではスタンプ情報は表示しない
       if (_isCoinExchangeCoupon || _isStampRewardCoupon) {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final userCouponDoc = await FirebaseFirestore.instance
-              .collection('user_coupons')
-              .doc(widget.coupon.id)
-              .get();
-          if (userCouponDoc.exists) {
-            final data = userCouponDoc.data();
-            if (!mounted) return;
-            setState(() {
-              _isUsed = data?['isUsed'] as bool? ?? false;
-              _isStampInfoLoading = false;
-            });
-            return;
-          }
-        }
         if (!mounted) return;
         setState(() {
           _isStampInfoLoading = false;
@@ -113,7 +91,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
           (couponData?['requiredStampCount'] as num?)?.toInt() ?? 0;
 
       int userStamps = 0;
-      bool isUsed = false;
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final userStoreDoc = await FirebaseFirestore.instance
@@ -124,22 +101,12 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             .get();
         final userStoreData = userStoreDoc.data();
         userStamps = (userStoreData?['stamps'] as num?)?.toInt() ?? 0;
-
-        // 使用済みチェック
-        final usedCouponDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('used_coupons')
-            .doc(couponId)
-            .get();
-        isUsed = usedCouponDoc.exists;
       }
 
       if (!mounted) return;
       setState(() {
         _requiredStampCount = requiredStampCount;
         _userStampCount = userStamps;
-        _isUsed = isUsed;
         _isStampInfoLoading = false;
       });
     } catch (_) {
@@ -152,113 +119,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
     }
   }
 
-  // クーポン使用処理
-  Future<void> _useCoupon() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('クーポンを使用'),
-        content: const Text('このクーポンを使用しますか？\n使用すると元に戻せません。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('使用する'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() => _isUsing = true);
-
-    try {
-      // coin_exchange / stamp_reward クーポンはuser_couponsを直接更新
-      if (_isCoinExchangeCoupon || _isStampRewardCoupon) {
-        await FirebaseFirestore.instance
-            .collection('user_coupons')
-            .doc(widget.coupon.id)
-            .update({
-          'isUsed': true,
-          'usedAt': FieldValue.serverTimestamp(),
-        });
-
-        BadgeService().incrementBadgeCounter(user.uid, 'couponUsed');
-
-        if (!mounted) return;
-        setState(() {
-          _isUsed = true;
-          _isUsing = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('クーポンを使用しました')),
-        );
-        return;
-      }
-
-      final couponService = ref.read(couponProvider);
-      await couponService.useCouponDirectly(
-        user.uid,
-        widget.coupon.id,
-        widget.coupon.storeId,
-      );
-
-      // バッジカウンター: クーポン使用
-      BadgeService().incrementBadgeCounter(user.uid, 'couponUsed');
-
-      if (!mounted) return;
-      setState(() {
-        _isUsed = true;
-        _isUsing = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('クーポンを使用しました')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isUsing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('エラー: $e')),
-      );
-    }
-  }
-
-  // ボタンが有効かどうかを判定
-  bool get _canUseCoupon {
-    if (_isUsed) return false;
-    if (_isStampInfoLoading) return false;
-    if (_isUsing) return false;
-    if (FirebaseAuth.instance.currentUser == null) return false;
-    if (widget.coupon.validUntil.year < 2100 &&
-        widget.coupon.validUntil.isBefore(DateTime.now())) return false;
-    if (!widget.coupon.noUsageLimit && widget.coupon.usedCount >= widget.coupon.usageLimit) return false;
-    if (_requiredStampCount > 0 && _userStampCount < _requiredStampCount) {
-      return false;
-    }
-    return true;
-  }
-
-  // ボタンのテキストを取得
-  String get _buttonText {
-    if (_isUsed) return '使用済み';
-    if (_isStampInfoLoading) return '読み込み中...';
-    if (FirebaseAuth.instance.currentUser == null) return 'ログインしてください';
-    if (widget.coupon.validUntil.year < 2100 &&
-        widget.coupon.validUntil.isBefore(DateTime.now())) return '有効期限切れ';
-    if (!widget.coupon.noUsageLimit && widget.coupon.usedCount >= widget.coupon.usageLimit) return '配布終了';
-    if (_requiredStampCount > 0 && _userStampCount < _requiredStampCount) {
-      return 'スタンプ不足（あと${_requiredStampCount - _userStampCount}個）';
-    }
-    return '使用する';
-  }
-
   // 有効期限の表示用フォーマット
   String _formatValidUntil() {
     try {
@@ -268,7 +128,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       final tomorrow = today.add(const Duration(days: 1));
-      final couponDate = DateTime(widget.coupon.validUntil.year, widget.coupon.validUntil.month, widget.coupon.validUntil.day);
+      final couponDate = DateTime(widget.coupon.validUntil.year,
+          widget.coupon.validUntil.month, widget.coupon.validUntil.day);
 
       String dateText;
       if (couponDate.isAtSameMomentAs(today)) {
@@ -276,7 +137,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
       } else if (couponDate.isAtSameMomentAs(tomorrow)) {
         dateText = '明日';
       } else {
-        dateText = '${widget.coupon.validUntil.month}月${widget.coupon.validUntil.day}日';
+        dateText =
+            '${widget.coupon.validUntil.month}月${widget.coupon.validUntil.day}日';
       }
 
       return '$dateText ${widget.coupon.validUntil.hour.toString().padLeft(2, '0')}:${widget.coupon.validUntil.minute.toString().padLeft(2, '0')}まで';
@@ -339,17 +201,6 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
           _buildNotice(),
         ],
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: CustomButton(
-            text: _buttonText,
-            isLoading: _isUsing,
-            onPressed: _canUseCoupon ? _useCoupon : null,
-            backgroundColor: _isUsed ? Colors.grey : null,
-          ),
-        ),
-      ),
     );
   }
 
@@ -360,7 +211,7 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         child: AspectRatio(
           aspectRatio: 1,
           child: Image.asset(
-            'assets/images/special_coupon_100yen.png',
+            'assets/images/special_coupon_100yen.jpg',
             width: double.infinity,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
@@ -372,7 +223,11 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
                     children: [
                       Icon(Icons.local_offer, size: 80, color: Colors.white),
                       SizedBox(height: 8),
-                      Text('100円OFF', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                      Text('100円OFF',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -397,7 +252,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
                 child: Center(
                   child: CircularProgressIndicator(
                     value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
                         : null,
                     color: Colors.white,
                     strokeWidth: 2,
@@ -502,7 +358,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             if (!_isStampRewardCoupon) ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.orange.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
@@ -531,11 +388,13 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             if (_isStampRewardCoupon) ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF9C27B0).withOpacity(0.10),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF9C27B0).withOpacity(0.35)),
+                  border: Border.all(
+                      color: const Color(0xFF9C27B0).withOpacity(0.35)),
                 ),
                 child: const Row(
                   children: [
@@ -562,7 +421,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               children: [
                 // 割引情報
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFF6B35).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -582,7 +442,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
 
                 // クーポンタイプ
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
                     color: Colors.blue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(16),
@@ -651,7 +512,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               _buildDetailRow(
                 icon: Icons.stars,
                 label: '必要スタンプ',
-                value: _isStampInfoLoading ? '読み込み中...' : '$_requiredStampCount',
+                value:
+                    _isStampInfoLoading ? '読み込み中...' : '$_requiredStampCount',
                 valueColor: Colors.orange[700]!,
               ),
               const SizedBox(height: 12),
@@ -680,7 +542,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
             _buildDetailRow(
               icon: Icons.calendar_today,
               label: '作成日',
-              value: '${widget.coupon.createdAt.year}/${widget.coupon.createdAt.month.toString().padLeft(2, '0')}/${widget.coupon.createdAt.day.toString().padLeft(2, '0')}',
+              value:
+                  '${widget.coupon.createdAt.year}/${widget.coupon.createdAt.month.toString().padLeft(2, '0')}/${widget.coupon.createdAt.day.toString().padLeft(2, '0')}',
               valueColor: Colors.grey[700]!,
             ),
           ],
@@ -707,27 +570,26 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
               ),
             ),
             const SizedBox(height: 16),
-
             ref.watch(storeNameProvider(widget.coupon.storeId)).when(
-              data: (storeName) => _buildDetailRow(
-                icon: Icons.store,
-                label: '店舗名',
-                value: storeName ?? '店舗名なし',
-                valueColor: Colors.black87,
-              ),
-              loading: () => _buildDetailRow(
-                icon: Icons.store,
-                label: '店舗名',
-                value: '読み込み中...',
-                valueColor: Colors.grey,
-              ),
-              error: (_, __) => _buildDetailRow(
-                icon: Icons.store,
-                label: '店舗名',
-                value: '店舗名なし',
-                valueColor: Colors.grey,
-              ),
-            ),
+                  data: (storeName) => _buildDetailRow(
+                    icon: Icons.store,
+                    label: '店舗名',
+                    value: storeName ?? '店舗名なし',
+                    valueColor: Colors.black87,
+                  ),
+                  loading: () => _buildDetailRow(
+                    icon: Icons.store,
+                    label: '店舗名',
+                    value: '読み込み中...',
+                    valueColor: Colors.grey,
+                  ),
+                  error: (_, __) => _buildDetailRow(
+                    icon: Icons.store,
+                    label: '店舗名',
+                    value: '店舗名なし',
+                    valueColor: Colors.grey,
+                  ),
+                ),
           ],
         ),
       ),
@@ -740,35 +602,158 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
         margin: const EdgeInsets.only(top: 8, bottom: 20),
         color: Colors.white,
         padding: const EdgeInsets.all(20),
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: Colors.orange.withOpacity(0.3),
-            ),
-          ),
-          child: const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                Icons.info_outline,
-                color: Colors.orange,
-                size: 20,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'クーポンのご利用方法',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
               ),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'クーポンは画面下部の「使用する」ボタンから利用できます。店舗スタッフに画面を見せてご利用ください。',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.orange,
-                  ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE3F2FD),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF90CAF9),
                 ),
               ),
-            ],
-          ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1976D2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '1',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'お会計時に店舗スタッフにクーポン利用を伝えてください',
+                          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1976D2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '2',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'アプリのQRコード画面を店舗スタッフに提示してください',
+                          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1976D2),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Center(
+                          child: Text(
+                            '3',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          '店舗スタッフがQRコードを読み取り、クーポンを適用します',
+                          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.orange.withOpacity(0.3),
+                ),
+              ),
+              child: const Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.orange,
+                    size: 20,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'クーポンはこのアプリから直接使用することはできません。'
+                      '不正利用防止のため、店舗スタッフによるQRコードスキャン時にのみクーポンが適用されます。',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

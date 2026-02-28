@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.syncStoreOwnerFlags = exports.setStoreOwnerFlagOnCreate = exports.notifyFollowersOnNewCoupon = exports.notifyFollowersOnNewPost = exports.expireCoinsScheduled = exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.updateInstagramSyncSettings = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.verifyEmailChangeOtp = exports.requestEmailChangeOtp = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.notifyCouponExpiryScheduled = exports.migrateStampCard = exports.syncStampsWithVisits = exports.syncStoreOwnerFlags = exports.setStoreOwnerFlagOnCreate = exports.notifyFollowersOnNewCoupon = exports.notifyFollowersOnNewPost = exports.expireCoinsScheduled = exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.updateInstagramSyncSettings = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.verifyEmailChangeOtp = exports.requestEmailChangeOtp = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -2221,7 +2221,23 @@ exports.punchStamp = (0, https_1.onCall)({
         .doc(storeId)
         .collection(userId)
         .doc('award_request');
-    await requestRef.set(Object.assign(Object.assign({ status: 'accepted', requestType: 'stamp', pointsToAward: 0, userPoints: 0, amount: 0, usedPoints: 0 }, (selectedCouponIds.length > 0 ? { selectedCouponIds } : {})), { storeId, storeName: (_a = result.storeName) !== null && _a !== void 0 ? _a : '', userId, respondedBy: storeUserId, createdAt: firestore_2.FieldValue.serverTimestamp(), respondedAt: firestore_2.FieldValue.serverTimestamp(), userNotified: false, userNotifiedAt: firestore_2.FieldValue.delete() }), { merge: true });
+    await requestRef.set({
+        status: 'accepted',
+        requestType: 'stamp',
+        pointsToAward: 0,
+        userPoints: 0,
+        amount: 0,
+        usedPoints: 0,
+        selectedCouponIds: selectedCouponIds.length > 0 ? selectedCouponIds : firestore_2.FieldValue.delete(),
+        storeId,
+        storeName: (_a = result.storeName) !== null && _a !== void 0 ? _a : '',
+        userId,
+        respondedBy: storeUserId,
+        createdAt: firestore_2.FieldValue.serverTimestamp(),
+        respondedAt: firestore_2.FieldValue.serverTimestamp(),
+        userNotified: false,
+        userNotifiedAt: firestore_2.FieldValue.delete(),
+    }, { merge: true });
     // stores/{storeId}/transactions にスタンプ来店記録を作成
     // フィルター時のクエリ対象となるため、userGender/userAgeGroup を含める
     let userGender = null;
@@ -2977,5 +2993,348 @@ exports.syncStoreOwnerFlags = (0, https_1.onCall)({ region: 'asia-northeast1' },
     }
     console.log(`[syncStoreOwnerFlags] ${updatedCount}件の店舗を更新しました`);
     return { updatedCount };
+});
+// スタンプ数と来店回数の同期（管理者専用）
+exports.syncStampsWithVisits = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+    enforceAppCheck: false,
+    timeoutSeconds: 300,
+}, async (request) => {
+    var _a, _b, _c, _d, _e;
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Authentication required');
+    }
+    const callerUid = request.auth.uid;
+    const callerSnap = await db.collection(USERS_COLLECTION).doc(callerUid).get();
+    if (!callerSnap.exists || ((_a = callerSnap.data()) === null || _a === void 0 ? void 0 : _a['isOwner']) !== true) {
+        throw new https_1.HttpsError('permission-denied', 'Only admin owners can execute this function');
+    }
+    const dryRun = ((_b = request.data) === null || _b === void 0 ? void 0 : _b.dryRun) === true;
+    console.log(`[syncStampsWithVisits] 開始 (dryRun=${dryRun})`);
+    const storesSnap = await db.collection('stores').get();
+    let totalChecked = 0;
+    let mismatchCount = 0;
+    let updatedCount = 0;
+    const mismatches = [];
+    const BATCH_SIZE = 500;
+    let batch = db.batch();
+    let batchCount = 0;
+    for (const storeDoc of storesSnap.docs) {
+        const storeId = storeDoc.id;
+        const storeName = storeDoc.data()['name'] || '店舗名なし';
+        const storeUsersSnap = await db
+            .collection('store_users')
+            .doc(storeId)
+            .collection('users')
+            .get();
+        for (const userDoc of storeUsersSnap.docs) {
+            const userId = userDoc.id;
+            const totalVisits = asInt(userDoc.data()['totalVisits'], 0);
+            const userStoreRef = db
+                .collection(USERS_COLLECTION)
+                .doc(userId)
+                .collection('stores')
+                .doc(storeId);
+            const userStoreSnap = await userStoreRef.get();
+            const currentStamps = asInt((_c = userStoreSnap.data()) === null || _c === void 0 ? void 0 : _c['stamps'], 0);
+            totalChecked++;
+            if (totalVisits > currentStamps) {
+                mismatchCount++;
+                // ユーザー情報を取得（最大50件まで詳細を返却）
+                let displayName = 'Unknown';
+                let profileImageUrl = null;
+                if (mismatches.length < 50) {
+                    const userSnap = await db.collection(USERS_COLLECTION).doc(userId).get();
+                    if (userSnap.exists) {
+                        displayName = ((_d = userSnap.data()) === null || _d === void 0 ? void 0 : _d['displayName']) || 'Unknown';
+                        profileImageUrl = ((_e = userSnap.data()) === null || _e === void 0 ? void 0 : _e['profileImageUrl']) || null;
+                    }
+                }
+                mismatches.push({ storeId, userId, totalVisits, stamps: currentStamps, displayName, profileImageUrl, storeName });
+                if (!dryRun) {
+                    batch.set(userStoreRef, {
+                        stamps: totalVisits,
+                        updatedAt: firestore_2.FieldValue.serverTimestamp(),
+                    }, { merge: true });
+                    updatedCount++;
+                    batchCount++;
+                    if (batchCount >= BATCH_SIZE) {
+                        await batch.commit();
+                        batch = db.batch();
+                        batchCount = 0;
+                    }
+                }
+            }
+        }
+    }
+    if (!dryRun && batchCount > 0) {
+        await batch.commit();
+    }
+    console.log(`[syncStampsWithVisits] 完了: checked=${totalChecked}, mismatches=${mismatchCount}, updated=${updatedCount}`);
+    return {
+        dryRun,
+        totalChecked,
+        mismatchCount,
+        updatedCount,
+        mismatches: mismatches.slice(0, 50),
+    };
+});
+// ===== 物理スタンプカード電子化移行 =====
+// 店舗スタッフがユーザーのQRコードをスキャンし、物理カードのスタンプ数を入力して
+// デジタルスタンプに移行する。来店扱い（コイン・visitCount）はしない。
+exports.migrateStampCard = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+    enforceAppCheck: false,
+}, async (request) => {
+    var _a, _b, _c, _d, _e;
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'Store must be authenticated');
+    }
+    const { userId, storeId, physicalStamps: rawPhysicalStamps } = request.data || {};
+    if (!userId || !storeId) {
+        throw new https_1.HttpsError('invalid-argument', 'Missing required parameters: userId and storeId');
+    }
+    const physicalStamps = asInt(rawPhysicalStamps, 0);
+    if (physicalStamps < 1 || physicalStamps > 99) {
+        throw new https_1.HttpsError('invalid-argument', 'physicalStamps must be between 1 and 99');
+    }
+    const staffUserId = request.auth.uid;
+    const staffUserRef = db.collection(USERS_COLLECTION).doc(staffUserId);
+    const storeRef = db.collection('stores').doc(storeId);
+    const targetUserRef = db.collection(USERS_COLLECTION).doc(userId);
+    const targetStoreRef = targetUserRef.collection('stores').doc(storeId);
+    const migrationDocId = `${storeId}_${userId}`;
+    const migrationDocRef = db.collection('stamp_migrations').doc(migrationDocId);
+    const result = await db.runTransaction(async (txn) => {
+        var _a, _b, _c, _d, _e, _f, _g;
+        // スタッフの店舗権限チェック（punchStamp と同じロジック）
+        const [staffUserSnap, storeSnap] = await Promise.all([
+            txn.get(staffUserRef),
+            txn.get(storeRef),
+        ]);
+        if (!staffUserSnap.exists) {
+            throw new https_1.HttpsError('permission-denied', 'Store user not found');
+        }
+        if (!storeSnap.exists) {
+            throw new https_1.HttpsError('not-found', 'Store not found');
+        }
+        const staffUserData = staffUserSnap.data();
+        const currentStoreId = ((_a = staffUserData['currentStoreId']) !== null && _a !== void 0 ? _a : '').toString();
+        const createdStores = (_b = staffUserData['createdStores']) !== null && _b !== void 0 ? _b : [];
+        const isOwnerFlag = staffUserData['isOwner'] === true || staffUserData['isStoreOwner'] === true;
+        const storeCreatedBy = ((_d = (_c = storeSnap.data()) === null || _c === void 0 ? void 0 : _c.createdBy) !== null && _d !== void 0 ? _d : '').toString();
+        const isMember = currentStoreId === storeId || createdStores.includes(storeId) || storeCreatedBy === staffUserId;
+        if (!isOwnerFlag && !isMember) {
+            throw new https_1.HttpsError('permission-denied', 'Not authorized for this store');
+        }
+        // 対象ユーザー存在確認
+        const targetUserSnap = await txn.get(targetUserRef);
+        if (!targetUserSnap.exists) {
+            throw new https_1.HttpsError('not-found', 'Target user not found');
+        }
+        // 二重移行チェック: migrationId を固定IDにすることでアトミックに防止
+        const migrationSnap = await txn.get(migrationDocRef);
+        if (migrationSnap.exists) {
+            throw new https_1.HttpsError('already-exists', `Migration already exists for userId=${userId}, storeId=${storeId}`);
+        }
+        // 現在のデジタルスタンプ数を取得
+        const targetStoreSnap = await txn.get(targetStoreRef);
+        const stampsBefore = asInt((_e = targetStoreSnap.data()) === null || _e === void 0 ? void 0 : _e['stamps'], 0);
+        const stampsAfter = stampsBefore + physicalStamps;
+        // 達成カード数を計算（10の倍数に到達した回数）
+        let completedCards = 0;
+        for (let s = stampsBefore + 1; s <= stampsAfter; s++) {
+            if (s % MAX_STAMPS === 0)
+                completedCards++;
+        }
+        const storeName = ((_g = (_f = storeSnap.data()) === null || _f === void 0 ? void 0 : _f.name) !== null && _g !== void 0 ? _g : '').toString();
+        // users/{userId}/stores/{storeId} のスタンプを更新
+        txn.set(targetStoreRef, {
+            storeId,
+            storeName: storeName || undefined,
+            stamps: stampsAfter,
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        // stamp_migrations ドキュメントを作成（二重移行防止の記録）
+        txn.set(migrationDocRef, {
+            migrationId: migrationDocId,
+            userId,
+            storeId,
+            staffUserId,
+            stampsBefore,
+            physicalStamps,
+            stampsAfter,
+            completedCards,
+            createdAt: firestore_2.FieldValue.serverTimestamp(),
+            note: '',
+        });
+        return { userId, storeId, storeName, stampsBefore, stampsAfter, completedCards };
+    });
+    console.log(`[migrateStampCard] 完了: userId=${userId}, storeId=${storeId}, ` +
+        `stampsBefore=${result.stampsBefore}, stampsAfter=${result.stampsAfter}, completedCards=${result.completedCards}`);
+    // トランザクション外: スタンプカード達成時のクーポン自動付与（punchStamp と同じロジック）
+    if (result.completedCards > 0) {
+        try {
+            const stampCoupons = await db
+                .collection('coupons')
+                .doc(storeId)
+                .collection('coupons')
+                .where('requiredStampCount', '>', 0)
+                .where('isActive', '==', true)
+                .get();
+            for (let card = 0; card < result.completedCards; card++) {
+                for (const couponDoc of stampCoupons.docs) {
+                    const couponData = couponDoc.data();
+                    const noUsageLimit = couponData['noUsageLimit'] === true;
+                    const usageLimit = asInt(couponData['usageLimit'], 0);
+                    const usedCount = asInt(couponData['usedCount'], 0);
+                    if (!noUsageLimit && usageLimit > 0 && usedCount >= usageLimit)
+                        continue;
+                    const userCouponRef = db.collection('user_coupons').doc();
+                    await userCouponRef.set({
+                        userId,
+                        couponId: couponDoc.id,
+                        storeId,
+                        storeName: (_a = couponData['storeName']) !== null && _a !== void 0 ? _a : '',
+                        title: (_b = couponData['title']) !== null && _b !== void 0 ? _b : '',
+                        obtainedAt: firestore_2.FieldValue.serverTimestamp(),
+                        isUsed: false,
+                        noExpiry: true,
+                        validUntil: null,
+                        type: 'stamp_reward',
+                        discountValue: (_c = couponData['discountValue']) !== null && _c !== void 0 ? _c : 0,
+                        discountType: (_d = couponData['discountType']) !== null && _d !== void 0 ? _d : 'fixed_amount',
+                        couponType: (_e = couponData['couponType']) !== null && _e !== void 0 ? _e : 'discount',
+                        requiredStampCount: 0,
+                    });
+                }
+            }
+            console.log(`[migrateStampCard] Awarded stamp coupons: userId=${userId}, storeId=${storeId}, cards=${result.completedCards}`);
+        }
+        catch (e) {
+            // クーポン付与失敗は致命的エラーとしない（スタンプ加算は完了済み）
+            console.error('[migrateStampCard] stamp coupon award error:', e);
+        }
+    }
+    return {
+        success: true,
+        userId: result.userId,
+        storeId: result.storeId,
+        storeName: result.storeName,
+        stampsBefore: result.stampsBefore,
+        stampsAfter: result.stampsAfter,
+        completedCards: result.completedCards,
+    };
+});
+// ─── コイン交換クーポン有効期限通知（毎日10:00 JST） ───
+exports.notifyCouponExpiryScheduled = (0, scheduler_1.onSchedule)({
+    region: 'asia-northeast1',
+    schedule: 'every day 10:00',
+    timeZone: 'Asia/Tokyo',
+}, async () => {
+    var _a, _b, _c, _d, _e, _f;
+    const now = new Date();
+    const BATCH_SIZE = 400;
+    let notified7d = 0;
+    let notified3d = 0;
+    // 7日後の日付範囲（0:00〜23:59:59）
+    const sevenDaysLater = new Date(now);
+    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7);
+    const sevenDaysStart = new Date(sevenDaysLater);
+    sevenDaysStart.setHours(0, 0, 0, 0);
+    const sevenDaysEnd = new Date(sevenDaysLater);
+    sevenDaysEnd.setHours(23, 59, 59, 999);
+    // 3日後の日付範囲（0:00〜23:59:59）
+    const threeDaysLater = new Date(now);
+    threeDaysLater.setDate(threeDaysLater.getDate() + 3);
+    const threeDaysStart = new Date(threeDaysLater);
+    threeDaysStart.setHours(0, 0, 0, 0);
+    const threeDaysEnd = new Date(threeDaysLater);
+    threeDaysEnd.setHours(23, 59, 59, 999);
+    // --- 7日前通知 ---
+    let lastDoc7d = null;
+    while (true) {
+        let query = db
+            .collection('user_coupons')
+            .where('type', '==', 'coin_exchange')
+            .where('isUsed', '==', false)
+            .where('validUntil', '>=', firestore_2.Timestamp.fromDate(sevenDaysStart))
+            .where('validUntil', '<=', firestore_2.Timestamp.fromDate(sevenDaysEnd))
+            .limit(BATCH_SIZE);
+        if (lastDoc7d) {
+            query = query.startAfter(lastDoc7d);
+        }
+        const snapshot = await query.get();
+        if (snapshot.empty)
+            break;
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            if (data['expiryNotified7d'] === true)
+                continue;
+            const userId = data['userId'];
+            const storeName = (_a = data['storeName']) !== null && _a !== void 0 ? _a : '店舗';
+            const title = (_b = data['title']) !== null && _b !== void 0 ? _b : '100円引きクーポン';
+            await createUserNotification({
+                userId,
+                title: 'クーポンの有効期限が近づいています',
+                body: `${storeName}の「${title}」の有効期限が残り7日です。お早めにご利用ください。`,
+                type: 'system',
+                tags: ['coupon_expiry'],
+                data: {
+                    userCouponId: doc.id,
+                    storeId: (_c = data['storeId']) !== null && _c !== void 0 ? _c : '',
+                    daysRemaining: 7,
+                },
+            });
+            await doc.ref.update({ expiryNotified7d: true });
+            notified7d++;
+        }
+        lastDoc7d = snapshot.docs[snapshot.docs.length - 1];
+        if (snapshot.size < BATCH_SIZE)
+            break;
+    }
+    // --- 3日前通知 ---
+    let lastDoc3d = null;
+    while (true) {
+        let query = db
+            .collection('user_coupons')
+            .where('type', '==', 'coin_exchange')
+            .where('isUsed', '==', false)
+            .where('validUntil', '>=', firestore_2.Timestamp.fromDate(threeDaysStart))
+            .where('validUntil', '<=', firestore_2.Timestamp.fromDate(threeDaysEnd))
+            .limit(BATCH_SIZE);
+        if (lastDoc3d) {
+            query = query.startAfter(lastDoc3d);
+        }
+        const snapshot = await query.get();
+        if (snapshot.empty)
+            break;
+        for (const doc of snapshot.docs) {
+            const data = doc.data();
+            if (data['expiryNotified3d'] === true)
+                continue;
+            const userId = data['userId'];
+            const storeName = (_d = data['storeName']) !== null && _d !== void 0 ? _d : '店舗';
+            const title = (_e = data['title']) !== null && _e !== void 0 ? _e : '100円引きクーポン';
+            await createUserNotification({
+                userId,
+                title: 'クーポンの有効期限が迫っています',
+                body: `${storeName}の「${title}」の有効期限が残り3日です。お早めにご利用ください！`,
+                type: 'system',
+                tags: ['coupon_expiry'],
+                data: {
+                    userCouponId: doc.id,
+                    storeId: (_f = data['storeId']) !== null && _f !== void 0 ? _f : '',
+                    daysRemaining: 3,
+                },
+            });
+            await doc.ref.update({ expiryNotified3d: true });
+            notified3d++;
+        }
+        lastDoc3d = snapshot.docs[snapshot.docs.length - 1];
+        if (snapshot.size < BATCH_SIZE)
+            break;
+    }
+    console.log(`[notifyCouponExpiryScheduled] notified7d=${notified7d}, notified3d=${notified3d}`);
 });
 //# sourceMappingURL=index.js.map

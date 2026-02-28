@@ -198,7 +198,7 @@
 
 ## 曜日別利用バッジ（dayVisit）
 
-特定の曜日にアプリを利用（来店）した回数でカウント。各曜日1〜3回の3段階。
+特定の曜日に**スタンプを押印した回数**でカウント（ログインは対象外）。各曜日1〜3回の3段階。
 
 ### 月曜日（monday）
 
@@ -437,7 +437,7 @@
 - バッジ取得フィルタリング: `getNewBadges()` はローカル定義（`kBadgeDefinitions`）に存在するバッジのみ返す
   - ローカル定義の最新情報（name/iconUrl等）で上書きして返却
   - 旧バッジ（ローカル定義に存在しない `isNew: true` のバッジ）は自動的に `isNew: false` に更新しクリーンアップ
-- 曜日別利用バッジ（dayVisit）: `incrementBadgeCounter('dayVisit_{曜日}')` で曜日ごとにカウント。日次包括チェックでも判定。カウンターキーは `dayVisit_monday` ～ `dayVisit_sunday`
+- 曜日別利用バッジ（dayVisit）: `incrementBadgeCounter('dayVisit_{曜日}')` で曜日ごとにカウント。**スタンプ押印時のみ付与**（日次ログインチェック `runComprehensiveBadgeCheck` の対象外）。カウンターキーは `dayVisit_monday` ～ `dayVisit_sunday`
 - トリガー実装状況: **実装済み**（13箇所 + 曜日別利用2箇所）
   - マップ画面表示 (`mapOpened`): `lib/views/map/map_view.dart`（`daily_missions/{yyyy-MM-dd}.map_open` で1日1回のみ加算）
   - 店舗詳細表示 (`storeDetailViewed`): `lib/views/stores/store_detail_view.dart`

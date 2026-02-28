@@ -22,8 +22,6 @@ class PaymentSuccessView extends StatelessWidget {
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
         title: const Text('支払い完了'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
         automaticallyImplyLeading: false, // 戻るボタンを非表示
       ),
       body: SafeArea(

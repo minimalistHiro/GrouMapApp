@@ -9,7 +9,27 @@
       "Glob(//Users/kanekohiroki/Desktop/groumapapp_store/**)",
       "Grep(//Users/kanekohiroki/Desktop/groumapapp_store/**)",
       "Bash(source *)",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+
+      "Bash(flutter build *)",
+      "Bash(flutter pub get*)",
+      "Bash(cd ios && pod install*)",
+      "Bash(cd /Users/kanekohiroki/Desktop/groumapapp*/ios && pod install*)",
+      "Bash(xcodebuild *)",
+      "Bash(open -a Xcode *)",
+      "Bash(mkdir -p *)",
+      "Bash(archive_date=*)",
+
+      "Bash(git status*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push*)",
+      "Bash(git checkout *)",
+      "Bash(git merge *)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+
+      "Bash(firebase deploy *)"
     ]
   }
 }

@@ -26,8 +26,6 @@ class ContactView extends StatelessWidget {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('お問い合わせ'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

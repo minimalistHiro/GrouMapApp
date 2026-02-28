@@ -655,8 +655,6 @@ class _LotteryViewState extends State<LotteryView>
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: const Color(0xFFFF6B35),
-          foregroundColor: Colors.white,
           elevation: 0,
         ),
         body: Stack(

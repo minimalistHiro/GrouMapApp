@@ -114,8 +114,6 @@ class _PasswordChangeViewState extends ConsumerState<PasswordChangeView> {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('パスワード変更'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: Padding(

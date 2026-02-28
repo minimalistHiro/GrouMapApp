@@ -101,8 +101,6 @@ class _EmailChangeOtpViewState extends ConsumerState<EmailChangeOtpView> {
     return Scaffold(
       appBar: CommonHeader(
         title: const Text('メールアドレス変更の認証'),
-        backgroundColor: const Color(0xFFFF6B35),
-        foregroundColor: Colors.white,
       ),
       backgroundColor: const Color(0xFFFBF6F2),
       body: SafeArea(
