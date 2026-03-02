@@ -54,7 +54,7 @@ class AppInfoView extends StatelessWidget {
         ),
         _buildInfoItem(
           label: 'バージョン',
-          value: '1.2.0',
+          value: '1.2.1',
           copyable: true,
         ),
         _buildInfoItem(

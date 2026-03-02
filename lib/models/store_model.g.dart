@@ -100,6 +100,10 @@ _$StoreDayHoursImpl _$$StoreDayHoursImplFromJson(Map<String, dynamic> json) =>
       open: json['open'] as String,
       close: json['close'] as String,
       isClosed: json['isClosed'] as bool? ?? false,
+      periods: (json['periods'] as List<dynamic>?)
+              ?.map((e) => e as Map<String, dynamic>)
+              .toList() ??
+          const [],
     );
 
 Map<String, dynamic> _$$StoreDayHoursImplToJson(_$StoreDayHoursImpl instance) =>
@@ -107,6 +111,7 @@ Map<String, dynamic> _$$StoreDayHoursImplToJson(_$StoreDayHoursImpl instance) =>
       'open': instance.open,
       'close': instance.close,
       'isClosed': instance.isClosed,
+      'periods': instance.periods,
     };
 
 _$StoreCompanyInfoImpl _$$StoreCompanyInfoImplFromJson(

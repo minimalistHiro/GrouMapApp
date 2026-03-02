@@ -560,6 +560,7 @@ class AuthService {
         'lastUpdated': FieldValue.serverTimestamp(), // ランキング更新用
         'isActive': true,
         'showTutorial': true, // 初回ログイン時にチュートリアルを表示
+        'walkthroughCompleted': false, // ウォークスルー未完了フラグ
         'readNotifications': <String>[], // 既読通知IDリスト
       };
 

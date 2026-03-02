@@ -20,6 +20,9 @@ import 'payment/point_payment_detail_view.dart';
 import 'stamps/daily_recommendation_view.dart';
 import 'stamps/badge_awarded_view.dart';
 import 'tutorial/tutorial_view.dart';
+import '../providers/walkthrough_provider.dart';
+import 'walkthrough/walkthrough_overlay.dart';
+import 'walkthrough/walkthrough_step_config.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
   final int initialIndex;
@@ -75,21 +78,42 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   bool _badgePopupShown = false;
 
   // static: ウィジェット再生成（ValueKey変更等）を跨いで保持
-  // 本日初ログイン処理（stats/mission）が完了済みかどうか
+  // ポップアップ表示が完了済みかどうか
   static bool _dailyLoginProcessed = false;
-  // ポップアップ表示待ちかどうか（処理済みだが表示前にmounted=falseで失敗した場合true）
-  static bool _pendingDailyRecommendation = false;
+  // 日次ログインの統計・ミッション処理が実行済みか
+  static bool _dailyLoginRecorded = false;
+  // 本日初ログインだったかのキャッシュ（ポップアップ表示判定用）
+  static bool _wasFirstLoginToday = false;
   // 本日の包括バッジチェック完了済みかどうか
   static bool _dailyBadgeCheckDone = false;
   // セッション中に表示済みのバッジIDを記録（重複表示防止）
   static final Set<String> _shownBadgeIds = {};
-  // チュートリアル表示済みかどうか（セッション内1回のみ）
+  // チュートリアル表示済みかどうか（ユーザー単位で管理）
   static bool _tutorialShown = false;
+  // ウォークスルー開始済みかどうか（ユーザー単位で管理）
+  static bool _walkthroughStarted = false;
+  // 前回のユーザーID（ユーザー切替検出用）
+  static String? _lastUserId;
+
+  // BottomNavigationBar全体のGlobalKey（タブ位置計算用）
+  final GlobalKey _bottomNavKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+
+    // 前インスタンスのゴースト状態をクリア
+    // AuthWrapperが背後でMainNavigationViewを作成した場合に、
+    // そのインスタンスが設定したwalkthrough状態が残るのを防ぐ
+    // ValueKey('user:${user.uid}')により同一ユーザーのリビルドではinitStateが呼ばれないため安全
+    final currentWalkthrough = ref.read(walkthroughProvider);
+    if (currentWalkthrough.isActive) {
+      ref.read(walkthroughProvider.notifier).resetState();
+    }
+    _tutorialShown = false;
+    _walkthroughStarted = false;
+
     _authSubscription = ref.listenManual<AsyncValue<User?>>(
       authStateProvider,
       (previous, next) {
@@ -98,9 +122,18 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
           _userDataSubscription?.close();
           _stopPointRequestListener();
           if (user == null) {
+            _lastUserId = null;
             return;
           }
+          // ユーザーが変わったらチュートリアル・ウォークスルーのフラグをリセット
+          if (_lastUserId != user.uid) {
+            _tutorialShown = false;
+            _walkthroughStarted = false;
+          }
+          _lastUserId = user.uid;
           _startPointRequestListener(user.uid);
+          // 日次統計・ミッション処理（1日1回、lastLoginDateで判定）
+          _recordDailyLoginIfNeeded(user.uid);
           _userDataSubscription = ref.listenManual<AsyncValue<Map<String, dynamic>?>>(
             userDataProvider(user.uid),
             (prev, data) {
@@ -112,9 +145,13 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
           );
         });
       },
+      // authStateProviderが既にAsyncData(user)で安定している場合でも
+      // コールバックを確実に発火させ、userDataSubscriptionを作成する
+      fireImmediately: true,
     );
     // 初期データ読み込みをフレーム後に実行
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       if (_didInitialLoad) {
         return;
       }
@@ -128,8 +165,21 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       );
 
       // 前のウィジェットでmounted=falseにより失敗したレコメンドポップアップをリトライ
-      if (_pendingDailyRecommendation && !_dailyLoginProcessed) {
+      if (_wasFirstLoginToday && !_dailyLoginProcessed) {
         _retryPendingDailyRecommendation();
+      }
+    });
+    // フォールバック: authリスナーが発火しなかった場合のウォークスルー起動保証
+    // YamaGoパターン: addPostFrameCallbackで初期状態を明示的にチェック
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _ensureWalkthroughIfNeeded();
+    });
+    // lastLoginAtを独立して更新（authリスナーチェーンに依存しない）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        _updateLastLoginAt(currentUser.uid);
       }
     });
   }
@@ -201,8 +251,23 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (bottomTabIndex == null) {
       return;
     }
-    final previousTab = tabs[_currentIndex];
     final nextTab = bottomTabs[bottomTabIndex];
+
+    // ウォークスルー中はステップに応じたタブのみ許可
+    final wState = ref.read(walkthroughProvider);
+    if (wState.isActive) {
+      final allowed = _walkthroughAllowedTab(wState.step);
+      if (allowed != null && nextTab != allowed) return;
+
+      // ウォークスルーステップを進行
+      if (wState.step == WalkthroughStep.tapMapTab && nextTab == _MainTab.map) {
+        ref.read(walkthroughProvider.notifier).nextStep();
+      } else if (wState.step == WalkthroughStep.tapHomeTab && nextTab == _MainTab.home) {
+        ref.read(walkthroughProvider.notifier).nextStep();
+      }
+    }
+
+    final previousTab = tabs[_currentIndex];
     final nextIndex = tabs.indexOf(nextTab);
     setState(() {
       _setCurrentTab(nextIndex, tabs);
@@ -236,6 +301,36 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     });
 
     await _loadTabSpecificData(tab);
+  }
+
+  // ウォークスルーステップに応じて許可するタブを返す（nullは制限なし）
+  _MainTab? _walkthroughAllowedTab(WalkthroughStep step) {
+    switch (step) {
+      case WalkthroughStep.tapMapTab:
+        return _MainTab.map;
+      case WalkthroughStep.tapHomeTab:
+        return _MainTab.home;
+      case WalkthroughStep.tapMissionFab:
+      case WalkthroughStep.tapCoinExchange:
+        return _MainTab.home;
+      default:
+        return null;
+    }
+  }
+
+  // BottomNavigationBar内のタブ位置をRectで計算
+  Rect _calcTabRect(int tabVisualIndex, int totalVisualItems) {
+    final renderBox = _bottomNavKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return Rect.zero;
+    final position = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+    final tabWidth = size.width / totalVisualItems;
+    return Rect.fromLTWH(
+      position.dx + tabWidth * tabVisualIndex,
+      position.dy,
+      tabWidth,
+      size.height,
+    );
   }
 
   // タブ固有のデータ読み込み
@@ -624,65 +719,46 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
   }
 
-  Future<void> _maybeShowDailyRecommendation(String userId, Map<String, dynamic> userData) async {
-    // チュートリアル: 新規ユーザーの初回のみ最優先で表示
-    if (!_tutorialShown && userData['showTutorial'] == true) {
-      _tutorialShown = true;
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute(
-          fullscreenDialog: true,
-          builder: (context) => TutorialView(userId: userId),
-        ),
-      );
-      if (!mounted) return;
-    }
-
-    if (_dailyRecommendationShown) return;
-
-    // ログイン統計・ミッション処理（セッション中、ユーザーごとに1回のみ）
-    if (!_dailyLoginProcessed && !_pendingDailyRecommendation) {
-      final lastLoginAt = userData['lastLoginAt'];
-      final now = DateTime.now();
-      final todayStart = DateTime(now.year, now.month, now.day);
-
-      bool isFirstLoginToday = true;
-      if (lastLoginAt != null) {
-        DateTime lastLoginDate;
-        if (lastLoginAt is Timestamp) {
-          lastLoginDate = lastLoginAt.toDate();
-        } else if (lastLoginAt is DateTime) {
-          lastLoginDate = lastLoginAt;
-        } else {
-          lastLoginDate = DateTime(2000);
-        }
-        isFirstLoginToday = lastLoginDate.isBefore(todayStart);
-      }
-
-      if (!isFirstLoginToday) {
-        // 本日初ログインでない場合: 軽量バッジチェックのみ実行
-        _checkBadgesOnHomeView(userId);
-        return;
-      }
-
-      _pendingDailyRecommendation = true;
-
-      // lastLoginAtを即座に更新（mounted状態に依存させない）
-      FirebaseFirestore.instance.collection('users').doc(userId).update({
+  /// lastLoginAtを画面を開くたびに確実に更新（.set merge: trueで無条件書き込み）
+  /// fcmToken保存と同じ方式で、.get()不要・キャッシュの影響を受けない。
+  Future<void> _updateLastLoginAt(String userId) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(userId).set({
         'lastLoginAt': FieldValue.serverTimestamp(),
-      }).catchError((e) {
-        debugPrint('lastLoginAt更新エラー: $e');
-      });
+      }, SetOptions(merge: true));
+    } catch (e) {
+      debugPrint('lastLoginAt更新エラー: $e');
+    }
+  }
 
-      // daily_login_stats のインクリメント（日次ログインユーザー数の集計用）
-      final nowForStats = DateTime.now();
-      final dateKey = '${nowForStats.year}-${nowForStats.month.toString().padLeft(2, '0')}-${nowForStats.day.toString().padLeft(2, '0')}';
+  /// 本日初ログイン時の統計・ミッション処理（daily_login_stats・デイリーミッション）
+  /// lastLoginDate（yyyy-MM-dd文字列）で判定し、Timestampキャッシュ問題を回避。
+  Future<void> _recordDailyLoginIfNeeded(String userId) async {
+    if (_dailyLoginRecorded) return;
+    // 同時呼び出し防止用（awaitの間に再入するケースを防ぐ）
+    _dailyLoginRecorded = true;
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      final userData = doc.data();
+      if (userData == null) return;
+
+      final now = DateTime.now();
+      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+      // lastLoginDate（yyyy-MM-dd文字列）で本日初回かを判定
+      final lastLoginDate = userData['lastLoginDate'] as String?;
+      if (lastLoginDate == todayStr) return;
+
+      _wasFirstLoginToday = true;
+
+      // daily_login_stats のインクリメント
       FirebaseFirestore.instance
           .collection('daily_login_stats')
-          .doc(dateKey)
+          .doc(todayStr)
           .set({
             'loginCount': FieldValue.increment(1),
-            'date': dateKey,
+            'date': todayStr,
           }, SetOptions(merge: true))
           .catchError((e) {
             debugPrint('daily_login_stats更新エラー: $e');
@@ -695,11 +771,128 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         missionService.markDailyMission(userId, 'app_open');
         missionService.updateLoginStreak(userId);
       }
+    } catch (e) {
+      debugPrint('日次ログイン記録エラー: $e');
+      // 失敗時はフラグをリセットして次回リスナー発火時にリトライ可能にする
+      _dailyLoginRecorded = false;
     }
+  }
+
+  /// フォールバック: authリスナー経由でuserDataSubscriptionが作成されなかった場合に
+  /// 直接Firestoreからユーザーデータを取得してウォークスルー条件をチェックする。
+  /// YamaGoパターン: リスナーに依存せず、addPostFrameCallbackで初期状態を明示チェック。
+  Future<void> _ensureWalkthroughIfNeeded() async {
+    // 既にウォークスルーが開始済み or userDataSubscriptionが作成済みなら不要
+    if (_walkthroughStarted) return;
+    if (_userDataSubscription != null) return;
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    debugPrint('[Walkthrough] フォールバック: userDataSubscription未作成のためFirestoreを直接チェック');
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!mounted) return;
+      final userData = doc.data();
+      if (userData == null) return;
+
+      // ウォークスルー条件チェック（_maybeShowDailyRecommendationのPath2と同等）
+      if (!_walkthroughStarted &&
+          userData['walkthroughCompleted'] != true &&
+          userData['showTutorial'] != true) {
+        _walkthroughStarted = true;
+        debugPrint('[Walkthrough] フォールバック経由でウォークスルー開始');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(walkthroughProvider.notifier).startWalkthrough(user.uid);
+          }
+        });
+      }
+
+      // チュートリアル表示チェック（Path1と同等）
+      if (!_tutorialShown && userData['showTutorial'] == true) {
+        _tutorialShown = true;
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (context) => TutorialView(userId: user.uid),
+          ),
+        );
+        if (!mounted) return;
+        if (!_walkthroughStarted) {
+          _walkthroughStarted = true;
+          debugPrint('[Walkthrough] フォールバック: チュートリアル完了後にウォークスルー開始');
+          ref.read(walkthroughProvider.notifier).startWalkthrough(user.uid);
+        }
+      }
+    } catch (e) {
+      debugPrint('[Walkthrough] フォールバックエラー: $e');
+    }
+  }
+
+  Future<void> _maybeShowDailyRecommendation(String userId, Map<String, dynamic> userData) async {
+    debugPrint('[Walkthrough] _maybeShowDailyRecommendation called: showTutorial=${userData['showTutorial']}, walkthroughCompleted=${userData['walkthroughCompleted']}, _tutorialShown=$_tutorialShown, _walkthroughStarted=$_walkthroughStarted');
+
+    // このウィジェットのルートが最前面でなければチュートリアル/ウォークスルーを表示しない
+    // AuthWrapperがオンボーディング完了前にMainNavigationViewを作成した場合の防御
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) {
+      debugPrint('[Walkthrough] ルートが最前面でないためチュートリアル/ウォークスルーをスキップ');
+      return;
+    }
+
+    // チュートリアル: 新規ユーザーの初回のみ最優先で表示
+    if (!_tutorialShown && userData['showTutorial'] == true) {
+      _tutorialShown = true;
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (context) => TutorialView(userId: userId),
+        ),
+      );
+      if (!mounted) return;
+
+      // ウォークスルー開始（チュートリアル完了直後）
+      if (!_walkthroughStarted) {
+        _walkthroughStarted = true;
+        debugPrint('[Walkthrough] ウォークスルー開始（チュートリアル完了後）');
+        ref.read(walkthroughProvider.notifier).startWalkthrough(userId);
+      }
+    }
+
+    // チュートリアル未表示でも、walkthroughCompleted==false ならウォークスルー開始
+    if (!_walkthroughStarted && userData['walkthroughCompleted'] != true && userData['showTutorial'] != true) {
+      _walkthroughStarted = true;
+      debugPrint('[Walkthrough] ウォークスルー開始（Path2: walkthroughCompleted==false）');
+      // BottomNavigationBar のレイアウト完了後にウォークスルーを開始
+      // Chrome ではキャッシュデータが initState 中に同期的に返されるため、
+      // 直接呼ぶと _calcTabRect() が Rect.zero を返す
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(walkthroughProvider.notifier).startWalkthrough(userId);
+        }
+      });
+    }
+
+    if (_dailyRecommendationShown) return;
+
+    // 本日初ログインでなければバッジチェックのみ
+    if (_dailyLoginRecorded && !_wasFirstLoginToday) {
+      _checkBadgesOnHomeView(userId);
+      return;
+    }
+
+    // まだ日次ログイン判定が完了していない場合はスキップ（次回のリスナー発火を待つ）
+    if (!_dailyLoginRecorded) return;
 
     // ポップアップ表示済みなら終了（前のウィジェットで表示完了していた場合）
     if (_dailyLoginProcessed) {
-      // 日次処理済みだがバッジポップアップは未表示の場合、軽量チェック
       _checkBadgesOnHomeView(userId);
       return;
     }
@@ -721,9 +914,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       return;
     }
 
-    // ポップアップ表示確定 → 再試行不要フラグをセット
+    // ポップアップ表示確定
     _dailyLoginProcessed = true;
-    _pendingDailyRecommendation = false;
 
     try {
       await Navigator.of(context).push(
@@ -763,7 +955,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (!mounted || _dailyLoginProcessed) return;
 
     _dailyLoginProcessed = true;
-    _pendingDailyRecommendation = false;
 
     try {
       await Navigator.of(context).push(
@@ -1034,7 +1225,9 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     required int bottomIndex,
     required List<BottomNavigationBarItem> items,
   }) {
-    return Scaffold(
+    final walkthroughState = ref.watch(walkthroughProvider);
+
+    final scaffold = Scaffold(
       body: pages[pageIndex.clamp(0, pages.length - 1)],
       floatingActionButton: tabs.contains(_MainTab.qr)
           ? FloatingActionButton(
@@ -1062,6 +1255,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
           ? const _LoweredFabLocation(_fabVerticalOffset)
           : null,
       bottomNavigationBar: BottomNavigationBar(
+        key: _bottomNavKey,
         type: BottomNavigationBarType.fixed,
         currentIndex: bottomIndex,
         onTap: (index) => _onBottomTabChanged(index, tabs),
@@ -1073,6 +1267,72 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         elevation: 8,
         items: items,
       ),
+    );
+
+    // ウォークスルーステップ1・4のオーバーレイ
+    final showTabOverlay = walkthroughState.isActive &&
+        (walkthroughState.step == WalkthroughStep.tapMapTab ||
+         walkthroughState.step == WalkthroughStep.tapHomeTab);
+
+    if (!showTabOverlay) return scaffold;
+
+    return Stack(
+      children: [
+        scaffold,
+        _buildNavTabWalkthroughOverlay(walkthroughState, tabs, items.length),
+      ],
+    );
+  }
+
+  Widget _buildNavTabWalkthroughOverlay(
+    WalkthroughState wState,
+    List<_MainTab> tabs,
+    int totalVisualItems,
+  ) {
+    final bottomTabs = _bottomTabsFor(tabs);
+    final showPlaceholder = tabs.contains(_MainTab.qr);
+    final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+
+    // ターゲットタブのビジュアルインデックスを計算
+    final targetTab = wState.step == WalkthroughStep.tapMapTab
+        ? _MainTab.map
+        : _MainTab.home;
+    final bottomTabIndex = bottomTabs.indexOf(targetTab);
+    if (bottomTabIndex < 0) return const SizedBox.shrink();
+    final visualIndex = _visualIndexForBottomTabIndex(bottomTabIndex, placeholderIndex);
+
+    final config = walkthroughStepConfigs[wState.step];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) {
+            final rect = _calcTabRect(visualIndex, totalVisualItems);
+            // BottomNavigationBar 未レイアウト時は Rect.zero → null に変換
+            final validRect = rect == Rect.zero ? null : rect;
+
+            if (validRect == null) {
+              // フレーム後に再計算をスケジュール（初回ビルド前に呼ばれた場合）
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) setLocalState(() {});
+              });
+            }
+
+            return WalkthroughOverlay(
+              targetRect: validRect,
+              message: config?.message ?? '',
+              messagePosition: config?.messagePosition ?? MessagePosition.center,
+              allowTapThrough: true,
+              onTargetTap: () {
+                _onBottomTabChanged(visualIndex, tabs);
+              },
+              onSkip: () {
+                ref.read(walkthroughProvider.notifier).skipWalkthrough();
+              },
+            );
+          },
+        );
+      },
     );
   }
 

@@ -3520,6 +3520,74 @@ export const notifyFollowersOnNewCoupon = onDocumentCreated(
   },
 );
 
+// フォロワーへのInstagram投稿通知
+export const notifyFollowersOnNewInstagramPost = onDocumentCreated(
+  {
+    document: 'public_instagram_posts/{postId}',
+    region: 'asia-northeast1',
+  },
+  async (event) => {
+    const data = event.data?.data() as Record<string, unknown> | undefined;
+    if (!data) return;
+
+    const storeId = (data['storeId'] ?? '').toString();
+    const storeName = (data['storeName'] ?? '').toString();
+    const caption = (data['caption'] ?? '').toString();
+    const isActive = data['isActive'] !== false;
+    const isVideo = data['isVideo'] === true;
+
+    if (!storeId || !isActive || isVideo) return;
+
+    const followersSnap = await db
+      .collection('stores')
+      .doc(storeId)
+      .collection('followers')
+      .get();
+
+    if (followersSnap.empty) return;
+
+    const truncatedCaption =
+      caption.length > 50 ? caption.substring(0, 50) + '...' : caption;
+
+    const BATCH_SIZE = 500;
+    const followerDocs = followersSnap.docs;
+    for (let i = 0; i < followerDocs.length; i += BATCH_SIZE) {
+      const chunk = followerDocs.slice(i, i + BATCH_SIZE);
+      await Promise.all(
+        chunk.map(async (followerDoc) => {
+          const followerId = followerDoc.id;
+          try {
+            const userDoc = await db.collection(USERS_COLLECTION).doc(followerId).get();
+            const userData = userDoc.data() as Record<string, unknown> | undefined;
+            const postNotification = (userData?.notificationSettings as Record<string, unknown> | undefined)?.post;
+            if (postNotification === false) return;
+
+            await createUserNotification({
+              userId: followerId,
+              title: `${storeName}がInstagramを更新しました`,
+              body: truncatedCaption || '新しいInstagram投稿をチェックしましょう！',
+              type: 'marketing',
+              tags: ['instagram_post'],
+              data: {
+                type: 'instagram_post',
+                storeId,
+                storeName,
+                postId: event.params.postId,
+              },
+            });
+          } catch (e) {
+            console.error(`[notifyFollowersOnNewInstagramPost] Error for follower ${followerId}:`, e);
+          }
+        }),
+      );
+    }
+
+    console.log(
+      `[notifyFollowersOnNewInstagramPost] Notified ${followersSnap.size} followers for store ${storeId}`,
+    );
+  },
+);
+
 // 店舗作成時にisOwnerフラグを自動設定
 // 作成者がisOwnerユーザーの場合、店舗ドキュメントにisOwner=trueを設定
 export const setStoreOwnerFlagOnCreate = onDocumentCreated(

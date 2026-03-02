@@ -6,6 +6,10 @@ import '../../widgets/pill_tab_bar.dart';
 import '../../services/coin_service.dart';
 import '../../services/mission_service.dart';
 import '../../providers/badge_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../providers/walkthrough_provider.dart';
+import '../walkthrough/walkthrough_overlay.dart';
+import '../walkthrough/walkthrough_step_config.dart';
 
 /// ミッションの状態
 enum MissionStatus {
@@ -37,14 +41,15 @@ class _MissionItem {
   });
 }
 
-class MissionsView extends StatefulWidget {
-  const MissionsView({super.key});
+class MissionsView extends ConsumerStatefulWidget {
+  final bool showCoinExchange;
+  const MissionsView({super.key, this.showCoinExchange = false});
 
   @override
-  State<MissionsView> createState() => _MissionsViewState();
+  ConsumerState<MissionsView> createState() => _MissionsViewState();
 }
 
-class _MissionsViewState extends State<MissionsView> {
+class _MissionsViewState extends ConsumerState<MissionsView> {
   int _selectedTabIndex = 0;
   bool _isLoading = true;
   int _userCoins = 0;
@@ -70,6 +75,9 @@ class _MissionsViewState extends State<MissionsView> {
   // コイン交換済み店舗IDのローカルキャッシュ（_loadAllMissionData 後の復活防止用）
   final Set<String> _exchangedStoreIds = {};
 
+  // ウォークスルー用GlobalKey
+  final GlobalKey _firstMapClaimKey = GlobalKey();
+
   /// 新規登録ミッションがすべて達成済み（claimed）かどうか
   bool get _isRegistrationComplete {
     const ids = [
@@ -85,6 +93,13 @@ class _MissionsViewState extends State<MissionsView> {
   @override
   void initState() {
     super.initState();
+    // ウォークスルーステップ6なら自動的に新規登録タブに切替
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final wState = ref.read(walkthroughProvider);
+      if (wState.isActive && wState.step == WalkthroughStep.claimMission) {
+        setState(() => _selectedTabIndex = 2);
+      }
+    });
     _loadAllMissionData();
   }
 
@@ -258,7 +273,7 @@ class _MissionsViewState extends State<MissionsView> {
       _buildRegistrationMission(
           'profile_completed', 'プロフィール完成', 'プロフィール情報をすべて入力する', 3, Icons.person),
       _buildRegistrationMission(
-          'first_map', 'マップ初利用', '初めてマップ画面を開く', 1, Icons.explore),
+          'first_map', 'マップ初利用', '初めてマップ画面を開く', 10, Icons.explore),
       _buildRegistrationMission(
           'first_favorite', 'お気に入り登録', '初めて店舗をお気に入りに追加', 2, Icons.favorite),
       _buildRegistrationMission(
@@ -317,8 +332,6 @@ class _MissionsViewState extends State<MissionsView> {
         return '連続ログインでボーナスコインを獲得';
       case 2:
         return '初回限定・合計最大10コイン';
-      case 3:
-        return '10コインで未訪問店舗の100円引きクーポンを取得';
       default:
         return '';
     }
@@ -384,6 +397,16 @@ class _MissionsViewState extends State<MissionsView> {
           _coinExpiresAt = CoinService.calculateExpiryDate(DateTime.now());
           _isCoinExpired = false;
         });
+        // ウォークスルーステップ6: first_mapミッション受取後にステップ7へ進行しホームに戻す
+        final wState = ref.read(walkthroughProvider);
+        if (wState.isActive &&
+            wState.step == WalkthroughStep.claimMission &&
+            mission.id == 'first_map') {
+          ref.read(walkthroughProvider.notifier).nextStep();
+          if (mounted) Navigator.of(context).pop();
+          return;
+        }
+
         _showCoinRewardPopup(mission);
       }
     } else {
@@ -549,12 +572,17 @@ class _MissionsViewState extends State<MissionsView> {
     return '有効期限: $dateText まで';
   }
 
+  bool get _isCoinExchangeMode => widget.showCoinExchange;
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final wState = ref.watch(walkthroughProvider);
+    return Stack(
+      children: [
+        Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
-      appBar: const CommonHeader(
-        title: Text('ミッション'),
+      appBar: CommonHeader(
+        title: Text(_isCoinExchangeMode ? 'コイン交換' : 'ミッション'),
       ),
       body: _isLoading
           ? const Center(
@@ -562,7 +590,20 @@ class _MissionsViewState extends State<MissionsView> {
                 color: Color(0xFFFF6B35),
               ),
             )
-          : Column(
+          : _isCoinExchangeMode
+              ? Column(
+                  children: [
+                    _buildCoinBalanceCard(),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _loadAllMissionData,
+                        child: _buildCoinExchangeTab(),
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
               children: [
                 _buildCoinBalanceCard(),
                 const SizedBox(height: 12),
@@ -570,7 +611,7 @@ class _MissionsViewState extends State<MissionsView> {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: PillTabBar(
-                    labels: const ['デイリー', 'ログイン', '新規登録', 'コイン交換'],
+                    labels: const ['デイリー', 'ログイン', '新規登録'],
                     selectedIndex: _selectedTabIndex,
                     onChanged: (index) {
                       setState(() {
@@ -598,9 +639,7 @@ class _MissionsViewState extends State<MissionsView> {
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: _loadAllMissionData,
-                    child: _selectedTabIndex == 3
-                        ? _buildCoinExchangeTab()
-                        : ListView(
+                    child: ListView(
                             padding: const EdgeInsets.only(bottom: 24),
                             children: [
                               // 新規登録タブ＆未達成時のガイドメッセージ
@@ -661,6 +700,15 @@ class _MissionsViewState extends State<MissionsView> {
                 ),
               ],
             ),
+        ),
+        if (wState.isActive && wState.step == WalkthroughStep.claimMission)
+          WalkthroughOverlay(
+            targetKey: _firstMapClaimKey,
+            message: walkthroughStepConfigs[WalkthroughStep.claimMission]!.message,
+            messagePosition: walkthroughStepConfigs[WalkthroughStep.claimMission]!.messagePosition,
+            onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+          ),
+      ],
     );
   }
 
@@ -678,6 +726,7 @@ class _MissionsViewState extends State<MissionsView> {
   /// 達成済み・未受取 = 活性化（グラデーション背景、タップで報酬受取）
   Widget _buildCompletedUnclaimedCard(_MissionItem mission) {
     return GestureDetector(
+      key: mission.id == 'first_map' ? _firstMapClaimKey : null,
       onTap: _isClaiming ? null : () => _claimReward(mission),
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

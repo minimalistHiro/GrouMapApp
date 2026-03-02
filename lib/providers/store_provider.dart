@@ -54,12 +54,22 @@ final storeProvider = FutureProvider.family<StoreModel?, String>((ref, storeId) 
         final dayData = entry.value as Map<String, dynamic>;
         final openTime = dayData['open']?.toString() ?? '09:00';
         final closeTime = dayData['close']?.toString() ?? '18:00';
+        // periods対応: periodsがあればそのまま変換、なければopen/closeから生成
+        List<Map<String, dynamic>> periods;
+        if (dayData['periods'] != null && dayData['periods'] is List) {
+          periods = (dayData['periods'] as List)
+              .map((p) => Map<String, dynamic>.from(p as Map))
+              .toList();
+        } else {
+          periods = [{'open': openTime, 'close': closeTime}];
+        }
         convertedBusinessHours[entry.key] = {
           'open': openTime,
           'close': closeTime,
           'isClosed': !(dayData['isOpen'] ?? true),
+          'periods': periods,
         };
-        print('storeProvider: ${entry.key} - open: $openTime, close: $closeTime, isOpen: ${dayData['isOpen']}');
+        print('storeProvider: ${entry.key} - open: $openTime, close: $closeTime, isOpen: ${dayData['isOpen']}, periods: ${periods.length}');
       }
     }
     

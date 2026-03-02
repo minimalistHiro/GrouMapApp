@@ -18,6 +18,9 @@ import '../../services/map_filter_service.dart';
 import 'filter_settings_view.dart';
 import '../../services/mission_service.dart';
 import '../../providers/badge_provider.dart';
+import '../../providers/walkthrough_provider.dart';
+import '../walkthrough/walkthrough_overlay.dart';
+import '../walkthrough/walkthrough_step_config.dart';
 
 class _MarkerVisual {
   final Color color;
@@ -69,6 +72,10 @@ class _MapViewState extends ConsumerState<MapView> {
   // 店舗情報表示フラグ
   bool _isShowStoreInfo = false;
   String _selectedStoreUid = '';
+
+  // ウォークスルー用GlobalKey
+  final GlobalKey _closeBtnKey = GlobalKey();
+  final GlobalKey _mapAreaKey = GlobalKey();
 
   // フィルタ/表示モード
   bool _showOpenNowOnly = false; // 「営業中のみ」表示
@@ -1240,6 +1247,11 @@ class _MapViewState extends ConsumerState<MapView> {
                 _selectedStoreUid = storeId;
               }
             });
+            // ウォークスルーステップ2 → 3に進行
+            final wState = ref.read(walkthroughProvider);
+            if (wState.isActive && wState.step == WalkthroughStep.tapMarker && _isShowStoreInfo) {
+              ref.read(walkthroughProvider.notifier).nextStep();
+            }
             await _createMarkers();
           },
         ),
@@ -1305,6 +1317,18 @@ class _MapViewState extends ConsumerState<MapView> {
       final bool isOpenFlag = today['isOpen'] == true;
       if (!isOpenFlag) return false;
 
+      // 複数時間帯対応: periodsがあればいずれかの時間帯で判定
+      final periods = today['periods'];
+      if (periods is List && periods.isNotEmpty) {
+        return periods.any((p) {
+          if (p is! Map) return false;
+          final openStr = (p['open'] ?? '').toString();
+          final closeStr = (p['close'] ?? '').toString();
+          return _isWithinTimeRange(openStr, closeStr, now);
+        });
+      }
+
+      // フォールバック: 従来のopen/closeで判定
       final String openStr = (today['open'] ?? '').toString();
       final String closeStr = (today['close'] ?? '').toString();
       return _isWithinTimeRange(openStr, closeStr, now);
@@ -1387,6 +1411,22 @@ class _MapViewState extends ConsumerState<MapView> {
     final isOpen = dayData['isOpen'] == true;
     if (!isOpen) return '定休日';
 
+    // 複数時間帯対応: periodsがあれば全時間帯を結合表示
+    final periods = dayData['periods'];
+    if (periods is List && periods.isNotEmpty) {
+      final parts = <String>[];
+      for (final p in periods) {
+        if (p is! Map) continue;
+        final open = (p['open'] ?? '').toString();
+        final close = (p['close'] ?? '').toString();
+        if (open.isNotEmpty && close.isNotEmpty) {
+          parts.add('$open〜$close');
+        }
+      }
+      if (parts.isNotEmpty) return parts.join(' / ');
+    }
+
+    // フォールバック: 従来のopen/close
     final openStr = (dayData['open'] ?? '').toString();
     final closeStr = (dayData['close'] ?? '').toString();
     if (openStr.isEmpty || closeStr.isEmpty) return '';
@@ -1568,9 +1608,52 @@ class _MapViewState extends ConsumerState<MapView> {
 
           // 地図コントロールボタン
           _buildMapControls(),
+
+          // ウォークスルーオーバーレイ（ステップ2: マーカータップ誘導）
+          _buildMapWalkthroughOverlay(),
         ],
       ),
     );
+  }
+
+  Widget _buildMapWalkthroughOverlay() {
+    final wState = ref.watch(walkthroughProvider);
+    if (!wState.isActive) return const SizedBox.shrink();
+
+    if (wState.step == WalkthroughStep.tapMarker) {
+      final config = walkthroughStepConfigs[WalkthroughStep.tapMarker];
+      return WalkthroughOverlay(
+        message: config?.message ?? '',
+        messagePosition: config?.messagePosition ?? MessagePosition.top,
+        passThrough: true,
+        overlayOpacity: 0.3,
+        onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+      );
+    }
+
+    if (wState.step == WalkthroughStep.tapClosePanel && _isShowStoreInfo) {
+      final config = walkthroughStepConfigs[WalkthroughStep.tapClosePanel];
+      return WalkthroughOverlay(
+        targetKey: _closeBtnKey,
+        message: config?.message ?? '',
+        messagePosition: config?.messagePosition ?? MessagePosition.top,
+        allowTapThrough: true,
+        onTargetTap: () async {
+          final wState = ref.read(walkthroughProvider);
+          if (wState.isActive && wState.step == WalkthroughStep.tapClosePanel) {
+            ref.read(walkthroughProvider.notifier).nextStep();
+          }
+          setState(() {
+            _isShowStoreInfo = false;
+            _expandedMarkerId = '';
+          });
+          await _createMarkers();
+        },
+        onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 
   Widget _buildStoreInfoCard() {
@@ -1831,7 +1914,13 @@ class _MapViewState extends ConsumerState<MapView> {
             top: 8,
             right: 8,
             child: GestureDetector(
+              key: _closeBtnKey,
               onTap: () async {
+                // ウォークスルーステップ3 → 4に進行
+                final wState = ref.read(walkthroughProvider);
+                if (wState.isActive && wState.step == WalkthroughStep.tapClosePanel) {
+                  ref.read(walkthroughProvider.notifier).nextStep();
+                }
                 setState(() {
                   _isShowStoreInfo = false;
                   _expandedMarkerId = '';

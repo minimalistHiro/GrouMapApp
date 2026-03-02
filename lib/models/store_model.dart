@@ -60,6 +60,7 @@ class StoreDayHours with _$StoreDayHours {
     required String open,
     required String close,
     @Default(false) bool isClosed,
+    @Default([]) List<Map<String, dynamic>> periods,
   }) = _StoreDayHours;
 
   factory StoreDayHours.fromJson(Map<String, dynamic> json) => _$StoreDayHoursFromJson(json);

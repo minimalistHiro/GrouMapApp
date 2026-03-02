@@ -37,6 +37,9 @@ import '../services/mission_service.dart';
 import 'main_navigation_view.dart';
 import 'stores/store_detail_view.dart';
 import '../services/coin_service.dart';
+import '../providers/walkthrough_provider.dart';
+import 'walkthrough/walkthrough_overlay.dart';
+import 'walkthrough/walkthrough_step_config.dart';
 
 // ユーザーが所持しているコイン状態
 final userCoinStatusProvider =
@@ -182,6 +185,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
   bool _hasClaimableMissions = false;
   String? _lastMissionCheckUserId;
   String? _lastCoinExpiryCheckUserId;
+
+  // ウォークスルー用GlobalKey
+  final GlobalKey _missionFabKey = GlobalKey();
+  final GlobalKey _coinExchangeKey = GlobalKey();
 
   Widget _buildLoadingIndicatorWithLabel(
     String label, {
@@ -482,6 +489,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
                     _buildRecommendedStoresSection(context),
                     const SizedBox(height: 12),
 
+                    // コイン交換ボタン（おすすめ店舗の下）- 10コイン以上で表示
+                    if (isLoggedIn)
+                      _buildCoinExchangeButton(context, ref, userId),
+
                     // くじ引きキャンペーンボタン（おすすめ店舗の下）- ログインユーザーのみ
                     // TODO: スロット機能は一時的に非表示（将来再開予定）
                     // if (isLoggedIn)
@@ -505,15 +516,59 @@ class _HomeViewState extends ConsumerState<HomeView> {
               bottom: 16,
               child: _buildMissionFloatingButton(context, userId),
             ),
+
+          // ウォークスルーオーバーレイ（ステップ5: ミッションFAB、ステップ7: コイン交換）
+          _buildHomeWalkthroughOverlay(),
         ],
       ),
     );
   }
 
+  Widget _buildHomeWalkthroughOverlay() {
+    final wState = ref.watch(walkthroughProvider);
+    if (!wState.isActive) return const SizedBox.shrink();
+
+    if (wState.step == WalkthroughStep.tapMissionFab) {
+      final config = walkthroughStepConfigs[WalkthroughStep.tapMissionFab];
+      return WalkthroughOverlay(
+        targetKey: _missionFabKey,
+        message: config?.message ?? '',
+        messagePosition: config?.messagePosition ?? MessagePosition.center,
+        allowTapThrough: true,
+        onTargetTap: () {
+          // FABのonTapが呼ばれるのでここでは何もしない
+        },
+        onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+      );
+    }
+
+    if (wState.step == WalkthroughStep.tapCoinExchange) {
+      final config = walkthroughStepConfigs[WalkthroughStep.tapCoinExchange];
+      return WalkthroughOverlay(
+        targetKey: _coinExchangeKey,
+        message: config?.message ?? '',
+        messagePosition: config?.messagePosition ?? MessagePosition.center,
+        allowTapThrough: true,
+        onTargetTap: () {
+          // GestureDetectorのonTapが呼ばれるのでここでは何もしない
+        },
+        onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
   Widget _buildMissionFloatingButton(BuildContext context, String userId) {
     final isActive = _hasClaimableMissions;
     return GestureDetector(
+      key: _missionFabKey,
       onTap: () async {
+        // ウォークスルーステップ5 → 6に進行
+        final wState = ref.read(walkthroughProvider);
+        if (wState.isActive && wState.step == WalkthroughStep.tapMissionFab) {
+          ref.read(walkthroughProvider.notifier).nextStep();
+        }
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => const MissionsView(),
@@ -1463,10 +1518,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
 
   Widget _buildMenuGrid(BuildContext context, WidgetRef ref, bool isLoggedIn) {
     final menuItems = [
-      {'icon': 'assets/images/icon_stamp.png', 'label': 'スタンプ'},
-      {'icon': 'assets/images/icon_badge.png', 'label': 'バッジ'},
-      {'icon': 'assets/images/icon_store.png', 'label': '店舗一覧'},
-      {'icon': 'assets/images/icon_coupon.png', 'label': 'クーポン'},
+      {'icon': 'assets/images/icon_stamp_menu.png', 'label': 'スタンプ'},
+      {'icon': 'assets/images/icon_badge_menu.png', 'label': 'バッジ'},
+      {'icon': 'assets/images/icon_store_menu.png', 'label': '店舗一覧'},
+      {'icon': 'assets/images/icon_coupon_menu.png', 'label': 'クーポン'},
     ];
 
     return Container(
@@ -1735,6 +1790,92 @@ class _HomeViewState extends ConsumerState<HomeView> {
       return '--';
     }
     return distance;
+  }
+
+  Widget _buildCoinExchangeButton(
+    BuildContext context,
+    WidgetRef ref,
+    String userId,
+  ) {
+    final coinStatus = ref.watch(userCoinStatusProvider(userId)).valueOrNull;
+    final availableCoins = coinStatus?.availableCoins ?? 0;
+    final wState = ref.watch(walkthroughProvider);
+    final isWalkthroughCoinStep =
+        wState.isActive && wState.step == WalkthroughStep.tapCoinExchange;
+
+    // 10コイン未満の場合は非表示（ウォークスルーステップ7以外）
+    if (availableCoins < 10 && !isWalkthroughCoinStep) {
+      // ウォークスルーのステップ7でコイン不足の場合は自動完了
+      if (isWalkthroughCoinStep) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(walkthroughProvider.notifier).completeWalkthrough();
+        });
+      }
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      key: _coinExchangeKey,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GestureDetector(
+        onTap: () {
+          // ウォークスルーステップ7で完了
+          if (isWalkthroughCoinStep) {
+            ref.read(walkthroughProvider.notifier).completeWalkthrough();
+          }
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) =>
+                  const MissionsView(showCoinExchange: true),
+            ),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFF6B35), Color(0xFFFF8F00)],
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+            ),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFFFF6B35).withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Image.asset(
+                'assets/images/icon_coin.png',
+                width: 22,
+                height: 22,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'コインをクーポンに交換しよう！',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white,
+                size: 14,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildRecommendedStoresSection(BuildContext context) {

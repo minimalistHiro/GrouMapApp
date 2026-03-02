@@ -2691,9 +2691,24 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                     rowColor = Colors.red[600]!;
                     isHoliday = true;
                   } else {
-                    final openTime = _getStringValue(dayData?['open'], '');
-                    final closeTime = _getStringValue(dayData?['close'], '');
-                    timeText = '$openTime - $closeTime';
+                    // 複数時間帯対応: periodsがあれば全時間帯を結合表示
+                    final periods = dayData?['periods'];
+                    if (periods is List && periods.isNotEmpty) {
+                      final parts = <String>[];
+                      for (final p in periods) {
+                        if (p is! Map) continue;
+                        final o = _getStringValue(p['open'], '');
+                        final c = _getStringValue(p['close'], '');
+                        if (o.isNotEmpty && c.isNotEmpty) {
+                          parts.add('$o - $c');
+                        }
+                      }
+                      timeText = parts.isNotEmpty ? parts.join(' / ') : '';
+                    } else {
+                      final openTime = _getStringValue(dayData?['open'], '');
+                      final closeTime = _getStringValue(dayData?['close'], '');
+                      timeText = '$openTime - $closeTime';
+                    }
                     rowIcon = Icons.access_time;
                     rowColor = Colors.green[600]!;
                   }
@@ -2926,6 +2941,12 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       return (label: '定休日', color: Colors.grey);
     }
 
+    // 複数時間帯対応: periodsがあればいずれかで判定
+    final periods = dayData['periods'];
+    if (periods is List && periods.isNotEmpty) {
+      return _evaluateMultiplePeriods(periods, now);
+    }
+
     final openTime = _getStringValue(dayData['open'], '');
     final closeTime = _getStringValue(dayData['close'], '');
     return _evaluateTimeRange(openTime, closeTime, now);
@@ -2967,6 +2988,35 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       return (label: '営業時間外', color: Colors.red);
     }
 
+    return (label: '営業時間外', color: Colors.red);
+  }
+
+  // 複数時間帯対応の営業ステータス評価
+  ({String label, Color color}) _evaluateMultiplePeriods(
+    List<dynamic> periods,
+    DateTime now, {
+    String? prefix,
+  }) {
+    // いずれかの時間帯で営業中かチェック
+    for (final p in periods) {
+      if (p is! Map) continue;
+      final openTime = (p['open'] ?? '').toString();
+      final closeTime = (p['close'] ?? '').toString();
+      final result = _evaluateTimeRange(openTime, closeTime, now, prefix: prefix);
+      if (result.label.contains('営業中') || result.label.contains('営業終了')) {
+        return result;
+      }
+    }
+    // 営業中でない場合、次の営業開始が近いかチェック
+    for (final p in periods) {
+      if (p is! Map) continue;
+      final openTime = (p['open'] ?? '').toString();
+      final closeTime = (p['close'] ?? '').toString();
+      final result = _evaluateTimeRange(openTime, closeTime, now, prefix: prefix);
+      if (result.label.contains('営業開始')) {
+        return result;
+      }
+    }
     return (label: '営業時間外', color: Colors.red);
   }
 

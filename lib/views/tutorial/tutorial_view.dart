@@ -58,15 +58,18 @@ class _TutorialViewState extends State<TutorialView> {
   }
 
   Future<void> _completeTutorial() async {
-    FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.userId)
-        .update({
-      'showTutorial': false,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }).catchError((e) {
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .update({
+        'showTutorial': false,
+        'walkthroughCompleted': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
       debugPrint('チュートリアル完了フラグ更新エラー: $e');
-    });
+    }
     if (mounted) {
       Navigator.of(context).pop();
     }

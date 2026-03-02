@@ -678,8 +678,7 @@ class _DailyRecommendationViewState
       'sunday': '日',
     };
 
-    String? openTime;
-    String? closeTime;
+    String? hoursText;
     final List<String> closedDays = [];
 
     for (final entry in dayNames.entries) {
@@ -688,28 +687,43 @@ class _DailyRecommendationViewState
         continue;
       }
       final isOpen = dayData['isOpen'] == true;
-      final dayOpen = (dayData['open'] ?? '').toString();
-      final dayClose = (dayData['close'] ?? '').toString();
       if (!isOpen) {
         closedDays.add(entry.value);
         continue;
       }
-      if (openTime == null &&
-          closeTime == null &&
-          dayOpen.isNotEmpty &&
-          dayClose.isNotEmpty) {
-        openTime = dayOpen;
-        closeTime = dayClose;
+      if (hoursText == null) {
+        // 複数時間帯対応: periodsがあれば全時間帯を結合表示
+        final periods = dayData['periods'];
+        if (periods is List && periods.isNotEmpty) {
+          final parts = <String>[];
+          for (final p in periods) {
+            if (p is! Map) continue;
+            final o = (p['open'] ?? '').toString();
+            final c = (p['close'] ?? '').toString();
+            if (o.isNotEmpty && c.isNotEmpty) {
+              parts.add('$o〜$c');
+            }
+          }
+          if (parts.isNotEmpty) hoursText = parts.join(' / ');
+        }
+        // フォールバック: 従来のopen/close
+        if (hoursText == null) {
+          final dayOpen = (dayData['open'] ?? '').toString();
+          final dayClose = (dayData['close'] ?? '').toString();
+          if (dayOpen.isNotEmpty && dayClose.isNotEmpty) {
+            hoursText = '$dayOpen〜$dayClose';
+          }
+        }
       }
     }
 
-    if (openTime == null || closeTime == null) {
+    if (hoursText == null) {
       return '';
     }
 
     final closedText =
         closedDays.isEmpty ? '定休日なし' : '${closedDays.join('、')}定休日';
-    return '$openTime〜$closeTime（$closedText）';
+    return '$hoursText（$closedText）';
   }
 
   Widget _buildStoreImage(String imageUrl) {

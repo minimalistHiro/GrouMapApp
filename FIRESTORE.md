@@ -488,7 +488,10 @@
   - `pendingRequestNotifiedAt`: 未承認店舗通知送信済み日時
   - `isOwner`: オーナー専用フラグ（trueの場合ユーザーアプリで非表示）。Cloud Functions `setStoreOwnerFlagOnCreate` により、isOwnerユーザーが店舗を作成した場合に自動設定
   - 表示ルール（ユーザーアプリ）: マップ/店舗一覧/おすすめ店舗/デイリーレコメンド/ミッションのコイン交換一覧は `isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` の店舗は非表示。認証状態に依存せず店舗ドキュメントの `isOwner` フラグのみで判定
-  - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）
+  - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）。各曜日のデータに `periods`（複数時間帯）フィールドを持つ場合がある
+    - 各曜日: `{ open: 'HH:mm', close: 'HH:mm', isOpen: bool, periods: [ { open: 'HH:mm', close: 'HH:mm' }, ... ] }`
+    - `periods` が存在する場合は複数時間帯（例: ランチ 11:00〜14:00 / ディナー 17:00〜22:00）として扱い、`open/close` は最初の時間帯のフォールバックとして使用
+    - `periods` が未設定または空の場合は従来の `open/close` 単一時間帯で判定
   - `scheduleOverrides`: 日付別スケジュール上書き（`Map<yyyy-MM-dd, Map>`）
     - 各エントリのキー: `yyyy-MM-dd` 形式の日付文字列
     - `type`: 種別（`closed`=臨時休業 / `open`=臨時営業 / `special_hours`=時間変更）
@@ -816,6 +819,7 @@
     - `login_7_claimed`: 7日連続ログインボーナス受取済みフラグ（bool）
     - `login_30_claimed`: 30日連続ログインボーナス受取済みフラグ（bool）
   - `showTutorial`: 初回オンボーディングチュートリアル表示フラグ（初期値 `true`、`TutorialView` の完了/スキップで `false`）
+  - `walkthroughCompleted`: インタラクティブウォークスルー完了フラグ（初期値 `false`、`TutorialView` 完了時に明示的に `false` を書き込み。ウォークスルー7ステップ完了またはスキップ時に `true` に更新。`true` のユーザーにはウォークスルーを表示しない）
   - `readNotifications`: 既読通知ID配列
   - `stores/{storeId}`: スタンプ/来店情報
     - `stamps`: スタンプ数

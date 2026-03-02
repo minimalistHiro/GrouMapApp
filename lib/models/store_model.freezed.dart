@@ -1121,6 +1121,7 @@ mixin _$StoreDayHours {
   String get open => throw _privateConstructorUsedError;
   String get close => throw _privateConstructorUsedError;
   bool get isClosed => throw _privateConstructorUsedError;
+  List<Map<String, dynamic>> get periods => throw _privateConstructorUsedError;
 
   /// Serializes this StoreDayHours to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -1138,7 +1139,11 @@ abstract class $StoreDayHoursCopyWith<$Res> {
           StoreDayHours value, $Res Function(StoreDayHours) then) =
       _$StoreDayHoursCopyWithImpl<$Res, StoreDayHours>;
   @useResult
-  $Res call({String open, String close, bool isClosed});
+  $Res call(
+      {String open,
+      String close,
+      bool isClosed,
+      List<Map<String, dynamic>> periods});
 }
 
 /// @nodoc
@@ -1159,6 +1164,7 @@ class _$StoreDayHoursCopyWithImpl<$Res, $Val extends StoreDayHours>
     Object? open = null,
     Object? close = null,
     Object? isClosed = null,
+    Object? periods = null,
   }) {
     return _then(_value.copyWith(
       open: null == open
@@ -1173,6 +1179,10 @@ class _$StoreDayHoursCopyWithImpl<$Res, $Val extends StoreDayHours>
           ? _value.isClosed
           : isClosed // ignore: cast_nullable_to_non_nullable
               as bool,
+      periods: null == periods
+          ? _value.periods
+          : periods // ignore: cast_nullable_to_non_nullable
+              as List<Map<String, dynamic>>,
     ) as $Val);
   }
 }
@@ -1185,7 +1195,11 @@ abstract class _$$StoreDayHoursImplCopyWith<$Res>
       __$$StoreDayHoursImplCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String open, String close, bool isClosed});
+  $Res call(
+      {String open,
+      String close,
+      bool isClosed,
+      List<Map<String, dynamic>> periods});
 }
 
 /// @nodoc
@@ -1204,6 +1218,7 @@ class __$$StoreDayHoursImplCopyWithImpl<$Res>
     Object? open = null,
     Object? close = null,
     Object? isClosed = null,
+    Object? periods = null,
   }) {
     return _then(_$StoreDayHoursImpl(
       open: null == open
@@ -1218,6 +1233,10 @@ class __$$StoreDayHoursImplCopyWithImpl<$Res>
           ? _value.isClosed
           : isClosed // ignore: cast_nullable_to_non_nullable
               as bool,
+      periods: null == periods
+          ? _value._periods
+          : periods // ignore: cast_nullable_to_non_nullable
+              as List<Map<String, dynamic>>,
     ));
   }
 }
@@ -1226,7 +1245,11 @@ class __$$StoreDayHoursImplCopyWithImpl<$Res>
 @JsonSerializable()
 class _$StoreDayHoursImpl implements _StoreDayHours {
   const _$StoreDayHoursImpl(
-      {required this.open, required this.close, this.isClosed = false});
+      {required this.open,
+      required this.close,
+      this.isClosed = false,
+      final List<Map<String, dynamic>> periods = const []})
+      : _periods = periods;
 
   factory _$StoreDayHoursImpl.fromJson(Map<String, dynamic> json) =>
       _$$StoreDayHoursImplFromJson(json);
@@ -1238,10 +1261,18 @@ class _$StoreDayHoursImpl implements _StoreDayHours {
   @override
   @JsonKey()
   final bool isClosed;
+  final List<Map<String, dynamic>> _periods;
+  @override
+  @JsonKey()
+  List<Map<String, dynamic>> get periods {
+    if (_periods is EqualUnmodifiableListView) return _periods;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_periods);
+  }
 
   @override
   String toString() {
-    return 'StoreDayHours(open: $open, close: $close, isClosed: $isClosed)';
+    return 'StoreDayHours(open: $open, close: $close, isClosed: $isClosed, periods: $periods)';
   }
 
   @override
@@ -1252,12 +1283,14 @@ class _$StoreDayHoursImpl implements _StoreDayHours {
             (identical(other.open, open) || other.open == open) &&
             (identical(other.close, close) || other.close == close) &&
             (identical(other.isClosed, isClosed) ||
-                other.isClosed == isClosed));
+                other.isClosed == isClosed) &&
+            const DeepCollectionEquality().equals(other._periods, _periods));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, open, close, isClosed);
+  int get hashCode => Object.hash(runtimeType, open, close, isClosed,
+      const DeepCollectionEquality().hash(_periods));
 
   /// Create a copy of StoreDayHours
   /// with the given fields replaced by the non-null parameter values.
@@ -1279,7 +1312,8 @@ abstract class _StoreDayHours implements StoreDayHours {
   const factory _StoreDayHours(
       {required final String open,
       required final String close,
-      final bool isClosed}) = _$StoreDayHoursImpl;
+      final bool isClosed,
+      final List<Map<String, dynamic>> periods}) = _$StoreDayHoursImpl;
 
   factory _StoreDayHours.fromJson(Map<String, dynamic> json) =
       _$StoreDayHoursImpl.fromJson;
@@ -1290,6 +1324,8 @@ abstract class _StoreDayHours implements StoreDayHours {
   String get close;
   @override
   bool get isClosed;
+  @override
+  List<Map<String, dynamic>> get periods;
 
   /// Create a copy of StoreDayHours
   /// with the given fields replaced by the non-null parameter values.
