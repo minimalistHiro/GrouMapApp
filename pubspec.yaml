@@ -98,6 +98,9 @@ dependencies:
   # Splash screen
   flutter_native_splash: ^2.4.0
 
+  # Deep Links (Universal Links / App Links)
+  app_links: ^6.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

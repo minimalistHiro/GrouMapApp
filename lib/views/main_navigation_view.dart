@@ -23,6 +23,9 @@ import 'tutorial/tutorial_view.dart';
 import '../providers/walkthrough_provider.dart';
 import 'walkthrough/walkthrough_overlay.dart';
 import 'walkthrough/walkthrough_step_config.dart';
+import '../services/deep_link_service.dart';
+import '../theme/app_ui.dart';
+import 'checkin/nfc_coupon_select_view.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
   final int initialIndex;
@@ -97,6 +100,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
   // BottomNavigationBar全体のGlobalKey（タブ位置計算用）
   final GlobalKey _bottomNavKey = GlobalKey();
+
+  // Deep Link (NFC チェックイン)
+  final DeepLinkService _deepLinkService = DeepLinkService();
+  bool _isProcessingCheckin = false;
 
   @override
   void initState() {
@@ -182,6 +189,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         _updateLastLoginAt(currentUser.uid);
       }
     });
+    // Deep Link リスナー（NFC チェックイン用）
+    _initDeepLinkListener();
   }
 
   // 初期データ読み込み
@@ -224,6 +233,67 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       ref.invalidate(storesProvider);
     } catch (e) {
       debugPrint('店舗データ読み込みエラー: $e');
+    }
+  }
+
+  // Deep Link リスナー初期化（NFC チェックイン用）
+  void _initDeepLinkListener() {
+    // コールドスタート時の初期リンクを処理
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final initialLink = await _deepLinkService.getInitialCheckinLink();
+      if (initialLink != null) {
+        _handleCheckinDeepLink(initialLink);
+      }
+    });
+    // ウォームスタート時のリンクストリームを監視
+    _deepLinkService.listenCheckinLinks((link) {
+      if (!mounted) return;
+      _handleCheckinDeepLink(link);
+    });
+  }
+
+  // NFC チェックイン Deep Link を処理
+  // → クーポン選択画面に遷移し、ユーザーがクーポンを選択後にチェックイン実行
+  Future<void> _handleCheckinDeepLink(CheckinDeepLink link) async {
+    if (_isProcessingCheckin) return;
+    _isProcessingCheckin = true;
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('チェックインにはログインが必要です'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+
+      // クーポン選択画面へ遷移（チェックイン処理はこの画面内で実行される）
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => NfcCouponSelectView(
+            storeId: link.storeId,
+            tagSecret: link.tagSecret,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('チェックインの準備に失敗しました'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      debugPrint('NFC checkin deep link error: $e');
+    } finally {
+      _isProcessingCheckin = false;
     }
   }
 
@@ -581,6 +651,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     _authSubscription?.close();
     _userDataSubscription?.close();
     _stopPointRequestListener();
+    _deepLinkService.dispose();
     super.dispose();
   }
 

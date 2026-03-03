@@ -1,6 +1,7 @@
 # ユーザー用アプリ 画面一覧（構成と説明）
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
+※ 2026-03-03更新: NFCチェックイン機能を実装。`DeepLinkService`（`app_links`パッケージ）でNFCタグのURL Deep Linkを受信し、`MainNavigationView`から`NfcCouponSelectView`（クーポン選択画面）経由で`NfcCheckinService`→Cloud Functions `nfcCheckin`を呼び出し、`NfcCheckinResultView`（結果画面・使用済みクーポン確認コード＋スタンプカード表示）に遷移するフローを追加。Universal Links（iOS）/ App Links（Android）設定済み。1日1回スタンプ制限（`lastStampDate`フィールド）を`punchStamp`/`nfcCheckin`の両方に適用。
 ※ 2026-03-02更新: チュートリアル完了後のインタラクティブウォークスルー（7ステップ）を実装。グレーアウトオーバーレイ＋ハイライト穴あきで操作対象を誘導する `WalkthroughOverlay` を追加。`WalkthroughProvider` でステップ管理。`MainNavigationView`（ステップ1・4: タブ誘導）、`MapView`（ステップ2・3: マーカータップ・パネル閉じ）、`HomeView`（ステップ5・7: FAB・コイン交換）、`MissionsView`（ステップ6: コイン受取）にオーバーレイを配置。Firestore `users/{uid}.walkthroughCompleted` で完了管理。first_mapミッション報酬を1→10コインに変更。
 ※ 2026-03-01更新（3回目）: 営業時間の複数時間帯（periods）対応。`StoreModel`の`StoreDayHours`に`periods`フィールドを追加。`MapView`の`_isStoreOpenNow()`と`_getTodayHours()`、`StoreDetailView`の営業時間表示・ステータス判定を複数時間帯に対応。ランチ+ディナー等の分割営業時間を正しく表示・判定。
 ※ 2026-03-01更新（2回目）: `MissionsView` のタブバーからコイン交換タブを削除し、3タブ（デイリー/ログイン/新規登録）に変更。`showCoinExchange` パラメータを追加し、ホーム画面からコイン交換モードで直接遷移可能に。`HomeView` のおすすめ店舗セクション直下にコイン交換カプセルボタンを追加（10コイン以上保有時のみ表示・タップで `MissionsView(showCoinExchange: true)` に遷移）。
@@ -53,8 +54,8 @@
 ## 起動・ナビゲーション
 
 ### MainNavigationView (`lib/views/main_navigation_view.dart`)
-- 構成: ボトムタブ（ホーム/マップ/投稿/プロフィール + ログイン時のみQR）、FAB（QR起動）
-- 説明: アプリ全体のタブ切替と初期データ読込を担うメインナビゲーション。バッジ獲得ポップアップの協調制御を一元管理（本日初ログイン時: レコメンドポップアップ→2秒→バッジポップアップ、2回目以降: 2秒後にバッジポップアップ）
+- 構成: ボトムタブ（ホーム/マップ/投稿/プロフィール + ログイン時のみQR）、FAB（QR起動）、Deep Link受信（NFCチェックイン用）
+- 説明: アプリ全体のタブ切替と初期データ読込を担うメインナビゲーション。バッジ獲得ポップアップの協調制御を一元管理（本日初ログイン時: レコメンドポップアップ→2秒→バッジポップアップ、2回目以降: 2秒後にバッジポップアップ）。`DeepLinkService`（`app_links`パッケージ）でNFCタグURL（`groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）のDeep Linkをコールドスタート/ウォームスタートの両方で受信し、`NfcCouponSelectView`に遷移。`_isProcessingCheckin`フラグで重複処理を防止
 
 ## 認証・登録
 
@@ -226,6 +227,24 @@
 ### PaymentSuccessView (`lib/views/payment/payment_success_view.dart`)
 - 構成: 成功メッセージ、店舗情報、支払い詳細、ホーム戻りボタン
 - 説明: 支払い完了画面
+
+## NFCチェックイン
+
+### NfcCouponSelectView (`lib/views/checkin/nfc_coupon_select_view.dart`)
+- 構成: CommonHeader（「チェックイン」）、店舗情報カード（アイコン+店舗名+「NFCチェックイン」ラベル）、クーポン選択セクション（利用可能クーポンがある場合: タイトル「利用するクーポンを選択」+説明文+クーポンカードリスト（チェックボックス+アイコン+タイトル+割引額+取得元ラベル（スタンプ特典/コイン交換）+有効期限）、クーポンなしの場合: 「利用可能なクーポンはありません」メッセージ）、下部固定ボタン（選択クーポンありの場合: 「N件のクーポンを利用してチェックイン」カウント+「チェックインする」ボタン、選択なしの場合: 「クーポンを使わずにチェックイン」ボタン）
+- パラメータ: `storeId`（店舗ID）/ `tagSecret`（NFCタグシークレット）
+- 説明: NFCタグURL Deep Link → `MainNavigationView` 経由で遷移するクーポン選択画面。`user_coupons` コレクションから当該店舗の未使用・有効期限内クーポンを取得し、チェックインと同時に利用するクーポンを複数選択可能。チェックイン実行時は `NfcCheckinService.checkin()` を呼び出し、成功後 `NfcCheckinResultView` に `pushReplacement` で遷移。`FirebaseFunctionsException` のエラーコード（`already-exists`=本日チェックイン済み / `not-found`=無効タグ / `permission-denied`=利用不可 / `unauthenticated`=未ログイン）に応じたエラーメッセージを SnackBar で表示
+
+### NfcCheckinResultView (`lib/views/checkin/nfc_checkin_result_view.dart`)
+- 構成: CommonHeader（「チェックイン完了」）、成功アイコン（緑チェック）+「チェックイン成功！」タイトル+店舗名、クーポン利用確認セクション（使用クーポンがある場合のみ: 緑枠カード+「クーポン利用済み」ヘッダー+使用クーポン一覧+6桁確認コード（モノスペース28px）+リアルタイム時計（日付+秒単位更新）+「この画面をスタッフにお見せください」案内）、共通スタンプカード（`StampCardWidget`・押印アニメーション・カード完了時シャインエフェクト）、来店ボーナスバナー（+Nコイン表示・`coinsAdded > 0` 時のみ）、獲得クーポンセクション（`awardedCoupons` がある場合のみ・オレンジ丸角Chip表示）、利用可能クーポンセクション（店舗の `coupons` サブコレクションから取得・必要スタンプ未達のクーポンは「あとNスタンプ」オーバーレイ表示）、下部固定「完了」ボタン（`MainNavigationView` に `pushAndRemoveUntil` で遷移）
+- パラメータ: `result`（`NfcCheckinResult`）/ `storeId`（店舗ID）/ `usedCoupons`（使用クーポン情報リスト）
+- 説明: NFCチェックイン結果表示画面。クーポン利用時はスタッフ目視確認用の確認コード（Cloud Functions生成の6桁コード）とリアルタイム時計（1秒間隔更新）を表示し、スクリーンショット不正対策。スタンプカードの押印アニメーション・コンプリートシャインエフェクトは `PointPaymentDetailView` と同様の演出
+
+### DeepLinkService (`lib/services/deep_link_service.dart`)
+- 説明: `app_links` パッケージを使用したDeep Linkサービス。NFCタグに書き込まれたURL（`https://groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）をUniversal Links（iOS）/ App Links（Android）経由で受信。`getInitialCheckinLink()`（コールドスタート）と `listenCheckinLinks()`（ウォームスタート）の2系統で対応。`CheckinDeepLink` モデルに `storeId` と `tagSecret` をパースして返す
+
+### NfcCheckinService (`lib/services/nfc_checkin_service.dart`)
+- 説明: Cloud Functions `nfcCheckin` を呼び出すサービス。`storeId`・`tagSecret`・`selectedUserCouponIds`（任意）をパラメータとして送信し、`NfcCheckinResult`（`stampsAfter`/`cardCompleted`/`storeName`/`coinsAdded`/`awardedCoupons`/`usedCoupons`/`usageVerificationCode`）を返す
 
 ## スタンプ・バッジ
 
@@ -443,6 +462,13 @@
                │  ├─ 利用規約（TermsView）
                │  └─ メールサポート（EmailSupportView）
                └─ お問い合わせ（ContactView）
+
+NFCチェックインフロー（Deep Link経由）
+└─ NFCタグタッチ → OS-native URL読取 → Universal Links/App Links
+   └─ MainNavigationView（DeepLinkService受信）
+      └─ NfcCouponSelectView（クーポン選択）
+         └─ NfcCheckinResultView（結果表示・確認コード・スタンプカード）
+            └─ MainNavigationView（完了）
 
 その他の単独遷移・演出系
 ├─ チュートリアル（TutorialView）→ 新規登録後の `UserInfoView` 完了直後に自動表示（showTutorial=true のユーザーのみ、保険でホーム遷移時にも表示可能）

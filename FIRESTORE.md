@@ -124,6 +124,24 @@
     - `readByUserAt`: ユーザー既読日時
     - `readByOwnerAt`: オーナー既読日時
 
+### nfc_tags
+- `nfc_tags/{tagId}`: NFCタグ管理
+  - `storeId`: 対象店舗ID（string）
+  - `tagSecret`: 検証用シークレット（ランダム32文字、string）
+  - `tagUid`: NFCタグの物理UID（オプション、二重検証用、string?）
+  - `isActive`: 有効フラグ（bool）
+  - `createdAt`: 登録日時（Timestamp）
+  - `createdBy`: 登録した管理者UID（string）
+  - `deactivatedAt`: 無効化日時（Timestamp?）
+- 複合インデックス: `[storeId ASC, tagSecret ASC]`（`firestore.indexes.json` に定義）
+- アクセス制御メモ（`firestore.rules`）:
+  - read: `isOwner()` のみ
+  - write: `isOwner()` のみ（Cloud Functions `registerNfcTag` / `nfcCheckin` からも書き込み可能）
+- 設計メモ:
+  - NFCタグにURL型NDEFレコード（`https://groumapapp.web.app/checkin?storeId={storeId}&secret={tagSecret}`）を書き込み
+  - ユーザーがタッチ → Universal Links/App Links でアプリ起動 → Cloud Functions `nfcCheckin` で検証・スタンプ付与
+  - NFCタグは書き込み後にロック（書き込み禁止）をかけ、第三者による書き換えを防止
+
 ### news
 - `news/{newsId}`: ニュース
   - `id`: ニュースID
@@ -487,6 +505,9 @@
   - `rejectedBy`: 拒否者UID
   - `pendingRequestNotifiedAt`: 未承認店舗通知送信済み日時
   - `isOwner`: オーナー専用フラグ（trueの場合ユーザーアプリで非表示）。Cloud Functions `setStoreOwnerFlagOnCreate` により、isOwnerユーザーが店舗を作成した場合に自動設定
+  - `claimedBy`: 店舗紐づけアカウントUID（String、nullable）。オーナーが代理作成した店舗に対して、店舗アカウントが紐づけを行った際にそのUIDを記録。null=未紐づけ
+  - `claimToken`: 店舗紐づけ認証トークン（String、nullable）。6桁の数字。店舗アカウントが紐づけ時に自動生成され、オーナーがこのトークンを入力して承認する
+  - `claimStatus`: 店舗紐づけステータス（String）。`unclaimed`=未紐づけ / `pending`=紐づけ申請中（オーナー承認待ち） / `claimed`=紐づけ承認済み。オーナーが代理作成した店舗のデフォルト値: `unclaimed`。店舗自身が作成した旧店舗にはこのフィールドは存在しない（後方互換性）
   - 表示ルール（ユーザーアプリ）: マップ/店舗一覧/おすすめ店舗/デイリーレコメンド/ミッションのコイン交換一覧は `isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` の店舗は非表示。認証状態に依存せず店舗ドキュメントの `isOwner` フラグのみで判定
   - `businessHours`: 営業時間（曜日ごとの `open/close/isOpen`）。各曜日のデータに `periods`（複数時間帯）フィールドを持つ場合がある
     - 各曜日: `{ open: 'HH:mm', close: 'HH:mm', isOpen: bool, periods: [ { open: 'HH:mm', close: 'HH:mm' }, ... ] }`
@@ -572,6 +593,7 @@
     - `paymentMethodBrand`: 支払いカードブランド（String、例: `visa`。nullable）
     - `paymentMethodLast4`: 支払いカード下4桁（String、例: `1234`。nullable）
     - `cancelAtPeriodEnd`: 期間終了時に解約するフラグ（bool、デフォルト: false）
+  - `nfcTagId`: 紐づくNFCタグID（`nfc_tags/{tagId}` のドキュメントID、string?）
   - `iconImageUrl`: アイコン画像
   - `storeImageUrl`: 店舗画像
   - `createdBy`: 作成者UID
@@ -824,6 +846,7 @@
   - `stores/{storeId}`: スタンプ/来店情報
     - `stamps`: スタンプ数
     - `lastVisited`: 最終来店
+    - `lastStampDate`: 最終スタンプ日（`yyyy-MM-dd` 形式、Asia/Tokyo。1日1回スタンプ制限用。string?）
     - `totalSpending`: 累計支出
     - `updatedAt`: 更新日時
     - `storeId`: 店舗ID

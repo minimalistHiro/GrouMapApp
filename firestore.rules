@@ -367,6 +367,14 @@ service cloud.firestore {
       // 書き込みはサーバーサイドのみ
       allow write: if false;
     }
+
+    // NFCタグ管理コレクション
+    match /nfc_tags/{tagId} {
+      // 管理者オーナーのみ読み取り可能
+      allow read: if isOwner();
+      // 書き込みはCloud Functions（registerNfcTag / nfcCheckin）のみ
+      allow write: if false;
+    }
     
     // バッジマスタ（アプリ内蔵に移行済み。既存データ参照用にreadのみ残す）
     match /badges/{badgeId} {
@@ -484,7 +492,12 @@ service cloud.firestore {
       // 新規作成は未ログインユーザーも許可
       allow create: if true;
       // 更新はオーナー or 店舗メンバーのみ可能
-      allow update: if isOwner() || isStoreMember(storeId);
+      // 店舗紐づけ申請時: 未紐づけ店舗のclaimStatus/claimedBy/claimTokenのみ更新可能
+      allow update: if isOwner() || isStoreMember(storeId)
+        || (request.auth != null
+            && resource.data.claimStatus == 'unclaimed'
+            && request.resource.data.claimStatus == 'pending'
+            && request.resource.data.claimedBy == request.auth.uid);
       // 削除はオーナー、または作成者本人のみ可能
       allow delete: if isOwner() || (request.auth != null && request.auth.uid == resource.data.createdBy);
 

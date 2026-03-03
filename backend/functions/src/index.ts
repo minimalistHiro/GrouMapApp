@@ -36,6 +36,7 @@ const USER_ACHIEVEMENT_EVENTS_COLLECTION = 'user_achievement_events';
 const RECOMMENDATION_IMPRESSIONS_COLLECTION = 'recommendation_impressions';
 const RECOMMENDATION_VISITS_COLLECTION = 'recommendation_visits';
 const MAX_STAMPS = 10;
+const NFC_TAGS_COLLECTION = 'nfc_tags';
 const INSTAGRAM_API_BASE = 'https://graph.facebook.com/v19.0';
 const DEFAULT_INSTAGRAM_SYNC_TIME = '09:00';
 const MIN_INSTAGRAM_SYNC_MINUTES = 9 * 60;
@@ -88,6 +89,12 @@ type InstagramSyncSettings = {
 function stripUndefined<T extends Record<string, unknown>>(value: T): T {
   const entries = Object.entries(value).filter(([, v]) => v !== undefined);
   return Object.fromEntries(entries) as T;
+}
+
+/** JST日付文字列を取得（yyyy-MM-dd 形式）。process.env.TZ=Asia/Tokyo 設定前提 */
+function getJstDateString(date?: Date): string {
+  const d = date ?? new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 function toStringValue(value: unknown): string {
@@ -2509,8 +2516,16 @@ export const punchStamp = onCall(
 
       const targetStoreSnap = await txn.get(targetStoreRef);
       const storeUserStatsSnap = await txn.get(storeUserStatsRef);
+
+      // 1日1回制限チェック
+      const todayJst = getJstDateString();
+      const lastStampDate = targetStoreSnap.data()?.['lastStampDate'];
+      if (typeof lastStampDate === 'string' && lastStampDate === todayJst) {
+        throw new HttpsError('already-exists', 'Already stamped today for this store');
+      }
+
       const currentStamps = asInt(targetStoreSnap.data()?.['stamps'], 0);
-      const stampsAdded = 1; // 上限なし・常に加算
+      const stampsAdded = 1;
       const nextStamps = currentStamps + 1;
       const cardCompleted = nextStamps % MAX_STAMPS === 0; // 10の倍数到達で達成
 
@@ -2558,23 +2573,21 @@ export const punchStamp = onCall(
         }
       }
 
-      // 常にスタンプ加算（上限なし）
+      // スタンプ加算 + 1日1回制限用の日付記録
       txn.set(
         targetStoreRef,
         stripUndefined({
           storeId,
           storeName: storeName || undefined,
           stamps: nextStamps,
+          lastStampDate: todayJst,
           lastVisited: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         }),
         { merge: true },
       );
 
-      const now = new Date();
-      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-        now.getDate(),
-      ).padStart(2, '0')}`;
+      const todayStr = todayJst;
       const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayStr);
       txn.set(
         statsRef,
@@ -4085,5 +4098,570 @@ export const notifyCouponExpiryScheduled = onSchedule(
     console.log(
       `[notifyCouponExpiryScheduled] notified7d=${notified7d}, notified3d=${notified3d}`,
     );
+  },
+);
+
+// NFCチェックイン（ユーザーアプリ用・完全自動スタンプ付与）
+export const nfcCheckin = onCall(
+  {
+    region: 'asia-northeast1',
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const userId = request.auth.uid;
+    const { storeId, tagSecret, selectedUserCouponIds: rawSelectedUserCouponIds } = request.data || {};
+    if (!storeId || !tagSecret) {
+      throw new HttpsError('invalid-argument', 'Missing required parameters: storeId and tagSecret');
+    }
+    const selectedUserCouponIds: string[] = Array.isArray(rawSelectedUserCouponIds)
+      ? rawSelectedUserCouponIds.filter((id: unknown) => typeof id === 'string' && (id as string).trim().length > 0)
+      : [];
+
+    // 1. NFCタグの検証
+    const tagQuery = await db
+      .collection(NFC_TAGS_COLLECTION)
+      .where('storeId', '==', storeId)
+      .where('tagSecret', '==', tagSecret)
+      .limit(1)
+      .get();
+
+    if (tagQuery.empty) {
+      throw new HttpsError('not-found', 'Invalid NFC tag');
+    }
+
+    const tagDoc = tagQuery.docs[0];
+    const tagData = tagDoc.data();
+    if (tagData['isActive'] !== true) {
+      throw new HttpsError('failed-precondition', 'NFC tag is deactivated');
+    }
+
+    // 2. 店舗の有効性チェック
+    const storeRef = db.collection('stores').doc(storeId);
+    const storeSnap = await storeRef.get();
+    if (!storeSnap.exists) {
+      throw new HttpsError('not-found', 'Store not found');
+    }
+    const storeData = storeSnap.data() as Record<string, unknown>;
+    if (storeData['isActive'] !== true || storeData['isApproved'] !== true) {
+      throw new HttpsError('failed-precondition', 'Store is not active or not approved');
+    }
+    const storeName = (storeData['name'] ?? '').toString();
+
+    // 3. トランザクション内でスタンプ処理
+    const targetUserRef = db.collection(USERS_COLLECTION).doc(userId);
+    const targetStoreRef = targetUserRef.collection('stores').doc(storeId);
+    const storeUserStatsRef = db.collection('store_users').doc(storeId).collection('users').doc(userId);
+
+    const result = await db.runTransaction(async (txn) => {
+      const [targetStoreSnap, storeUserStatsSnap] = await Promise.all([
+        txn.get(targetStoreRef),
+        txn.get(storeUserStatsRef),
+      ]);
+
+      // 1日1回制限チェック
+      const todayJst = getJstDateString();
+      const lastStampDate = targetStoreSnap.data()?.['lastStampDate'];
+      if (typeof lastStampDate === 'string' && lastStampDate === todayJst) {
+        throw new HttpsError('already-exists', 'Already checked in today for this store');
+      }
+
+      const currentStamps = asInt(targetStoreSnap.data()?.['stamps'], 0);
+      const stampsAdded = 1;
+      const nextStamps = currentStamps + 1;
+      const cardCompleted = nextStamps % MAX_STAMPS === 0;
+
+      // スタンプ加算 + 1日1回制限用の日付記録
+      txn.set(
+        targetStoreRef,
+        stripUndefined({
+          storeId,
+          storeName: storeName || undefined,
+          stamps: nextStamps,
+          lastStampDate: todayJst,
+          lastVisited: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }),
+        { merge: true },
+      );
+
+      // 日次統計
+      const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayJst);
+      txn.set(
+        statsRef,
+        {
+          date: todayJst,
+          visitorCount: FieldValue.increment(1),
+          lastUpdated: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      // 来店ユーザー統計
+      if (storeUserStatsSnap.exists) {
+        txn.set(
+          storeUserStatsRef,
+          {
+            lastVisitAt: FieldValue.serverTimestamp(),
+            totalVisits: FieldValue.increment(1),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } else {
+        txn.set(storeUserStatsRef, {
+          userId,
+          storeId,
+          firstVisitAt: FieldValue.serverTimestamp(),
+          lastVisitAt: FieldValue.serverTimestamp(),
+          totalVisits: 1,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
+
+      return {
+        userId,
+        storeId,
+        storeName,
+        stampsAdded,
+        stampsAfter: nextStamps,
+        cardCompleted,
+      };
+    });
+
+    // 来店ボーナスコイン +1
+    let coinsAdded = 0;
+    try {
+      const coinNow = new Date();
+      const coinExpiresAt = new Date(coinNow.getTime() + 180 * 24 * 60 * 60 * 1000);
+      await targetUserRef.update({
+        coins: FieldValue.increment(1),
+        coinLastEarnedAt: Timestamp.fromDate(coinNow),
+        coinExpiresAt: Timestamp.fromDate(coinExpiresAt),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      coinsAdded = 1;
+    } catch (e) {
+      console.error('[nfcCheckin] coin bonus error:', e);
+    }
+
+    // stores/{storeId}/transactions にスタンプ来店記録を作成
+    let userGender: string | null = null;
+    let userAgeGroup: string | null = null;
+    let userPrefecture: string | null = null;
+    let userCity: string | null = null;
+    try {
+      const targetUserSnap = await targetUserRef.get();
+      if (targetUserSnap.exists) {
+        const userData = targetUserSnap.data();
+        userGender = typeof userData?.gender === 'string' ? userData.gender : null;
+        userPrefecture = typeof userData?.prefecture === 'string' ? userData.prefecture : null;
+        userCity = typeof userData?.city === 'string' ? userData.city : null;
+        const birthDateVal = userData?.birthDate;
+        if (birthDateVal) {
+          const bd =
+            birthDateVal instanceof Timestamp
+              ? birthDateVal
+              : birthDateVal instanceof Date
+                ? Timestamp.fromDate(birthDateVal)
+                : null;
+          if (bd) {
+            userAgeGroup = calculateAgeGroup(bd);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('[nfcCheckin] ユーザー属性取得エラー（続行）:', e);
+    }
+
+    const stampTxnRef = storeRef.collection('transactions').doc();
+    await stampTxnRef.set({
+      transactionId: stampTxnRef.id,
+      storeId,
+      storeName: result.storeName ?? '',
+      userId,
+      type: 'stamp',
+      amountYen: 0,
+      points: 0,
+      status: 'completed',
+      source: 'nfc_checkin',
+      userGender,
+      userAgeGroup,
+      userPrefecture,
+      userCity,
+      createdAt: FieldValue.serverTimestamp(),
+      createdAtClient: new Date(),
+    });
+
+    // バッジ判定 & user_achievement_events 作成
+    try {
+      const badges = await checkAndAwardBadges({ userId, storeId });
+      const eventRef = db
+        .collection(USER_ACHIEVEMENT_EVENTS_COLLECTION)
+        .doc(userId)
+        .collection('events')
+        .doc(stampTxnRef.id);
+      await eventRef.set(
+        {
+          type: 'stamp_punch',
+          transactionId: stampTxnRef.id,
+          storeId,
+          storeName: result.storeName ?? '',
+          pointsAwarded: 0,
+          stampsAdded: result.stampsAdded ?? 0,
+          stampsAfter: result.stampsAfter ?? 0,
+          cardCompleted: result.cardCompleted ?? false,
+          badges,
+          createdAt: FieldValue.serverTimestamp(),
+          seenAt: null,
+        },
+        { merge: true },
+      );
+    } catch (e) {
+      console.error('[nfcCheckin] achievement event creation error:', e);
+    }
+
+    // 自動フォロー
+    try {
+      const followDocRef = targetUserRef.collection('followed_stores').doc(storeId);
+      const followSnap = await followDocRef.get();
+
+      if (!followSnap.exists) {
+        const userDoc = await targetUserRef.get();
+        const userData = userDoc.data() as Record<string, unknown> | undefined;
+
+        const followBatch = db.batch();
+        followBatch.set(followDocRef, {
+          storeId,
+          storeName: result.storeName ?? '',
+          category: storeData['category'] ?? '',
+          storeImageUrl: storeData['storeImageUrl'] ?? null,
+          followedAt: FieldValue.serverTimestamp(),
+          source: 'stamp',
+        });
+        followBatch.set(
+          storeRef.collection('followers').doc(userId),
+          {
+            userId,
+            userName: userData?.displayName ?? 'ユーザー',
+            followedAt: FieldValue.serverTimestamp(),
+          },
+        );
+        followBatch.update(targetUserRef, {
+          followedStoreIds: FieldValue.arrayUnion(storeId),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        await followBatch.commit();
+        console.log(`[nfcCheckin] Auto-followed store ${storeId} for user ${userId}`);
+      }
+    } catch (e) {
+      console.error('[nfcCheckin] auto-follow error:', e);
+    }
+
+    // スタンプ達成特典クーポンの自動付与
+    const awardedCoupons: Array<{ couponId: string; title: string; discountValue: number }> = [];
+    if (result.cardCompleted) {
+      try {
+        const stampCoupons = await db
+          .collection('coupons')
+          .doc(storeId)
+          .collection('coupons')
+          .where('requiredStampCount', '>', 0)
+          .where('isActive', '==', true)
+          .get();
+
+        for (const couponDoc of stampCoupons.docs) {
+          const couponData = couponDoc.data();
+          const noUsageLimit = couponData['noUsageLimit'] === true;
+          const usageLimit = asInt(couponData['usageLimit'], 0);
+          const usedCount = asInt(couponData['usedCount'], 0);
+          if (!noUsageLimit && usageLimit > 0 && usedCount >= usageLimit) continue;
+
+          const userCouponRef = db.collection('user_coupons').doc();
+          await userCouponRef.set({
+            userId,
+            couponId: couponDoc.id,
+            storeId,
+            storeName: couponData['storeName'] ?? '',
+            title: couponData['title'] ?? '',
+            obtainedAt: FieldValue.serverTimestamp(),
+            isUsed: false,
+            noExpiry: true,
+            validUntil: null,
+            type: 'stamp_reward',
+            discountValue: couponData['discountValue'] ?? 0,
+            discountType: couponData['discountType'] ?? 'fixed_amount',
+            couponType: couponData['couponType'] ?? 'discount',
+            requiredStampCount: 0,
+          });
+          awardedCoupons.push({
+            couponId: couponDoc.id,
+            title: couponData['title'] ?? '',
+            discountValue: asInt(couponData['discountValue'], 0),
+          });
+        }
+        console.log(`[nfcCheckin] Awarded stamp coupons for user ${userId}, store ${storeId}`);
+      } catch (e) {
+        console.error('[nfcCheckin] stamp coupon award error:', e);
+      }
+    }
+
+    // 友達紹介コイン付与（初回スタンプ時）
+    try {
+      let referralAwardedInviteeCoins = 5;
+      let referralAwardedInviterCoins = 5;
+      let pendingReferralDocRef: FirebaseFirestore.DocumentReference | null = null;
+
+      const pendingReferralSnap = await db
+        .collection(REFERRAL_USES_COLLECTION)
+        .where('referredUserId', '==', userId)
+        .where('status', '==', 'pending')
+        .limit(1)
+        .get();
+      if (!pendingReferralSnap.empty) {
+        pendingReferralDocRef = pendingReferralSnap.docs[0].ref;
+        const plannedCoins = pendingReferralSnap.docs[0].data()?.plannedCoins;
+        if (typeof plannedCoins?.invitee === 'number') {
+          referralAwardedInviteeCoins = plannedCoins.invitee;
+        }
+        if (typeof plannedCoins?.inviter === 'number') {
+          referralAwardedInviterCoins = plannedCoins.inviter;
+        }
+      }
+
+      let referralCoinJustAwarded = false;
+      let referralReferredByUid: string | null = null;
+
+      await db.runTransaction(async (refTxn) => {
+        const refUserSnap = await refTxn.get(targetUserRef);
+        if (!refUserSnap.exists) return;
+        const refUserData = refUserSnap.data() as Record<string, unknown>;
+        const referredBy = typeof refUserData.referredBy === 'string' ? refUserData.referredBy : null;
+        const alreadyAwarded = refUserData.referralCoinAwarded === true;
+        if (!referredBy || alreadyAwarded) return;
+
+        const referrerRef = db.collection(USERS_COLLECTION).doc(referredBy);
+        const referrerSnap = await refTxn.get(referrerRef);
+        if (!referrerSnap.exists) return;
+
+        const refNow = new Date();
+        const refExpiresAt = new Date(refNow.getTime() + 180 * 24 * 60 * 60 * 1000);
+
+        refTxn.update(targetUserRef, {
+          coins: FieldValue.increment(referralAwardedInviteeCoins),
+          coinLastEarnedAt: Timestamp.fromDate(refNow),
+          coinExpiresAt: Timestamp.fromDate(refExpiresAt),
+          referralCoinAwarded: true,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        refTxn.update(referrerRef, {
+          coins: FieldValue.increment(referralAwardedInviterCoins),
+          coinLastEarnedAt: Timestamp.fromDate(refNow),
+          coinExpiresAt: Timestamp.fromDate(refExpiresAt),
+          referralEarningsPoints: FieldValue.increment(referralAwardedInviterCoins),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+
+        referralCoinJustAwarded = true;
+        referralReferredByUid = referredBy;
+      });
+
+      if (referralCoinJustAwarded && referralReferredByUid) {
+        if (pendingReferralDocRef) {
+          await pendingReferralDocRef.update({
+            status: 'awarded',
+            awardedAt: FieldValue.serverTimestamp(),
+          });
+        }
+
+        const [refereeUserDoc, referrerUserDoc] = await Promise.all([
+          targetUserRef.get(),
+          db.collection(USERS_COLLECTION).doc(referralReferredByUid).get(),
+        ]);
+        const refereeName =
+          typeof refereeUserDoc.data()?.displayName === 'string'
+            ? (refereeUserDoc.data()!.displayName as string).trim() || '友達'
+            : '友達';
+        const referrerName =
+          typeof referrerUserDoc.data()?.displayName === 'string'
+            ? (referrerUserDoc.data()!.displayName as string).trim() || '友達'
+            : '友達';
+
+        const refereeNotifRef = targetUserRef.collection('notifications').doc();
+        await refereeNotifRef.set({
+          id: refereeNotifRef.id,
+          userId,
+          title: '友達紹介コイン獲得',
+          body: `${referrerName}さんのコードで登録し、${referralAwardedInviteeCoins}コインが付与されました`,
+          type: 'social',
+          createdAt: new Date().toISOString(),
+          isRead: false,
+          isDelivered: true,
+          data: { source: 'user', reason: 'friend_referral', coins: referralAwardedInviteeCoins },
+          tags: ['referral'],
+        });
+
+        const referrerNotifRef = db
+          .collection(USERS_COLLECTION)
+          .doc(referralReferredByUid)
+          .collection('notifications')
+          .doc();
+        await referrerNotifRef.set({
+          id: referrerNotifRef.id,
+          userId: referralReferredByUid,
+          title: '友達紹介コイン獲得',
+          body: `${refereeName}さんが初めてお店でスタンプを獲得し、${referralAwardedInviterCoins}コインが付与されました`,
+          type: 'social',
+          createdAt: new Date().toISOString(),
+          isRead: false,
+          isDelivered: true,
+          data: { source: 'user', reason: 'friend_referral', coins: referralAwardedInviterCoins },
+          tags: ['referral'],
+        });
+
+        console.log(
+          `[nfcCheckin] Referral coins awarded: referee=${userId}, referrer=${referralReferredByUid}`,
+        );
+      }
+    } catch (e) {
+      console.error('[nfcCheckin] referral coin award error:', e);
+    }
+
+    // ユーザークーポンの利用処理（selectedUserCouponIds）
+    const usedCoupons: Array<{ docId: string; title: string; discountValue: number }> = [];
+    let usageVerificationCode: string | null = null;
+
+    if (selectedUserCouponIds.length > 0) {
+      try {
+        for (const couponDocId of selectedUserCouponIds) {
+          const userCouponRef = db.collection('user_coupons').doc(couponDocId);
+          const userCouponSnap = await userCouponRef.get();
+          if (!userCouponSnap.exists) continue;
+          const couponData = userCouponSnap.data() as Record<string, unknown>;
+
+          // 自分のクーポンか検証
+          if (couponData['userId'] !== userId) continue;
+          // この店舗のクーポンか検証
+          if (couponData['storeId'] !== storeId) continue;
+          // 未使用か検証
+          if (couponData['isUsed'] === true) continue;
+
+          // 使用済みに更新
+          await userCouponRef.update({
+            isUsed: true,
+            usedAt: FieldValue.serverTimestamp(),
+            usedVia: 'nfc_checkin',
+          });
+
+          usedCoupons.push({
+            docId: couponDocId,
+            title: typeof couponData['title'] === 'string' ? couponData['title'] : 'クーポン',
+            discountValue: typeof couponData['discountValue'] === 'number' ? couponData['discountValue'] : 0,
+          });
+        }
+
+        // 目視確認用ワンタイムコード生成（6桁）
+        if (usedCoupons.length > 0) {
+          usageVerificationCode = String(randomInt(100000, 999999));
+        }
+
+        console.log(
+          `[nfcCheckin] Used ${usedCoupons.length} user coupons for user=${userId}, store=${storeId}`,
+        );
+      } catch (e) {
+        console.error('[nfcCheckin] user coupon usage error:', e);
+      }
+    }
+
+    console.log(
+      `[nfcCheckin] Success: user=${userId}, store=${storeId}, stamps=${result.stampsAfter}, coins=${coinsAdded}`,
+    );
+
+    return {
+      ...result,
+      coinsAdded,
+      awardedCoupons,
+      usedCoupons,
+      usageVerificationCode,
+    };
+  },
+);
+
+// NFCタグ登録（管理者用）
+export const registerNfcTag = onCall(
+  {
+    region: 'asia-northeast1',
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'Must be authenticated');
+    }
+
+    const adminUserId = request.auth.uid;
+    const adminUserSnap = await db.collection(USERS_COLLECTION).doc(adminUserId).get();
+    if (!adminUserSnap.exists || adminUserSnap.data()?.isOwner !== true) {
+      throw new HttpsError('permission-denied', 'Only admin owners can register NFC tags');
+    }
+
+    const { storeId, tagSecret, tagUid } = request.data || {};
+    if (!storeId || !tagSecret) {
+      throw new HttpsError('invalid-argument', 'Missing required parameters: storeId and tagSecret');
+    }
+    if (typeof tagSecret !== 'string' || tagSecret.length < 16) {
+      throw new HttpsError('invalid-argument', 'tagSecret must be at least 16 characters');
+    }
+
+    // 店舗の存在確認
+    const storeSnap = await db.collection('stores').doc(storeId).get();
+    if (!storeSnap.exists) {
+      throw new HttpsError('not-found', 'Store not found');
+    }
+
+    // 既存タグの確認（同じ店舗に既にタグがある場合は無効化）
+    const existingTags = await db
+      .collection(NFC_TAGS_COLLECTION)
+      .where('storeId', '==', storeId)
+      .where('isActive', '==', true)
+      .get();
+
+    const batch = db.batch();
+    for (const existingTag of existingTags.docs) {
+      batch.update(existingTag.ref, {
+        isActive: false,
+        deactivatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 新しいタグを登録
+    const tagRef = db.collection(NFC_TAGS_COLLECTION).doc();
+    batch.set(tagRef, {
+      storeId,
+      tagSecret,
+      tagUid: tagUid || null,
+      isActive: true,
+      createdAt: FieldValue.serverTimestamp(),
+      createdBy: adminUserId,
+    });
+
+    // 店舗にタグIDを紐づけ
+    batch.update(db.collection('stores').doc(storeId), {
+      nfcTagId: tagRef.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await batch.commit();
+
+    console.log(`[registerNfcTag] Registered tag ${tagRef.id} for store ${storeId} by ${adminUserId}`);
+
+    return {
+      tagId: tagRef.id,
+      storeId,
+      nfcUrl: `https://groumapapp.web.app/checkin?storeId=${storeId}&secret=${tagSecret}`,
+    };
   },
 );
