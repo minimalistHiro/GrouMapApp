@@ -134,6 +134,7 @@
   - `createdBy`: 登録した管理者UID（string）
   - `deactivatedAt`: 無効化日時（Timestamp?）
 - 複合インデックス: `[storeId ASC, tagSecret ASC]`（`firestore.indexes.json` に定義）
+- 複合インデックス: `[storeId ASC, isActive ASC]`（`firestore.indexes.json` に定義。店舗用アプリ `NfcTagManagementView` の `activeNfcTagProvider` で使用）
 - アクセス制御メモ（`firestore.rules`）:
   - read: `isOwner()` のみ
   - write: `isOwner()` のみ（Cloud Functions `registerNfcTag` / `nfcCheckin` からも書き込み可能）

@@ -1,6 +1,6 @@
 # GrouMap（ぐるまっぷ）サービス機能一覧
 
-> **最終更新**: 2026-03-03（NFCチェックイン機能実装・DeepLinkService追加・1日1回スタンプ制限（lastStampDate）追加）
+> **最終更新**: 2026-03-04（店舗用アプリにNFCタグ管理画面（NfcTagManagementView）を追加。管理者オーナー限定でNFCタグURL・storeId・tagSecretの確認・コピー・生成が可能に）
 >
 > 本ドキュメントは、ユーザー用アプリ (`groumapapp`) と店舗用アプリ (`groumapapp_store`) の全Dartファイルおよび関連ドキュメントを基に、サービスの全機能をまとめたものです。
 
@@ -439,6 +439,7 @@
 | **Instagram連携** | OAuth手順案内、認証コード入力、同期/解除、同期完了確認、定期同期設定（毎日1回・`09:00〜21:00` の30分単位で時刻指定） |
 | **店舗アイコントリミング** | アイコン画像の丸型クロップ処理 |
 | **物理スタンプカード移行** | 紙のスタンプカードを保有している既存顧客をデジタルに移行する機能。店舗スタッフがユーザーのQRコードをスキャン → 物理カードのスタンプ数を入力 → 移行確定。Cloud Function `migrateStampCard` がFirestoreトランザクションで処理。1ユーザー×1店舗につき1回のみ実行可能（`stamp_migrations/{storeId}_{userId}` の固定IDドキュメントで二重移行防止）。来店ボーナスコイン・visitCount は付与しない。スタンプ10の倍数達成時はスタンプ達成特典クーポンを自動付与。設定画面「店舗情報」セクションから遷移（QRスキャン → 確認/入力 → 完了の3画面フロー） |
+| **NFCタグ管理** | 管理者オーナー（`isOwner=true`）専用のNFCタグ管理機能（`NfcTagManagementView`）。各店舗のNFCタグURL（`https://groumapapp.web.app/checkin?storeId={storeId}&secret={tagSecret}`）・storeId・tagSecretをコピーボタン付きで確認可能。「生成する」ボタンで新しいタグシークレット（24文字英数字）を自動生成しCloud Function `registerNfcTag` で登録。再生成時は旧タグが自動無効化。`activeNfcTagProvider`（StreamProvider）でFirestoreをリアルタイム監視し、生成後すぐに画面が更新される。店舗設定詳細（`StoreSettingsDetailView`）に「NFCタグ管理」メニューとして追加 |
 
 ### 2.13 決済方法の詳細
 
