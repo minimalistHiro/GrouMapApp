@@ -49,7 +49,8 @@ class _LoweredFabLocation extends FloatingActionButtonLocation {
 
   @override
   Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
-    final baseOffset = FloatingActionButtonLocation.centerDocked.getOffset(scaffoldGeometry);
+    final baseOffset =
+        FloatingActionButtonLocation.centerDocked.getOffset(scaffoldGeometry);
     return Offset(baseOffset.dx, baseOffset.dy + offset);
   }
 }
@@ -69,9 +70,11 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   static const double _fabIconSize = 20;
   static const double _fabLabelSize = 10;
   ProviderSubscription<AsyncValue<User?>>? _authSubscription;
-  ProviderSubscription<AsyncValue<Map<String, dynamic>?>>? _userDataSubscription;
+  ProviderSubscription<AsyncValue<Map<String, dynamic>?>>?
+      _userDataSubscription;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _storesSub;
-  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>> _storeRequestSubs = {};
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+      _storeRequestSubs = {};
   bool _isNavigatingToPointDetail = false;
   String? _lastHandledRequestId;
   bool _referralPopupShown = false;
@@ -104,6 +107,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   // Deep Link (NFC チェックイン)
   final DeepLinkService _deepLinkService = DeepLinkService();
   bool _isProcessingCheckin = false;
+  static const Duration _checkinDedupeWindow = Duration(seconds: 5);
+  String? _activeCheckinKey;
+  String? _lastHandledCheckinKey;
+  DateTime? _lastHandledAt;
 
   @override
   void initState() {
@@ -141,7 +148,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
           _startPointRequestListener(user.uid);
           // 日次統計・ミッション処理（1日1回、lastLoginDateで判定）
           _recordDailyLoginIfNeeded(user.uid);
-          _userDataSubscription = ref.listenManual<AsyncValue<Map<String, dynamic>?>>(
+          _userDataSubscription =
+              ref.listenManual<AsyncValue<Map<String, dynamic>?>>(
             userDataProvider(user.uid),
             (prev, data) {
               final userData = data.valueOrNull;
@@ -256,6 +264,25 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   // NFC チェックイン Deep Link を処理
   // → クーポン選択画面に遷移し、ユーザーがクーポンを選択後にチェックイン実行
   Future<void> _handleCheckinDeepLink(CheckinDeepLink link) async {
+    final checkinKey = link.dedupeKey;
+    final now = DateTime.now();
+
+    // 同じチェックイン画面が既に開いている場合は重複遷移させない
+    if (_activeCheckinKey == checkinKey) {
+      debugPrint(
+          'NFC checkin dedupe: active key is already open ($checkinKey)');
+      return;
+    }
+
+    // 初期リンク + ストリームの連続受信を5秒間抑止
+    if (_lastHandledCheckinKey == checkinKey &&
+        _lastHandledAt != null &&
+        now.difference(_lastHandledAt!) <= _checkinDedupeWindow) {
+      debugPrint(
+          'NFC checkin dedupe: ignored duplicate key within 5s ($checkinKey)');
+      return;
+    }
+
     if (_isProcessingCheckin) return;
     _isProcessingCheckin = true;
 
@@ -274,16 +301,30 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
       if (!mounted) return;
 
+      _activeCheckinKey = checkinKey;
+      _lastHandledCheckinKey = checkinKey;
+      _lastHandledAt = now;
+
       // クーポン選択画面へ遷移（チェックイン処理はこの画面内で実行される）
-      Navigator.of(context).push(
+      Navigator.of(context)
+          .push(
         MaterialPageRoute(
           builder: (_) => NfcCouponSelectView(
             storeId: link.storeId,
             tagSecret: link.tagSecret,
           ),
         ),
-      );
+      )
+          .whenComplete(() {
+        if (!mounted) return;
+        if (_activeCheckinKey == checkinKey) {
+          _activeCheckinKey = null;
+        }
+      });
     } catch (e) {
+      if (_activeCheckinKey == checkinKey) {
+        _activeCheckinKey = null;
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -316,8 +357,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   Future<void> _onBottomTabChanged(int bottomIndex, List<_MainTab> tabs) async {
     final bottomTabs = _bottomTabsFor(tabs);
     final showPlaceholder = tabs.contains(_MainTab.qr);
-    final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
-    final bottomTabIndex = _bottomTabIndexForVisualIndex(bottomIndex, placeholderIndex);
+    final placeholderIndex =
+        showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+    final bottomTabIndex =
+        _bottomTabIndexForVisualIndex(bottomIndex, placeholderIndex);
     if (bottomTabIndex == null) {
       return;
     }
@@ -332,7 +375,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       // ウォークスルーステップを進行
       if (wState.step == WalkthroughStep.tapMapTab && nextTab == _MainTab.map) {
         ref.read(walkthroughProvider.notifier).nextStep();
-      } else if (wState.step == WalkthroughStep.tapHomeTab && nextTab == _MainTab.home) {
+      } else if (wState.step == WalkthroughStep.tapHomeTab &&
+          nextTab == _MainTab.home) {
         ref.read(walkthroughProvider.notifier).nextStep();
       }
     }
@@ -390,7 +434,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
   // BottomNavigationBar内のタブ位置をRectで計算
   Rect _calcTabRect(int tabVisualIndex, int totalVisualItems) {
-    final renderBox = _bottomNavKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox =
+        _bottomNavKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null || !renderBox.hasSize) return Rect.zero;
     final position = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
@@ -559,7 +604,9 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (placeholderIndex < 0) {
       return bottomTabIndex;
     }
-    return bottomTabIndex >= placeholderIndex ? bottomTabIndex + 1 : bottomTabIndex;
+    return bottomTabIndex >= placeholderIndex
+        ? bottomTabIndex + 1
+        : bottomTabIndex;
   }
 
   List<BottomNavigationBarItem> _bottomNavItemsWithPlaceholder(
@@ -571,7 +618,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       bottomTabs,
       profileBadgeCount: profileBadgeCount,
     );
-    final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+    final placeholderIndex =
+        showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
     if (placeholderIndex >= 0 && placeholderIndex <= items.length) {
       items.insert(
         placeholderIndex,
@@ -657,7 +705,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
   void _startPointRequestListener(String userId) {
     _stopPointRequestListener();
-    _storesSub = FirebaseFirestore.instance.collection('stores').snapshots().listen((storesSnap) {
+    _storesSub = FirebaseFirestore.instance
+        .collection('stores')
+        .snapshots()
+        .listen((storesSnap) {
       if (!mounted) return;
       final currentStoreIds =
           _storeRequestSubs.keys.map((key) => key.split(':').first).toSet();
@@ -678,7 +729,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
           if (status != 'accepted') return;
           if (_isRequestAlreadyNotified(data)) return;
           final combinedRequestId = '${storeId}_$userId';
-          if (_isNavigatingToPointDetail || _lastHandledRequestId == combinedRequestId) return;
+          if (_isNavigatingToPointDetail ||
+              _lastHandledRequestId == combinedRequestId) return;
 
           _isNavigatingToPointDetail = true;
           _lastHandledRequestId = combinedRequestId;
@@ -778,7 +830,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (_referralPopupShown) return;
     final inviteePopupShown = userData['friendReferralPopupShown'] == true;
     final inviteePopupData = userData['friendReferralPopup'];
-    final referrerPopupShown = userData['friendReferralPopupReferrerShown'] == true;
+    final referrerPopupShown =
+        userData['friendReferralPopupReferrerShown'] == true;
     final referrerPopupData = userData['friendReferralPopupReferrer'];
 
     if (!inviteePopupShown && inviteePopupData is Map) {
@@ -810,12 +863,16 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     _dailyLoginRecorded = true;
 
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
       final userData = doc.data();
       if (userData == null) return;
 
       final now = DateTime.now();
-      final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final todayStr =
+          '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
       // lastLoginDate（yyyy-MM-dd文字列）で本日初回かを判定
       final lastLoginDate = userData['lastLoginDate'] as String?;
@@ -828,12 +885,11 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
           .collection('daily_login_stats')
           .doc(todayStr)
           .set({
-            'loginCount': FieldValue.increment(1),
-            'date': todayStr,
-          }, SetOptions(merge: true))
-          .catchError((e) {
-            debugPrint('daily_login_stats更新エラー: $e');
-          });
+        'loginCount': FieldValue.increment(1),
+        'date': todayStr,
+      }, SetOptions(merge: true)).catchError((e) {
+        debugPrint('daily_login_stats更新エラー: $e');
+      });
 
       // デイリーミッション: 新規登録ミッション完了済みの場合のみ実行
       final missionService = MissionService();
@@ -860,7 +916,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    debugPrint('[Walkthrough] フォールバック: userDataSubscription未作成のためFirestoreを直接チェック');
+    debugPrint(
+        '[Walkthrough] フォールバック: userDataSubscription未作成のためFirestoreを直接チェック');
 
     try {
       final doc = await FirebaseFirestore.instance
@@ -906,8 +963,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
   }
 
-  Future<void> _maybeShowDailyRecommendation(String userId, Map<String, dynamic> userData) async {
-    debugPrint('[Walkthrough] _maybeShowDailyRecommendation called: showTutorial=${userData['showTutorial']}, walkthroughCompleted=${userData['walkthroughCompleted']}, _tutorialShown=$_tutorialShown, _walkthroughStarted=$_walkthroughStarted');
+  Future<void> _maybeShowDailyRecommendation(
+      String userId, Map<String, dynamic> userData) async {
+    debugPrint(
+        '[Walkthrough] _maybeShowDailyRecommendation called: showTutorial=${userData['showTutorial']}, walkthroughCompleted=${userData['walkthroughCompleted']}, _tutorialShown=$_tutorialShown, _walkthroughStarted=$_walkthroughStarted');
 
     // このウィジェットのルートが最前面でなければチュートリアル/ウォークスルーを表示しない
     // AuthWrapperがオンボーディング完了前にMainNavigationViewを作成した場合の防御
@@ -938,7 +997,9 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
 
     // チュートリアル未表示でも、walkthroughCompleted==false ならウォークスルー開始
-    if (!_walkthroughStarted && userData['walkthroughCompleted'] != true && userData['showTutorial'] != true) {
+    if (!_walkthroughStarted &&
+        userData['walkthroughCompleted'] != true &&
+        userData['showTutorial'] != true) {
       _walkthroughStarted = true;
       debugPrint('[Walkthrough] ウォークスルー開始（Path2: walkthroughCompleted==false）');
       // BottomNavigationBar のレイアウト完了後にウォークスルーを開始
@@ -1044,7 +1105,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   }
 
   // バッジポップアップ表示（レコメンド後 or 直接表示）
-  Future<void> _showBadgePopupAfterDelay(String userId, Future<List<Map<String, dynamic>>>? comprehensiveFuture) async {
+  Future<void> _showBadgePopupAfterDelay(String userId,
+      Future<List<Map<String, dynamic>>>? comprehensiveFuture) async {
     if (_badgePopupShown) return;
     _badgePopupShown = true;
 
@@ -1058,7 +1120,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
 
     // セッション内で表示済みのバッジを除外
-    newBadges.removeWhere((b) => _shownBadgeIds.contains(b['badgeId']?.toString() ?? ''));
+    newBadges.removeWhere(
+        (b) => _shownBadgeIds.contains(b['badgeId']?.toString() ?? ''));
     if (newBadges.isEmpty || !mounted) return;
 
     // 2秒待機
@@ -1100,7 +1163,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     final badgeService = ref.read(badgeProvider);
     final newBadges = await badgeService.getNewBadges(userId);
     // セッション内で表示済みのバッジを除外
-    newBadges.removeWhere((b) => _shownBadgeIds.contains(b['badgeId']?.toString() ?? ''));
+    newBadges.removeWhere(
+        (b) => _shownBadgeIds.contains(b['badgeId']?.toString() ?? ''));
     if (newBadges.isEmpty || !mounted) return;
 
     // 2秒待機
@@ -1133,7 +1197,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
   }
 
-  void _showInviteeReferralPopup(String userId, Map<dynamic, dynamic> popupData) {
+  void _showInviteeReferralPopup(
+      String userId, Map<dynamic, dynamic> popupData) {
     final pointsRaw = popupData['points'];
     final referrerNameRaw = popupData['referrerName'];
     final points = pointsRaw is int
@@ -1141,9 +1206,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         : pointsRaw is num
             ? pointsRaw.toInt()
             : int.tryParse('$pointsRaw') ?? 0;
-    final referrerName = (referrerNameRaw is String && referrerNameRaw.trim().isNotEmpty)
-        ? referrerNameRaw.trim()
-        : '友達';
+    final referrerName =
+        (referrerNameRaw is String && referrerNameRaw.trim().isNotEmpty)
+            ? referrerNameRaw.trim()
+            : '友達';
     _referralPopupShown = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -1168,7 +1234,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     });
   }
 
-  void _showReferrerReferralPopup(String userId, Map<dynamic, dynamic> popupData) {
+  void _showReferrerReferralPopup(
+      String userId, Map<dynamic, dynamic> popupData) {
     final pointsRaw = popupData['points'];
     final referredNameRaw = popupData['referredName'];
     final points = pointsRaw is int
@@ -1176,9 +1243,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         : pointsRaw is num
             ? pointsRaw.toInt()
             : int.tryParse('$pointsRaw') ?? 0;
-    final referredName = (referredNameRaw is String && referredNameRaw.trim().isNotEmpty)
-        ? referredNameRaw.trim()
-        : '友達';
+    final referredName =
+        (referredNameRaw is String && referredNameRaw.trim().isNotEmpty)
+            ? referredNameRaw.trim()
+            : '友達';
     _referralPopupShown = true;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -1218,7 +1286,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         final pages = _pagesForTabs(tabs);
         final bottomTabs = _bottomTabsFor(tabs);
         final showPlaceholder = tabs.contains(_MainTab.qr);
-        final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+        final placeholderIndex =
+            showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
         final safeIndex = _coerceIndex(pages.length);
 
         if (safeIndex != _currentIndex) {
@@ -1234,9 +1303,12 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         final bottomIndex = bottomTabs.isEmpty
             ? 0
             : currentTab == _MainTab.qr
-                ? _visualIndexForBottomTabIndex(_safeBottomIndex(bottomTabs), placeholderIndex)
+                ? _visualIndexForBottomTabIndex(
+                    _safeBottomIndex(bottomTabs), placeholderIndex)
                 : _visualIndexForBottomTabIndex(
-                    bottomTabs.indexOf(currentTab).clamp(0, bottomTabs.length - 1),
+                    bottomTabs
+                        .indexOf(currentTab)
+                        .clamp(0, bottomTabs.length - 1),
                     placeholderIndex,
                   );
 
@@ -1343,7 +1415,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     // ウォークスルーステップ1・4のオーバーレイ
     final showTabOverlay = walkthroughState.isActive &&
         (walkthroughState.step == WalkthroughStep.tapMapTab ||
-         walkthroughState.step == WalkthroughStep.tapHomeTab);
+            walkthroughState.step == WalkthroughStep.tapHomeTab);
 
     if (!showTabOverlay) return scaffold;
 
@@ -1362,15 +1434,16 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   ) {
     final bottomTabs = _bottomTabsFor(tabs);
     final showPlaceholder = tabs.contains(_MainTab.qr);
-    final placeholderIndex = showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+    final placeholderIndex =
+        showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
 
     // ターゲットタブのビジュアルインデックスを計算
-    final targetTab = wState.step == WalkthroughStep.tapMapTab
-        ? _MainTab.map
-        : _MainTab.home;
+    final targetTab =
+        wState.step == WalkthroughStep.tapMapTab ? _MainTab.map : _MainTab.home;
     final bottomTabIndex = bottomTabs.indexOf(targetTab);
     if (bottomTabIndex < 0) return const SizedBox.shrink();
-    final visualIndex = _visualIndexForBottomTabIndex(bottomTabIndex, placeholderIndex);
+    final visualIndex =
+        _visualIndexForBottomTabIndex(bottomTabIndex, placeholderIndex);
 
     final config = walkthroughStepConfigs[wState.step];
 
@@ -1392,7 +1465,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
             return WalkthroughOverlay(
               targetRect: validRect,
               message: config?.message ?? '',
-              messagePosition: config?.messagePosition ?? MessagePosition.center,
+              messagePosition:
+                  config?.messagePosition ?? MessagePosition.center,
               allowTapThrough: true,
               onTargetTap: () {
                 _onBottomTabChanged(visualIndex, tabs);
@@ -1570,7 +1644,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (parsed == null) {
       return null;
     }
-    return DateTime(date.year, date.month, date.day, parsed.hour, parsed.minute);
+    return DateTime(
+        date.year, date.month, date.day, parsed.hour, parsed.minute);
   }
 
   TimeOfDay? _parseTime(String value) {
@@ -1612,10 +1687,13 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   }
 
   bool _isSameDate(DateTime start, DateTime end) {
-    return start.year == end.year && start.month == end.month && start.day == end.day;
+    return start.year == end.year &&
+        start.month == end.month &&
+        start.day == end.day;
   }
 
-  Map<String, dynamic> _resolveCurrentSettings(Map<String, dynamic>? ownerSettings) {
+  Map<String, dynamic> _resolveCurrentSettings(
+      Map<String, dynamic>? ownerSettings) {
     final rawCurrent = ownerSettings?['current'];
     if (rawCurrent is Map<String, dynamic>) {
       return rawCurrent;

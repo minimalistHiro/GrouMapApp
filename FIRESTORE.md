@@ -499,6 +499,7 @@
   - `isRegularHoliday`: 不定休フラグ（true/false）
   - `isActive`: 店舗公開フラグ（初期値はフィールド未設定。5項目（店舗プロフィール・位置情報・メニュー・店内画像・決済方法）全完了時に `isActive` フィールドが未設定の場合のみ自動 `true` に初期化。以降は設定画面のトグルで手動切り替え可能で、自動上書きは行わない）
   - `isApproved`: 承認フラグ（承認ボタンでtrue）
+  - `stampEnabled`: スタンプ発行フラグ（bool。**省略/trueの場合は通常通りスタンプ付与。falseの場合はスタンプ0の新規ユーザーへのスタンプ付与を停止し来店記録のみ取得。スタンプ1〜9を保有する既存ユーザーは引き続き10個まで付与。対象店舗のみ手動設定。後方互換性のため、フィールド不在はtrue扱い**）
   - `approvalStatus`: 承認ステータス（`pending`/`approved`/`rejected`）
   - `approvedAt`: 承認日時
   - `approvedBy`: 承認者UID

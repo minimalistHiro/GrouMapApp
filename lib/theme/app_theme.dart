@@ -25,7 +25,7 @@ abstract final class AppTheme {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppUi.card,
         elevation: 0,
         margin: EdgeInsets.zero,

@@ -62,6 +62,14 @@
 					<string>com.googleusercontent.apps.1215704250-pdoe4kuu0udcivsisdoel0o747bu9df7</string>
 				</array>
 			</dict>
+			<dict>
+				<key>CFBundleTypeRole</key>
+				<string>Editor</string>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>groumap</string>
+				</array>
+			</dict>
 		</array>
 		<key>UIStatusBarHidden</key>
 		<false/>

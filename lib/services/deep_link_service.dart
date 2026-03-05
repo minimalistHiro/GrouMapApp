@@ -7,9 +7,15 @@ class CheckinDeepLink {
   final String tagSecret;
 
   CheckinDeepLink({required this.storeId, required this.tagSecret});
+
+  String get dedupeKey => '$storeId:$tagSecret';
 }
 
 class DeepLinkService {
+  // Canonical host (current) + one-release legacy host compatibility.
+  static const String canonicalCheckinHost = 'groumapapp.web.app';
+  static const String legacyCheckinHost = 'groumap-ea452.web.app';
+
   final AppLinks _appLinks = AppLinks();
   StreamSubscription<Uri>? _subscription;
 
@@ -43,9 +49,26 @@ class DeepLinkService {
 
   /// チェックイン用URLをパース
   CheckinDeepLink? _parseCheckinUri(Uri uri) {
+    return parseCheckinUri(uri);
+  }
+
+  @visibleForTesting
+  static CheckinDeepLink? parseCheckinUri(Uri uri) {
+    final isCheckinPath = uri.path == '/checkin';
+    final isCanonicalHost = uri.host == canonicalCheckinHost;
+    final isLegacyHost = uri.host == legacyCheckinHost;
+
+    // Canonical URL:
     // https://groumapapp.web.app/checkin?storeId=xxx&secret=yyy
-    if (uri.host != 'groumapapp.web.app') return null;
-    if (uri.path != '/checkin') return null;
+    // Legacy URL (one-release compatibility):
+    // https://groumap-ea452.web.app/checkin?storeId=xxx&secret=yyy
+    final isUniversalLink = uri.scheme == 'https' &&
+        isCheckinPath &&
+        (isCanonicalHost || isLegacyHost);
+
+    // Manual fallback button URL on /checkin page.
+    final isCustomScheme = uri.scheme == 'groumap' && uri.host == 'checkin';
+    if (!isUniversalLink && !isCustomScheme) return null;
 
     final storeId = uri.queryParameters['storeId'];
     final secret = uri.queryParameters['secret'];

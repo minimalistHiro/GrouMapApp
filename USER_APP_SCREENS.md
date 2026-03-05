@@ -1,6 +1,7 @@
 # ユーザー用アプリ 画面一覧（構成と説明）
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
+※ 2026-03-05更新: NFCチェックイン導線を単線化。正規URLを `https://groumapapp.web.app/checkin?...` に統一し、旧ホスト `groumap-ea452.web.app` は互換期間のみ受理。`/checkin` の自動 `groumap://` リダイレクトを廃止し、手動ボタンでのみアプリを開く方式に変更。アプリ側は `storeId:secret` キーで5秒重複抑止 + チェックイン画面表示中の同一キー再push禁止を追加。
 ※ 2026-03-03更新: NFCチェックイン機能を実装。`DeepLinkService`（`app_links`パッケージ）でNFCタグのURL Deep Linkを受信し、`MainNavigationView`から`NfcCouponSelectView`（クーポン選択画面）経由で`NfcCheckinService`→Cloud Functions `nfcCheckin`を呼び出し、`NfcCheckinResultView`（結果画面・使用済みクーポン確認コード＋スタンプカード表示）に遷移するフローを追加。Universal Links（iOS）/ App Links（Android）設定済み。1日1回スタンプ制限（`lastStampDate`フィールド）を`punchStamp`/`nfcCheckin`の両方に適用。
 ※ 2026-03-02更新: チュートリアル完了後のインタラクティブウォークスルー（7ステップ）を実装。グレーアウトオーバーレイ＋ハイライト穴あきで操作対象を誘導する `WalkthroughOverlay` を追加。`WalkthroughProvider` でステップ管理。`MainNavigationView`（ステップ1・4: タブ誘導）、`MapView`（ステップ2・3: マーカータップ・パネル閉じ）、`HomeView`（ステップ5・7: FAB・コイン交換）、`MissionsView`（ステップ6: コイン受取）にオーバーレイを配置。Firestore `users/{uid}.walkthroughCompleted` で完了管理。first_mapミッション報酬を1→10コインに変更。
 ※ 2026-03-01更新（3回目）: 営業時間の複数時間帯（periods）対応。`StoreModel`の`StoreDayHours`に`periods`フィールドを追加。`MapView`の`_isStoreOpenNow()`と`_getTodayHours()`、`StoreDetailView`の営業時間表示・ステータス判定を複数時間帯に対応。ランチ+ディナー等の分割営業時間を正しく表示・判定。
@@ -55,7 +56,7 @@
 
 ### MainNavigationView (`lib/views/main_navigation_view.dart`)
 - 構成: ボトムタブ（ホーム/マップ/投稿/プロフィール + ログイン時のみQR）、FAB（QR起動）、Deep Link受信（NFCチェックイン用）
-- 説明: アプリ全体のタブ切替と初期データ読込を担うメインナビゲーション。バッジ獲得ポップアップの協調制御を一元管理（本日初ログイン時: レコメンドポップアップ→2秒→バッジポップアップ、2回目以降: 2秒後にバッジポップアップ）。`DeepLinkService`（`app_links`パッケージ）でNFCタグURL（`groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）のDeep Linkをコールドスタート/ウォームスタートの両方で受信し、`NfcCouponSelectView`に遷移。`_isProcessingCheckin`フラグで重複処理を防止
+- 説明: アプリ全体のタブ切替と初期データ読込を担うメインナビゲーション。バッジ獲得ポップアップの協調制御を一元管理（本日初ログイン時: レコメンドポップアップ→2秒→バッジポップアップ、2回目以降: 2秒後にバッジポップアップ）。`DeepLinkService`（`app_links`パッケージ）でNFCタグURL（`groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）のDeep Linkをコールドスタート/ウォームスタートの両方で受信し、`NfcCouponSelectView`に遷移。同一リンクは `storeId:secret` をキーに5秒間の重複抑止を行い、チェックイン画面表示中は同一キーの再pushを無効化して二重遷移を防止
 
 ## 認証・登録
 
@@ -241,7 +242,7 @@
 - 説明: NFCチェックイン結果表示画面。クーポン利用時はスタッフ目視確認用の確認コード（Cloud Functions生成の6桁コード）とリアルタイム時計（1秒間隔更新）を表示し、スクリーンショット不正対策。スタンプカードの押印アニメーション・コンプリートシャインエフェクトは `PointPaymentDetailView` と同様の演出
 
 ### DeepLinkService (`lib/services/deep_link_service.dart`)
-- 説明: `app_links` パッケージを使用したDeep Linkサービス。NFCタグに書き込まれたURL（`https://groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）をUniversal Links（iOS）/ App Links（Android）経由で受信。`getInitialCheckinLink()`（コールドスタート）と `listenCheckinLinks()`（ウォームスタート）の2系統で対応。`CheckinDeepLink` モデルに `storeId` と `tagSecret` をパースして返す
+- 説明: `app_links` パッケージを使用したDeep Linkサービス。NFCタグに書き込まれたURL（`https://groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）をUniversal Links（iOS）/ App Links（Android）経由で受信。正規ホストは `groumapapp.web.app`、旧ホスト `groumap-ea452.web.app` は互換期間のみ受理。`/checkin` パスのみを受理し、`storeId` と `secret` が揃う場合だけ `CheckinDeepLink` を生成。手動フォールバック用に `groumap://checkin?...` のパースも維持。`getInitialCheckinLink()`（コールドスタート）と `listenCheckinLinks()`（ウォームスタート）の2系統で対応
 
 ### NfcCheckinService (`lib/services/nfc_checkin_service.dart`)
 - 説明: Cloud Functions `nfcCheckin` を呼び出すサービス。`storeId`・`tagSecret`・`selectedUserCouponIds`（任意）をパラメータとして送信し、`NfcCheckinResult`（`stampsAfter`/`cardCompleted`/`storeName`/`coinsAdded`/`awardedCoupons`/`usedCoupons`/`usageVerificationCode`）を返す

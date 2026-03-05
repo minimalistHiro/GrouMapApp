@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.groumap.groumapapp",
+      "sha256_cert_fingerprints": [
+        "62:B9:90:34:80:A5:B7:1E:D8:05:1F:0F:93:02:0B:20:9C:57:95:3E:37:12:EA:2A:B5:9D:64:62:1C:19:B1:CA"
+      ]
+    }
+  }
+]
