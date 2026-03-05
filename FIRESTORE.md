@@ -596,6 +596,10 @@
     - `paymentMethodLast4`: 支払いカード下4桁（String、例: `1234`。nullable）
     - `cancelAtPeriodEnd`: 期間終了時に解約するフラグ（bool、デフォルト: false）
   - `nfcTagId`: 紐づくNFCタグID（`nfc_tags/{tagId}` のドキュメントID、string?）
+  - `discoveredCount`: ぐるまっぷ経由でNFCチェックインしたユニークユーザー数（初回来店のみカウント）。レア度の自動算出に使用（number、デフォルト: 0）。レア度算出: 0→★★★★レジェンド / 1〜5→★★★エピック / 6〜20→★★レア / 21以上→★コモン（フェーズ1追加）
+  - `totalVisitCount`: NFCチェックインの累計来店回数（再来店を含む全ユーザー合計）。マップ賑わい度ビューに使用（number、デフォルト: 0）（フェーズ1追加）
+  - `rarityOverride`: 運営による手動レア度上書き（number?、1〜4。1=コモン/2=レア/3=エピック/4=レジェンド。設定時は `discoveredCount` による自動算出より優先。未設定（null）の場合は自動算出）（フェーズ1追加）
+  - `areaId`: 所属エリアのID（string?、`areas` コレクションのドキュメントID。店舗の座標がエリア半径内に入る場合に設定。エリア外の場合は null → 秘境スポット扱い）（フェーズ2追加）
   - `iconImageUrl`: アイコン画像
   - `storeImageUrl`: 店舗画像
   - `createdBy`: 作成者UID

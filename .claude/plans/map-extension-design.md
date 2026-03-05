@@ -108,27 +108,31 @@ bool _communityMapMode = false;
 String _communitySubMode = 'exploration'; // 'exploration' | 'activity'
 ```
 
-### 2-2. 賑わい度ビュー: discoveredCount に応じたサークルオーバーレイ
+### 2-2. 賑わい度ビュー: totalVisitCount に応じたサークルオーバーレイ
 
 `flutter_google_maps` の Heatmap 機能は Flutter プラグインとしてサポートが限定的なため、
 `Circle` オーバーレイで代替する。
 
+**指標:** `stores/{storeId}.totalVisitCount`（全ユーザーの累計来店回数。再来店を含む）
+
+> `discoveredCount`（ユニーク発見者数）ではなく **総来店回数** を使う。再来店も含むことで「愛されているお店」がより明確に可視化される。`totalVisitCount` は `block-a-cloud-functions.md` の変更でNFCチェックインごとにインクリメントする。
+
 **賑わい度の5段階:**
 
-| discoveredCount | サークル色（fillColor） | 半径 | 意味 |
-|---------------|----------|------|------|
-| 0 | 表示なし | - | 未開拓 |
-| 1〜5 | `Color(0x1A29B6F6)` | 40m | ほぼ未開拓 |
-| 6〜20 | `Color(0x3366BB6A)` | 60m | 探索始まり |
-| 21〜50 | `Color(0x4DFB8C00)` | 80m | 賑わっている |
-| 51〜 | `Color(0x66FFB300)` | 100m | 超人気スポット |
+| totalVisitCount | サークル色（fillColor） | 半径 | 意味 |
+|----------------|----------|------|------|
+| 0 | 表示なし | - | 来店記録なし |
+| 1〜10 | `Color(0x1A29B6F6)` | 40m | 来店始まり |
+| 11〜30 | `Color(0x3366BB6A)` | 60m | 賑わいはじめ |
+| 31〜100 | `Color(0x4DFB8C00)` | 80m | 賑わっている |
+| 101〜 | `Color(0x66FFB300)` | 100m | 超人気スポット |
 
 ```dart
 Set<Circle> _buildActivityCircles() {
   final circles = <Circle>{};
   for (final store in _filteredStores) {
-    final discoveredCount = (store['discoveredCount'] as num?)?.toInt() ?? 0;
-    if (discoveredCount == 0) continue;
+    final totalVisitCount = (store['totalVisitCount'] as num?)?.toInt() ?? 0;
+    if (totalVisitCount == 0) continue;
 
     final lat = store['location']?['latitude'] as double?;
     final lng = store['location']?['longitude'] as double?;
@@ -137,13 +141,13 @@ Set<Circle> _buildActivityCircles() {
 
     Color fillColor;
     double radius;
-    if (discoveredCount <= 5) {
+    if (totalVisitCount <= 10) {
       fillColor = const Color(0x1A29B6F6);
       radius = 40;
-    } else if (discoveredCount <= 20) {
+    } else if (totalVisitCount <= 30) {
       fillColor = const Color(0x3366BB6A);
       radius = 60;
-    } else if (discoveredCount <= 50) {
+    } else if (totalVisitCount <= 100) {
       fillColor = const Color(0x4DFB8C00);
       radius = 80;
     } else {

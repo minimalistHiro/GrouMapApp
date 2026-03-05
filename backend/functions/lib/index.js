@@ -1123,7 +1123,7 @@ exports.processFriendReferral = (0, firestore_1.onDocumentWritten)({
     document: `${USERS_COLLECTION}/{userId}`,
     region: 'asia-northeast1',
 }, async (event) => {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e;
     if (!((_a = event.data) === null || _a === void 0 ? void 0 : _a.after.exists))
         return;
     const afterData = event.data.after.data();
@@ -1219,6 +1219,19 @@ exports.processFriendReferral = (0, firestore_1.onDocumentWritten)({
             referralCount: firestore_2.FieldValue.increment(1),
             updatedAt: firestore_2.FieldValue.serverTimestamp(),
         });
+    });
+    // ウェルカムお知らせを被紹介者に送信
+    const referrerDisplayName = typeof ((_e = referrerDoc.data()) === null || _e === void 0 ? void 0 : _e.displayName) === 'string'
+        ? (referrerDoc.data().displayName.trim() || '友達')
+        : '友達';
+    await db.collection(USERS_COLLECTION).doc(userId).collection('notifications').add({
+        type: 'social',
+        tags: ['referral', 'welcome'],
+        title: 'ようこそぐるまっぷへ！',
+        body: `${referrerDisplayName}さんの紹介でアプリを始めました。\nお店のNFCタグにスマホをタッチすると、図鑑カードが解放されます。\nまずは近くのお店を探してみましょう！`,
+        isRead: false,
+        isDelivered: false,
+        createdAt: firestore_2.FieldValue.serverTimestamp(),
     });
 });
 exports.sendUserNotificationOnCreate = (0, firestore_1.onDocumentCreated)({
@@ -2479,8 +2492,8 @@ exports.punchStamp = (0, https_1.onCall)({
             await refereeNotifRef.set({
                 id: refereeNotifRef.id,
                 userId,
-                title: '友達紹介コイン獲得',
-                body: `${referrerName}さんのコードで登録し、${referralAwardedInviteeCoins}コインが付与されました`,
+                title: 'ようこそぐるまっぷへ！',
+                body: `${referrerName}さんの紹介でアプリを始めました。NFCタグにタッチして新しいお店を発見してみましょう！`,
                 type: 'social',
                 createdAt: refNow.toISOString(),
                 isRead: false,
@@ -2488,7 +2501,6 @@ exports.punchStamp = (0, https_1.onCall)({
                 data: {
                     source: 'user',
                     reason: 'friend_referral',
-                    coins: referralAwardedInviteeCoins,
                 },
                 tags: ['referral'],
             });
@@ -2496,8 +2508,8 @@ exports.punchStamp = (0, https_1.onCall)({
             await referrerNotifRef.set({
                 id: referrerNotifRef.id,
                 userId: referralReferredByUid,
-                title: '友達紹介コイン獲得',
-                body: `${refereeName}さんが初めてお店でスタンプを獲得し、${referralAwardedInviterCoins}コインが付与されました`,
+                title: 'お友達が登録しました！',
+                body: `${refereeName}さんがぐるまっぷに参加しました。一緒に街を探検しましょう！`,
                 type: 'social',
                 createdAt: refNow.toISOString(),
                 isRead: false,
@@ -2505,11 +2517,10 @@ exports.punchStamp = (0, https_1.onCall)({
                 data: {
                     source: 'user',
                     reason: 'friend_referral',
-                    coins: referralAwardedInviterCoins,
                 },
                 tags: ['referral'],
             });
-            console.log(`[punchStamp] Referral coins awarded: referee=${userId} (${referralAwardedInviteeCoins}coins), referrer=${referralReferredByUid} (${referralAwardedInviterCoins}coins)`);
+            console.log(`[punchStamp] Referral notification sent: referee=${userId}, referrer=${referralReferredByUid}`);
         }
     }
     catch (e) {
@@ -3756,13 +3767,13 @@ exports.nfcCheckin = (0, https_1.onCall)({
             await refereeNotifRef.set({
                 id: refereeNotifRef.id,
                 userId,
-                title: '友達紹介コイン獲得',
-                body: `${referrerName}さんのコードで登録し、${referralAwardedInviteeCoins}コインが付与されました`,
+                title: 'ようこそぐるまっぷへ！',
+                body: `${referrerName}さんの紹介でアプリを始めました。NFCタグにタッチして新しいお店を発見してみましょう！`,
                 type: 'social',
                 createdAt: new Date().toISOString(),
                 isRead: false,
                 isDelivered: true,
-                data: { source: 'user', reason: 'friend_referral', coins: referralAwardedInviteeCoins },
+                data: { source: 'user', reason: 'friend_referral' },
                 tags: ['referral'],
             });
             const referrerNotifRef = db
@@ -3773,16 +3784,16 @@ exports.nfcCheckin = (0, https_1.onCall)({
             await referrerNotifRef.set({
                 id: referrerNotifRef.id,
                 userId: referralReferredByUid,
-                title: '友達紹介コイン獲得',
-                body: `${refereeName}さんが初めてお店でスタンプを獲得し、${referralAwardedInviterCoins}コインが付与されました`,
+                title: 'お友達が登録しました！',
+                body: `${refereeName}さんがぐるまっぷに参加しました。一緒に街を探検しましょう！`,
                 type: 'social',
                 createdAt: new Date().toISOString(),
                 isRead: false,
                 isDelivered: true,
-                data: { source: 'user', reason: 'friend_referral', coins: referralAwardedInviterCoins },
+                data: { source: 'user', reason: 'friend_referral' },
                 tags: ['referral'],
             });
-            console.log(`[nfcCheckin] Referral coins awarded: referee=${userId}, referrer=${referralReferredByUid}`);
+            console.log(`[nfcCheckin] Referral notification sent: referee=${userId}, referrer=${referralReferredByUid}`);
         }
     }
     catch (e) {

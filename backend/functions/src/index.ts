@@ -1478,6 +1478,20 @@ export const processFriendReferral = onDocumentWritten(
         updatedAt: FieldValue.serverTimestamp(),
       });
     });
+
+    // ウェルカムお知らせを被紹介者に送信
+    const referrerDisplayName = typeof referrerDoc.data()?.displayName === 'string'
+      ? ((referrerDoc.data()!.displayName as string).trim() || '友達')
+      : '友達';
+    await db.collection(USERS_COLLECTION).doc(userId).collection('notifications').add({
+      type: 'social',
+      tags: ['referral', 'welcome'],
+      title: 'ようこそぐるまっぷへ！',
+      body: `${referrerDisplayName}さんの紹介でアプリを始めました。\nお店のNFCタグにスマホをタッチすると、図鑑カードが解放されます。\nまずは近くのお店を探してみましょう！`,
+      isRead: false,
+      isDelivered: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
   },
 );
 
@@ -2971,8 +2985,8 @@ export const punchStamp = onCall(
         await refereeNotifRef.set({
           id: refereeNotifRef.id,
           userId,
-          title: '友達紹介コイン獲得',
-          body: `${referrerName}さんのコードで登録し、${referralAwardedInviteeCoins}コインが付与されました`,
+          title: 'ようこそぐるまっぷへ！',
+          body: `${referrerName}さんの紹介でアプリを始めました。NFCタグにタッチして新しいお店を発見してみましょう！`,
           type: 'social',
           createdAt: refNow.toISOString(),
           isRead: false,
@@ -2980,7 +2994,6 @@ export const punchStamp = onCall(
           data: {
             source: 'user',
             reason: 'friend_referral',
-            coins: referralAwardedInviteeCoins,
           },
           tags: ['referral'],
         });
@@ -2989,8 +3002,8 @@ export const punchStamp = onCall(
         await referrerNotifRef.set({
           id: referrerNotifRef.id,
           userId: referralReferredByUid,
-          title: '友達紹介コイン獲得',
-          body: `${refereeName}さんが初めてお店でスタンプを獲得し、${referralAwardedInviterCoins}コインが付与されました`,
+          title: 'お友達が登録しました！',
+          body: `${refereeName}さんがぐるまっぷに参加しました。一緒に街を探検しましょう！`,
           type: 'social',
           createdAt: refNow.toISOString(),
           isRead: false,
@@ -2998,12 +3011,11 @@ export const punchStamp = onCall(
           data: {
             source: 'user',
             reason: 'friend_referral',
-            coins: referralAwardedInviterCoins,
           },
           tags: ['referral'],
         });
 
-        console.log(`[punchStamp] Referral coins awarded: referee=${userId} (${referralAwardedInviteeCoins}coins), referrer=${referralReferredByUid} (${referralAwardedInviterCoins}coins)`);
+        console.log(`[punchStamp] Referral notification sent: referee=${userId}, referrer=${referralReferredByUid}`);
       }
     } catch (e) {
       console.error('[punchStamp] referral coin award error:', e);
@@ -4495,13 +4507,13 @@ export const nfcCheckin = onCall(
         await refereeNotifRef.set({
           id: refereeNotifRef.id,
           userId,
-          title: '友達紹介コイン獲得',
-          body: `${referrerName}さんのコードで登録し、${referralAwardedInviteeCoins}コインが付与されました`,
+          title: 'ようこそぐるまっぷへ！',
+          body: `${referrerName}さんの紹介でアプリを始めました。NFCタグにタッチして新しいお店を発見してみましょう！`,
           type: 'social',
           createdAt: new Date().toISOString(),
           isRead: false,
           isDelivered: true,
-          data: { source: 'user', reason: 'friend_referral', coins: referralAwardedInviteeCoins },
+          data: { source: 'user', reason: 'friend_referral' },
           tags: ['referral'],
         });
 
@@ -4513,18 +4525,18 @@ export const nfcCheckin = onCall(
         await referrerNotifRef.set({
           id: referrerNotifRef.id,
           userId: referralReferredByUid,
-          title: '友達紹介コイン獲得',
-          body: `${refereeName}さんが初めてお店でスタンプを獲得し、${referralAwardedInviterCoins}コインが付与されました`,
+          title: 'お友達が登録しました！',
+          body: `${refereeName}さんがぐるまっぷに参加しました。一緒に街を探検しましょう！`,
           type: 'social',
           createdAt: new Date().toISOString(),
           isRead: false,
           isDelivered: true,
-          data: { source: 'user', reason: 'friend_referral', coins: referralAwardedInviterCoins },
+          data: { source: 'user', reason: 'friend_referral' },
           tags: ['referral'],
         });
 
         console.log(
-          `[nfcCheckin] Referral coins awarded: referee=${userId}, referrer=${referralReferredByUid}`,
+          `[nfcCheckin] Referral notification sent: referee=${userId}, referrer=${referralReferredByUid}`,
         );
       }
     } catch (e) {

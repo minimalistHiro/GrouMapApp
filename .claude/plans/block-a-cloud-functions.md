@@ -11,11 +11,11 @@
 |---|--------|------|--------------|
 | 1 | `isFirstVisit` フラグ追加 + `discoveredCount` インクリメント | `nfcCheckin` | L4159-4234 |
 | 2 | `visitorCount` バグ確認（既に修正済みの可能性あり） | `nfcCheckin` / `punchStamp` | L4192 / L2591 |
-| 3 | スタンプ付与を全停止（全ユーザー・全店舗） | `nfcCheckin` / `punchStamp` | L4172-4188 / L2527-2587 |
+| 3 | スタンプ付与を救済措置付きで制御（`currentStamps >= 1` のユーザーは継続加算。0のユーザーはスタンプ付与なし） | `nfcCheckin` / `punchStamp` | L4172-4188 / L2527-2587 |
 | 4 | 来店ボーナスコイン付与を削除 | `nfcCheckin` | L4236-4250 |
 | 5 | スタンプ達成クーポン自動付与を削除 | `nfcCheckin` / `punchStamp` | L4365-4411 / L2846-2887 |
 | 6 | 自動フォローの source を `nfc_checkin` に変更 | `nfcCheckin` | L4344 |
-| 7 | 戻り値・achievement イベントのスタンプ関連フィールドを整理 | `nfcCheckin` / `punchStamp` | L4226-4233 / L2693-2700 |
+| 7 | 戻り値・achievement イベントのスタンプ関連フィールドを整理（`stampsAfter`・`cardCompleted` は救済措置対応のため残す） | `nfcCheckin` / `punchStamp` | L4226-4233 / L2693-2700 |
 
 ---
 
@@ -39,83 +39,62 @@
 
 ### 1-1. トランザクション内: isFirstVisit 追加 + スタンプ削除（L4159-4234）
 
-#### 削除するロジック
-
-```typescript
-// 以下を削除
-const currentStamps = asInt(targetStoreSnap.data()?.['stamps'], 0);
-const stampsAdded = 1;
-const nextStamps = currentStamps + 1;
-const cardCompleted = nextStamps % MAX_STAMPS === 0;
-```
-
-#### 追加するロジック
+#### 変更するロジック（救済措置付き分岐に差し替え）
 
 ```typescript
 // isFirstVisit 判定（storeUserStatsSnap.exists の否定）
 const isFirstVisit = !storeUserStatsSnap.exists;
+const currentStamps = asInt(storeStampData?.stamps, 0);
 
-// 初発見時: stores/{storeId}.discoveredCount を +1
-if (isFirstVisit) {
-  txn.update(storeRef, {
-    discoveredCount: FieldValue.increment(1),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+if (currentStamps >= 1) {
+  // 救済措置: 既存スタンプ保有ユーザーはスタンプを +1 加算
+  const nextStamps = currentStamps + 1;
+  const cardCompleted = nextStamps % MAX_STAMPS === 0;
+  txn.set(
+    targetStoreRef,
+    stripUndefined({
+      storeId,
+      storeName: storeName || undefined,
+      stamps: nextStamps,
+      lastStampDate: todayJst,
+      lastVisited: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }),
+    { merge: true },
+  );
+  // トランザクション return（救済措置ユーザー）
+  return { userId, storeId, storeName, stampsAfter: nextStamps, cardCompleted, isFirstVisit };
+} else {
+  // 新規ユーザー（stamps=0）: 来店記録のみ（スタンプ加算なし）
+  txn.set(
+    targetStoreRef,
+    stripUndefined({
+      storeId,
+      storeName: storeName || undefined,
+      lastStampDate: todayJst,   // 1日1回制限チェック用（フィールド名流用）
+      lastVisited: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }),
+    { merge: true },
+  );
+  // トランザクション return（新規ユーザー）
+  return { userId, storeId, storeName, stampsAfter: 0, cardCompleted: false, isFirstVisit };
 }
 ```
 
-#### txn.set(targetStoreRef, ...) の変更
+#### stores フィールドのインクリメント（両分岐共通）
 
 ```typescript
-// Before: stamps/stampsAdded/nextStamps/cardCompleted を含む
-txn.set(
-  targetStoreRef,
-  stripUndefined({
-    storeId,
-    storeName: storeName || undefined,
-    stamps: nextStamps,          // ← 削除
-    lastStampDate: todayJst,
-    lastVisited: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }),
-  { merge: true },
-);
-
-// After: stamps を削除（lastStampDate は 1日1回制限チェックに必要なため残す）
-txn.set(
-  targetStoreRef,
-  stripUndefined({
-    storeId,
-    storeName: storeName || undefined,
-    lastStampDate: todayJst,
-    lastVisited: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }),
-  { merge: true },
-);
+// 毎回: stores/{storeId}.totalVisitCount を +1（賑わい度ビューの指標。再来店も含む）
+txn.update(storeRef, {
+  totalVisitCount: FieldValue.increment(1),
+  // 初発見時のみ: discoveredCount を +1（コミュニティ開拓率・レア度算出に使用）
+  ...(isFirstVisit ? { discoveredCount: FieldValue.increment(1) } : {}),
+  updatedAt: FieldValue.serverTimestamp(),
+});
 ```
 
-#### トランザクションの return 変更
-
-```typescript
-// Before:
-return {
-  userId,
-  storeId,
-  storeName,
-  stampsAdded,
-  stampsAfter: nextStamps,
-  cardCompleted,
-};
-
-// After:
-return {
-  userId,
-  storeId,
-  storeName,
-  isFirstVisit,
-};
-```
+> **注意**: `result.stampsAfter` と `result.cardCompleted` は Flutter 側の画面分岐（スタンプ押印フロー vs 直接図鑑カード遷移）に必要なため、戻り値に残す。
 
 ---
 
@@ -226,9 +205,9 @@ return {
   usageVerificationCode,
 };
 
-// After: coinsAdded を削除
+// After: coinsAdded を削除（stampsAfter / cardCompleted は救済措置のため残す）
 return {
-  ...result,        // { userId, storeId, storeName, isFirstVisit }
+  ...result,        // { userId, storeId, storeName, stampsAfter, cardCompleted, isFirstVisit }
   awardedCoupons,   // 常に空配列
   usedCoupons,
   usageVerificationCode,
@@ -251,66 +230,46 @@ console.log(`[nfcCheckin] Success: user=${userId}, store=${storeId}, isFirstVisi
 
 ## 2. punchStamp の変更
 
-### 2-1. トランザクション内: スタンプ計算削除（L2527-2530）
+### 2-1〜2-3. トランザクション内: 救済措置付き分岐に変更（L2527-2700）
+
+`nfcCheckin` と同じ救済措置ロジックを適用する。
 
 ```typescript
-// 削除:
+// 救済措置付き分岐（punchStamp）
 const currentStamps = asInt(targetStoreSnap.data()?.['stamps'], 0);
-const stampsAdded = 1;
-const nextStamps = currentStamps + 1;
-const cardCompleted = nextStamps % MAX_STAMPS === 0;
-```
 
-### 2-2. txn.set(targetStoreRef, ...) の変更（L2576-2588）
-
-```typescript
-// Before: stamps: nextStamps を含む
-txn.set(
-  targetStoreRef,
-  stripUndefined({
-    storeId,
-    storeName: storeName || undefined,
-    stamps: nextStamps,          // ← 削除
-    lastStampDate: todayJst,
-    lastVisited: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }),
-  { merge: true },
-);
-
-// After:
-txn.set(
-  targetStoreRef,
-  stripUndefined({
-    storeId,
-    storeName: storeName || undefined,
-    lastStampDate: todayJst,
-    lastVisited: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }),
-  { merge: true },
-);
-```
-
-### 2-3. トランザクションの return 変更（L2693-2700）
-
-```typescript
-// Before:
-return {
-  userId,
-  storeId,
-  storeName,
-  stampsAdded,
-  stampsAfter: nextStamps,
-  cardCompleted,
-};
-
-// After:
-return {
-  userId,
-  storeId,
-  storeName,
-};
+if (currentStamps >= 1) {
+  // 既存スタンプ保有ユーザー: スタンプ +1
+  const nextStamps = currentStamps + 1;
+  const cardCompleted = nextStamps % MAX_STAMPS === 0;
+  txn.set(
+    targetStoreRef,
+    stripUndefined({
+      storeId,
+      storeName: storeName || undefined,
+      stamps: nextStamps,
+      lastStampDate: todayJst,
+      lastVisited: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }),
+    { merge: true },
+  );
+  return { userId, storeId, storeName, stampsAdded: 1, stampsAfter: nextStamps, cardCompleted };
+} else {
+  // 新規ユーザー（stamps=0）: 来店記録のみ
+  txn.set(
+    targetStoreRef,
+    stripUndefined({
+      storeId,
+      storeName: storeName || undefined,
+      lastStampDate: todayJst,
+      lastVisited: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }),
+    { merge: true },
+  );
+  return { userId, storeId, storeName, stampsAdded: 0, stampsAfter: 0, cardCompleted: false };
+}
 ```
 
 ### 2-4. achievement event の stamp フィールド整理（L2783-2798）

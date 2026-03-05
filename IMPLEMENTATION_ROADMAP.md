@@ -46,9 +46,9 @@ Cloud Functions 側の変更は **nfc-zukan-flow-redesign.md の仕様を優先*
 > 設計書: [immediate-tasks-design.md](.claude/plans/immediate-tasks-design.md)
 > **フェーズ1の Cloud Functions 修正前に完了しておくこと。**
 
-- [ ] **#13** `FIRESTORE.md` に `discoveredCount` / `rarityOverride` / `areaId` を追記（`nfcCheckin` 修正前）
-- [ ] **#10** `punchStamp` 内のウェルカムお知らせ文言を更新（コイン記述を削除）→ `firebase deploy --only functions:punchStamp`
-- [ ] **#9** `STORE_AGREEMENT.md` 新規作成（パイロット営業開始前・運用タスク）
+- [x] **#13** `FIRESTORE.md` に `discoveredCount` / `rarityOverride` / `areaId` を追記（`nfcCheckin` 修正前）
+- [x] **#10** `punchStamp` 内のウェルカムお知らせ文言を更新（コイン記述を削除）→ `firebase deploy --only functions:punchStamp`
+- [x] **#9** `STORE_AGREEMENT.md` 新規作成（パイロット営業開始前・運用タスク）
 
 ---
 
