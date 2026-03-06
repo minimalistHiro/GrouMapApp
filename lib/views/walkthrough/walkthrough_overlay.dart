@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../widgets/custom_button.dart';
 import 'walkthrough_painter.dart';
 import 'walkthrough_step_config.dart';
 
@@ -12,6 +13,9 @@ class WalkthroughOverlay extends StatefulWidget {
 
   /// 説明テキスト
   final String message;
+
+  /// サブテキスト（補足説明）
+  final String? subMessage;
 
   /// スキップ時のコールバック
   final VoidCallback? onSkip;
@@ -31,17 +35,30 @@ class WalkthroughOverlay extends StatefulWidget {
   /// オーバーレイの透明度（0.0〜1.0）
   final double overlayOpacity;
 
+  /// ユーザー操作が必要かどうか（falseなら「次へ」ボタンを表示）
+  final bool requiresAction;
+
+  /// 「次へ」ボタンが押された時のコールバック
+  final VoidCallback? onNext;
+
+  /// コンセプト画面レイアウト（3アイコン説明）を表示するか
+  final bool showConceptLayout;
+
   const WalkthroughOverlay({
     super.key,
     this.targetKey,
     this.targetRect,
     required this.message,
+    this.subMessage,
     this.onSkip,
     this.allowTapThrough = true,
     this.messagePosition = MessagePosition.center,
     this.onTargetTap,
     this.passThrough = false,
     this.overlayOpacity = 0.6,
+    this.requiresAction = true,
+    this.onNext,
+    this.showConceptLayout = false,
   });
 
   @override
@@ -101,6 +118,13 @@ class _WalkthroughOverlayState extends State<WalkthroughOverlay>
 
   @override
   Widget build(BuildContext context) {
+    // フルスクリーンモード（操作不要 + ターゲットなし）
+    if (!widget.requiresAction &&
+        widget.targetRect == null &&
+        widget.targetKey == null) {
+      return _buildFullscreenOverlay(context);
+    }
+
     final screenSize = MediaQuery.of(context).size;
     final overlayColor = Colors.black.withOpacity(widget.overlayOpacity);
 
@@ -200,6 +224,181 @@ class _WalkthroughOverlayState extends State<WalkthroughOverlay>
     );
   }
 
+  /// フルスクリーンオーバーレイ（concept / learnNfcTouch ステップ用）
+  Widget _buildFullscreenOverlay(BuildContext context) {
+    final safeArea = MediaQuery.of(context).padding;
+
+    return Material(
+      type: MaterialType.transparency,
+      child: Container(
+        color: Colors.black.withOpacity(0.88),
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // スキップボタン
+              if (widget.onSkip != null)
+                Positioned(
+                  top: 8,
+                  right: 16,
+                  child: GestureDetector(
+                    onTap: widget.onSkip,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'スキップ',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // メインコンテンツ（中央）
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: widget.showConceptLayout
+                      ? _buildConceptContent()
+                      : _buildFullscreenMessageContent(),
+                ),
+              ),
+
+              // 「次へ」ボタン（下部）
+              Positioned(
+                bottom: 32 + safeArea.bottom,
+                left: 32,
+                right: 32,
+                child: CustomButton(
+                  text: widget.showConceptLayout ? 'はじめる' : '次へ',
+                  onPressed: widget.onNext,
+                  backgroundColor: const Color(0xFFFF6B35),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// コンセプト画面コンテンツ（3アイコン説明）
+  Widget _buildConceptContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          widget.message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            height: 1.5,
+          ),
+        ),
+        if (widget.subMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            widget.subMessage!,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.7),
+              fontSize: 14,
+              height: 1.5,
+            ),
+          ),
+        ],
+        const SizedBox(height: 48),
+        // 3ステップ説明
+        _buildConceptStep(
+          icon: Icons.map_outlined,
+          label: 'マップで未発見の店を探す',
+        ),
+        const SizedBox(height: 8),
+        const Icon(Icons.arrow_downward, color: Colors.white38, size: 20),
+        const SizedBox(height: 8),
+        _buildConceptStep(
+          icon: Icons.nfc,
+          label: 'NFCタッチで図鑑カードGET',
+        ),
+        const SizedBox(height: 8),
+        const Icon(Icons.arrow_downward, color: Colors.white38, size: 20),
+        const SizedBox(height: 8),
+        _buildConceptStep(
+          icon: Icons.menu_book_outlined,
+          label: 'コレクション達成！',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildConceptStep({required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white, size: 28),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 通常のフルスクリーンメッセージコンテンツ（learnNfcTouch など）
+  Widget _buildFullscreenMessageContent() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 40),
+        Text(
+          widget.message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            height: 1.5,
+          ),
+        ),
+        if (widget.subMessage != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            widget.subMessage!,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.85),
+              fontSize: 15,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildSkipButton(BuildContext context) {
     return Positioned(
       top: MediaQuery.of(context).padding.top + 8,
@@ -252,22 +451,47 @@ class _WalkthroughOverlayState extends State<WalkthroughOverlay>
       left: 24,
       right: 24,
       child: IgnorePointer(
-        child: Text(
-          widget.message,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            height: 1.5,
-            shadows: [
-              Shadow(
-                color: Colors.black54,
-                blurRadius: 8,
-                offset: Offset(0, 2),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Text(
+              widget.message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                height: 1.5,
+                shadows: [
+                  Shadow(
+                    color: Colors.black54,
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+            ),
+            if (widget.subMessage != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                widget.subMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                  height: 1.5,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
               ),
             ],
-          ),
+          ],
         ),
       ),
     );

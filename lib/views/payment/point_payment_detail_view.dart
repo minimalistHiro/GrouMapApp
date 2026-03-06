@@ -369,19 +369,6 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       // 新規登録ミッション: スタンプ初獲得
       MissionService().markRegistrationMission(userId, 'first_stamp');
 
-      // 曜日別訪問バッジカウンター
-      const dayNames = [
-        'monday',
-        'tuesday',
-        'wednesday',
-        'thursday',
-        'friday',
-        'saturday',
-        'sunday'
-      ];
-      final dayName = dayNames[DateTime.now().weekday - 1];
-      BadgeService().incrementBadgeCounter(userId, 'dayVisit_$dayName');
-
       // 来店ボーナス: +1コイン付与（二重付与防止）
       await _awardVisitCoinBonus(userId, eventsSnap.docs.first);
     } catch (_) {

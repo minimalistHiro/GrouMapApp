@@ -66,6 +66,18 @@ service cloud.firestore {
             )
         );
     }
+    // 店舗アカウントが変更できないオーナー専用フィールドの判定
+    function updatesRestrictedFields() {
+      return request.resource.data.diff(resource.data).changedKeys()
+        .hasAny(['areaId', 'rarityOverride', 'isApproved', 'isOwner', 'founderMember', 'linkCode', 'createdByOwner']);
+    }
+    // linkedUids への自己 UID arrayUnion のみ許可（店舗オーナーが StoreLinkView でリンクコードを使って紐づける際）
+    function isLinkedUidsArrayUnionSelf() {
+      return request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedUids', 'updatedAt'])
+        && request.resource.data.linkedUids.hasAll(resource.data.get('linkedUids', []))
+        && request.resource.data.linkedUids.hasAll([request.auth.uid]);
+    }
     function isCouponUserUseIncrementLegacy() {
       return request.auth != null
         && !(resource.data.isActive == false)
@@ -491,13 +503,16 @@ service cloud.firestore {
       allow read: if true;
       // 新規作成は未ログインユーザーも許可
       allow create: if true;
-      // 更新はオーナー or 店舗メンバーのみ可能
+      // 更新はオーナー or 店舗メンバーのみ可能（店舗メンバーはオーナー専用フィールドを変更不可）
       // 店舗紐づけ申請時: 未紐づけ店舗のclaimStatus/claimedBy/claimTokenのみ更新可能
-      allow update: if isOwner() || isStoreMember(storeId)
+      // linkedUids への自己UID追加（StoreLinkView からのリンクコード紐づけ）も許可
+      allow update: if isOwner()
+        || (isStoreMember(storeId) && !updatesRestrictedFields())
         || (request.auth != null
             && resource.data.claimStatus == 'unclaimed'
             && request.resource.data.claimStatus == 'pending'
-            && request.resource.data.claimedBy == request.auth.uid);
+            && request.resource.data.claimedBy == request.auth.uid)
+        || isLinkedUidsArrayUnionSelf();
       // 削除はオーナー、または作成者本人のみ可能
       allow delete: if isOwner() || (request.auth != null && request.auth.uid == resource.data.createdBy);
 
@@ -692,6 +707,43 @@ service cloud.firestore {
           || isStoreMember(resource.data.storeId)
         );
       allow write: if false;
+    }
+
+    // エリアコレクション（areas/{areaId}）
+    match /areas/{areaId} {
+      // 全ユーザー読み取り可能（認証不要）
+      allow read: if true;
+      // 管理者のみ書き込み可能
+      allow write: if isOwner();
+    }
+
+    // 期間別開拓ランキングスコア（ranking_scores/{periodId}/users/{userId}）
+    match /ranking_scores/{periodId} {
+      allow read: if true;
+      allow write: if false;
+
+      match /users/{userId} {
+        allow read: if true;    // 全公開（認証不要）
+        allow write: if false;  // Cloud Functions のみ書き込み可能
+      }
+    }
+
+    // 週次ミッション達成進捗（weekly_mission_progress/{userId}）
+    match /weekly_mission_progress/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // Cloud Functions のみ書き込み可能
+    }
+
+    // 月次探検レポート（monthly_reports/{userId}/reports/{yearMonth}）
+    match /monthly_reports/{userId}/reports/{yearMonth} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if false; // Cloud Functions のみ書き込み可能
+    }
+
+    // コミュニティ月次サマリー（monthly_reports_community/{yearMonth}）
+    match /monthly_reports_community/{yearMonth} {
+      allow read: if request.auth != null;
+      allow write: if false; // Cloud Functions のみ書き込み可能
     }
 
     // その他のコレクションは認証されたユーザーのみ読み取り可能

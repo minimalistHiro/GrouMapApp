@@ -13,7 +13,7 @@ class LeaderboardView extends ConsumerStatefulWidget {
 }
 
 class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
-  RankingType _selectedType = RankingType.totalPoints;
+  RankingType _selectedType = RankingType.discoveredStoreCount;
   RankingPeriodType _selectedPeriod = RankingPeriodType.allTime;
 
   @override
@@ -325,6 +325,8 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
 
   String _getRankingTypeLabel(RankingType type) {
     switch (type) {
+      case RankingType.discoveredStoreCount:
+        return '開拓店舗数';
       case RankingType.totalPoints:
         return 'ポイント';
       case RankingType.badgeCount:
@@ -357,6 +359,8 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
 
   String _getRankingDisplayValue(RankingModel ranking) {
     switch (_selectedType) {
+      case RankingType.discoveredStoreCount:
+        return '${ranking.discoveredStoreCount} 店舗';
       case RankingType.totalPoints:
         return '${ranking.totalPoints} pt';
       case RankingType.badgeCount:

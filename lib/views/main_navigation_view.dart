@@ -6,16 +6,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/auth_provider.dart';
 import '../providers/owner_settings_provider.dart';
 import '../providers/store_provider.dart';
-import '../providers/coupon_provider.dart';
 import '../providers/badge_provider.dart';
-import '../providers/posts_provider.dart';
-import '../services/push_notification_service.dart';
 import '../services/mission_service.dart';
-import 'home_view.dart';
 import 'map/map_view.dart';
-import 'qr/qr_generator_view.dart';
 import 'profile/profile_view.dart';
-import 'posts/posts_view.dart';
+import 'zukan/zukan_view.dart';
 import 'payment/point_payment_detail_view.dart';
 import 'stamps/daily_recommendation_view.dart';
 import 'stamps/badge_awarded_view.dart';
@@ -26,49 +21,24 @@ import 'walkthrough/walkthrough_step_config.dart';
 import '../services/deep_link_service.dart';
 import '../theme/app_ui.dart';
 import 'checkin/nfc_coupon_select_view.dart';
+import 'report/monthly_report_view.dart';
 
 class MainNavigationView extends ConsumerStatefulWidget {
   final int initialIndex;
   const MainNavigationView({Key? key, this.initialIndex = 0}) : super(key: key);
 
-  static Future<void> switchToPostsTab(BuildContext context) async {
-    final state = context.findAncestorStateOfType<_MainNavigationViewState>();
-    if (state == null) {
-      return;
-    }
-    await state._switchToTab(_MainTab.coupons);
-  }
-
   @override
   ConsumerState<MainNavigationView> createState() => _MainNavigationViewState();
 }
 
-class _LoweredFabLocation extends FloatingActionButtonLocation {
-  final double offset;
-  const _LoweredFabLocation(this.offset);
-
-  @override
-  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
-    final baseOffset =
-        FloatingActionButtonLocation.centerDocked.getOffset(scaffoldGeometry);
-    return Offset(baseOffset.dx, baseOffset.dy + offset);
-  }
-}
-
 enum _MainTab {
-  home,
   map,
-  qr,
-  coupons,
+  zukan,
   profile,
 }
 
 class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   int _currentIndex = 0;
-  int _lastNonQrTabIndex = 0;
-  static const double _fabVerticalOffset = 12;
-  static const double _fabIconSize = 20;
-  static const double _fabLabelSize = 10;
   ProviderSubscription<AsyncValue<User?>>? _authSubscription;
   ProviderSubscription<AsyncValue<Map<String, dynamic>?>>?
       _userDataSubscription;
@@ -244,11 +214,18 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
   }
 
-  // Deep Link リスナー初期化（NFC チェックイン用）
+  // Deep Link リスナー初期化（NFC チェックイン + 月次レポート）
   void _initDeepLinkListener() {
     // コールドスタート時の初期リンクを処理
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
+      // 月次レポートDeepLinkを先に判定
+      final reportLink =
+          await _deepLinkService.getInitialMonthlyReportLink();
+      if (reportLink != null) {
+        _handleMonthlyReportDeepLink(reportLink);
+        return;
+      }
       final initialLink = await _deepLinkService.getInitialCheckinLink();
       if (initialLink != null) {
         _handleCheckinDeepLink(initialLink);
@@ -259,6 +236,20 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       if (!mounted) return;
       _handleCheckinDeepLink(link);
     });
+    // 月次レポートDeepLinkストリーム
+    _deepLinkService.listenMonthlyReportLinks((link) {
+      if (!mounted) return;
+      _handleMonthlyReportDeepLink(link);
+    });
+  }
+
+  // 月次レポートDeepLinkを処理
+  void _handleMonthlyReportDeepLink(MonthlyReportDeepLink link) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MonthlyReportView(yearMonth: link.yearMonth),
+      ),
+    );
   }
 
   // NFC チェックイン Deep Link を処理
@@ -338,27 +329,16 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     }
   }
 
-  List<_MainTab> _bottomTabsFor(List<_MainTab> tabs) {
-    return tabs.where((tab) => tab != _MainTab.qr).toList();
-  }
+  List<_MainTab> _bottomTabsFor(List<_MainTab> tabs) => tabs;
 
   void _setCurrentTab(int index, List<_MainTab> tabs) {
     _currentIndex = index;
-    final tab = tabs[index];
-    if (tab != _MainTab.qr) {
-      final bottomIndex = _bottomTabsFor(tabs).indexOf(tab);
-      if (bottomIndex >= 0) {
-        _lastNonQrTabIndex = bottomIndex;
-      }
-    }
   }
 
   // タブ切り替え時のデータ読み込み（BottomNavigationBar用）
   Future<void> _onBottomTabChanged(int bottomIndex, List<_MainTab> tabs) async {
     final bottomTabs = _bottomTabsFor(tabs);
-    final showPlaceholder = tabs.contains(_MainTab.qr);
-    final placeholderIndex =
-        showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+    const placeholderIndex = -1;
     final bottomTabIndex =
         _bottomTabIndexForVisualIndex(bottomIndex, placeholderIndex);
     if (bottomTabIndex == null) {
@@ -375,27 +355,18 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       // ウォークスルーステップを進行
       if (wState.step == WalkthroughStep.tapMapTab && nextTab == _MainTab.map) {
         ref.read(walkthroughProvider.notifier).nextStep();
-      } else if (wState.step == WalkthroughStep.tapHomeTab &&
-          nextTab == _MainTab.home) {
+      } else if (wState.step == WalkthroughStep.tapZukanTab &&
+          nextTab == _MainTab.zukan) {
         ref.read(walkthroughProvider.notifier).nextStep();
+      } else if (wState.step == WalkthroughStep.tapProfileTab &&
+          nextTab == _MainTab.profile) {
+        ref.read(walkthroughProvider.notifier).completeWalkthrough();
       }
     }
 
-    final previousTab = tabs[_currentIndex];
-    final nextIndex = tabs.indexOf(nextTab);
     setState(() {
-      _setCurrentTab(nextIndex, tabs);
+      _setCurrentTab(tabs.indexOf(nextTab), tabs);
     });
-
-    // ホームタブに切り替わった時はバッジポップアップフラグをリセット
-    if (nextTab == _MainTab.home && previousTab != _MainTab.home) {
-      _badgePopupShown = false;
-      final authState = ref.read(authStateProvider);
-      final user = authState.maybeWhen(data: (u) => u, orElse: () => null);
-      if (user != null) {
-        _checkBadgesOnHomeView(user.uid);
-      }
-    }
 
     // タブに応じて必要なデータを読み込み
     await _loadTabSpecificData(nextTab);
@@ -408,10 +379,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     if (!tabs.contains(tab)) {
       return;
     }
-    final previousTab = tabs[_currentIndex];
-    final nextIndex = tabs.indexOf(tab);
     setState(() {
-      _setCurrentTab(nextIndex, tabs);
+      _setCurrentTab(tabs.indexOf(tab), tabs);
     });
 
     await _loadTabSpecificData(tab);
@@ -422,11 +391,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     switch (step) {
       case WalkthroughStep.tapMapTab:
         return _MainTab.map;
-      case WalkthroughStep.tapHomeTab:
-        return _MainTab.home;
-      case WalkthroughStep.tapMissionFab:
-      case WalkthroughStep.tapCoinExchange:
-        return _MainTab.home;
+      case WalkthroughStep.tapZukanTab:
+        return _MainTab.zukan;
+      case WalkthroughStep.tapProfileTab:
+        return _MainTab.profile;
       default:
         return null;
     }
@@ -454,21 +422,11 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     await authState.when(
       data: (user) async {
         switch (tab) {
-          case _MainTab.home:
-            if (user != null) {
-              await _loadHomeData(user.uid);
-            }
-            break;
           case _MainTab.map:
             await _loadMapData(user?.uid ?? '');
             break;
-          case _MainTab.qr:
-            if (user != null) {
-              await _loadQRData(user.uid);
-            }
-            break;
-          case _MainTab.coupons:
-            await _loadPostsData();
+          case _MainTab.zukan:
+            // 図鑑データは ZukanView 内で自動的に取得
             break;
           case _MainTab.profile:
             if (user != null) {
@@ -482,44 +440,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     );
   }
 
-  // 各タブのデータ読み込みメソッド
-  Future<void> _loadHomeData(String userId) async {
-    // ホーム画面のデータは既にuserDataProviderで管理されているため、
-    // 必要に応じてプロバイダーを無効化
-  }
-
   Future<void> _loadMapData(String userId) async {
     // マップ画面のデータ読み込み
     await _loadLocationData();
     await _loadStoreData();
-  }
-
-  Future<void> _loadQRData(String userId) async {
-    // QRコード画面のデータ読み込み
-    // QRコード画面は主にスキャン機能のため、特別なデータ読み込みは不要
-  }
-
-  Future<void> _loadPostsData() async {
-    try {
-      ref.invalidate(instagramSearchPostsProvider);
-    } catch (e) {
-      debugPrint('投稿データ読み込みエラー: $e');
-    }
-  }
-
-  Future<void> _loadCouponData(String? userId) async {
-    // クーポン画面のデータ読み込み
-    try {
-      if (userId != null) {
-        ref.invalidate(availableCouponsProvider(userId));
-        ref.invalidate(userCouponsProvider(userId));
-      } else {
-        ref.invalidate(availableCouponsProvider('guest'));
-      }
-      ref.invalidate(promotionsProvider);
-    } catch (e) {
-      debugPrint('クーポンデータ読み込みエラー: $e');
-    }
   }
 
   Future<void> _loadProfileData(String userId) async {
@@ -532,19 +456,9 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   }
 
   List<_MainTab> _tabsForUser(User? user) {
-    if (user == null) {
-      return const [
-        _MainTab.home,
-        _MainTab.map,
-        _MainTab.coupons,
-      ];
-    }
-
     return const [
-      _MainTab.home,
       _MainTab.map,
-      _MainTab.qr,
-      _MainTab.coupons,
+      _MainTab.zukan,
       _MainTab.profile,
     ];
   }
@@ -562,33 +476,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     _loadTabSpecificData(tabs[safeIndex]);
   }
 
-  void _onQrFabPressed(List<_MainTab> tabs) {
-    if (!tabs.contains(_MainTab.qr)) {
-      return;
-    }
-    _loadTabSpecificData(_MainTab.qr);
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => const QRGeneratorView(),
-      ),
-    );
-  }
-
-  int _safeBottomIndex(List<_MainTab> bottomTabs) {
-    if (bottomTabs.isEmpty) {
-      return 0;
-    }
-    return _lastNonQrTabIndex.clamp(0, bottomTabs.length - 1);
-  }
-
-  int _placeholderIndexFor(List<_MainTab> bottomTabs) {
-    final mapIndex = bottomTabs.indexOf(_MainTab.map);
-    final couponsIndex = bottomTabs.indexOf(_MainTab.coupons);
-    if (mapIndex >= 0 && couponsIndex >= 0 && mapIndex < couponsIndex) {
-      return mapIndex + 1;
-    }
-    return -1;
-  }
+  int _placeholderIndexFor(List<_MainTab> bottomTabs) => -1;
 
   int? _bottomTabIndexForVisualIndex(int visualIndex, int placeholderIndex) {
     if (placeholderIndex < 0) {
@@ -635,14 +523,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   List<Widget> _pagesForTabs(List<_MainTab> tabs) {
     return tabs.map((tab) {
       switch (tab) {
-        case _MainTab.home:
-          return const HomeView();
         case _MainTab.map:
           return const MapView();
-        case _MainTab.qr:
-          return const QRGeneratorView();
-        case _MainTab.coupons:
-          return const PostsView();
+        case _MainTab.zukan:
+          return const ZukanView();
         case _MainTab.profile:
           return const ProfileView();
       }
@@ -655,25 +539,15 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   }) {
     return tabs.map((tab) {
       switch (tab) {
-        case _MainTab.home:
-          return const BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'ホーム',
-          );
         case _MainTab.map:
           return const BottomNavigationBarItem(
             icon: Icon(Icons.map),
             label: 'マップ',
           );
-        case _MainTab.qr:
+        case _MainTab.zukan:
           return const BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code),
-            label: 'QRコード',
-          );
-        case _MainTab.coupons:
-          return const BottomNavigationBarItem(
-            icon: Icon(Icons.article),
-            label: '投稿',
+            icon: Icon(Icons.menu_book),
+            label: '図鑑',
           );
         case _MainTab.profile:
           return BottomNavigationBarItem(
@@ -1012,6 +886,9 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       });
     }
 
+    // ウォークスルーが開始された（未完了ユーザー）場合はレコメンド・バッジポップアップをスキップ
+    if (_walkthroughStarted) return;
+
     if (_dailyRecommendationShown) return;
 
     // 本日初ログインでなければバッジチェックのみ
@@ -1070,6 +947,9 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
   // 前のウィジェットでmounted=falseにより失敗したレコメンドポップアップのリトライ
   Future<void> _retryPendingDailyRecommendation() async {
+    // ウォークスルーが開始された場合はスキップ
+    if (_walkthroughStarted) return;
+
     _dailyRecommendationShown = true;
 
     // 包括バッジチェックをバックグラウンドで開始
@@ -1285,9 +1165,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         final tabs = _tabsForUser(user);
         final pages = _pagesForTabs(tabs);
         final bottomTabs = _bottomTabsFor(tabs);
-        final showPlaceholder = tabs.contains(_MainTab.qr);
-        final placeholderIndex =
-            showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+        const placeholderIndex = -1;
         final safeIndex = _coerceIndex(pages.length);
 
         if (safeIndex != _currentIndex) {
@@ -1302,54 +1180,23 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         final currentTab = tabs[safeIndex];
         final bottomIndex = bottomTabs.isEmpty
             ? 0
-            : currentTab == _MainTab.qr
-                ? _visualIndexForBottomTabIndex(
-                    _safeBottomIndex(bottomTabs), placeholderIndex)
-                : _visualIndexForBottomTabIndex(
-                    bottomTabs
-                        .indexOf(currentTab)
-                        .clamp(0, bottomTabs.length - 1),
-                    placeholderIndex,
-                  );
+            : _visualIndexForBottomTabIndex(
+                bottomTabs
+                    .indexOf(currentTab)
+                    .clamp(0, bottomTabs.length - 1),
+                placeholderIndex,
+              );
 
-        if (user == null) {
-          final items = _bottomNavItemsWithPlaceholder(
-            bottomTabs,
-            showPlaceholder,
-          );
-          return _buildBottomScaffold(
-            tabs: tabs,
-            pages: pages,
-            pageIndex: safeIndex,
-            bottomIndex: bottomIndex,
-            items: items,
-          );
-        }
-
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collectionGroup('messages')
-              .where('userId', isEqualTo: user.uid)
-              .where('senderRole', isEqualTo: 'owner')
-              .where('readByUserAt', isNull: true)
-              .snapshots(),
-          builder: (context, unreadSnapshot) {
-            final unreadCount = unreadSnapshot.hasError
-                ? 0
-                : (unreadSnapshot.data?.docs.length ?? 0);
-            final items = _bottomNavItemsWithPlaceholder(
-              bottomTabs,
-              showPlaceholder,
-              profileBadgeCount: unreadCount,
-            );
-            return _buildBottomScaffold(
-              tabs: tabs,
-              pages: pages,
-              pageIndex: safeIndex,
-              bottomIndex: bottomIndex,
-              items: items,
-            );
-          },
+        final items = _bottomNavItemsWithPlaceholder(
+          bottomTabs,
+          false,
+        );
+        return _buildBottomScaffold(
+          tabs: tabs,
+          pages: pages,
+          pageIndex: safeIndex,
+          bottomIndex: bottomIndex,
+          items: items,
         );
       },
       loading: () => const Scaffold(
@@ -1372,31 +1219,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
     final scaffold = Scaffold(
       body: pages[pageIndex.clamp(0, pages.length - 1)],
-      floatingActionButton: tabs.contains(_MainTab.qr)
-          ? FloatingActionButton(
-              onPressed: () => _onQrFabPressed(tabs),
-              backgroundColor: const Color(0xFFFF6B35),
-              shape: const CircleBorder(),
-              child: const Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.qr_code, color: Colors.white, size: _fabIconSize),
-                  SizedBox(height: 2),
-                  Text(
-                    'QRコード',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: _fabLabelSize,
-                      height: 1,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : null,
-      floatingActionButtonLocation: tabs.contains(_MainTab.qr)
-          ? const _LoweredFabLocation(_fabVerticalOffset)
-          : null,
       bottomNavigationBar: BottomNavigationBar(
         key: _bottomNavKey,
         type: BottomNavigationBarType.fixed,
@@ -1412,17 +1234,26 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       ),
     );
 
-    // ウォークスルーステップ1・4のオーバーレイ
+    // タブハイライトオーバーレイ（tapMapTab / tapZukanTab / tapProfileTab）
     final showTabOverlay = walkthroughState.isActive &&
         (walkthroughState.step == WalkthroughStep.tapMapTab ||
-            walkthroughState.step == WalkthroughStep.tapHomeTab);
+            walkthroughState.step == WalkthroughStep.tapZukanTab ||
+            walkthroughState.step == WalkthroughStep.tapProfileTab);
 
-    if (!showTabOverlay) return scaffold;
+    // フルスクリーンオーバーレイ（concept / learnNfcTouch）
+    final showFullscreenOverlay = walkthroughState.isActive &&
+        (walkthroughState.step == WalkthroughStep.concept ||
+            walkthroughState.step == WalkthroughStep.learnNfcTouch);
+
+    if (!showTabOverlay && !showFullscreenOverlay) return scaffold;
 
     return Stack(
       children: [
         scaffold,
-        _buildNavTabWalkthroughOverlay(walkthroughState, tabs, items.length),
+        if (showTabOverlay)
+          _buildNavTabWalkthroughOverlay(walkthroughState, tabs, items.length),
+        if (showFullscreenOverlay)
+          _buildFullscreenWalkthroughOverlay(walkthroughState),
       ],
     );
   }
@@ -1433,13 +1264,14 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     int totalVisualItems,
   ) {
     final bottomTabs = _bottomTabsFor(tabs);
-    final showPlaceholder = tabs.contains(_MainTab.qr);
-    final placeholderIndex =
-        showPlaceholder ? _placeholderIndexFor(bottomTabs) : -1;
+    const placeholderIndex = -1;
 
     // ターゲットタブのビジュアルインデックスを計算
-    final targetTab =
-        wState.step == WalkthroughStep.tapMapTab ? _MainTab.map : _MainTab.home;
+    final targetTab = wState.step == WalkthroughStep.tapMapTab
+        ? _MainTab.map
+        : wState.step == WalkthroughStep.tapZukanTab
+            ? _MainTab.zukan
+            : _MainTab.profile;
     final bottomTabIndex = bottomTabs.indexOf(targetTab);
     if (bottomTabIndex < 0) return const SizedBox.shrink();
     final visualIndex =
@@ -1478,6 +1310,21 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
           },
         );
       },
+    );
+  }
+
+  /// concept / learnNfcTouch ステップ用のフルスクリーンオーバーレイ
+  Widget _buildFullscreenWalkthroughOverlay(WalkthroughState wState) {
+    final config = walkthroughStepConfigs[wState.step];
+    final isConcept = wState.step == WalkthroughStep.concept;
+
+    return WalkthroughOverlay(
+      message: config?.message ?? '',
+      subMessage: config?.subMessage,
+      requiresAction: false,
+      showConceptLayout: isConcept,
+      onNext: () => ref.read(walkthroughProvider.notifier).nextStep(),
+      onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
     );
   }
 

@@ -408,6 +408,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "stores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isApproved",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isOwner",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

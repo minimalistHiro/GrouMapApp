@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/common_header.dart';
 import '../../widgets/stamp_card_widget.dart';
 import '../../services/nfc_checkin_service.dart';
+import '../../providers/badge_provider.dart';
 import '../../theme/app_ui.dart';
 import '../main_navigation_view.dart';
+import '../zukan/zukan_card_view.dart';
 
 class NfcCheckinResultView extends StatefulWidget {
   final NfcCheckinResult result;
@@ -124,7 +127,52 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
         _loading = false;
       });
 
-      // スタンプ演出を開始
+      // ━━ バッジトリガー（NFCチェックイン時） ━━
+      if (userId != null) {
+        // 曜日別利用バッジ（毎回のNFCチェックイン時にカウント）
+        const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        final dayName = dayNames[DateTime.now().weekday - 1];
+        BadgeService().incrementBadgeCounter(userId, 'dayVisit_$dayName');
+
+        // 図鑑発見バッジ・レジェンド発見バッジ（初来店時のみ）
+        if (widget.result.isFirstVisit) {
+          BadgeService().incrementBadgeCounter(userId, 'zukanDiscover');
+
+          // レジェンドレア度判定: rarityOverride=4 または discoveredCount<=1（初発見）
+          final discoveredCount = (storeData['discoveredCount'] as num?)?.toInt() ?? 0;
+          final rarityOverride = (storeData['rarityOverride'] as num?)?.toInt();
+          final isLegendaryStore = rarityOverride == 4 || (rarityOverride == null && discoveredCount <= 1);
+          if (isLegendaryStore) {
+            BadgeService().incrementBadgeCounter(userId, 'legendDiscover');
+          }
+        }
+      }
+
+      // 秘境探検家バッジトリガー: hiddenExplorerIncremented が true の場合はログ出力
+      // バッジ付与は Cloud Functions 側で完了済み（user_badges/{userId}/badges に isNew:true で保存）
+      if (widget.result.hiddenExplorerIncremented) {
+        debugPrint('[NfcCheckinResult] 秘境探検家カウンターをインクリメント済み - 新規バッジを確認');
+      }
+
+      // 週次ミッション達成チェック（バックグラウンドで実行）
+      _checkWeeklyMission();
+
+      // 新規ユーザー（stampsAfter == 0）は図鑑カード画面へ直接遷移
+      if (widget.result.stampsAfter == 0) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => ZukanCardView(
+              storeId: widget.storeId,
+              storeName: widget.result.storeName,
+              isFirstVisit: widget.result.isFirstVisit,
+            ),
+          ),
+        );
+        return;
+      }
+
+      // スタンプ保有者: スタンプ演出を開始
       final displayStamps = widget.result.stampsAfter % _maxStamps;
       final effectiveDisplay = displayStamps == 0 && widget.result.cardCompleted
           ? _maxStamps
@@ -179,7 +227,7 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
 
     return Scaffold(
       backgroundColor: AppUi.surface,
-      appBar: CommonHeader(title: const Text('チェックイン完了')),
+      appBar: CommonHeader(title: const Text('チェックイン完了'), showBack: false),
       body: Column(
         children: [
           Expanded(
@@ -236,9 +284,6 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                     ),
                   const SizedBox(height: 16),
 
-                  // 来店ボーナス表示
-                  if (widget.result.coinsAdded > 0) _buildCoinBonusBanner(),
-
                   // 獲得クーポン表示
                   if (widget.result.awardedCoupons.isNotEmpty) ...[
                     const SizedBox(height: 16),
@@ -256,27 +301,42 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
               ),
             ),
           ),
-          // 完了ボタン
+          // カードを見るボタン（スタンプ保有者用）
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-              child: SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _onComplete,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppUi.primary,
-                    foregroundColor: AppUi.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppUi.controlRadius),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _onViewZukanCard,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppUi.primary,
+                        foregroundColor: AppUi.onPrimary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppUi.controlRadius),
+                        ),
+                      ),
+                      child: const Text(
+                        'カードを見る',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    '完了',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: _onComplete,
+                    child: const Text(
+                      'ホームに戻る',
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
@@ -424,49 +484,6 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey[500],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCoinBonusBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF2EC),
-        borderRadius: BorderRadius.circular(AppUi.controlRadius),
-        border: Border.all(color: AppUi.primary, width: 1.5),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.monetization_on, color: Colors.amber[700], size: 24),
-          const SizedBox(width: 8),
-          const Text(
-            '来店ボーナス',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.bold,
-              color: AppUi.primary,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppUi.primary,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              '+${widget.result.coinsAdded} コイン',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
             ),
           ),
         ],
@@ -624,6 +641,118 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
           );
         }).toList()),
       ],
+    );
+  }
+
+  /// 週次ミッション達成チェック（NFC チェックイン後にバックグラウンドで実行）
+  Future<void> _checkWeeklyMission() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) return;
+
+    try {
+      final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+      final result = await functions.httpsCallable('checkWeeklyMission').call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+
+      final newlyAchieved = data['newlyAchieved'] as bool? ?? false;
+      final newBadges = List<String>.from(data['newBadges'] as List? ?? []);
+
+      if (newlyAchieved && mounted) {
+        _showWeeklyMissionAchievedDialog(newBadges);
+      }
+    } catch (e) {
+      // 週次ミッションチェックはバックグラウンド処理のためエラーは無視
+      debugPrint('[NfcCheckinResult] 週次ミッションチェックエラー（続行）: $e');
+    }
+  }
+
+  void _showWeeklyMissionAchievedDialog(List<String> newBadges) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.emoji_events, size: 64, color: Color(0xFFFF8F00)),
+                const SizedBox(height: 16),
+                const Text(
+                  '週次ミッション達成！',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '発見ヒントを通知で送りました。\nマップを開いて確認しましょう！',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                ),
+                if (newBadges.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF8E1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFFFC107)),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          '新バッジを獲得！',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF8F00),
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        ...newBadges.map((b) => Text(
+                          b,
+                          style: const TextStyle(fontSize: 13, color: Colors.black87),
+                        )),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppUi.primary,
+                      foregroundColor: AppUi.onPrimary,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _onViewZukanCard() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ZukanCardView(
+          storeId: widget.storeId,
+          storeName: widget.result.storeName,
+          isFirstVisit: widget.result.isFirstVisit,
+        ),
+      ),
     );
   }
 

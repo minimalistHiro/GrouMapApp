@@ -79,6 +79,18 @@ enum BadgeType {
   recommendViewed,
   @JsonValue('stamp_card_completed')
   stampCardCompleted,
+  @JsonValue('hidden_explorer')
+  hiddenExplorer,
+  @JsonValue('hidden_explorer_complete')
+  hiddenExplorerComplete,
+  @JsonValue('genre_complete')
+  genreComplete,
+  @JsonValue('weekly_mission')
+  weeklyMission,
+  @JsonValue('zukan_discover')
+  zukanDiscover,
+  @JsonValue('legend_discover')
+  legendDiscover,
 }
 
 enum BadgeRarity {

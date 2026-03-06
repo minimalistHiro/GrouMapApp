@@ -35,7 +35,7 @@ class WalkthroughNotifier extends StateNotifier<WalkthroughState> {
   /// ウォークスルーを開始
   void startWalkthrough(String userId) {
     state = WalkthroughState(
-      step: WalkthroughStep.tapMapTab,
+      step: WalkthroughStep.concept,
       isActive: true,
       userId: userId,
     );

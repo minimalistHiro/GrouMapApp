@@ -9,6 +9,7 @@ class RankingModel with _$RankingModel {
     required String userId,
     required String displayName,
     required String? photoURL,
+    @Default(0) int discoveredStoreCount,
     required int totalPoints,
     required int badgeCount,
     required int stampCount,
@@ -53,6 +54,8 @@ class UserRankingHistory with _$UserRankingHistory {
 }
 
 enum RankingType {
+  @JsonValue('discovered_store_count')
+  discoveredStoreCount,
   @JsonValue('total_points')
   totalPoints,
   @JsonValue('badge_count')

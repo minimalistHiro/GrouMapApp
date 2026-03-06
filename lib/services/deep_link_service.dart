@@ -11,6 +11,12 @@ class CheckinDeepLink {
   String get dedupeKey => '$storeId:$tagSecret';
 }
 
+class MonthlyReportDeepLink {
+  final String yearMonth;
+
+  MonthlyReportDeepLink({required this.yearMonth});
+}
+
 class DeepLinkService {
   // Canonical host (current) + one-release legacy host compatibility.
   static const String canonicalCheckinHost = 'groumapapp.web.app';
@@ -31,6 +37,34 @@ class DeepLinkService {
     }
   }
 
+  /// コールドスタート時の月次レポートDeepLinkを取得
+  Future<MonthlyReportDeepLink?> getInitialMonthlyReportLink() async {
+    try {
+      final uri = await _appLinks.getInitialLink();
+      if (uri == null) return null;
+      return DeepLinkService.parseMonthlyReportUri(uri);
+    } catch (e) {
+      debugPrint('月次レポートDeepLink取得エラー: $e');
+      return null;
+    }
+  }
+
+  /// ウォームスタート時の月次レポートDeepLinkを監視
+  void listenMonthlyReportLinks(
+      void Function(MonthlyReportDeepLink link) onLink) {
+    _appLinks.uriLinkStream.listen(
+      (uri) {
+        final link = DeepLinkService.parseMonthlyReportUri(uri);
+        if (link != null) {
+          onLink(link);
+        }
+      },
+      onError: (error) {
+        debugPrint('月次レポートDeepLinkストリームエラー: $error');
+      },
+    );
+  }
+
   /// ウォームスタート時のリンクストリームを監視
   void listenCheckinLinks(void Function(CheckinDeepLink link) onLink) {
     _subscription?.cancel();
@@ -45,6 +79,26 @@ class DeepLinkService {
         debugPrint('Deep Linkストリームエラー: $error');
       },
     );
+  }
+
+  /// 月次レポートDeepLinkをパース（/monthly_report/{yearMonth}）
+  static MonthlyReportDeepLink? parseMonthlyReportUri(Uri uri) {
+    // https://groumapapp.web.app/monthly_report/2026-03
+    final isCanonicalHost = uri.host == canonicalCheckinHost;
+    final isLegacyHost = uri.host == legacyCheckinHost;
+    if (uri.scheme != 'https' || (!isCanonicalHost && !isLegacyHost)) {
+      return null;
+    }
+    final segments = uri.pathSegments;
+    if (segments.length == 2 && segments[0] == 'monthly_report') {
+      final yearMonth = segments[1];
+      // 簡易バリデーション: YYYY-MM 形式
+      final regex = RegExp(r'^\d{4}-\d{2}$');
+      if (regex.hasMatch(yearMonth)) {
+        return MonthlyReportDeepLink(yearMonth: yearMonth);
+      }
+    }
+    return null;
   }
 
   /// チェックイン用URLをパース

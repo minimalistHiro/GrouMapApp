@@ -2,6 +2,28 @@
 
 ## Firestore: コレクション一覧（abc順・コード参照ベース）
 
+### areas（フェーズ2追加）
+- `areas/{areaId}`: エリア定義（地図上に表示するエリア円の定義）
+  - `areaId`: エリアID（ドキュメントIDと同値。例: "warabi", "kawaguchi"）
+  - `name`: エリア表示名（例: "蕨エリア"）
+  - `description`: エリア説明（任意）
+  - `center`: 円の中心座標（`{ latitude: number, longitude: number }`）
+  - `radiusMeters`: 円の半径（メートル単位。例: 500）
+  - `color`: マップ表示色（16進数 hex。例: "#FF6B35"。未設定時はデフォルト色 `#FF6B35`）
+  - `isActive`: 表示フラグ（false の場合はマップに表示しない）
+  - `order`: 表示優先度（任意。小さい値ほど先に表示）
+  - `createdAt`: 作成日時
+  - `updatedAt`: 更新日時
+- アクセス制御:
+  - read: 全公開（認証不要）
+  - write: `isOwner()` のみ（管理者）
+- 設計メモ:
+  - フェーズ4-A 以降は店舗用アプリの `AreaManagementView` / `AreaEditView` からUI操作で管理可能（管理者オーナー専用）
+  - フェーズ4-B 以降は店舗用アプリの `StoreAreaRarityView` から各店舗の `areaId` / `rarityOverride` を管理可能（管理者オーナー専用）
+  - `stores.areaId` に対応するエリアのドキュメントID を設定する
+  - `areaId == null` の店舗は「秘境スポット」として扱われる
+  - Google Maps SDK の `Circle` ウィジェットと完全互換（center + radiusMeters を使用）
+
 ### badges（廃止・アプリ内蔵に移行済み）
 - `badges/{badgeId}`: バッジ定義（参照専用・write無効）
   - バッジ定義はアプリ内蔵（`lib/data/badge_definitions.dart`）に移行済み
@@ -123,6 +145,66 @@
     - `createdAt`: 作成日時
     - `readByUserAt`: ユーザー既読日時
     - `readByOwnerAt`: オーナー既読日時
+
+### weekly_mission_progress（フェーズ3-D追加）
+- `weekly_mission_progress/{userId}`: ユーザーの週次ミッション達成進捗
+  - `userId`: ユーザーUID（ドキュメントIDと同値）
+  - `achievedWeeks`: 達成済み週IDの配列（例: `["2026-W10", "2026-W11"]`。JST月曜起点のISO 8601週番号）
+  - `totalAchievedCount`: 累計達成回数（int、週次ミッションバッジのしきい値判定に使用）
+  - `updatedAt`: 最終更新日時（Timestamp）
+- アクセス制御:
+  - read: 本人のみ（`request.auth.uid == userId`）
+  - write: Cloud Functions のみ（`allow write: if false`）
+- 設計メモ:
+  - `checkWeeklyMission` Cloud Function が NFC チェックイン後にユーザー呼び出しで判定
+  - 週IDは JST 月曜起点（`{year}-W{weekNum}` 形式）
+  - 達成条件: 今週の未訪問店舗への初来店 ≥ 1件 かつ 今週の総来店回数 ≥ 3回
+  - 達成時に `badge_progress.weeklyMission` をインクリメントし、累計達成回数に応じたバッジ（`weekly_mission_1/5/10/25`）を `user_badges` に付与
+  - 達成時に発見ヒント FCM 通知（近くのレジェンド/エピック店舗のヒント）を送信
+
+### monthly_reports（フェーズ3-C追加）
+- `monthly_reports/{userId}/reports/{yyyy-MM}`: ユーザー月次探検レポート
+  - `userId`: ユーザーUID（コレクションID）
+  - `yearMonth`: 対象月（`yyyy-MM` 形式。例: "2026-03"）
+  - `generatedAt`: レポート生成日時（Timestamp）
+  - `monthlyDiscoveredCount`: 今月の発見店舗数（number）
+  - `totalDiscoveredCount`: 累計発見店舗数（number）
+  - `topGenre`: 最もよく行ったジャンルのグループキー（string?。例: "cafe_sweets"）
+  - `topGenreCount`: topGenre の今月来店回数（number）
+  - `visitedAreas`: 今月訪問したエリア名リスト（List<string>）
+  - `legendDiscoveredCount`: 今月発見したレジェンド店舗数（number）
+  - `communityContributionCount`: コミュニティ開拓率への貢献（新規発見店舗数）（number）
+  - `totalVisitsThisMonth`: 今月の総来店回数（賑わい貢献）（number）
+  - `hotStoresCount`: マイマップで炎マーク（10回来店）の店舗数（number）
+  - `communityDiscoveredCount`: 今月の全体発見店舗数（number）
+  - `communityExplorationRateDelta`: エリア開拓率の変化（%ポイント）（number）
+  - `communityVisitsDelta`: エリア賑わい度の変化（来店回数・先月比）（number）
+  - `newStoresAddedCount`: 今月新規追加店舗数（number）
+  - `recommendedStores`: 来月のおすすめ店舗リスト（最大3件）（List<Map>）
+    - `storeId`: 店舗ID
+    - `storeName`: 店舗名
+    - `category`: カテゴリ
+    - `rarity`: レア度（4=レジェンド, 3=エピック）
+    - `areaId`: エリアID（nullable）
+- アクセス制御:
+  - read: 本人のみ（`request.auth.uid == userId`）
+  - write: Cloud Functions のみ（`allow write: if false`）
+- 設計メモ:
+  - `generateMonthlyReport` Scheduled Function が毎月末 23:00 JST に生成
+  - 同月に2回実行した場合は既存ドキュメントを上書き（冪等）
+  - ユーザー単位エラーはスキップしてログに記録（全体処理を止めない）
+
+### monthly_reports_community（フェーズ3-C追加）
+- `monthly_reports_community/{yyyy-MM}`: コミュニティ月次サマリー
+  - `yearMonth`: 対象月（ドキュメントIDと同値）
+  - `communityDiscoveredCount`: 今月の全体発見店舗数（新規firstVisitAt件数）（number）
+  - `communityExplorationRateDelta`: エリア開拓率の変化（%ポイント）（number）
+  - `communityVisitsDelta`: エリア賑わい度の変化（来店回数・先月比）（number）
+  - `newStoresAddedCount`: 今月新規追加店舗数（number）
+  - `generatedAt`: 生成日時（Timestamp）
+- アクセス制御:
+  - read: 認証済みユーザー全員
+  - write: Cloud Functions のみ（`allow write: if false`）
 
 ### nfc_tags
 - `nfc_tags/{tagId}`: NFCタグ管理
@@ -323,6 +405,17 @@
   - `isActive`: 有効フラグ
   - `createdAt`: 作成日時
   - `updatedAt`: 更新日時
+
+### ranking_scores（フェーズ2追加）
+- `ranking_scores/{periodId}/users/{userId}`: 期間別開拓ランキングスコア
+  - periodId: `alltime`（全期間）/ `{yyyy}-W{nn}`（週別、ISO 8601）/ `{yyyy}-{MM}`（月別）/ `{yyyy}-{MM}-{dd}`（日別）
+  - `score`: スコア（当期間内の discoveredStoreCount 増分）
+  - `displayName`: ユーザー表示名（書き込み時のスナップショット。rankingOptOut == true の場合は「名無し探検家」）
+  - `photoURL`: プロフィール画像URL（スナップショット。rankingOptOut == true の場合は null）
+  - `rankingOptOut`: オプトアウトフラグ（bool、スナップショット）
+  - `updatedAt`: 最終更新日時
+- 更新タイミング: `nfcCheckin` で `isFirstVisit == true` の場合に alltime / weekly / monthly / daily の 4 ドキュメントを batch 更新
+- アクセス制御: read は全公開（認証不要）、write は Cloud Functions のみ（`allow write: if false`）
 
 ### recommendation_clicks
 - `recommendation_clicks/{clickId}`: レコメンドクリック記録
@@ -536,6 +629,7 @@
     - `syncTime`: 毎日の同期時刻（`HH:mm`、`09:00〜21:00` の30分単位）
     - `nextSyncAt`: 次回自動同期予定日時
     - `updatedAt`: 設定更新日時
+  - `zukanOrder`: 図鑑表示順序（int。店舗作成時に自動採番。管理者アプリの「並び替え」機能で変更可能。小さい値ほど先に表示）
   - `tags`: タグ
   - `paymentMethods`: 利用可能な決済方法（カテゴリ別Map）
     - `cash`: 現金カテゴリ
@@ -600,6 +694,9 @@
   - `totalVisitCount`: NFCチェックインの累計来店回数（再来店を含む全ユーザー合計）。マップ賑わい度ビューに使用（number、デフォルト: 0）（フェーズ1追加）
   - `rarityOverride`: 運営による手動レア度上書き（number?、1〜4。1=コモン/2=レア/3=エピック/4=レジェンド。設定時は `discoveredCount` による自動算出より優先。未設定（null）の場合は自動算出）（フェーズ1追加）
   - `areaId`: 所属エリアのID（string?、`areas` コレクションのドキュメントID。店舗の座標がエリア半径内に入る場合に設定。エリア外の場合は null → 秘境スポット扱い）（フェーズ2追加）
+  - `linkCode`: リンクコード（String?。6文字英数字（大文字+数字）。管理者（isOwner=true）が店舗作成時に自動生成。店舗オーナーが `StoreLinkView` でアカウント紐づけ時に入力するコード。`AdminStoreListView` から再生成可能）（2026-03追加）
+  - `createdByOwner`: 管理者作成フラグ（bool。true = 管理者（isOwner=true）が `AdminStoreCreateView` から作成した店舗（新方式・isApproved=trueで即公開）。false/null = 旧方式（店舗オーナーが `StoreInfoView` で自己登録・承認フロー経由））（2026-03追加）
+  - `linkedUids`: 紐づけ済み店舗オーナーUID一覧（List<String>。`StoreLinkView` でリンクコードを入力した店舗オーナーのUIDを格納。arrayUnionで追加）（2026-03追加）
   - `iconImageUrl`: アイコン画像
   - `storeImageUrl`: 店舗画像
   - `createdBy`: 作成者UID
@@ -715,7 +812,7 @@
 ### badge_progress
 - `badge_progress/{userId}_{counterKey}`: バッジ進捗カウンター（アクション系バッジの累積回数を記録）
   - `userId`: ユーザーUID
-  - `badgeType`: カウンターキー（BadgeType名: `mapOpened`, `storeDetailViewed`, `favoriteAdded`, `slotPlayed`（廃止）, `slotWin`（廃止）, `couponUsed`, `likeGiven`, `commentPosted`, `followUser`, `coinsEarned`, `missionCompleted`, `recommendViewed`, `stampCardCompleted`, `specialEvents`, 曜日別: `dayVisit_monday`, `dayVisit_tuesday`, `dayVisit_wednesday`, `dayVisit_thursday`, `dayVisit_friday`, `dayVisit_saturday`, `dayVisit_sunday`）
+  - `badgeType`: カウンターキー（BadgeType名: `mapOpened`, `storeDetailViewed`, `favoriteAdded`, `slotPlayed`（廃止）, `slotWin`（廃止）, `couponUsed`, `likeGiven`, `commentPosted`, `followUser`, `coinsEarned`, `missionCompleted`, `recommendViewed`, `stampCardCompleted`（廃止: スタンプシステム廃止に伴い新規カウント停止）, `specialEvents`, `hiddenExplorer`（フェーズ3-B追加: エリア外店舗への初回来店カウント）, 曜日別: `dayVisit_monday`, `dayVisit_tuesday`, `dayVisit_wednesday`, `dayVisit_thursday`, `dayVisit_friday`, `dayVisit_saturday`, `dayVisit_sunday`（NFCチェックイン時にカウント）, `zukanDiscover`（NFCチェックイン・初来店時にカウント）, `legendDiscover`（NFCチェックイン・初来店時、レジェンドレア度店舗のみカウント）
   - `currentValue`: 現在値（`FieldValue.increment(1)` でアトミック更新）
   - `lastUpdated`: 最終更新日時
 - 書き込みタイミング: 各アクション実行時に `BadgeService().incrementBadgeCounter()` で自動記録
@@ -770,6 +867,7 @@
   - `isStoreOwner`: 店舗アカウント判定
   - `createdStores`: 作成店舗ID配列
   - `currentStoreId`: 選択中の店舗ID
+  - `linkedStoreId`: 紐づけ先の店舗ID（String?。店舗オーナーが `StoreLinkView` でリンクコード入力後に設定される。null = 未紐づけ。isOwner=true の管理者は複数店舗管理のため不使用）（2026-03追加）
   - `points`: 通常ポイント
   - `specialPoints`: 特別ポイント
   - `specialPointsTotal`: 特別ポイント累計
@@ -848,11 +946,14 @@
     - `login_30_claimed`: 30日連続ログインボーナス受取済みフラグ（bool）
   - `showTutorial`: 初回オンボーディングチュートリアル表示フラグ（初期値 `true`、`TutorialView` の完了/スキップで `false`）
   - `walkthroughCompleted`: インタラクティブウォークスルー完了フラグ（初期値 `false`、`TutorialView` 完了時に明示的に `false` を書き込み。ウォークスルー7ステップ完了またはスキップ時に `true` に更新。`true` のユーザーにはウォークスルーを表示しない）
+  - `discoveredStoreCount`: NFCチェックイン済みのユニーク店舗数（int、初回来店時に nfcCheckin でインクリメント。ランキングスコアのもととなる累計値）
+  - `rankingOptOut`: ランキング参加オプトアウトフラグ（bool、デフォルト: false。true の場合は「名無し探検家」として匿名表示）
   - `readNotifications`: 既読通知ID配列
   - `stores/{storeId}`: スタンプ/来店情報
     - `stamps`: スタンプ数
     - `lastVisited`: 最終来店
     - `lastStampDate`: 最終スタンプ日（`yyyy-MM-dd` 形式、Asia/Tokyo。1日1回スタンプ制限用。string?）
+    - `totalVisits`: 累計来店回数（`nfcCheckin` トランザクション内でミラー書き込み。個人マップモードのピン色判定に使用。初回来店時 `1`、以降は `+1`）
     - `totalSpending`: 累計支出
     - `updatedAt`: 更新日時
     - `storeId`: 店舗ID
@@ -908,6 +1009,8 @@
     - `hasCoupon`: クーポンあり店舗のみ（bool）
     - `hasAvailableCoupon`: 利用可能クーポンあり店舗のみ（bool）
     - `maxDistanceKm`: 最大距離km（number、null=制限なし）
+    - `categoryMode`: ジャンル別アイコン表示モード（bool）
+    - `pioneerMode`: 開拓状況アイコン表示モード（bool）
     - `updatedAt`: 更新日時
   - `daily_missions/{yyyy-MM-dd}`: デイリーミッション（日付ごと）
     - `map_open`: マップ画面オープン報酬の当日付与済みフラグ（bool、マップ関連報酬の1日1回制御用）

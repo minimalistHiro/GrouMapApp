@@ -175,21 +175,45 @@ class _FilterSettingsViewState extends State<FilterSettingsView> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               children: [
-                // 営業状況セクション
+                // マップ表示設定セクション
                 _buildSectionCard(
-                  title: '営業状況',
-                  child: CustomSwitchListTile(
-                    title: const Text('営業中のみ表示'),
-                    subtitle: const Text(
-                      '現在営業中の店舗のみマップに表示します',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    value: _filter.showOpenNowOnly,
-                    onChanged: (val) {
-                      setState(() {
-                        _filter = _filter.copyWith(showOpenNowOnly: val);
-                      });
-                    },
+                  title: 'マップ表示設定',
+                  subtitle: 'マーカーの見た目を変更します',
+                  child: Column(
+                    children: [
+                      CustomSwitchListTile(
+                        title: const Text('ジャンル別表示'),
+                        subtitle: const Text(
+                          'カテゴリごとのアイコンでマーカーを表示します',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        value: _filter.categoryMode,
+                        onChanged: (val) {
+                          setState(() {
+                            _filter = _filter.copyWith(
+                              categoryMode: val,
+                              pioneerMode: val ? false : _filter.pioneerMode,
+                            );
+                          });
+                        },
+                      ),
+                      CustomSwitchListTile(
+                        title: const Text('開拓状況表示'),
+                        subtitle: const Text(
+                          '来店状況に応じたアイコンでマーカーを表示します',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        value: _filter.pioneerMode,
+                        onChanged: (val) {
+                          setState(() {
+                            _filter = _filter.copyWith(
+                              pioneerMode: val,
+                              categoryMode: val ? false : _filter.categoryMode,
+                            );
+                          });
+                        },
+                      ),
+                    ],
                   ),
                 ),
 

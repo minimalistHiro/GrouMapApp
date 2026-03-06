@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.registerNfcTag = exports.nfcCheckin = exports.notifyCouponExpiryScheduled = exports.migrateStampCard = exports.syncStampsWithVisits = exports.syncStoreOwnerFlags = exports.setStoreOwnerFlagOnCreate = exports.notifyFollowersOnNewInstagramPost = exports.notifyFollowersOnNewCoupon = exports.notifyFollowersOnNewPost = exports.expireCoinsScheduled = exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.updateInstagramSyncSettings = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.verifyEmailChangeOtp = exports.requestEmailChangeOtp = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
+exports.checkWeeklyMission = exports.generateMonthlyReport = exports.registerNfcTag = exports.nfcCheckin = exports.notifyCouponExpiryScheduled = exports.migrateStampCard = exports.syncStampsWithVisits = exports.syncStoreOwnerFlags = exports.setStoreOwnerFlagOnCreate = exports.notifyFollowersOnNewInstagramPost = exports.notifyFollowersOnNewCoupon = exports.notifyFollowersOnNewPost = exports.expireCoinsScheduled = exports.syncInstagramPostsScheduled = exports.unlinkInstagramAuth = exports.syncInstagramPosts = exports.updateInstagramSyncSettings = exports.exchangeInstagramAuthCode = exports.startInstagramAuth = exports.punchStamp = exports.verifyQrToken = exports.issueQrToken = exports.testHttpFunction = exports.testFunction = exports.updateStoreDailyStats = exports.verifyEmailOtp = exports.recordRecommendationVisitOnPointAward = exports.calculatePointRequestRates = exports.verifyEmailChangeOtp = exports.requestEmailChangeOtp = exports.requestEmailOtp = exports.notifyPendingStoreRequest = exports.resetLiveChatUnreadOnRead = exports.sendLiveChatNotificationOnCreate = exports.sendUserNotificationOnCreate = exports.processFriendReferral = exports.processAwardAchievement = exports.sendNotificationOnPublish = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const scheduler_1 = require("firebase-functions/v2/scheduler");
 const firestore_1 = require("firebase-functions/v2/firestore");
@@ -2062,7 +2062,7 @@ exports.punchStamp = (0, https_1.onCall)({
     region: 'asia-northeast1',
     enforceAppCheck: false,
 }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Store must be authenticated');
     }
@@ -2111,9 +2111,15 @@ exports.punchStamp = (0, https_1.onCall)({
             throw new https_1.HttpsError('already-exists', 'Already stamped today for this store');
         }
         const currentStamps = asInt((_h = targetStoreSnap.data()) === null || _h === void 0 ? void 0 : _h['stamps'], 0);
-        const stampsAdded = 1;
-        const nextStamps = currentStamps + 1;
-        const cardCompleted = nextStamps % MAX_STAMPS === 0; // 10の倍数到達で達成
+        let stampsAfter = 0;
+        let cardCompleted = false;
+        if (currentStamps >= 1) {
+            // 救済措置: 既存スタンプ保有者はスタンプを +1 加算
+            const nextStamps = currentStamps + 1;
+            cardCompleted = nextStamps % MAX_STAMPS === 0;
+            stampsAfter = nextStamps;
+        }
+        // currentStamps == 0 の場合は来店記録のみ（stampsAfter = 0 のまま）
         const couponReads = [];
         if (selectedCouponIds.length > 0) {
             for (const couponId of selectedCouponIds) {
@@ -2144,15 +2150,27 @@ exports.punchStamp = (0, https_1.onCall)({
                 });
             }
         }
-        // スタンプ加算 + 1日1回制限用の日付記録
-        txn.set(targetStoreRef, stripUndefined({
-            storeId,
-            storeName: storeName || undefined,
-            stamps: nextStamps,
-            lastStampDate: todayJst,
-            lastVisited: firestore_2.FieldValue.serverTimestamp(),
-            updatedAt: firestore_2.FieldValue.serverTimestamp(),
-        }), { merge: true });
+        // スタンプ加算（救済措置対象ユーザーのみ）+ 1日1回制限用の日付記録
+        if (currentStamps >= 1) {
+            txn.set(targetStoreRef, stripUndefined({
+                storeId,
+                storeName: storeName || undefined,
+                stamps: stampsAfter,
+                lastStampDate: todayJst,
+                lastVisited: firestore_2.FieldValue.serverTimestamp(),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            }), { merge: true });
+        }
+        else {
+            // 新規ユーザー（stamps=0）: 来店記録のみ
+            txn.set(targetStoreRef, stripUndefined({
+                storeId,
+                storeName: storeName || undefined,
+                lastStampDate: todayJst,
+                lastVisited: firestore_2.FieldValue.serverTimestamp(),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            }), { merge: true });
+        }
         const todayStr = todayJst;
         const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayStr);
         txn.set(statsRef, {
@@ -2236,8 +2254,8 @@ exports.punchStamp = (0, https_1.onCall)({
             userId,
             storeId,
             storeName,
-            stampsAdded,
-            stampsAfter: nextStamps,
+            stampsAdded: currentStamps >= 1 ? 1 : 0,
+            stampsAfter,
             cardCompleted,
         };
     });
@@ -2317,14 +2335,11 @@ exports.punchStamp = (0, https_1.onCall)({
             .collection('events')
             .doc(stampTxnRef.id);
         await eventRef.set({
-            type: 'stamp_punch',
+            type: 'punch_checkin',
             transactionId: stampTxnRef.id,
             storeId,
             storeName: (_c = result.storeName) !== null && _c !== void 0 ? _c : '',
             pointsAwarded: 0,
-            stampsAdded: (_d = result.stampsAdded) !== null && _d !== void 0 ? _d : 0,
-            stampsAfter: (_e = result.stampsAfter) !== null && _e !== void 0 ? _e : 0,
-            cardCompleted: (_f = result.cardCompleted) !== null && _f !== void 0 ? _f : false,
             badges,
             createdAt: firestore_2.FieldValue.serverTimestamp(),
             seenAt: null,
@@ -2349,15 +2364,15 @@ exports.punchStamp = (0, https_1.onCall)({
             const followBatch = db.batch();
             followBatch.set(followDocRef, {
                 storeId,
-                storeName: (_g = result.storeName) !== null && _g !== void 0 ? _g : '',
-                category: (_h = storeData === null || storeData === void 0 ? void 0 : storeData.category) !== null && _h !== void 0 ? _h : '',
-                storeImageUrl: (_j = storeData === null || storeData === void 0 ? void 0 : storeData.storeImageUrl) !== null && _j !== void 0 ? _j : null,
+                storeName: (_d = result.storeName) !== null && _d !== void 0 ? _d : '',
+                category: (_e = storeData === null || storeData === void 0 ? void 0 : storeData.category) !== null && _e !== void 0 ? _e : '',
+                storeImageUrl: (_f = storeData === null || storeData === void 0 ? void 0 : storeData.storeImageUrl) !== null && _f !== void 0 ? _f : null,
                 followedAt: firestore_2.FieldValue.serverTimestamp(),
-                source: 'stamp',
+                source: 'punch_checkin',
             });
             followBatch.set(db.collection('stores').doc(storeId).collection('followers').doc(userId), {
                 userId,
-                userName: (_k = userData === null || userData === void 0 ? void 0 : userData.displayName) !== null && _k !== void 0 ? _k : 'ユーザー',
+                userName: (_g = userData === null || userData === void 0 ? void 0 : userData.displayName) !== null && _g !== void 0 ? _g : 'ユーザー',
                 followedAt: firestore_2.FieldValue.serverTimestamp(),
             });
             followBatch.update(db.collection(USERS_COLLECTION).doc(userId), {
@@ -2371,48 +2386,7 @@ exports.punchStamp = (0, https_1.onCall)({
     catch (e) {
         console.error('[punchStamp] auto-follow error:', e);
     }
-    // スタンプカード達成時のクーポン自動付与
-    if (result.cardCompleted) {
-        try {
-            const stampCoupons = await db
-                .collection('coupons')
-                .doc(storeId)
-                .collection('coupons')
-                .where('requiredStampCount', '>', 0)
-                .where('isActive', '==', true)
-                .get();
-            for (const couponDoc of stampCoupons.docs) {
-                const couponData = couponDoc.data();
-                // 発行枚数制限チェック
-                const noUsageLimit = couponData['noUsageLimit'] === true;
-                const usageLimit = asInt(couponData['usageLimit'], 0);
-                const usedCount = asInt(couponData['usedCount'], 0);
-                if (!noUsageLimit && usageLimit > 0 && usedCount >= usageLimit)
-                    continue;
-                const userCouponRef = db.collection('user_coupons').doc();
-                await userCouponRef.set({
-                    userId,
-                    couponId: couponDoc.id,
-                    storeId,
-                    storeName: (_l = couponData['storeName']) !== null && _l !== void 0 ? _l : '',
-                    title: (_m = couponData['title']) !== null && _m !== void 0 ? _m : '',
-                    obtainedAt: firestore_2.FieldValue.serverTimestamp(),
-                    isUsed: false,
-                    noExpiry: true,
-                    validUntil: null,
-                    type: 'stamp_reward',
-                    discountValue: (_o = couponData['discountValue']) !== null && _o !== void 0 ? _o : 0,
-                    discountType: (_p = couponData['discountType']) !== null && _p !== void 0 ? _p : 'fixed_amount',
-                    couponType: (_q = couponData['couponType']) !== null && _q !== void 0 ? _q : 'discount',
-                    requiredStampCount: 0,
-                });
-            }
-            console.log(`[punchStamp] Awarded stamp coupons for user ${userId}, store ${storeId}`);
-        }
-        catch (e) {
-            console.error('[punchStamp] stamp coupon award error:', e);
-        }
-    }
+    // スタンプ達成クーポン自動付与を削除（廃止）
     // 友達紹介コイン付与（初回スタンプ時）
     let referralCoinJustAwarded = false;
     let referralReferredByUid = null;
@@ -2428,7 +2402,7 @@ exports.punchStamp = (0, https_1.onCall)({
             .get();
         if (!pendingReferralSnap.empty) {
             pendingReferralDocRef = pendingReferralSnap.docs[0].ref;
-            const plannedCoins = (_r = pendingReferralSnap.docs[0].data()) === null || _r === void 0 ? void 0 : _r.plannedCoins;
+            const plannedCoins = (_h = pendingReferralSnap.docs[0].data()) === null || _h === void 0 ? void 0 : _h.plannedCoins;
             if (typeof (plannedCoins === null || plannedCoins === void 0 ? void 0 : plannedCoins.invitee) === 'number') {
                 referralAwardedInviteeCoins = plannedCoins.invitee;
             }
@@ -2482,10 +2456,10 @@ exports.punchStamp = (0, https_1.onCall)({
                 db.collection(USERS_COLLECTION).doc(userId).get(),
                 db.collection(USERS_COLLECTION).doc(referralReferredByUid).get(),
             ]);
-            const refereeName = typeof ((_s = refereeUserDoc.data()) === null || _s === void 0 ? void 0 : _s.displayName) === 'string'
+            const refereeName = typeof ((_j = refereeUserDoc.data()) === null || _j === void 0 ? void 0 : _j.displayName) === 'string'
                 ? (refereeUserDoc.data().displayName.trim() || '友達')
                 : '友達';
-            const referrerName = typeof ((_t = referrerUserDoc.data()) === null || _t === void 0 ? void 0 : _t.displayName) === 'string'
+            const referrerName = typeof ((_k = referrerUserDoc.data()) === null || _k === void 0 ? void 0 : _k.displayName) === 'string'
                 ? (referrerUserDoc.data().displayName.trim() || '友達')
                 : '友達';
             const refereeNotifRef = targetUserRef.collection('notifications').doc();
@@ -3423,7 +3397,7 @@ exports.nfcCheckin = (0, https_1.onCall)({
     region: 'asia-northeast1',
     enforceAppCheck: false,
 }, async (request) => {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'User must be authenticated');
     }
@@ -3466,7 +3440,7 @@ exports.nfcCheckin = (0, https_1.onCall)({
     const targetStoreRef = targetUserRef.collection('stores').doc(storeId);
     const storeUserStatsRef = db.collection('store_users').doc(storeId).collection('users').doc(userId);
     const result = await db.runTransaction(async (txn) => {
-        var _a, _b;
+        var _a, _b, _c;
         const [targetStoreSnap, storeUserStatsSnap] = await Promise.all([
             txn.get(targetStoreRef),
             txn.get(storeUserStatsRef),
@@ -3478,18 +3452,37 @@ exports.nfcCheckin = (0, https_1.onCall)({
             throw new https_1.HttpsError('already-exists', 'Already checked in today for this store');
         }
         const currentStamps = asInt((_b = targetStoreSnap.data()) === null || _b === void 0 ? void 0 : _b['stamps'], 0);
-        const stampsAdded = 1;
-        const nextStamps = currentStamps + 1;
-        const cardCompleted = nextStamps % MAX_STAMPS === 0;
-        // スタンプ加算 + 1日1回制限用の日付記録
-        txn.set(targetStoreRef, stripUndefined({
-            storeId,
-            storeName: storeName || undefined,
-            stamps: nextStamps,
-            lastStampDate: todayJst,
-            lastVisited: firestore_2.FieldValue.serverTimestamp(),
-            updatedAt: firestore_2.FieldValue.serverTimestamp(),
-        }), { merge: true });
+        const isFirstVisit = !storeUserStatsSnap.exists;
+        const currentTotalVisits = asInt((_c = storeUserStatsSnap.data()) === null || _c === void 0 ? void 0 : _c['totalVisits'], 0);
+        const newTotalVisits = isFirstVisit ? 1 : currentTotalVisits + 1;
+        let stampsAfter = 0;
+        let cardCompleted = false;
+        if (currentStamps >= 1) {
+            // 救済措置: 既存スタンプ保有者はスタンプを +1 加算
+            const nextStamps = currentStamps + 1;
+            cardCompleted = nextStamps % MAX_STAMPS === 0;
+            stampsAfter = nextStamps;
+            txn.set(targetStoreRef, stripUndefined({
+                storeId,
+                storeName: storeName || undefined,
+                stamps: nextStamps,
+                totalVisits: newTotalVisits,
+                lastStampDate: todayJst,
+                lastVisited: firestore_2.FieldValue.serverTimestamp(),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            }), { merge: true });
+        }
+        else {
+            // 新規ユーザー（stamps=0）: 来店記録のみ（スタンプ加算なし）
+            txn.set(targetStoreRef, stripUndefined({
+                storeId,
+                storeName: storeName || undefined,
+                totalVisits: newTotalVisits,
+                lastStampDate: todayJst,
+                lastVisited: firestore_2.FieldValue.serverTimestamp(),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            }), { merge: true });
+        }
         // 日次統計
         const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayJst);
         txn.set(statsRef, {
@@ -3516,31 +3509,22 @@ exports.nfcCheckin = (0, https_1.onCall)({
                 updatedAt: firestore_2.FieldValue.serverTimestamp(),
             });
         }
+        // discoveredCount インクリメント（初回来店時のみ）
+        if (isFirstVisit) {
+            txn.update(storeRef, {
+                discoveredCount: firestore_2.FieldValue.increment(1),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            });
+        }
         return {
             userId,
             storeId,
             storeName,
-            stampsAdded,
-            stampsAfter: nextStamps,
+            stampsAfter,
             cardCompleted,
+            isFirstVisit,
         };
     });
-    // 来店ボーナスコイン +1
-    let coinsAdded = 0;
-    try {
-        const coinNow = new Date();
-        const coinExpiresAt = new Date(coinNow.getTime() + 180 * 24 * 60 * 60 * 1000);
-        await targetUserRef.update({
-            coins: firestore_2.FieldValue.increment(1),
-            coinLastEarnedAt: firestore_2.Timestamp.fromDate(coinNow),
-            coinExpiresAt: firestore_2.Timestamp.fromDate(coinExpiresAt),
-            updatedAt: firestore_2.FieldValue.serverTimestamp(),
-        });
-        coinsAdded = 1;
-    }
-    catch (e) {
-        console.error('[nfcCheckin] coin bonus error:', e);
-    }
     // stores/{storeId}/transactions にスタンプ来店記録を作成
     let userGender = null;
     let userAgeGroup = null;
@@ -3596,14 +3580,12 @@ exports.nfcCheckin = (0, https_1.onCall)({
             .collection('events')
             .doc(stampTxnRef.id);
         await eventRef.set({
-            type: 'stamp_punch',
+            type: 'nfc_checkin',
             transactionId: stampTxnRef.id,
             storeId,
             storeName: (_c = result.storeName) !== null && _c !== void 0 ? _c : '',
             pointsAwarded: 0,
-            stampsAdded: (_d = result.stampsAdded) !== null && _d !== void 0 ? _d : 0,
-            stampsAfter: (_e = result.stampsAfter) !== null && _e !== void 0 ? _e : 0,
-            cardCompleted: (_f = result.cardCompleted) !== null && _f !== void 0 ? _f : false,
+            isFirstVisit: (_d = result.isFirstVisit) !== null && _d !== void 0 ? _d : false,
             badges,
             createdAt: firestore_2.FieldValue.serverTimestamp(),
             seenAt: null,
@@ -3611,6 +3593,185 @@ exports.nfcCheckin = (0, https_1.onCall)({
     }
     catch (e) {
         console.error('[nfcCheckin] achievement event creation error:', e);
+    }
+    // discoveredStoreCount インクリメント + ranking_scores batch 更新（初回来店時のみ）
+    if (result.isFirstVisit) {
+        try {
+            // users/{uid}.discoveredStoreCount をインクリメント
+            await targetUserRef.update({
+                discoveredStoreCount: firestore_2.FieldValue.increment(1),
+                updatedAt: firestore_2.FieldValue.serverTimestamp(),
+            });
+            // ranking_scores 用の期間ID計算
+            const rankingNow = new Date();
+            const rankingYyyy = rankingNow.getFullYear();
+            const rankingMM = String(rankingNow.getMonth() + 1).padStart(2, '0');
+            const rankingDd = String(rankingNow.getDate()).padStart(2, '0');
+            const rankingStartOfYear = new Date(rankingYyyy, 0, 1);
+            const rankingWeekNum = Math.ceil(((rankingNow.getTime() - rankingStartOfYear.getTime()) / 86400000 + rankingStartOfYear.getDay() + 1) / 7);
+            const rankingWw = String(rankingWeekNum).padStart(2, '0');
+            const periodIds = {
+                alltime: 'alltime',
+                weekly: `${rankingYyyy}-W${rankingWw}`,
+                monthly: `${rankingYyyy}-${rankingMM}`,
+                daily: `${rankingYyyy}-${rankingMM}-${rankingDd}`,
+            };
+            const rankingUserSnap = await targetUserRef.get();
+            const rankingUserData = rankingUserSnap.data();
+            const rankingOptOut = (rankingUserData === null || rankingUserData === void 0 ? void 0 : rankingUserData.rankingOptOut) === true;
+            const displayName = rankingOptOut
+                ? '名無し探検家'
+                : (typeof (rankingUserData === null || rankingUserData === void 0 ? void 0 : rankingUserData.displayName) === 'string' ? rankingUserData.displayName : '不明なユーザー');
+            const photoURL = rankingOptOut
+                ? null
+                : (typeof (rankingUserData === null || rankingUserData === void 0 ? void 0 : rankingUserData.profileImageUrl) === 'string' ? rankingUserData.profileImageUrl : null);
+            const rankingBatch = db.batch();
+            for (const periodId of Object.values(periodIds)) {
+                const rankingRef = db
+                    .collection('ranking_scores')
+                    .doc(periodId)
+                    .collection('users')
+                    .doc(userId);
+                rankingBatch.set(rankingRef, {
+                    score: firestore_2.FieldValue.increment(1),
+                    displayName,
+                    photoURL: photoURL !== null && photoURL !== void 0 ? photoURL : null,
+                    rankingOptOut,
+                    updatedAt: firestore_2.FieldValue.serverTimestamp(),
+                }, { merge: true });
+            }
+            await rankingBatch.commit();
+            console.log(`[nfcCheckin] discoveredStoreCount & ranking_scores updated for user=${userId}`);
+        }
+        catch (e) {
+            console.error('[nfcCheckin] discoveredStoreCount/ranking_scores update error:', e);
+        }
+    }
+    // 秘境探検家バッジ + ジャンル別コンプリートバッジ（初回来店時のみ）
+    let hiddenExplorerIncremented = false;
+    if (result.isFirstVisit) {
+        try {
+            const storeAreaId = storeData['areaId'];
+            // ① 秘境探検家シリーズ（エリア外店舗への初回来店）
+            if (!storeAreaId) {
+                hiddenExplorerIncremented = true;
+                const hiddenProgressRef = db.collection('badge_progress').doc(`${userId}_hiddenExplorer`);
+                await hiddenProgressRef.set({
+                    userId,
+                    badgeType: 'hiddenExplorer',
+                    currentValue: firestore_2.FieldValue.increment(1),
+                    lastUpdated: firestore_2.FieldValue.serverTimestamp(),
+                }, { merge: true });
+                const hiddenSnap = await hiddenProgressRef.get();
+                const hiddenCount = asInt((_e = hiddenSnap.data()) === null || _e === void 0 ? void 0 : _e['currentValue'], 0);
+                // 段階バッジ付与（hidden_explorer_1〜3）
+                const hiddenThresholds = [
+                    ['hidden_explorer_1', 1],
+                    ['hidden_explorer_2', 3],
+                    ['hidden_explorer_3', 5],
+                ];
+                for (const [badgeId, threshold] of hiddenThresholds) {
+                    if (hiddenCount >= threshold) {
+                        const badgeRef = db.collection('user_badges').doc(userId).collection('badges').doc(badgeId);
+                        const snap = await badgeRef.get();
+                        if (!snap.exists) {
+                            await badgeRef.set({
+                                userId,
+                                badgeId,
+                                unlockedAt: firestore_2.FieldValue.serverTimestamp(),
+                                progress: hiddenCount,
+                                requiredValue: threshold,
+                                isNew: true,
+                            });
+                            console.log(`[nfcCheckin] Badge awarded: ${badgeId} to user=${userId}`);
+                        }
+                    }
+                }
+                // hidden_explorer_4: 全エリア外店舗制覇チェック
+                const allStoresForHiddenSnap = await db.collection('stores')
+                    .where('isActive', '==', true)
+                    .where('isApproved', '==', true)
+                    .get();
+                const totalHiddenStoreCount = allStoresForHiddenSnap.docs
+                    .filter(d => !d.data()['areaId'] && d.data()['isOwner'] !== true)
+                    .length;
+                if (totalHiddenStoreCount > 0 && hiddenCount >= totalHiddenStoreCount) {
+                    const badge4Ref = db.collection('user_badges').doc(userId).collection('badges').doc('hidden_explorer_4');
+                    if (!(await badge4Ref.get()).exists) {
+                        await badge4Ref.set({
+                            userId,
+                            badgeId: 'hidden_explorer_4',
+                            unlockedAt: firestore_2.FieldValue.serverTimestamp(),
+                            progress: hiddenCount,
+                            requiredValue: totalHiddenStoreCount,
+                            isNew: true,
+                        });
+                        console.log(`[nfcCheckin] Badge awarded: hidden_explorer_4 to user=${userId}`);
+                    }
+                }
+            }
+            // ② ジャンル別コンプリートバッジ
+            const storeCategory = storeData['category'];
+            if (storeCategory) {
+                const genreGroupsMap = {
+                    'cafe_sweets': ['カフェ・喫茶店', 'スイーツ', 'ケーキ', 'タピオカ', 'パン・サンドイッチ'],
+                    'washoku': ['和食', '日本料理', '海鮮', '寿司', 'そば', 'うどん', 'うなぎ', '天ぷら'],
+                    'izakaya_bar': ['居酒屋', 'バー・お酒', 'スナック'],
+                    'yakitori_age': ['焼き鳥', 'とんかつ', '串揚げ', 'お好み焼き', 'もんじゃ焼き'],
+                    'nabe_yakiniku': ['しゃぶしゃぶ', '鍋', '焼肉', 'ホルモン'],
+                    'ramen_chinese': ['ラーメン', '中華料理', '餃子'],
+                    'asian_ethnic': ['韓国料理', 'タイ料理', 'カレー', '沖縄料理'],
+                    'western_french': ['レストラン', '洋食', 'フレンチ', 'スペイン料理', 'ビストロ'],
+                    'italian_meat': ['パスタ', 'ピザ', 'ステーキ', 'ハンバーグ', 'ハンバーガー'],
+                    'shokudo_other': ['ビュッフェ', '食堂', '料理旅館', 'その他'],
+                };
+                let matchedGenre = null;
+                for (const [genre, cats] of Object.entries(genreGroupsMap)) {
+                    if (cats.includes(storeCategory)) {
+                        matchedGenre = genre;
+                        break;
+                    }
+                }
+                if (matchedGenre) {
+                    const genreCats = genreGroupsMap[matchedGenre];
+                    const allStoresForGenreSnap = await db.collection('stores')
+                        .where('isActive', '==', true)
+                        .where('isApproved', '==', true)
+                        .get();
+                    const genreStoreIds = allStoresForGenreSnap.docs
+                        .filter(d => genreCats.includes(d.data()['category']) && d.data()['isOwner'] !== true)
+                        .map(d => d.id);
+                    if (genreStoreIds.length > 0) {
+                        let allVisited = true;
+                        for (const gStoreId of genreStoreIds) {
+                            const visitSnap = await db.collection('store_users').doc(gStoreId).collection('users').doc(userId).get();
+                            if (!visitSnap.exists) {
+                                allVisited = false;
+                                break;
+                            }
+                        }
+                        if (allVisited) {
+                            const genreBadgeId = `genre_complete_${matchedGenre}`;
+                            const genreBadgeRef = db.collection('user_badges').doc(userId).collection('badges').doc(genreBadgeId);
+                            if (!(await genreBadgeRef.get()).exists) {
+                                await genreBadgeRef.set({
+                                    userId,
+                                    badgeId: genreBadgeId,
+                                    unlockedAt: firestore_2.FieldValue.serverTimestamp(),
+                                    progress: 1,
+                                    requiredValue: 1,
+                                    isNew: true,
+                                });
+                                console.log(`[nfcCheckin] Badge awarded: ${genreBadgeId} to user=${userId}`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (e) {
+            console.error('[nfcCheckin] hiddenExplorer/genreComplete badge error:', e);
+        }
     }
     // 自動フォロー
     try {
@@ -3622,15 +3783,15 @@ exports.nfcCheckin = (0, https_1.onCall)({
             const followBatch = db.batch();
             followBatch.set(followDocRef, {
                 storeId,
-                storeName: (_g = result.storeName) !== null && _g !== void 0 ? _g : '',
-                category: (_h = storeData['category']) !== null && _h !== void 0 ? _h : '',
-                storeImageUrl: (_j = storeData['storeImageUrl']) !== null && _j !== void 0 ? _j : null,
+                storeName: (_f = result.storeName) !== null && _f !== void 0 ? _f : '',
+                category: (_g = storeData['category']) !== null && _g !== void 0 ? _g : '',
+                storeImageUrl: (_h = storeData['storeImageUrl']) !== null && _h !== void 0 ? _h : null,
                 followedAt: firestore_2.FieldValue.serverTimestamp(),
-                source: 'stamp',
+                source: 'nfc_checkin',
             });
             followBatch.set(storeRef.collection('followers').doc(userId), {
                 userId,
-                userName: (_k = userData === null || userData === void 0 ? void 0 : userData.displayName) !== null && _k !== void 0 ? _k : 'ユーザー',
+                userName: (_j = userData === null || userData === void 0 ? void 0 : userData.displayName) !== null && _j !== void 0 ? _j : 'ユーザー',
                 followedAt: firestore_2.FieldValue.serverTimestamp(),
             });
             followBatch.update(targetUserRef, {
@@ -3644,53 +3805,8 @@ exports.nfcCheckin = (0, https_1.onCall)({
     catch (e) {
         console.error('[nfcCheckin] auto-follow error:', e);
     }
-    // スタンプ達成特典クーポンの自動付与
+    // スタンプ達成クーポン自動付与を削除（廃止）。常に空配列を返す
     const awardedCoupons = [];
-    if (result.cardCompleted) {
-        try {
-            const stampCoupons = await db
-                .collection('coupons')
-                .doc(storeId)
-                .collection('coupons')
-                .where('requiredStampCount', '>', 0)
-                .where('isActive', '==', true)
-                .get();
-            for (const couponDoc of stampCoupons.docs) {
-                const couponData = couponDoc.data();
-                const noUsageLimit = couponData['noUsageLimit'] === true;
-                const usageLimit = asInt(couponData['usageLimit'], 0);
-                const usedCount = asInt(couponData['usedCount'], 0);
-                if (!noUsageLimit && usageLimit > 0 && usedCount >= usageLimit)
-                    continue;
-                const userCouponRef = db.collection('user_coupons').doc();
-                await userCouponRef.set({
-                    userId,
-                    couponId: couponDoc.id,
-                    storeId,
-                    storeName: (_l = couponData['storeName']) !== null && _l !== void 0 ? _l : '',
-                    title: (_m = couponData['title']) !== null && _m !== void 0 ? _m : '',
-                    obtainedAt: firestore_2.FieldValue.serverTimestamp(),
-                    isUsed: false,
-                    noExpiry: true,
-                    validUntil: null,
-                    type: 'stamp_reward',
-                    discountValue: (_o = couponData['discountValue']) !== null && _o !== void 0 ? _o : 0,
-                    discountType: (_p = couponData['discountType']) !== null && _p !== void 0 ? _p : 'fixed_amount',
-                    couponType: (_q = couponData['couponType']) !== null && _q !== void 0 ? _q : 'discount',
-                    requiredStampCount: 0,
-                });
-                awardedCoupons.push({
-                    couponId: couponDoc.id,
-                    title: (_r = couponData['title']) !== null && _r !== void 0 ? _r : '',
-                    discountValue: asInt(couponData['discountValue'], 0),
-                });
-            }
-            console.log(`[nfcCheckin] Awarded stamp coupons for user ${userId}, store ${storeId}`);
-        }
-        catch (e) {
-            console.error('[nfcCheckin] stamp coupon award error:', e);
-        }
-    }
     // 友達紹介コイン付与（初回スタンプ時）
     try {
         let referralAwardedInviteeCoins = 5;
@@ -3704,7 +3820,7 @@ exports.nfcCheckin = (0, https_1.onCall)({
             .get();
         if (!pendingReferralSnap.empty) {
             pendingReferralDocRef = pendingReferralSnap.docs[0].ref;
-            const plannedCoins = (_s = pendingReferralSnap.docs[0].data()) === null || _s === void 0 ? void 0 : _s.plannedCoins;
+            const plannedCoins = (_k = pendingReferralSnap.docs[0].data()) === null || _k === void 0 ? void 0 : _k.plannedCoins;
             if (typeof (plannedCoins === null || plannedCoins === void 0 ? void 0 : plannedCoins.invitee) === 'number') {
                 referralAwardedInviteeCoins = plannedCoins.invitee;
             }
@@ -3757,10 +3873,10 @@ exports.nfcCheckin = (0, https_1.onCall)({
                 targetUserRef.get(),
                 db.collection(USERS_COLLECTION).doc(referralReferredByUid).get(),
             ]);
-            const refereeName = typeof ((_t = refereeUserDoc.data()) === null || _t === void 0 ? void 0 : _t.displayName) === 'string'
+            const refereeName = typeof ((_l = refereeUserDoc.data()) === null || _l === void 0 ? void 0 : _l.displayName) === 'string'
                 ? refereeUserDoc.data().displayName.trim() || '友達'
                 : '友達';
-            const referrerName = typeof ((_u = referrerUserDoc.data()) === null || _u === void 0 ? void 0 : _u.displayName) === 'string'
+            const referrerName = typeof ((_m = referrerUserDoc.data()) === null || _m === void 0 ? void 0 : _m.displayName) === 'string'
                 ? referrerUserDoc.data().displayName.trim() || '友達'
                 : '友達';
             const refereeNotifRef = targetUserRef.collection('notifications').doc();
@@ -3841,11 +3957,17 @@ exports.nfcCheckin = (0, https_1.onCall)({
             console.error('[nfcCheckin] user coupon usage error:', e);
         }
     }
-    console.log(`[nfcCheckin] Success: user=${userId}, store=${storeId}, stamps=${result.stampsAfter}, coins=${coinsAdded}`);
-    return Object.assign(Object.assign({}, result), { coinsAdded,
+    console.log(`[nfcCheckin] Success: user=${userId}, store=${storeId}, isFirstVisit=${result.isFirstVisit}`);
+    return {
+        storeName: result.storeName,
+        stampsAfter: result.stampsAfter,
+        cardCompleted: result.cardCompleted,
+        isFirstVisit: result.isFirstVisit,
         awardedCoupons,
         usedCoupons,
-        usageVerificationCode });
+        usageVerificationCode,
+        hiddenExplorerIncremented,
+    };
 });
 // NFCタグ登録（管理者用）
 exports.registerNfcTag = (0, https_1.onCall)({
@@ -3907,6 +4029,466 @@ exports.registerNfcTag = (0, https_1.onCall)({
         tagId: tagRef.id,
         storeId,
         nfcUrl: `https://groumapapp.web.app/checkin?storeId=${storeId}&secret=${tagSecret}`,
+    };
+});
+// ============================================================
+// generateMonthlyReport
+// Scheduled: 毎月末 23:00 JST（UTC 14:00、月末最終日）
+// ============================================================
+exports.generateMonthlyReport = (0, scheduler_1.onSchedule)({
+    schedule: '0 14 28-31 * *',
+    timeZone: 'Asia/Tokyo',
+    memory: '512MiB',
+    timeoutSeconds: 540,
+}, async () => {
+    var _a, _b, _c, _d, _e;
+    const now = new Date();
+    // 月末最終日のみ実行（28〜31日スケジュールなので最終日以外はスキップ）
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    if (tomorrow.getMonth() === now.getMonth()) {
+        // 翌日が同月 → 最終日ではない
+        console.log('[generateMonthlyReport] Not the last day of month. Skipping.');
+        return;
+    }
+    const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    console.log(`[generateMonthlyReport] Starting for yearMonth=${yearMonth}`);
+    const GENRE_GROUPS = {
+        'cafe_sweets': ['カフェ・喫茶店', 'スイーツ', 'ケーキ', 'タピオカ', 'パン・サンドイッチ'],
+        'washoku': ['和食', '日本料理', '海鮮', '寿司', 'そば', 'うどん', 'うなぎ', '天ぷら'],
+        'izakaya_bar': ['居酒屋', 'バー・お酒', 'スナック'],
+        'yakitori_age': ['焼き鳥', 'とんかつ', '串揚げ', 'お好み焼き', 'もんじゃ焼き'],
+        'nabe_yakiniku': ['しゃぶしゃぶ', '鍋', '焼肉', 'ホルモン'],
+        'ramen_chinese': ['ラーメン', '中華料理', '餃子'],
+        'asian_ethnic': ['韓国料理', 'タイ料理', 'カレー', '沖縄料理'],
+        'western_french': ['レストラン', '洋食', 'フレンチ', 'スペイン料理', 'ビストロ'],
+        'italian_meat': ['パスタ', 'ピザ', 'ステーキ', 'ハンバーグ', 'ハンバーガー'],
+        'shokudo_other': ['ビュッフェ', '食堂', '料理旅館', 'その他'],
+    };
+    // 今月の開始・終了Timestamp
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const monthStartTs = firestore_2.Timestamp.fromDate(monthStart);
+    const monthEndTs = firestore_2.Timestamp.fromDate(monthEnd);
+    // 全店舗データを取得（ジャンル/エリア集計用）
+    const allStoresSnap = await db.collection('stores')
+        .where('isActive', '==', true)
+        .where('isApproved', '==', true)
+        .get();
+    const storeDataMap = {};
+    for (const doc of allStoresSnap.docs) {
+        const d = doc.data();
+        if (d['isOwner'] === true)
+            continue;
+        storeDataMap[doc.id] = {
+            category: (_a = d['category']) !== null && _a !== void 0 ? _a : '',
+            areaId: (_b = d['areaId']) !== null && _b !== void 0 ? _b : null,
+            name: (_c = d['name']) !== null && _c !== void 0 ? _c : '',
+            rarity: d['rarityOverride'],
+            discoveredCount: (_d = d['discoveredCount']) !== null && _d !== void 0 ? _d : 0,
+        };
+    }
+    // エリア名マップを取得
+    const areasSnap = await db.collection('areas').get();
+    const areaNameMap = {};
+    for (const doc of areasSnap.docs) {
+        const d = doc.data();
+        areaNameMap[doc.id] = (_e = d['name']) !== null && _e !== void 0 ? _e : doc.id;
+    }
+    // コミュニティデータ集計（今月全体の新規firstVisitAt件数）
+    let communityDiscoveredCount = 0;
+    // 全 store_users をスキャンして今月の新規発見を集計
+    // （全体件数が多い場合はサンプリングだが、ここでは全件処理）
+    // NOTE: 大規模運用時はCloud Firestoreの集計クエリへの移行を検討
+    const storeIds = Object.keys(storeDataMap);
+    for (const sid of storeIds) {
+        const usersSnap = await db.collection('store_users').doc(sid).collection('users')
+            .where('firstVisitAt', '>=', monthStartTs)
+            .where('firstVisitAt', '<=', monthEndTs)
+            .get();
+        communityDiscoveredCount += usersSnap.size;
+    }
+    // 今月新規追加店舗数
+    const newStoresSnap = await db.collection('stores')
+        .where('isActive', '==', true)
+        .where('isApproved', '==', true)
+        .where('approvedAt', '>=', monthStartTs)
+        .where('approvedAt', '<=', monthEndTs)
+        .get();
+    const newStoresAddedCount = newStoresSnap.size;
+    // コミュニティドキュメントを書き込み
+    const communityData = {
+        yearMonth,
+        communityDiscoveredCount,
+        communityExplorationRateDelta: 0, // 将来: 先月比計算
+        communityVisitsDelta: 0, // 将来: 先月比計算
+        newStoresAddedCount,
+        generatedAt: firestore_2.FieldValue.serverTimestamp(),
+    };
+    await db.collection('monthly_reports_community').doc(yearMonth).set(communityData, { merge: true });
+    console.log(`[generateMonthlyReport] Community data written: discovered=${communityDiscoveredCount}`);
+    // アクティブユーザー一覧取得（過去30日以内にログイン）
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgoTs = firestore_2.Timestamp.fromDate(thirtyDaysAgo);
+    const usersSnap = await db.collection(USERS_COLLECTION)
+        .where('lastLoginAt', '>=', thirtyDaysAgoTs)
+        .get();
+    console.log(`[generateMonthlyReport] Active users: ${usersSnap.size}`);
+    const BATCH_SIZE = 100;
+    const userDocs = usersSnap.docs;
+    let processedCount = 0;
+    let errorCount = 0;
+    for (let i = 0; i < userDocs.length; i += BATCH_SIZE) {
+        const chunk = userDocs.slice(i, i + BATCH_SIZE);
+        await Promise.all(chunk.map(async (userDoc) => {
+            var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+            const uid = userDoc.id;
+            try {
+                const userData = userDoc.data();
+                const totalDiscoveredCount = (_a = userData['discoveredStoreCount']) !== null && _a !== void 0 ? _a : 0;
+                const fcmToken = (_b = userData['fcmToken']) !== null && _b !== void 0 ? _b : null;
+                // 今月来店したstore_usersを集計
+                let monthlyDiscoveredCount = 0;
+                let totalVisitsThisMonth = 0;
+                let hotStoresCount = 0;
+                let legendDiscoveredCount = 0;
+                const visitedAreaIds = new Set();
+                const genreVisitCounts = {};
+                const communityContributionCount_user = [];
+                for (const sid of storeIds) {
+                    const visitRef = db.collection('store_users').doc(sid).collection('users').doc(uid);
+                    const visitSnap = await visitRef.get();
+                    if (!visitSnap.exists)
+                        continue;
+                    const vd = visitSnap.data();
+                    const firstVisitAt = vd['firstVisitAt'];
+                    // 今月の訪問記録（users/{uid}/stores/{storeId} で来店回数確認）
+                    const userStoreRef = db.collection(USERS_COLLECTION).doc(uid).collection('stores').doc(sid);
+                    const userStoreSnap = await userStoreRef.get();
+                    const userStoreTotalVisits = userStoreSnap.exists ? ((_c = userStoreSnap.data()['totalVisits']) !== null && _c !== void 0 ? _c : 0) : 0;
+                    // 今月の来店数を推定（totalVisits は累計なので今月分の正確な算出は困難。
+                    // store_users の lastVisitAt が今月以内のものを今月の来店として集計）
+                    const lastVisitAt = vd['lastVisitAt'];
+                    const isVisitedThisMonth = lastVisitAt
+                        ? lastVisitAt.toDate() >= monthStart && lastVisitAt.toDate() <= monthEnd
+                        : false;
+                    if (isVisitedThisMonth) {
+                        totalVisitsThisMonth += 1; // 来店1件としてカウント
+                    }
+                    // 今月初回発見
+                    if (firstVisitAt && firstVisitAt.toDate() >= monthStart && firstVisitAt.toDate() <= monthEnd) {
+                        monthlyDiscoveredCount += 1;
+                        communityContributionCount_user.push(1);
+                        // エリア
+                        const storeInfo = storeDataMap[sid];
+                        if ((storeInfo === null || storeInfo === void 0 ? void 0 : storeInfo.areaId) && areaNameMap[storeInfo.areaId]) {
+                            visitedAreaIds.add(areaNameMap[storeInfo.areaId]);
+                        }
+                        // レジェンド発見
+                        const discoveredCount = (_d = storeInfo === null || storeInfo === void 0 ? void 0 : storeInfo.discoveredCount) !== null && _d !== void 0 ? _d : 0;
+                        const rarity = (_e = storeInfo === null || storeInfo === void 0 ? void 0 : storeInfo.rarity) !== null && _e !== void 0 ? _e : (discoveredCount === 0 ? 4 : discoveredCount <= 5 ? 3 : discoveredCount <= 20 ? 2 : 1);
+                        if (rarity === 4)
+                            legendDiscoveredCount += 1;
+                        // ジャンル集計
+                        const cat = (_f = storeInfo === null || storeInfo === void 0 ? void 0 : storeInfo.category) !== null && _f !== void 0 ? _f : '';
+                        for (const [genre, cats] of Object.entries(GENRE_GROUPS)) {
+                            if (cats.includes(cat)) {
+                                genreVisitCounts[genre] = ((_g = genreVisitCounts[genre]) !== null && _g !== void 0 ? _g : 0) + 1;
+                                break;
+                            }
+                        }
+                    }
+                    // 炎マーク（10回以上来店）
+                    if (userStoreTotalVisits >= 10) {
+                        hotStoresCount += 1;
+                    }
+                }
+                // topGenre 算出
+                let topGenre = null;
+                let topGenreCount = 0;
+                for (const [g, c] of Object.entries(genreVisitCounts)) {
+                    if (c > topGenreCount) {
+                        topGenreCount = c;
+                        topGenre = g;
+                    }
+                }
+                // 来月おすすめ店舗（未訪問のレジェンド/エピック 最大3件）
+                const recommendedStores = [];
+                for (const [sid, info] of Object.entries(storeDataMap)) {
+                    if (recommendedStores.length >= 3)
+                        break;
+                    const visitRef = db.collection('store_users').doc(sid).collection('users').doc(uid);
+                    const visited = (await visitRef.get()).exists;
+                    if (visited)
+                        continue;
+                    const rarity = (_h = info.rarity) !== null && _h !== void 0 ? _h : (info.discoveredCount === 0 ? 4 : info.discoveredCount <= 5 ? 3 : info.discoveredCount <= 20 ? 2 : 1);
+                    if (rarity >= 3) {
+                        recommendedStores.push({
+                            storeId: sid,
+                            storeName: info.name,
+                            category: info.category,
+                            rarity,
+                            areaId: info.areaId,
+                        });
+                    }
+                }
+                // レポートドキュメントを書き込み
+                const reportData = {
+                    userId: uid,
+                    yearMonth,
+                    generatedAt: firestore_2.FieldValue.serverTimestamp(),
+                    monthlyDiscoveredCount,
+                    totalDiscoveredCount,
+                    topGenre,
+                    topGenreCount,
+                    visitedAreas: Array.from(visitedAreaIds),
+                    legendDiscoveredCount,
+                    communityContributionCount: communityContributionCount_user.length,
+                    totalVisitsThisMonth,
+                    hotStoresCount,
+                    communityDiscoveredCount,
+                    communityExplorationRateDelta: 0,
+                    communityVisitsDelta: 0,
+                    newStoresAddedCount,
+                    recommendedStores,
+                };
+                await db.collection('monthly_reports').doc(uid).collection('reports').doc(yearMonth).set(reportData, { merge: true });
+                processedCount++;
+                // FCM プッシュ通知送信
+                const notificationsEnabled = ((_j = userData['notificationSettings']) === null || _j === void 0 ? void 0 : _j['pushEnabled']) !== false;
+                if (fcmToken && notificationsEnabled && monthlyDiscoveredCount > 0) {
+                    try {
+                        await messaging.send({
+                            token: fcmToken,
+                            notification: {
+                                title: '今月の探検まとめが届きました！',
+                                body: `今月は${monthlyDiscoveredCount}店舗を新たに発見！コミュニティと一緒に街を開拓しました`,
+                            },
+                            data: {
+                                type: 'monthly_report',
+                                yearMonth,
+                                click_action: `/monthly_report/${yearMonth}`,
+                            },
+                            apns: {
+                                payload: {
+                                    aps: {
+                                        sound: 'default',
+                                        badge: 1,
+                                    },
+                                },
+                            },
+                        });
+                    }
+                    catch (fcmErr) {
+                        console.warn(`[generateMonthlyReport] FCM error for user=${uid}:`, fcmErr);
+                    }
+                }
+            }
+            catch (err) {
+                errorCount++;
+                console.error(`[generateMonthlyReport] Error for user=${uid}:`, err);
+            }
+        }));
+    }
+    // 管理ログを記録
+    await db.collection('admin_logs').add({
+        type: 'generateMonthlyReport',
+        yearMonth,
+        processedCount,
+        errorCount,
+        totalUsers: userDocs.length,
+        createdAt: firestore_2.FieldValue.serverTimestamp(),
+    });
+    console.log(`[generateMonthlyReport] Completed: processed=${processedCount}, errors=${errorCount}`);
+});
+// ============================================================
+// checkWeeklyMission
+// 週次ミッション達成チェック（NFC チェックイン後に Flutter から呼び出し）
+// 条件1: 今週に未訪問店舗へ初来店 >= 1件
+// 条件2: 今週の来店合計 >= 3回
+// 達成時: badge_progress 更新 + バッジ付与 + 発見ヒント通知
+// ============================================================
+exports.checkWeeklyMission = (0, https_1.onCall)({
+    region: 'asia-northeast1',
+    enforceAppCheck: false,
+}, async (request) => {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+    if (!request.auth) {
+        throw new https_1.HttpsError('unauthenticated', 'User must be authenticated');
+    }
+    const userId = request.auth.uid;
+    // 今週の月曜日を JST で計算
+    const now = new Date();
+    const jstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const dayOfWeek = jstNow.getUTCDay(); // 0=日曜, 1=月曜...
+    const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    const weekStartJst = new Date(jstNow);
+    weekStartJst.setUTCDate(jstNow.getUTCDate() - daysFromMonday);
+    weekStartJst.setUTCHours(0, 0, 0, 0);
+    const weekStart = new Date(weekStartJst.getTime() - 9 * 60 * 60 * 1000); // JST → UTC
+    // 週ID (e.g., "2026-W10")
+    const weekYear = weekStartJst.getUTCFullYear();
+    const jan1 = new Date(Date.UTC(weekYear, 0, 1));
+    const weekNum = Math.ceil(((weekStartJst.getTime() - jan1.getTime()) / 86400000 + jan1.getUTCDay() + 1) / 7);
+    const weekId = `${weekYear}-W${String(weekNum).padStart(2, '0')}`;
+    // 既に今週達成済みか確認
+    const weeklyProgressRef = db.collection('weekly_mission_progress').doc(userId);
+    const weeklyProgressSnap = await weeklyProgressRef.get();
+    const weeklyData = (_a = weeklyProgressSnap.data()) !== null && _a !== void 0 ? _a : {};
+    const achievedWeeks = (_b = weeklyData['achievedWeeks']) !== null && _b !== void 0 ? _b : [];
+    const totalAchievedCount = asInt(weeklyData['totalAchievedCount'], 0);
+    if (achievedWeeks.includes(weekId)) {
+        return {
+            achieved: false,
+            newlyAchieved: false,
+            weeklyMissionCount: totalAchievedCount,
+            alreadyAchievedThisWeek: true,
+            progress: null,
+        };
+    }
+    // ユーザーの今週の来店データを取得
+    const userStoresSnap = await db.collection(USERS_COLLECTION).doc(userId).collection('stores').get();
+    let newStoresThisWeek = 0;
+    let totalVisitsThisWeek = 0;
+    for (const storeDoc of userStoresSnap.docs) {
+        const sd = storeDoc.data();
+        const lastVisited = sd['lastVisited'];
+        if (lastVisited && lastVisited.toDate() >= weekStart) {
+            totalVisitsThisWeek++;
+            // 初回訪問かチェック（store_users/{storeId}/users/{userId}.firstVisitAt）
+            const storeId = storeDoc.id;
+            const storeUserSnap = await db.collection('store_users').doc(storeId).collection('users').doc(userId).get();
+            if (storeUserSnap.exists) {
+                const firstVisitAt = storeUserSnap.data()['firstVisitAt'];
+                if (firstVisitAt && firstVisitAt.toDate() >= weekStart) {
+                    newStoresThisWeek++;
+                }
+            }
+        }
+    }
+    const progress = { newStoresThisWeek, totalVisitsThisWeek };
+    // ミッション達成判定
+    // 条件1: 未訪問店舗への初来店 >= 1件
+    // 条件2: 今週の来店合計 >= 3回
+    const missionAchieved = newStoresThisWeek >= 1 && totalVisitsThisWeek >= 3;
+    if (!missionAchieved) {
+        return {
+            achieved: false,
+            newlyAchieved: false,
+            weeklyMissionCount: totalAchievedCount,
+            alreadyAchievedThisWeek: false,
+            progress,
+        };
+    }
+    // 達成処理
+    const newTotalCount = totalAchievedCount + 1;
+    // weekly_mission_progress 更新
+    await weeklyProgressRef.set({
+        userId,
+        totalAchievedCount: firestore_2.FieldValue.increment(1),
+        achievedWeeks: firestore_2.FieldValue.arrayUnion(weekId),
+        lastAchievedAt: firestore_2.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    // badge_progress/{userId}_weeklyMission 更新
+    const badgeProgressRef = db.collection('badge_progress').doc(`${userId}_weeklyMission`);
+    await badgeProgressRef.set({
+        userId,
+        badgeType: 'weeklyMission',
+        currentValue: firestore_2.FieldValue.increment(1),
+        lastUpdated: firestore_2.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    const badgeProgressSnap = await badgeProgressRef.get();
+    const badgeCount = asInt((_c = badgeProgressSnap.data()) === null || _c === void 0 ? void 0 : _c['currentValue'], 0);
+    // バッジ付与チェック
+    const weeklyBadgeThresholds = [
+        ['weekly_mission_1', 1],
+        ['weekly_mission_5', 5],
+        ['weekly_mission_10', 10],
+        ['weekly_mission_25', 25],
+    ];
+    const newBadges = [];
+    for (const [badgeId, threshold] of weeklyBadgeThresholds) {
+        if (badgeCount >= threshold) {
+            const badgeRef = db.collection('user_badges').doc(userId).collection('badges').doc(badgeId);
+            const snap = await badgeRef.get();
+            if (!snap.exists) {
+                await badgeRef.set({
+                    userId,
+                    badgeId,
+                    unlockedAt: firestore_2.FieldValue.serverTimestamp(),
+                    progress: badgeCount,
+                    requiredValue: threshold,
+                    isNew: true,
+                });
+                newBadges.push(badgeId);
+                console.log(`[checkWeeklyMission] Badge awarded: ${badgeId} to user=${userId}`);
+            }
+        }
+    }
+    // 発見ヒント通知（近くの未発見レジェンド/エピック店舗）
+    try {
+        const userDoc = await db.collection(USERS_COLLECTION).doc(userId).get();
+        const fcmToken = (_e = (_d = userDoc.data()) === null || _d === void 0 ? void 0 : _d['fcmToken']) !== null && _e !== void 0 ? _e : null;
+        const notificationsEnabled = ((_g = (_f = userDoc.data()) === null || _f === void 0 ? void 0 : _f['notificationSettings']) === null || _g === void 0 ? void 0 : _g['pushEnabled']) !== false;
+        if (fcmToken && notificationsEnabled) {
+            const allStoresSnap = await db.collection('stores')
+                .where('isActive', '==', true)
+                .where('isApproved', '==', true)
+                .get();
+            let hintStoreName = null;
+            let hintStoreCategory = null;
+            for (const storeDoc of allStoresSnap.docs) {
+                const sd = storeDoc.data();
+                if (sd['isOwner'] === true)
+                    continue;
+                const visitSnap = await db.collection('store_users').doc(storeDoc.id).collection('users').doc(userId).get();
+                if (visitSnap.exists)
+                    continue;
+                const discoveredCount = asInt(sd['discoveredCount'], 0);
+                const rarityOverride = sd['rarityOverride'];
+                const rarity = rarityOverride !== null && rarityOverride !== void 0 ? rarityOverride : (discoveredCount === 0 ? 4 : discoveredCount <= 5 ? 3 : discoveredCount <= 20 ? 2 : 1);
+                if (rarity >= 3) {
+                    hintStoreName = (_h = sd['name']) !== null && _h !== void 0 ? _h : null;
+                    hintStoreCategory = (_j = sd['category']) !== null && _j !== void 0 ? _j : null;
+                    break;
+                }
+            }
+            const bodyText = hintStoreName
+                ? `${hintStoreCategory ? `カテゴリ：${hintStoreCategory}系` : 'レジェンド店舗'}「${hintStoreName}」が光っています！マップを開いて確認しよう`
+                : 'マップを開いて近くの未発見店舗を探してみましょう！';
+            await messaging.send({
+                token: fcmToken,
+                notification: {
+                    title: '週次ミッション達成！発見ヒントが届きました',
+                    body: bodyText,
+                },
+                data: {
+                    type: 'weekly_mission_achieved',
+                    weekId,
+                    badgeCount: String(newTotalCount),
+                },
+                apns: {
+                    payload: {
+                        aps: {
+                            sound: 'default',
+                            badge: 1,
+                        },
+                    },
+                },
+            });
+        }
+    }
+    catch (notifErr) {
+        console.warn(`[checkWeeklyMission] Notification error for user=${userId}:`, notifErr);
+    }
+    console.log(`[checkWeeklyMission] Mission achieved: user=${userId}, weekId=${weekId}, count=${newTotalCount}, newBadges=${newBadges.join(',')}`);
+    return {
+        achieved: true,
+        newlyAchieved: true,
+        weeklyMissionCount: newTotalCount,
+        alreadyAchievedThisWeek: false,
+        newBadges,
+        progress,
     };
 });
 //# sourceMappingURL=index.js.map

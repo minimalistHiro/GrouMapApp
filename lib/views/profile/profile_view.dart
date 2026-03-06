@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../providers/auth_provider.dart';
 import '../../providers/badge_provider.dart';
+import '../../providers/zukan_provider.dart';
 import '../settings/profile_edit_view.dart';
 import '../settings/interest_category_view.dart';
 import '../settings/password_change_view.dart';
@@ -20,7 +21,12 @@ import '../support/help_view.dart';
 import '../feedback/feedback_view.dart';
 import '../settings/app_info_view.dart';
 import '../auth/welcome_view.dart';
-import '../../widgets/user_stats_card.dart';
+import '../badges/badges_view.dart';
+import '../ranking/leaderboard_view.dart';
+import '../notifications/notifications_view.dart';
+import '../qr/qr_generator_view.dart';
+import '../report/monthly_report_view.dart';
+import '../stamps/stamp_cards_view.dart';
 
 class ProfileView extends ConsumerStatefulWidget {
   const ProfileView({Key? key}) : super(key: key);
@@ -32,6 +38,7 @@ class ProfileView extends ConsumerStatefulWidget {
 class _ProfileViewState extends ConsumerState<ProfileView> {
   Map<String, dynamic>? _userData;
   bool _isLoadingUserData = true;
+  bool _hasStampCards = false;
 
   @override
   void initState() {
@@ -49,14 +56,25 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                 .collection('users')
                 .doc(user.uid)
                 .get();
+            // スタンプカード保有チェック（1枚以上かつスタンプ1つ以上）
+            final storesSnapshot = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('stores')
+                .get();
+            final hasStamps = storesSnapshot.docs.any(
+              (d) => (d.data()['stamps'] as int? ?? 0) > 0,
+            );
             if (doc.exists) {
               final userData = doc.data();
               setState(() {
                 _userData = userData;
+                _hasStampCards = hasStamps;
                 _isLoadingUserData = false;
               });
             } else {
               setState(() {
+                _hasStampCards = hasStamps;
                 _isLoadingUserData = false;
               });
             }
@@ -160,8 +178,29 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFBF6F2),
+        elevation: 0,
+        title: const Text(
+          'アカウント',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        actions: [
+          authState.whenOrNull(
+            data: (user) {
+              if (user == null) return null;
+              return _buildNotificationBell(context, user.uid);
+            },
+          ) ?? const SizedBox.shrink(),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: SafeArea(
-        top: true,
+        top: false,
         bottom: false,
         child: authState.when(
           data: (user) {
@@ -275,7 +314,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      UserStatsCard(userId: user.uid),
+                      _buildExplorationStatsCard(context, user.uid),
                     ],
                   ),
 
@@ -294,8 +333,68 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
                   const SizedBox(height: 24),
 
-                  // 設定セクション（SettingsView と同様）
-                  _buildSectionTitle('アカウント'),
+                  // ゲームセクション
+                  _buildSectionTitle('ゲーム'),
+                  _buildSettingsMenuContainer(context, [
+                    _buildMenuItem(
+                      icon: Icons.emoji_events,
+                      title: 'バッジ一覧',
+                      subtitle: '獲得したバッジを確認',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const BadgesView()),
+                      ),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.leaderboard,
+                      title: 'ランキング',
+                      subtitle: '探検家ランキングを見る',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const LeaderboardView()),
+                      ),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.bar_chart,
+                      title: '過去のレポート',
+                      subtitle: '月次探検レポートを確認',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) =>
+                                const MonthlyReportListView()),
+                      ),
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.notifications,
+                      title: '通知・お知らせ',
+                      subtitle: 'お知らせや通知を確認',
+                      trailing: _buildNotificationUnreadTrailing(user.uid),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const NotificationsView()),
+                      ),
+                    ),
+                    if (_hasStampCards)
+                      _buildMenuItem(
+                        icon: Icons.card_membership,
+                        title: 'スタンプカード',
+                        subtitle: 'お気に入り店舗のスタンプカードを確認',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const StampCardsView()),
+                        ),
+                      ),
+                  ]),
+
+                  const SizedBox(height: 24),
+
+                  // アカウント設定セクション
+                  _buildSectionTitle('アカウント設定'),
                   _buildSettingsMenuContainer(context, [
                     if (_userData == null ||
                         _calcBasicProfileCompletion(_userData!) >= 1.0)
@@ -359,22 +458,16 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
                   const SizedBox(height: 24),
 
-                  _buildSectionTitle('通知'),
-                  _buildSettingsMenuContainer(context, [
-                    _buildMenuItem(
-                      icon: Icons.notifications,
-                      title: '通知設定',
-                      subtitle: 'プッシュ通知・メール通知の設定',
-                      onTap: () => _openNotificationSettings(context),
-                    ),
-                  ]),
-
-                  const SizedBox(height: 24),
-
                   // 店舗管理セクションは表示しない
 
                   _buildSectionTitle('サポート'),
                   _buildSettingsMenuContainer(context, [
+                    _buildMenuItem(
+                      icon: Icons.notifications_outlined,
+                      title: '通知設定',
+                      subtitle: 'プッシュ通知・メール通知の設定',
+                      onTap: () => _openNotificationSettings(context),
+                    ),
                     _buildMenuItem(
                       icon: Icons.help,
                       title: 'ヘルプ・サポート',
@@ -410,6 +503,24 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
 
                   const SizedBox(height: 24),
 
+                  // QRコードフォールバック（NFC非対応端末向け）
+                  Center(
+                    child: TextButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const QRGeneratorView()),
+                      ),
+                      child: const Text(
+                        'QRコードを表示する（NFC非対応端末向け）',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+
                   _buildSectionTitle('アカウント'),
                   _buildSettingsMenuContainer(context, [
                     _buildMenuItem(
@@ -433,6 +544,171 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           ),
         ),
       ),
+    );
+  }
+
+  // ============ 探検統計カード ============
+
+  Widget _buildExplorationStatsCard(BuildContext context, String userId) {
+    final discoveredCount = ref.watch(userDiscoveredStoreCountProvider);
+    final badgeCountAsync =
+        ref.watch(FutureProvider.autoDispose.family<int, String>((ref, uid) async {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('user_badges')
+          .doc(uid)
+          .collection('badges')
+          .get();
+      return snapshot.docs.length;
+    })(userId));
+    final badgeCount = badgeCountAsync.maybeWhen(data: (c) => c, orElse: () => 0);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '探検統計',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildStatCell(Icons.store, '$discoveredCount', '発見店舗'),
+              _buildStatDivider(),
+              _buildStatCell(Icons.emoji_events, '$badgeCount', 'バッジ'),
+              _buildStatDivider(),
+              _buildStatCell(Icons.leaderboard, '--', 'ランキング'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCell(IconData icon, String value, String label) {
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, color: const Color(0xFFFF6B35), size: 20),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          Text(
+            label,
+            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatDivider() =>
+      Container(width: 1, height: 40, color: Colors.grey[200]);
+
+  // ============ 通知ベルアイコン ============
+
+  Widget _buildNotificationBell(BuildContext context, String userId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final unread = snapshot.data?.docs.length ?? 0;
+        return IconButton(
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.notifications_outlined, color: Colors.black87),
+              if (unread > 0)
+                Positioned(
+                  right: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints:
+                        const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      unread > 99 ? '99+' : '$unread',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => const NotificationsView()),
+          ),
+        );
+      },
+    );
+  }
+
+  // ============ 通知未読 trailing ============
+
+  Widget _buildNotificationUnreadTrailing(String userId) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final unread = snapshot.data?.docs.length ?? 0;
+        if (unread <= 0) return const Icon(Icons.chevron_right);
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                unread > 99 ? '99+' : '$unread',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right),
+          ],
+        );
+      },
     );
   }
 
@@ -917,7 +1193,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           ),
           const SizedBox(height: 10),
           Text(
-            '完成させると5コインもらえる＆あなたに合ったお店が見つかりやすくなります',
+            '完成させると「自己紹介マスター」バッジが獲得できる＆あなたに合ったお店が見つかりやすくなります',
             style: TextStyle(
               fontSize: 12,
               color: Colors.grey[600],

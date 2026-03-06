@@ -1,6 +1,25 @@
 # ユーザー用アプリ 画面一覧（構成と説明）
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
+※ 2026-03-06更新（図鑑カードUI微調整）: ZukanCardWidgetのカード角丸を8→6に縮小。発見済みカードの縁をレア度単色ボーダーからグラデーションborderに変更（星1〜3=シルバー系グラデーション、星4=ゴールド系グラデーション・padding 3.0で内側に食い込む形で枠を太く）。店舗名テキストを fontSize 6→5、説明テキストを fontSize 5→4 に縮小。未発見カードの枠も border width 1.0→2.0 に変更。
+※ 2026-03-06更新（マップゲームUI全面刷新）: MapViewのGoogle Mapsスタイルをダークブルー系ゲームスタイル（`_gameMapStyle` 定数）に変更（旧: POI非表示のみ）。店舗情報カードを半透明ダーク背景（`#101E2E` 90%不透明）＋シアン発光ボーダー（`#00E5FF`）のゲーム風パネルに全面変更。パネル内に来店ステータスバッジ（未発見/初発見/探索中/常連/レジェンド）・グラジエントオーバーレイ・オレンジグラジェントボタンを追加。現在地中心のレーダーアニメーション（3つの同心円が20m→200mに拡大フェードアウト）を追加（`TickerProviderStateMixin` + `AnimationController`）。店舗情報非表示時に下部プレイヤーHUD（発見数/スタンプ数/ポイントの3指標・シアンボーダーパネル）を常時表示。マーカータップ時にオレンジ選択リング拡大アニメーション（`getScreenCoordinate()` でスクリーン座標変換）を追加。検索・フィルター・コントロールボタンをダーク背景＋シアンボーダーに変更。マーカータップの `HapticFeedback` を `lightImpact` → `mediumImpact` に強化。閉じるボタンもゲーム風ダークスタイルに変更。
+※ 2026-03-06更新（図鑑カードUIポケカ風リデザイン）: ZukanCardWidgetをポケモンカード風UIに全面リデザイン。カード上部にカテゴリカラー帯＋店舗名（左）＋レア度星（右）の固定14px帯、中央に1:1正方形アイコン/画像（`AspectRatio(1.0)`）、下部に説明テキスト最大40文字（`padding: all(4)`余白付き）のレイアウト。レア度カラー（コモン=グレー/レア=ブルー/エピック=パープル/レジェンド=ゴールド）でカード枠ボーダーを色分け。未発見カードをグレー背景（`grey.shade200/300/400`）に変更（旧: 黒系ダーク `#1E1E1E` 等）。未発見カードタップ時はSnackBarを廃止し `showDialog`（AlertDialog「まだ未発見のお店です」）を表示。グリッドの`childAspectRatio`を`0.68`→`0.60`に変更。
+※ 2026-03-06更新（マップピン色改善）: 通常モードのピンアクセント色（ボーダー＋尾）を営業中=緑 `#43A047`・営業時間外=グレー `#BDBDBD` に変更。個人モードのピン中心を常に店舗アイコン画像（画像なし時はカテゴリアイコン）表示に変更し、ピンアクセント色をステータスに応じた色（グレー/水色/緑/オレンジ/ゴールドグラデーション）に変更。MapViewの左上に通常モード用凡例カード（緑丸=営業中・グレー丸=営業時間外）を追加。フィルター設定から「営業状況」（営業中のみ表示）セクションを削除。
+※ 2026-03-06更新（マップUI改善④）: MapViewのモードトグル（通常/個人/コミュニティ）をカスタムウィジェット `CompactToggleBar`（`compact_toggle_bar.dart`）に置き換え。`TabController`・`TickerProviderStateMixin` を廃止し `_mapMode` 文字列のみで状態管理。コミュニティサブモードトグル（開拓率/賑わい度）も同ウィジェット化。白背景・影あり・プライマリカラー選択の統一されたピル型UIに変更。
+※ 2026-03-06更新（マップUI改善③）: MapViewのモードトグルを独自ピルUIから `CustomTopTabBar`（`TabController`ベース）に変更（背景色 `#FBF6F2`・黒テキスト・黒インジケーター・`Material`ラップ＋角丸12・影付き）。マーカータップ時に `HapticFeedback.lightImpact()` を追加（近接自動フォーカス時の `mediumImpact` より弱め）。
+※ 2026-03-06更新（ZukanCardView UI刷新）: カード発見演出画面を全面リニューアル。背景を `Color(0xFF0A0A14)` の深い暗色＋レア度カラーのRadialGradientグロー＋スパークル（光の粒）に変更。アニメーションを3コントローラー構成（`_flipController`・`_glowController`・`_textController`）に拡張。カード裏面に「ぐるまっぷ」ロゴ＋🗺️＋同心円パターンを追加。カード表面をレア度カラーのグラデーション背景＋グロー枠に変更（実店舗画像を円形フレームで表示、画像なし時はカテゴリアイコンでフォールバック）。完了ボタンをレア度カラーのLinearGradientグラデーションボタン（初回「図鑑に登録完了！」/再訪問「ホームに戻る」）に変更。再訪問時は「再訪問」テキストをフェードイン表示。
+※ 2026-03-06更新（図鑑UI刷新）: ZukanViewを5列フラットグリッド（`crossAxisCount: 5`）に変更。カテゴリ別グループ・フィルターチップ・ソートメニューを廃止し、zukanOrder番号順の単一グリッドに統一。未発見カードをダーク背景+「?」マーク表示に変更（旧: グレースケール画像+「？？？」）。ZukanCardWidgetにindexパラメータを追加しカード左上に番号表示。
+※ 2026-03-06更新（UI調整）: ZukanView・NfcCouponSelectView・NfcCheckinResultView の CommonHeader に `showBack: false` を設定し、左上の戻るボタンを非表示に変更。MapView の店舗情報パネル（ピンタップ時）からスタンプ進捗インジケーター（丸10個のスタンプ状態表示）を削除（スタンプシステム廃止に伴うUI整理）。
+※ 2026-03-06更新（マップUI改善）: MapViewの検索バーを折りたたみ式に変更（通常時は左上の検索アイコンのみ表示、タップで展開・←ボタンで折りたたみ）。「開拓・未開拓」トグルを廃止し、フィルターチップ「開拓」を「開拓状況」に統合（選択時にピンのボーダー色切り替えを自動ON）。
+※ 2026-03-06更新（マップモードUI刷新）: フィルターチップ列（営業中/ジャンル別/開拓状況/個人マップ/コミュニティ）を廃止し、検索バー直下に3択モードトグルピル（通常/個人/コミュニティ）を常時表示するUIに変更。ジャンル別表示・開拓状況表示はフィルター設定画面の「マップ表示設定」セクションに移動。MapFilterModelに `categoryMode`・`pioneerMode` フィールドを追加し、Firestoreに保存。
+※ 2026-03-06更新（近接自動フォーカス）: MapViewにGeolocator位置ストリーム（5m移動ごと更新）を追加し、ユーザーが店舗の半径50m以内に入ると自動でそのピンを拡大・店舗情報パネルを表示（ピンタップと同じ挙動）。同時に`HapticFeedback.mediumImpact()`でスマホを軽く振動させる。100m以上離れるとリセットされ再来接近時に再発火。複数店舗が同時に50m以内になった場合は1店舗のみフォーカス（`_proximityTriggeredStoreIds`で重複防止）。
+※ 2026-03-06更新（フェーズ3-D）: MissionsView に「週次」タブを追加（4タブ化: デイリー/ログイン/新規登録/週次）。週次ミッション進捗表示・達成判定ボタン・累計達成バッジ進捗を追加。NfcCheckinResultView に `checkWeeklyMission` Cloud Function 呼び出しを追加（バックグラウンド実行、達成時ダイアログ表示）。
+※ 2026-03-06更新（フェーズ3-C）: MonthlyReportView（月次探検レポート画面）・MonthlyReportListView（過去レポート一覧画面）を追加。ProfileViewのゲームセクションに「過去のレポート」メニューを追加。DeepLinkService に `/monthly_report/{yearMonth}` ルート追加（FCM通知タップ→MonthlyReportView直接遷移）。generateMonthlyReport Scheduled Functionが毎月末23:00 JSTに実行。
+※ 2026-03-06更新（ウォークスルー改善）: ウォークスルーを4ステップから6ステップに拡張。concept（フルスクリーンコンセプト画面・3アイコン説明）・learnNfcTouch（NFCタッチ説明・フルスクリーン）・tapProfileTab（アカウントタブ案内）を追加。tapClosePanelを削除。WalkthroughStepConfigにsubMessage・requiresActionフィールドを追加。WalkthroughOverlayにフルスクリーンモード・コンセプトレイアウト・次へボタンを追加。
+※ 2026-03-06更新（フェーズ2 ②）: MapViewに「個人マップ」「コミュニティ」フィルターチップを追加。個人マップモード（totalVisitsに応じた5段階ピン色：グレー/ライトブルー/グリーン/オレンジ/ゴールド）・コミュニティマップモード（エリアCircleオーバーレイ「開拓率」/ totalVisitCountによる賑わい度Circleオーバーレイ「賑わい度」のサブモードトグル）を追加。_setMapMode()でモード切り替えを一括管理。
+※ 2026-03-05更新（フェーズ2 ①）: AreaExplorationView（エリア開拓率一覧画面）を追加。MapViewにエリアCircleオーバーレイ描画（_loadAreas/_buildAreaCircles）を追加。StoreDetailViewに秘境スポットバッジを追加（areaId == null の店舗）。
+※ 2026-03-05更新（フェーズ1 ⑥ #14）: 階層図を3タブ構成（マップ/図鑑/アカウント）に更新。旧ホームタブ・投稿タブ・QRタブを主タブから削除。図鑑タブ（ZukanView）を追加。NFCチェックインフローにZukanCardView遷移を追加。ウォークスルー説明を7ステップから4ステップに修正。
+※ 2026-03-05更新（フェーズ1 ③）: ナビゲーション3タブ化（マップ/図鑑/アカウント）、FAB廃止。ProfileView強化（探検統計カード・通知ベル・ゲームセクション・QRフォールバックボタン）。ウォークスルーを4ステップに短縮（ステップ④「図鑑タブで発見済み店舗を確認しよう」に変更）。友達紹介UI廃止（home_view.dartから導線削除）。
 ※ 2026-03-05更新: NFCチェックイン導線を単線化。正規URLを `https://groumapapp.web.app/checkin?...` に統一し、旧ホスト `groumap-ea452.web.app` は互換期間のみ受理。`/checkin` の自動 `groumap://` リダイレクトを廃止し、手動ボタンでのみアプリを開く方式に変更。アプリ側は `storeId:secret` キーで5秒重複抑止 + チェックイン画面表示中の同一キー再push禁止を追加。
 ※ 2026-03-03更新: NFCチェックイン機能を実装。`DeepLinkService`（`app_links`パッケージ）でNFCタグのURL Deep Linkを受信し、`MainNavigationView`から`NfcCouponSelectView`（クーポン選択画面）経由で`NfcCheckinService`→Cloud Functions `nfcCheckin`を呼び出し、`NfcCheckinResultView`（結果画面・使用済みクーポン確認コード＋スタンプカード表示）に遷移するフローを追加。Universal Links（iOS）/ App Links（Android）設定済み。1日1回スタンプ制限（`lastStampDate`フィールド）を`punchStamp`/`nfcCheckin`の両方に適用。
 ※ 2026-03-02更新: チュートリアル完了後のインタラクティブウォークスルー（7ステップ）を実装。グレーアウトオーバーレイ＋ハイライト穴あきで操作対象を誘導する `WalkthroughOverlay` を追加。`WalkthroughProvider` でステップ管理。`MainNavigationView`（ステップ1・4: タブ誘導）、`MapView`（ステップ2・3: マーカータップ・パネル閉じ）、`HomeView`（ステップ5・7: FAB・コイン交換）、`MissionsView`（ステップ6: コイン受取）にオーバーレイを配置。Firestore `users/{uid}.walkthroughCompleted` で完了管理。first_mapミッション報酬を1→10コインに変更。
@@ -55,8 +74,8 @@
 ## 起動・ナビゲーション
 
 ### MainNavigationView (`lib/views/main_navigation_view.dart`)
-- 構成: ボトムタブ（ホーム/マップ/投稿/プロフィール + ログイン時のみQR）、FAB（QR起動）、Deep Link受信（NFCチェックイン用）
-- 説明: アプリ全体のタブ切替と初期データ読込を担うメインナビゲーション。バッジ獲得ポップアップの協調制御を一元管理（本日初ログイン時: レコメンドポップアップ→2秒→バッジポップアップ、2回目以降: 2秒後にバッジポップアップ）。`DeepLinkService`（`app_links`パッケージ）でNFCタグURL（`groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）のDeep Linkをコールドスタート/ウォームスタートの両方で受信し、`NfcCouponSelectView`に遷移。同一リンクは `storeId:secret` をキーに5秒間の重複抑止を行い、チェックイン画面表示中は同一キーの再pushを無効化して二重遷移を防止
+- 構成: ボトムタブ3つ（マップ / 図鑑 / アカウント）、FABなし、Deep Link受信（NFCチェックイン用）
+- 説明: アプリ全体のタブ切替と初期データ読込を担うメインナビゲーション。3タブ構成（マップ=index0・起動時のデフォルト / 図鑑=index1 / アカウント=index2）。QR FABは廃止しアカウント画面内のフォールバックボタンに移設。バッジ獲得ポップアップの協調制御を一元管理（本日初ログイン時: レコメンドポップアップ→2秒→バッジポップアップ、2回目以降: 2秒後にバッジポップアップ）。`DeepLinkService`（`app_links`パッケージ）でNFCタグURL（`groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）のDeep Linkをコールドスタート/ウォームスタートの両方で受信し、`NfcCouponSelectView`に遷移。同一リンクは `storeId:secret` をキーに5秒間の重複抑止を行い、チェックイン画面表示中は同一キーの再pushを無効化して二重遷移を防止
 
 ## 認証・登録
 
@@ -105,24 +124,24 @@
 ## ウォークスルー（インタラクティブガイド）
 
 ### WalkthroughOverlay (`lib/views/walkthrough/walkthrough_overlay.dart`)
-- 構成: グレーアウトオーバーレイ（`Colors.black.withOpacity(0.6)`）＋操作対象を穴あきハイライト表示（`CustomPaint` + `Path.combine(PathOperation.difference)`）、白文字説明テキスト（太字18px）、右上「スキップ」テキストボタン、ハイライト枠のパルスアニメーション
-- パラメータ: `targetKey`（GlobalKey）/ `targetRect`（Rect直接指定）/ `message`（説明テキスト）/ `onSkip`（スキップ時コールバック）/ `allowTapThrough`（ハイライト部分のタップ透過）/ `messagePosition`（テキスト位置: top/center/aboveTarget）
-- 説明: チュートリアル4ページ完了後に自動開始される7ステップのインタラクティブウォークスルー。画面全体をグレーアウトし、操作対象のみハイライトして次のアクションを誘導する。各画面（MainNavigationView/MapView/HomeView/MissionsView）のStackに配置
+- 構成: グレーアウトオーバーレイ（`Colors.black.withOpacity(0.6)`）＋操作対象を穴あきハイライト表示（`CustomPaint` + `Path.combine(PathOperation.difference)`）、白文字説明テキスト（太字・サブテキスト付き）、右上「スキップ」テキストボタン、ハイライト枠のパルスアニメーション
+- パラメータ: `targetKey`（GlobalKey）/ `targetRect`（Rect直接指定）/ `message`（説明テキスト）/ `subMessage`（補足テキスト）/ `onSkip`（スキップ時コールバック）/ `allowTapThrough`（ハイライト部分のタップ透過）/ `messagePosition`（テキスト位置: top/center/aboveTarget）/ `requiresAction`（ユーザー操作が必要か。falseなら「次へ」ボタン表示）/ `onNext`（次へボタンコールバック）/ `showConceptLayout`（コンセプト画面レイアウトを表示するか）
+- フルスクリーンモード: `requiresAction=false` かつターゲットなしの場合、画面全体を暗黒背景で覆い中央にメッセージ＋「次へ」ボタンを表示。`showConceptLayout=true` の場合は3アイコン説明レイアウト（マップで未発見の店を探す→NFCタッチで図鑑GET→コレクション達成）を表示
+- 説明: チュートリアル4ページ完了後に自動開始される6ステップのインタラクティブウォークスルー。各画面（MainNavigationView/MapView）のStackに配置。ウォークスルー開始セッション中（`_walkthroughStarted = true`）は「今日のレコメンド」ポップアップとバッジ獲得ポップアップを非表示にする（ウォークスルー完了済みユーザーは従来通り表示）
 
 ### WalkthroughProvider (`lib/providers/walkthrough_provider.dart`)
-- 説明: ウォークスルーの状態管理。`WalkthroughStep` enum（none/tapMapTab/tapMarker/tapClosePanel/tapHomeTab/tapMissionFab/claimMission/tapCoinExchange）、`WalkthroughState`（step/isActive/userId）、`WalkthroughNotifier`（startWalkthrough/nextStep/completeWalkthrough/skipWalkthrough）を提供。完了・スキップ時に Firestore `users/{uid}.walkthroughCompleted = true` を更新
+- 説明: ウォークスルーの状態管理。`WalkthroughStep` enum（none/concept/tapMapTab/tapMarker/learnNfcTouch/tapZukanTab/tapProfileTab）、`WalkthroughState`（step/isActive/userId）、`WalkthroughNotifier`（startWalkthrough/nextStep/completeWalkthrough/skipWalkthrough/resetState）を提供。完了・スキップ時に Firestore `users/{uid}.walkthroughCompleted = true` を更新。`tapProfileTab` 完了時は `completeWalkthrough()` を呼び出してウォークスルーを終了
 
-### ウォークスルーフロー（7ステップ）
+### ウォークスルーフロー（6ステップ）
 
-| # | 画面 | ハイライト対象 | テキスト | ユーザー操作 |
-|---|------|-------------|---------|-----------|
-| 1 | ホーム | ボトムナビの「マップ」タブ | マップ画面を開いてみよう！ | マップタブをタップ |
-| 2 | マップ | マップ領域全体 | 気になるお店をタップしてみよう！ | 店舗マーカーをタップ |
-| 3 | マップ（パネル表示中） | パネル右上の×ボタン | お店の情報を確認したら閉じよう！ | ×ボタンをタップ |
-| 4 | マップ | ボトムナビの「ホーム」タブ | ホーム画面に戻ろう！ | ホームタブをタップ |
-| 5 | ホーム | ミッションFAB（右下72×72） | ミッションを確認してコインを受け取ろう！ | FABをタップ |
-| 6 | ミッション | 「マップ初利用」の受取ボタン | タップして10コインを受け取ろう！ | 受取ボタンをタップ |
-| 7 | ホーム | コイン交換カプセルボタン | 10コインで100円引きクーポンと交換しよう！ | ボタンをタップ → 完了 |
+| # | ステップ | 形式 | テキスト | サブテキスト | ユーザー操作 |
+|---|---------|------|---------|------------|-----------|
+| 0 | concept | フルスクリーン（3アイコン） | 街を舞台にした探検ゲームへようこそ。 | ただし、実際に行かないと進まない。 | 「はじめる」ボタン |
+| 1 | tapMapTab | タブハイライト | マップを開いてみよう！ | グレーのマーカーが"まだ誰も発見していない"お店です | マップタブをタップ |
+| 2 | tapMarker | マップオーバーレイ | 気になるお店をタップしてみよう！ | ★の数がレア度。少ない発見者数ほどレアなお店です | 店舗マーカーをタップ |
+| 3 | learnNfcTouch | フルスクリーン | 実際のお店でNFCタッチしてみよう！ | レジ近くのスタンドにスマホをかざすと図鑑カードが発見できます。何のレア度が出るかはお楽しみ✦ | 「次へ」ボタン |
+| 4 | tapZukanTab | タブハイライト | 図鑑タブを開いてみよう！ | ？？？のシルエットは、まだ行っていないお店。コンプリートを目指そう！ | 図鑑タブをタップ |
+| 5 | tapProfileTab | タブハイライト | アカウントタブもチェック！ | バッジ・ランキング・毎月の探検レポートが見られます | アカウントタブをタップ → 完了 |
 
 ## ホーム・メインタブ
 
@@ -131,12 +150,27 @@
 - 説明: 主要情報と、ユーザーのスタンプ進捗に応じたおすすめ店舗レコメンドを集約したダッシュボード
 
 ### MapView (`lib/views/map/map_view.dart`)
-- 構成: GoogleMap（現在地青ドット表示あり・現在地ボタンはカスタム実装）、店舗マーカー、検索窓（左）＋フィルターボタン（右）、「開拓・未開拓」トグル（検索バー直下・左寄せコンパクトカード。ONにするとピンのボーダー＋尾の色が開拓済み（スタンプ1以上）=青 `#2196F3`、未開拓（スタンプ0）=グレー `#BDBDBD` に変化。OFFではデフォルトのオレンジ `#FF6B35`）、店舗情報パネル（マーカータップで表示。店舗名・今日の営業状況バッジ + 具体的な営業時間「営業中 09:00〜21:00」または「臨時休業」等を表示。複数時間帯（periods）対応：ランチ+ディナー等の分割営業時間を「11:00〜14:00 / 17:00〜22:00」形式で表示。scheduleOverrides・isRegularHoliday を考慮した正確な営業状況を表示。不定休（`isRegularHoliday=true`）で今日の scheduleOverride がない場合は「定休日」と表示）
-- 説明: 周辺店舗を地図で探す画面。`isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` の店舗は表示しない。フィルターボタンから詳細フィルター設定画面へ遷移可能。「営業中のみ」フィルターは scheduleOverrides（臨時休業・臨時営業）および isRegularHoliday を考慮した判定を行う。マップ閲覧報酬（`mapOpened`）は `daily_missions/{date}.map_open` で1日1回のみカウントする
+- 構成: GoogleMap（ダークブルー系ゲームスタイル・現在地ボタンはカスタム実装）、店舗マーカー、検索アイコンボタン（左上・折りたたみ式。ダーク背景＋シアンボーダー）＋フィルターボタン（右上・ダーク背景＋シアンボーダー）、**モードタブ（`CompactToggleBar`）**（検索バー直下・常時表示。「通常」/「個人」/「コミュニティ」の3択・`_mapMode` 文字列で状態管理）、コミュニティサブモードトグル（コミュニティ選択時のみ。「開拓率」/「賑わい度」の2択トグル）、**プレイヤーHUD**（下部固定・店舗情報非表示時のみ表示。シアンボーダーパネルに発見数/スタンプ数/ポイントの3指標を横並び）、店舗情報パネル（ゲーム風）、コントロールボタン（ダーク背景＋シアンボーダー）
+- **マップスタイル**: ダークブルー系ゲームスタイル（`#0d1b2a` ベース・水系 `#0a2030`・道路 `#1a3a52`・POI非表示・テキストはシアン系 `#8ec3b9`）。旧: POI非表示のみのデフォルトスタイル
+- 通常モード: 店舗のアイコン画像（またはカテゴリアイコン）を白丸ピンに表示。ピンアクセント色（ボーダー＋尾）が営業中=緑 `#43A047`・営業時間外=グレー `#BDBDBD` で色分けされる。左上に凡例カード（緑丸=営業中・グレー丸=営業時間外）を小さく表示（`_mapMode == 'normal'`）
+- 個人モード: ピン中心に常に店舗アイコン画像（画像なし時はカテゴリアイコン・グレー）を表示。ピンアクセント色（ボーダー＋尾）を `users/{uid}/stores/{storeId}.totalVisits` に応じて5段階で変化（0件=グレー `#BDBDBD` / 1件=ライトブルー `#29B6F6` / 2〜4件=グリーン `#66BB6A` / 5〜9件=オレンジ `#FB8C00` / 10件〜=ゴールドグラデーション `#FFF9C4`→`#FFD700`→`#B8860B`）。モードトグルで「個人」選択時に切り替え（`_mapMode == 'personal'`）
+- コミュニティモード: サブモード「開拓率」ではエリアCircleオーバーレイ（`_areaCircles`）を表示。サブモード「賑わい度」では `stores.totalVisitCount` に応じた5段階Circleオーバーレイ（1〜10件=ライトブルー半径40m / 11〜30件=グリーン60m / 31〜100件=オレンジ80m / 101件〜=ゴールド100m）を表示（`_mapMode == 'community'`）
+- 開拓状況表示: フィルター設定の「マップ表示設定 > 開拓状況表示」ONで、ピンのボーダー＋尾の色が開拓済み（スタンプ1以上）=青 `#2196F3`、未開拓=グレー `#BDBDBD` に切り替わる（`MapFilterModel.pioneerMode`）
+- ジャンル別表示: フィルター設定の「マップ表示設定 > ジャンル別表示」ONで、カテゴリアイコンでマーカーを表示（`MapFilterModel.categoryMode`）
+- 近接自動フォーカス: Geolocator位置ストリーム（5m移動ごと更新）で継続的に現在地を監視。店舗の半径50m以内に入ると自動でピンを拡大・店舗情報パネルを表示し、`HapticFeedback.mediumImpact()`で軽くバイブレーション。100m以上離れるとリセット（再来接近で再発火）。一度に1店舗のみフォーカス。
+- **レーダーアニメーション**: `TickerProviderStateMixin` + `AnimationController`（2秒ループ）で現在地を中心に3つの同心円（位相ずらし）が20m→200mに拡大しながらフェードアウト。`_buildRadarCircles()` で Google Maps `Circle` として描画し `_getActiveCircles()` に統合
+- **マーカータップ**: ピンをタップ時に `HapticFeedback.mediumImpact()` でバイブレーション。`getScreenCoordinate()` でスクリーン座標を取得し、オレンジ選択リングが拡大フェードするアニメーション（`_selectionRingController` 500ms）を表示
+- **店舗情報パネル（ゲーム風）**: 半透明ダーク背景（`#101E2E` 90%不透明）＋シアン発光ボーダー（`#00E5FF`）。画像上にグラジエントオーバーレイ・左上ジャンルバッジ・右上営業状況バッジ（ドット付き）。来店ステータスバッジ（未発見/初発見/探索中/常連/レジェンド）を店舗名横に表示。スタンプ数・今日の営業時間を表示。詳細ボタンはオレンジグラジェント（`#FF6B35`→`#FF8C42`）。閉じるボタンはダーク円形＋シアンボーダー
+- 説明: 周辺店舗をゲーム感覚で探す画面。`isActive=true` かつ `isApproved=true` の店舗のみ表示し、`stores.isOwner=true` の店舗は表示しない。フィルターボタンから詳細フィルター設定画面へ遷移可能。営業中判定（scheduleOverrides・isRegularHolidayを考慮した複数時間帯対応）はピン色（通常モード）に反映される。マップ閲覧報酬（`mapOpened`）は `daily_missions/{date}.map_open` で1日1回のみカウントする。プレイヤー統計（`discoveredStoreCount`/`stampCount`/`totalPoints`）は `users/{uid}` から読み込み下部HUDに表示
+
+### AreaExplorationView (`lib/views/area/area_exploration_view.dart`)
+- 構成: CommonHeader（「エリア開拓率」）、トグルボタン（「マイ開拓率」/「みんなの開拓率」・選択時オレンジ背景・非選択時白背景・シャドウ付き）、エリアカードリスト（`areaExplorationRateProvider` から取得。各カード: エリアカラーの丸ドット+エリア名+パーセント表示（エリアカラー・太字20px）、LinearProgressIndicator（エリアカラー）、「訪問数 / 全店舗数 店舗」テキスト、エリア説明テキスト（末尾省略））
+- 説明: エリア別の開拓率を一覧表示する画面。「マイ開拓率」は自分がNFCチェックイン済みの店舗数÷エリア内総店舗数、「みんなの開拓率」は `discoveredCount >= 1`（1人以上が来店した）店舗数÷エリア内総店舗数を表示。`areasProvider`（`areas`コレクション `isActive=true` / `order`昇順）・`zukanAllStoresProvider`（全店舗）・`userVisitedStoreIdsProvider`（自分の訪問済み店舗ID）の3つのプロバイダーを組み合わせて計算する
 
 ### FilterSettingsView (`lib/views/map/filter_settings_view.dart`)
-- 構成: CommonHeader、各フィルターセクション（営業状況/ジャンル/開拓状態/お気に入り/決済方法/クーポン/距離）、リセット＋保存ボタン
-- 説明: マップ表示のフィルター条件を設定する画面。設定はFirestore（users/{userId}/map_filter/settings）に保存
+- 構成: CommonHeader、各フィルターセクション（**マップ表示設定**/ジャンル/開拓状態/お気に入り/決済方法/クーポン/距離）、リセット＋保存ボタン
+- マップ表示設定セクション: 「ジャンル別表示」（カテゴリアイコン表示ON/OFF）・「開拓状況表示」（来店状況アイコン表示ON/OFF）の2つのトグル。相互排他で片方をONにするともう片方は自動OFF。設定は `MapFilterModel.categoryMode` / `MapFilterModel.pioneerMode` に保存
+- 説明: マップ表示のフィルター条件・表示モード設定画面。設定はFirestore（users/{userId}/map_filter/settings）に保存
 
 ### PostsView (`lib/views/posts/posts_view.dart`)
 - 構成: 投稿グリッド（3列）、空/エラー/読み込み状態（`public_instagram_posts` と `public_posts` の統一フィードを日付降順で取得し、画像なし投稿は除外・51件ずつボタン式追加読込・最大306件表示・1店舗あたり最大51件）、グリッド下部に青テキスト「さらに表示する」ボタン（追加データありの場合のみ表示）
@@ -232,20 +266,31 @@
 ## NFCチェックイン
 
 ### NfcCouponSelectView (`lib/views/checkin/nfc_coupon_select_view.dart`)
-- 構成: CommonHeader（「チェックイン」）、店舗情報カード（アイコン+店舗名+「NFCチェックイン」ラベル）、クーポン選択セクション（利用可能クーポンがある場合: タイトル「利用するクーポンを選択」+説明文+クーポンカードリスト（チェックボックス+アイコン+タイトル+割引額+取得元ラベル（スタンプ特典/コイン交換）+有効期限）、クーポンなしの場合: 「利用可能なクーポンはありません」メッセージ）、下部固定ボタン（選択クーポンありの場合: 「N件のクーポンを利用してチェックイン」カウント+「チェックインする」ボタン、選択なしの場合: 「クーポンを使わずにチェックイン」ボタン）
+- 構成: CommonHeader（「お店を発見」・戻るボタン非表示）、店舗情報カード（アイコン+店舗名+「NFCタッチで発見」ラベル）、クーポン選択セクション（利用可能クーポンがある場合: タイトル「利用するクーポンを選択」+説明文+クーポンカードリスト（チェックボックス+アイコン+タイトル+割引額+取得元ラベル（スタンプ特典/コイン交換）+有効期限）、クーポンなしの場合: 「利用可能なクーポンはありません」+「このままお店を発見しましょう」メッセージ）、下部固定ボタン（選択クーポンありの場合: 「N件のクーポンを利用して発見する」カウント+「発見する」ボタン、選択なしの場合: 「クーポンを使わずに発見する」ボタン）
 - パラメータ: `storeId`（店舗ID）/ `tagSecret`（NFCタグシークレット）
-- 説明: NFCタグURL Deep Link → `MainNavigationView` 経由で遷移するクーポン選択画面。`user_coupons` コレクションから当該店舗の未使用・有効期限内クーポンを取得し、チェックインと同時に利用するクーポンを複数選択可能。チェックイン実行時は `NfcCheckinService.checkin()` を呼び出し、成功後 `NfcCheckinResultView` に `pushReplacement` で遷移。`FirebaseFunctionsException` のエラーコード（`already-exists`=本日チェックイン済み / `not-found`=無効タグ / `permission-denied`=利用不可 / `unauthenticated`=未ログイン）に応じたエラーメッセージを SnackBar で表示
+- 説明: NFCタグURL Deep Link → `MainNavigationView` 経由で遷移するクーポン選択画面。`user_coupons` コレクションから当該店舗の未使用・有効期限内クーポンを取得し、発見と同時に利用するクーポンを複数選択可能。発見実行時は `NfcCheckinService.checkin()` を呼び出し、成功後 `NfcCheckinResultView` に `pushReplacement` で遷移。`FirebaseFunctionsException` のエラーコード（`already-exists`=本日発見済み / `not-found`=無効NFCタグ / `permission-denied`=利用不可 / `unauthenticated`=未ログイン）に応じたエラーメッセージをダイアログで表示
 
 ### NfcCheckinResultView (`lib/views/checkin/nfc_checkin_result_view.dart`)
-- 構成: CommonHeader（「チェックイン完了」）、成功アイコン（緑チェック）+「チェックイン成功！」タイトル+店舗名、クーポン利用確認セクション（使用クーポンがある場合のみ: 緑枠カード+「クーポン利用済み」ヘッダー+使用クーポン一覧+6桁確認コード（モノスペース28px）+リアルタイム時計（日付+秒単位更新）+「この画面をスタッフにお見せください」案内）、共通スタンプカード（`StampCardWidget`・押印アニメーション・カード完了時シャインエフェクト）、来店ボーナスバナー（+Nコイン表示・`coinsAdded > 0` 時のみ）、獲得クーポンセクション（`awardedCoupons` がある場合のみ・オレンジ丸角Chip表示）、利用可能クーポンセクション（店舗の `coupons` サブコレクションから取得・必要スタンプ未達のクーポンは「あとNスタンプ」オーバーレイ表示）、下部固定「完了」ボタン（`MainNavigationView` に `pushAndRemoveUntil` で遷移）
+- 構成: CommonHeader（「チェックイン完了」・戻るボタン非表示）、成功アイコン（緑チェック）+「チェックイン成功！」タイトル+店舗名、クーポン利用確認セクション（使用クーポンがある場合のみ: 緑枠カード+「クーポン利用済み」ヘッダー+使用クーポン一覧+6桁確認コード（モノスペース28px）+リアルタイム時計（日付+秒単位更新）+「この画面をスタッフにお見せください」案内）、共通スタンプカード（`StampCardWidget`・押印アニメーション・カード完了時シャインエフェクト、`stampsAfter >= 1` の場合のみ表示）、獲得クーポンセクション（`awardedCoupons` がある場合のみ・オレンジ丸角Chip表示）、利用可能クーポンセクション（店舗の `coupons` サブコレクションから取得・必要スタンプ未達のクーポンは「あとNスタンプ」オーバーレイ表示）、下部固定ボタン（「カードを見る」プライマリボタン + 「ホームに戻る」テキストボタン）
 - パラメータ: `result`（`NfcCheckinResult`）/ `storeId`（店舗ID）/ `usedCoupons`（使用クーポン情報リスト）
-- 説明: NFCチェックイン結果表示画面。クーポン利用時はスタッフ目視確認用の確認コード（Cloud Functions生成の6桁コード）とリアルタイム時計（1秒間隔更新）を表示し、スクリーンショット不正対策。スタンプカードの押印アニメーション・コンプリートシャインエフェクトは `PointPaymentDetailView` と同様の演出
+- 説明: NFCチェックイン結果表示画面。クーポン利用時はスタッフ目視確認用の確認コード（Cloud Functions生成の6桁コード）とリアルタイム時計（1秒間隔更新）を表示し、スクリーンショット不正対策。スタンプカードの押印アニメーション・コンプリートシャインエフェクトは `stampsAfter >= 1` の既存スタンプ保有者のみ表示。`stampsAfter == 0` の場合（新規ユーザー）は店舗詳細取得後に自動的に `ZukanCardView` へ `pushReplacement` で遷移。「カードを見る」ボタンタップでも `ZukanCardView` に遷移
 
 ### DeepLinkService (`lib/services/deep_link_service.dart`)
 - 説明: `app_links` パッケージを使用したDeep Linkサービス。NFCタグに書き込まれたURL（`https://groumapapp.web.app/checkin?storeId=xxx&secret=yyy`）をUniversal Links（iOS）/ App Links（Android）経由で受信。正規ホストは `groumapapp.web.app`、旧ホスト `groumap-ea452.web.app` は互換期間のみ受理。`/checkin` パスのみを受理し、`storeId` と `secret` が揃う場合だけ `CheckinDeepLink` を生成。手動フォールバック用に `groumap://checkin?...` のパースも維持。`getInitialCheckinLink()`（コールドスタート）と `listenCheckinLinks()`（ウォームスタート）の2系統で対応
 
 ### NfcCheckinService (`lib/services/nfc_checkin_service.dart`)
-- 説明: Cloud Functions `nfcCheckin` を呼び出すサービス。`storeId`・`tagSecret`・`selectedUserCouponIds`（任意）をパラメータとして送信し、`NfcCheckinResult`（`stampsAfter`/`cardCompleted`/`storeName`/`coinsAdded`/`awardedCoupons`/`usedCoupons`/`usageVerificationCode`）を返す
+- 説明: Cloud Functions `nfcCheckin` を呼び出すサービス。`storeId`・`tagSecret`・`selectedUserCouponIds`（任意）をパラメータとして送信し、`NfcCheckinResult`（`stampsAfter`/`cardCompleted`/`storeName`/`isFirstVisit`/`awardedCoupons`/`usedCoupons`/`usageVerificationCode`）を返す。`coinsAdded` はコインシステム廃止に伴い削除済み
+
+## 図鑑
+
+### ZukanView (`lib/views/zukan/zukan_view.dart`)
+- 構成: CommonHeader（「図鑑」・戻るボタン非表示）、開拓サマリーバー（「発見済み X店舗 / 全Y店舗」+ LinearProgressIndicator）、5列フラットグリッド（`crossAxisCount: 5`・`childAspectRatio: 0.60`・カテゴリグループなし）
+- 説明: 全登録店舗を図鑑スタイルで一覧表示するタブ画面。`zukanStoresProvider` から全店舗データと発見済みフラグを取得し、`zukanOrder`順（管理者設定の番号順）でフラット表示。ZukanCardWidgetはポケモンカード風UI: 上部にカテゴリカラー帯＋店舗名（fontSize 5）＋レア度星（固定14px）、中央に1:1正方形アイコン/画像（`AspectRatio`）、下部に説明テキスト fontSize 4（最大40文字・余白付き）。発見済みカードはレア度グラデーション枠（角丸6・padding 3.0で内側枠・星1〜3=シルバー系グラデーション・星4=ゴールド系グラデーション）。未発見カードはグレー背景（`grey.shade200/300/400`）＋「?」マーク表示。発見済みカードタップで `StoreDetailView` に遷移。未発見カードタップで `showDialog`（AlertDialog「まだ未発見のお店です / お店に来店してNFCタッチすると、このカードを発見できます。」）を表示。フィルターチップ・ソートメニューは廃止
+
+### ZukanCardView (`lib/views/zukan/zukan_card_view.dart`)
+- 構成: 深い暗色背景（`Color(0xFF0A0A14)`）＋レア度カラーのRadialGradientグロー＋スパークル（`_CardBackgroundPainter`）、ヘッダーテキスト（初発見「発見！」/再訪問「再訪問」・レア度カラー＋発光Shadow・フェードイン）、カード本体（260×360・20px角丸）、レア度カラーグロー枠＋グラデーション背景、レア度ラベルバッジ＋カテゴリタグ＋円形店舗画像（140×140）＋星テキスト＋発見者数、レア度星アイコン（`Icons.star` × 4）、レア度ラベルテキスト、発見者数テキスト（「あなたが最初の発見者です！」または「あなたがN人目の発見者です！」）、レア度カラーのLinearGradientグラデーションボタン（初回「図鑑に登録完了！」/再訪問「ホームに戻る」）
+- パラメータ: `storeId`（店舗ID）/ `storeName`（店舗名）/ `isFirstVisit`（初来店フラグ）
+- 説明: NFCチェックイン後の図鑑カード発見演出画面。3コントローラー構成（`_flipController` 700ms・`_glowController` 2秒ループ・`_textController` 500ms）。初来店（`isFirstVisit=true`）時は600ms遅延後にフリップアニメーション（`Matrix4.rotateY()`・パースペクティブ0.001）でカード裏面（「ぐるまっぷ」ロゴ＋🗺️＋同心円パターン・`_CardBack`）からカード表面（`_CardFront`）にめくれ、完了後にヘッダー・情報・ボタンがフェードイン。再訪時はカード表面を即表示しテキストのみフェードイン。カード表面の店舗画像は `iconImageUrl` をClipOvalで円形表示、画像なし時は `StampCardWidget.getCategoryIcon()` によるカテゴリアイコンにフォールバック。レア度・発見者数は `zukanStoresProvider` から取得
 
 ## スタンプ・バッジ
 
@@ -268,8 +313,8 @@
 ## ミッション
 
 ### MissionsView (`lib/views/missions/missions_view.dart`)
-- 構成: AppBar（通常時「ミッション」、コイン交換モード時「コイン交換」）、コイン残高表示（有効期限日付き・Firestore取得）、通常モード: PillTabBar（デイリー/ログイン/新規登録の3タブ）＋ミッションリスト（3状態: 未達成=グレイアウト / 達成済み未受取=黄色〜アンバーグラデーション背景・タップで報酬受取 / 受取済み=半透明の黄色グラデーション+チェックマーク）。コイン交換モード（`showCoinExchange: true`）: タブバー非表示、交換レート説明+未訪問店舗リスト+交換ボタンを直接表示（未訪問店舗は `isActive=true` かつ `isApproved=true` かつ `stores.isOwner!=true` のみ）。新規登録ミッション未完了時はデイリー/ログインタブを非活性化（グレーアウト・タップ不可）し新規登録タブを初期選択、新規登録タブ上部にオレンジグラデーションのガイドメッセージバナー表示（「まずは新規登録ミッションを完了しよう!」）
-- 説明: コイン獲得ミッションの一覧画面。Firestore連携でミッション達成状態をリアルタイム反映し、「受け取る」タップでコインをDBに加算。デイリーミッションは日付ベースで自動リセット。コイン交換機能はホーム画面のコイン交換ボタンから `showCoinExchange: true` で遷移し、10コインで未訪問店舗の100円引きクーポンを取得可能（有効期限30日、交換候補は `isActive=true` かつ `isApproved=true` かつ `stores.isOwner!=true` の未訪問店舗のみ）。交換成功後は所持コインと未訪問店舗リストをローカル状態で即時更新してUIに反映し、バックグラウンドでFirestoreから最新データを再取得。新規登録ミッション（5種）をすべて受取完了するまでデイリー・ログインタブはロックされる。ホーム画面右下のフローティングボタンから通常モードに遷移、ホーム画面のコイン交換ボタンからコイン交換モードに遷移
+- 構成: AppBar（通常時「ミッション」、コイン交換モード時「コイン交換」）、コイン残高表示（有効期限日付き・Firestore取得）、通常モード: PillTabBar（デイリー/ログイン/新規登録/週次の4タブ）＋ミッションリスト（3状態: 未達成=グレイアウト / 達成済み未受取=黄色〜アンバーグラデーション背景・タップで報酬受取 / 受取済み=半透明の黄色グラデーション+チェックマーク）。週次タブ: 今週のミッション進捗（未訪問店舗来店数・今週来店合計）・達成時の受取ボタン・達成報酬説明・累計達成バッジ進捗（1/5/10/25回のロック/アンロック表示）。コイン交換モード（`showCoinExchange: true`）: タブバー非表示、交換レート説明+未訪問店舗リスト+交換ボタンを直接表示（未訪問店舗は `isActive=true` かつ `isApproved=true` かつ `stores.isOwner!=true` のみ）。新規登録ミッション未完了時はデイリー/ログイン/週次タブを非活性化（グレーアウト・タップ不可）し新規登録タブを初期選択、新規登録タブ上部にオレンジグラデーションのガイドメッセージバナー表示（「まずは新規登録ミッションを完了しよう!」）
+- 説明: ミッション一覧・週次ミッション・コイン交換を管理する画面。週次ミッションは「今週の未訪問店舗に来店（1件）」かつ「今週の来店合計（3回）」が達成条件で、毎週月曜日リセット。達成時に `checkWeeklyMission` Cloud Function を呼び出し、累計達成回数に応じた限定バッジ（`weekly_mission_1/5/10/25`）を付与し発見ヒント通知を送信。コイン獲得ミッション（デイリー/ログイン/新規登録）はFirestore連携でリアルタイム反映し、「受け取る」タップでコインをDBに加算。コイン交換機能は `showCoinExchange: true` で遷移し、10コインで未訪問店舗の100円引きクーポンを取得可能（有効期限30日）。新規登録ミッション（5種）をすべて受取完了するまでデイリー・ログイン・週次タブはロックされる
 
 ## スロット（廃止）
 
@@ -279,9 +324,9 @@
 
 ## ランキング・フィードバック
 
-### LeaderboardView (`lib/views/ranking/leaderboard_view.dart`) ※現在非公開
-- 構成: ランキング種別/期間フィルタ、ランキングリスト
-- 説明: ユーザーランキングの表示画面。コードは実装済みだが、現段階ではユーザー向けには公開していない。店舗用アプリの管理者オーナー（`isOwner=true`）のみが利用可能
+### LeaderboardView (`lib/views/ranking/leaderboard_view.dart`)
+- 構成: ランキング種別フィルタ（開拓店舗数 / ポイント / バッジ数 / スタンプ数 / 総支払額 / コイン）、期間フィルタ（日次 / 週次 / 月次 / 全期間）、ランキングリスト（上位3位はアイコン強調表示）
+- 説明: 全ユーザー向けに公開済みのランキング画面。デフォルト指標は「開拓店舗数（discoveredStoreCount）」。`ranking_scores/{periodId}/users/{userId}` コレクションから高速取得。`rankingOptOut=true` のユーザーは「名無し探検家」として匿名表示（フェーズ2 ③ ランキング刷新で全公開に変更）
 
 ### FeedbackView (`lib/views/feedback/feedback_view.dart`)
 - 構成: カテゴリ選択、件名/本文/メール入力、送信ボタン
@@ -300,8 +345,16 @@
 ## プロフィール・設定
 
 ### ProfileView (`lib/views/profile/profile_view.dart`)
-- 構成: プロフィール表示、ユーザー統計カード（全店舗スタンプ進捗/開拓済み(スタンプ1〜9個)/スタンプ満了(スタンプ10個以上)・各ラベル下に条件テキストをグレー小文字で表示）、プロフィール完成度カード（2段階：基本プロフィール6項目（表示名・生年月日・性別・都道府県・市区町村・職業）未完成時は「プロフィールを完成させよう」カード表示（ここから ProfileEditView に`showNextButton=true`で遷移し、保存後 InterestCategoryView へシームレスに続く）、基本完成済み＆興味カテゴリ未設定時は「興味カテゴリを設定しよう」カード表示、全完了で非表示）、設定リスト（店舗アプリ設定画面と同一のListTileスタイル：オレンジアイコン・タイトル+サブタイトル・chevron_right、セクション別白背景角丸16コンテナ。基本プロフィール完成後に「プロフィール編集」「興味カテゴリ設定」メニュー表示）、**友達紹介セクション**（自分の紹介コードを大きなオレンジ太字で表示・コピーボタン・紹介件数・初回スタンプで+5コインの説明）、通知設定、サポート/規約などの導線（退会メニューは `HelpView` の「退会するには？」FAQに移設済み）、アカウントセクション（ログアウトのみ）、背景色 `Color(0xFFFBF6F2)`
-- 説明: ユーザーアカウントのハブ画面。プロフィール完成度を2段階（基本プロフィール6項目→興味カテゴリ）で段階的に促す。プロフィール画像は任意でゲージに影響しない。「プロフィールを完成させよう」カードからは ProfileEditView（次へボタン）→ InterestCategoryView と連続して遷移するフローになっている。友達紹介セクションでは自分の紹介コードを確認・コピーでき、紹介件数と特典内容を表示
+- 構成: AppBar（タイトル「アカウント」・右上に通知ベルアイコン（未読バッジ付き・`users/{uid}/notifications` で `isRead==false` 件数をStreamBuilderで表示））、プロフィール表示、**探検統計カード**（発見店舗数（`userDiscoveredStoreCountProvider`）・バッジ数（Firestore `user_badges/{uid}/badges` から取得）・ランキング「--」の3指標を横並びで表示）、プロフィール完成度カード（2段階：基本プロフィール6項目（表示名・生年月日・性別・都道府県・市区町村・職業）未完成時は「プロフィールを完成させよう」カード表示（ここから ProfileEditView に`showNextButton=true`で遷移し、保存後 InterestCategoryView へシームレスに続く）、基本完成済み＆興味カテゴリ未設定時は「興味カテゴリを設定しよう」カード表示、全完了で非表示）、**ゲームセクション**（「バッジ一覧」→BadgesView / 「ランキング」→LeaderboardView / **「過去のレポート」→MonthlyReportListView**（フェーズ3-C追加） / 「通知・お知らせ」→NotificationsView（未読数バッジ付き））、設定リスト（店舗アプリ設定画面と同一のListTileスタイル：オレンジアイコン・タイトル+サブタイトル・chevron_right、セクション別白背景角丸16コンテナ。基本プロフィール完成後に「プロフィール編集」「興味カテゴリ設定」メニュー表示）、サポートセクション（通知設定・お問い合わせ・ヘルプ・アプリについて・利用規約・プライバシーポリシー）、アカウントセクション（**QRコードを表示する（NFC非対応端末向け）**グレーテキストボタン・ログアウト）、背景色 `Color(0xFFFBF6F2)`
+- 説明: ユーザーアカウントのハブ画面。ヘッダーに通知ベルを配置し未読を可視化。探検統計カードで発見店舗数・バッジ数・ランキングを一覧表示。「ゲーム」セクションにバッジ一覧・ランキング・**月次レポート**・通知への導線を集約。QRコードはNFC非対応端末向けフォールバックとしてアカウント下部に小さく配置。友達紹介セクションはUIから廃止（バックエンドは維持）
+
+### MonthlyReportListView (`lib/views/report/monthly_report_view.dart`)
+- 構成: AppBar（タイトル「過去のレポート」）、月別レポートリスト（取得可能な月を新しい順にリスト表示・`availableReportMonthsProvider`で取得・空の場合は「まだレポートはありません」空表示）、各リスト行タップで MonthlyReportView に遷移
+- 説明: 過去の月次探検レポートの一覧画面。ProfileViewのゲームセクション「過去のレポート」から遷移
+
+### MonthlyReportView (`lib/views/report/monthly_report_view.dart`)
+- 構成: AppBar（タイトル「{yyyy}年{MM}月の探検レポート」・右上シェアボタン）、セクション1（今月のハイライト：発見店舗数大表示・累計発見数・最もよく行ったジャンル・訪問エリアチップ・レジェンド発見数・今月の来店回数）、セクション2（コミュニティへの貢献：コミュニティ発見貢献数・炎マーク店舗数）、セクション3（今月のコミュニティ全体：全体発見数・新規追加店舗数）、セクション4（来月のおすすめ：未訪問レジェンド/エピック店舗の横スクロールカード最大3件）、フッター（SNSシェアテキストプレビュー・「コピーしてシェア」ボタン）、背景色 `Color(0xFFFBF6F2)`
+- 説明: ユーザー個人の月次探検レポート表示画面。`monthlyReportProvider(yearMonth)` でFirestore `monthly_reports/{userId}/reports/{yearMonth}` を取得。FCM通知タップ（DeepLink `/monthly_report/{yearMonth}`）からも遷移可能。シェアテキストはクリップボードコピー方式（share_plusパッケージ不使用）。レポートが存在しない月は「まだレポートはありません」空表示
 
 ### ProfileEditView (`lib/views/settings/profile_edit_view.dart`)
 - 構成: プロフィール編集フォーム（表示名、ユーザーID（@プレフィックス・英数字+アンダースコア・3〜20文字・ユニーク制約）、自己紹介（最大100文字・3行入力）、生年月日、性別、職業（8種ドロップダウン）、都道府県/市区町村、画像選択/アップロード（任意））、ボタン（通常は「保存」・`showNextButton=true`時は「次へ」）
@@ -328,8 +381,8 @@
 - 説明: メールアドレス変更用OTP認証画面。新メールアドレスに送信された6桁コードを入力し、Cloud FunctionsでFirebase AuthとFirestoreのメールアドレスを更新
 
 ### NotificationSettingsView (`lib/views/settings/notification_settings_view.dart`)
-- 構成: プッシュ通知セクション（クーポン発行・投稿）、メール通知セクション（お知らせメール・ニュースレター・キャンペーン）のスイッチ一覧
-- 説明: プッシュ通知・メール通知の受信設定を統合した画面
+- 構成: プッシュ通知セクション（クーポン発行・投稿）、メール通知セクション（お知らせメール・ニュースレター・キャンペーン）、ランキング設定セクション（ランキング参加ON/OFF）のスイッチ一覧
+- 説明: プッシュ通知・メール通知・ランキング参加設定を統合した画面。ランキング参加をOFFにすると「名無し探検家」として匿名表示される（`users/{uid}.rankingOptOut`で管理）
 
 ## サポート
 
@@ -390,9 +443,9 @@
       │  └─ WelcomeView
       │     ├─ ログインせずに開始
       │     │  └─ MainNavigationView
-      │     │     ├─ ホーム（HomeView）
-      │     │     ├─ マップ（MapView）
-      │     │     └─ 投稿（PostsView）
+      │     │     ├─ マップ（MapView）（未ログイン時も閲覧可）
+      │     │     ├─ 図鑑（ZukanView）（未ログイン時も閲覧可）
+      │     │     └─ アカウント（ProfileView）（未ログイン時: ログイン促進カード表示）
       │     ├─ ログイン（SignInView）
       │     └─ 新規アカウント登録（TermsPrivacyConsentView）
       │
@@ -403,41 +456,23 @@
          │  │     └─ MainNavigationView
          │  └─ MainNavigationView（プロフィール入力済み）
          └─ MainNavigationView
-            ├─ ホーム（HomeView）
-            │  ├─ ニュース詳細（NewsDetailView）
-            │  ├─ お知らせ（NotificationsView）
-            │  │  ├─ お知らせ詳細（AnnouncementDetailView）
-            │  │  └─ 通知詳細（NotificationDetailView）
-            │  ├─ 店舗一覧（StoreListView）
-            │  │  └─ 店舗詳細（StoreDetailView）
-            │  ├─ クーポン一覧（CouponsView）
-            │  │  └─ クーポン詳細（CouponDetailView）
-            │  ├─ 投稿一覧（PostsView）
-            │  │  └─ 投稿詳細（PostDetailView）
-            │  ├─ スタンプカード（StampCardsView）
-            │  ├─ バッジ一覧（BadgesView）
-            │  ├─ ランキング（LeaderboardView）※現在非公開・管理者オーナー専用
-            │  ├─ 友達紹介（FriendReferralView）
-            │  ├─ 店舗紹介（StoreReferralView）
-            │  ├─ ミッション（MissionsView）
-            │  ├─ スロット（LotteryView）※廃止
-            │  └─ フィードバック（FeedbackView）
-            │
-            ├─ マップ（MapView）
+            ├─ マップ（MapView）（index 0・起動時デフォルト）
             │  ├─ フィルター設定（FilterSettingsView）
             │  └─ 店舗詳細（StoreDetailView）
+            │     ├─ クーポン詳細（CouponDetailView）
+            │     ├─ 投稿詳細（PostDetailView）
+            │     └─ 投稿一覧（PostsView）
+            │        └─ 投稿詳細（PostDetailView）
             │
-            ├─ QRコード（QRGeneratorView）※輝度MAX自動制御
-            │  ├─ 支払い（PointPaymentView）
-            │  │  └─ 支払い完了（PaymentSuccessView）
-            │  ├─ ポイント付与確認（PointRequestConfirmationView）
-            │  │  └─ 付与結果（PointPaymentDetailView）
-            │  └─ ポイント利用承認（PointUsageApprovalView）
+            ├─ 図鑑（ZukanView）（index 1）
+            │  └─ 店舗詳細（StoreDetailView）（発見済みカードタップ）
             │
-            ├─ 投稿（PostsView）
-            │  └─ 投稿詳細（PostDetailView）
-            │
-            └─ アカウント（ProfileView）
+            └─ アカウント（ProfileView）（index 2）
+               ├─ 通知・お知らせ（NotificationsView）
+               │  ├─ お知らせ詳細（AnnouncementDetailView）
+               │  └─ 通知詳細（NotificationDetailView）
+               ├─ バッジ一覧（BadgesView）
+               ├─ ランキング（LeaderboardView）
                ├─ プロフィール編集（ProfileEditView）
                │  ├─ アイコン調整（UserIconCropView）
                │  └─ 興味カテゴリ設定（InterestCategoryView）※プロフィール未完成フロー時のみ（showNextButton=true）
@@ -462,6 +497,12 @@
                │  ├─ プライバシーポリシー（Legal/PrivacyPolicyView）
                │  ├─ 利用規約（TermsView）
                │  └─ メールサポート（EmailSupportView）
+               ├─ QRコードを表示（QRGeneratorView）※NFC非対応端末向けフォールバック
+               │  ├─ 支払い（PointPaymentView）
+               │  │  └─ 支払い完了（PaymentSuccessView）
+               │  ├─ ポイント付与確認（PointRequestConfirmationView）
+               │  │  └─ 付与結果（PointPaymentDetailView）
+               │  └─ ポイント利用承認（PointUsageApprovalView）
                └─ お問い合わせ（ContactView）
 
 NFCチェックインフロー（Deep Link経由）
@@ -469,13 +510,15 @@ NFCチェックインフロー（Deep Link経由）
    └─ MainNavigationView（DeepLinkService受信）
       └─ NfcCouponSelectView（クーポン選択）
          └─ NfcCheckinResultView（結果表示・確認コード・スタンプカード）
-            └─ MainNavigationView（完了）
+            ├─ ZukanCardView（図鑑カード発見演出）
+            │  └─ MainNavigationView（完了・pushAndRemoveUntil）
+            └─ MainNavigationView（「ホームに戻る」ボタン）
 
 その他の単独遷移・演出系
 ├─ チュートリアル（TutorialView）→ 新規登録後の `UserInfoView` 完了直後に自動表示（showTutorial=true のユーザーのみ、保険でホーム遷移時にも表示可能）
-├─ ウォークスルー（WalkthroughOverlay）→ チュートリアル完了後に自動開始（walkthroughCompleted=false のユーザーのみ・7ステップ: マップタブ→マーカータップ→パネル閉じ→ホームタブ→FAB→コイン受取→コイン交換）
-├─ バッジ獲得（BadgeAwardedView）→ ホーム画面に戻る
-├─ おすすめ店舗（DailyRecommendationView）→ その日初回ログイン時に自動表示
+├─ ウォークスルー（WalkthroughOverlay）→ チュートリアル完了後に自動開始（walkthroughCompleted=false のユーザーのみ・6ステップ: コンセプト→マップタブ→マーカータップ→NFCタッチ説明→図鑑タブ→アカウントタブ・ウォークスルー中はバッジ・レコメンドポップアップを非表示）
+├─ バッジ獲得（BadgeAwardedView）→ ホーム画面に戻る（ウォークスルー中は表示しない）
+├─ おすすめ店舗（DailyRecommendationView）→ その日初回ログイン時に自動表示（ウォークスルー中は表示しない）
 ├─ ポイント利用入力（PointUsageRequestView）
 │  └─ 店舗側入力待ち（PointUsageWaitingView）
 └─ 取引履歴（TransactionHistoryView）

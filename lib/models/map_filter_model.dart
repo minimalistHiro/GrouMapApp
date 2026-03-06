@@ -27,6 +27,12 @@ class MapFilterModel {
   /// 最大距離（km単位、null = 制限なし）
   final double? maxDistanceKm;
 
+  /// ジャンル別アイコン表示モード
+  final bool categoryMode;
+
+  /// 開拓状況アイコン表示モード
+  final bool pioneerMode;
+
   /// 更新日時
   final DateTime? updatedAt;
 
@@ -39,6 +45,8 @@ class MapFilterModel {
     this.hasCoupon = false,
     this.hasAvailableCoupon = false,
     this.maxDistanceKm,
+    this.categoryMode = false,
+    this.pioneerMode = false,
     this.updatedAt,
   });
 
@@ -51,7 +59,9 @@ class MapFilterModel {
       paymentMethodCategories.isNotEmpty ||
       hasCoupon ||
       hasAvailableCoupon ||
-      maxDistanceKm != null;
+      maxDistanceKm != null ||
+      categoryMode ||
+      pioneerMode;
 
   MapFilterModel copyWith({
     bool? showOpenNowOnly,
@@ -62,6 +72,8 @@ class MapFilterModel {
     bool? hasCoupon,
     bool? hasAvailableCoupon,
     double? Function()? maxDistanceKm,
+    bool? categoryMode,
+    bool? pioneerMode,
     DateTime? updatedAt,
   }) {
     return MapFilterModel(
@@ -75,6 +87,8 @@ class MapFilterModel {
       hasAvailableCoupon: hasAvailableCoupon ?? this.hasAvailableCoupon,
       maxDistanceKm:
           maxDistanceKm != null ? maxDistanceKm() : this.maxDistanceKm,
+      categoryMode: categoryMode ?? this.categoryMode,
+      pioneerMode: pioneerMode ?? this.pioneerMode,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -89,6 +103,8 @@ class MapFilterModel {
       'hasCoupon': hasCoupon,
       'hasAvailableCoupon': hasAvailableCoupon,
       'maxDistanceKm': maxDistanceKm,
+      'categoryMode': categoryMode,
+      'pioneerMode': pioneerMode,
       'updatedAt': FieldValue.serverTimestamp(),
     };
   }
@@ -109,6 +125,8 @@ class MapFilterModel {
       hasCoupon: map['hasCoupon'] as bool? ?? false,
       hasAvailableCoupon: map['hasAvailableCoupon'] as bool? ?? false,
       maxDistanceKm: (map['maxDistanceKm'] as num?)?.toDouble(),
+      categoryMode: map['categoryMode'] as bool? ?? false,
+      pioneerMode: map['pioneerMode'] as bool? ?? false,
       updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
     );
   }

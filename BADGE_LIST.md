@@ -1,7 +1,7 @@
 # バッジ一覧
 
 バッジ定義はアプリ内蔵（`lib/data/badge_definitions.dart`）で管理。
-全162種（既存基本20種 + スタンプ追加11種 + カテゴリ別来店50種 + 曜日別利用21種 + アクション系60種）。
+全180種（既存162種 + フェーズ3追加18種：秘境探検家4 + ジャンルコンプリート10 + 週次ミッション4）。
 
 ## レア度
 
@@ -198,7 +198,7 @@
 
 ## 曜日別利用バッジ（dayVisit）
 
-特定の曜日に**スタンプを押印した回数**でカウント（ログインは対象外）。各曜日1〜3回の3段階。
+特定の曜日に**NFCチェックインした回数**でカウント（ログインは対象外）。各曜日1〜3回の3段階。
 
 ### 月曜日（monday）
 
@@ -357,7 +357,9 @@
 | follow_user_10 | ソーシャルバタフライ | 10店舗をフォロー | rare |
 | follow_user_25 | コミュニティリーダー | 25店舗をフォロー | epic |
 
-### コイン獲得（coinsEarned）
+### コイン獲得（coinsEarned）（廃止・獲得不可）
+
+※ コインシステム廃止に伴い、以下のバッジは新規獲得不可。既に獲得済みのバッジは維持。
 
 | バッジID | 名前 | 獲得条件 | レア度 |
 |----------|------|----------|--------|
@@ -367,7 +369,9 @@
 | coins_earned_300 | コインリッチ | コインを累計300枚獲得 | epic |
 | coins_earned_500 | コインタイクーン | コインを累計500枚獲得 | legendary |
 
-### ミッション達成（missionCompleted）
+### ミッション達成（missionCompleted）（廃止・獲得不可）
+
+※ ミッションUI廃止に伴い、以下のバッジは新規獲得不可。既に獲得済みのバッジは維持。
 
 | バッジID | 名前 | 獲得条件 | レア度 |
 |----------|------|----------|--------|
@@ -385,7 +389,9 @@
 | recommend_viewed_5 | レコメンドウォッチャー | レコメンドを5回閲覧 | rare |
 | recommend_viewed_10 | レコメンドマニア | レコメンドを10回閲覧 | epic |
 
-### スタンプカード達成（stampCardCompleted）
+### スタンプカード達成（stampCardCompleted）（廃止・獲得不可）
+
+※ スタンプシステム廃止（2026-03-05）に伴い、以下のバッジは新規獲得不可。既に獲得済みのバッジは維持。
 
 | バッジID | 名前 | 獲得条件 | レア度 |
 |----------|------|----------|--------|
@@ -393,6 +399,65 @@
 | stamp_card_completed_3 | カードコレクター | スタンプカードを3枚達成 | rare |
 | stamp_card_completed_5 | カードマスター | スタンプカードを5枚達成 | epic |
 | stamp_card_completed_10 | カードレジェンド | スタンプカードを10枚達成 | legendary |
+
+---
+
+## フェーズ3追加バッジ
+
+### 秘境探検家シリーズ（hiddenExplorer）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|---------|------|---------|--------|
+| hidden_explorer_1 | 秘境探検家 ★ | エリア外店舗に初来店（1店舗） | rare |
+| hidden_explorer_2 | 秘境探検家 ★★ | エリア外店舗に3店舗来店 | epic |
+| hidden_explorer_3 | 秘境探検家 ★★★ | エリア外店舗に5店舗来店 | legendary |
+| hidden_explorer_4 | 真の冒険者 | 現在登録されている全エリア外店舗を制覇 | legendary |
+
+### ジャンル別コンプリートバッジ（genreComplete）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|---------|------|---------|--------|
+| genre_complete_cafe_sweets | カフェ・スイーツ完全制覇 | カフェ・スイーツ系の全店舗訪問 | epic |
+| genre_complete_washoku | 和食完全制覇 | 和食系の全店舗訪問 | epic |
+| genre_complete_izakaya_bar | 居酒屋・バー完全制覇 | 居酒屋・バー系の全店舗訪問 | epic |
+| genre_complete_yakitori_age | 焼き鳥・揚げ物完全制覇 | 焼き鳥・揚げ物系の全店舗訪問 | epic |
+| genre_complete_nabe_yakiniku | 鍋・焼肉完全制覇 | 鍋・焼肉系の全店舗訪問 | epic |
+| genre_complete_ramen_chinese | ラーメン・中華完全制覇 | ラーメン・中華系の全店舗訪問 | epic |
+| genre_complete_asian_ethnic | アジア・エスニック完全制覇 | アジア・エスニック系の全店舗訪問 | epic |
+| genre_complete_western_french | 洋食・フレンチ完全制覇 | 洋食・フレンチ系の全店舗訪問 | epic |
+| genre_complete_italian_meat | イタリアン・肉料理完全制覇 | イタリアン・肉料理系の全店舗訪問 | epic |
+| genre_complete_shokudo_other | 食堂・その他完全制覇 | 食堂・その他の全店舗訪問 | epic |
+
+### 週次ミッション達成バッジ（weeklyMission）
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|---------|------|---------|--------|
+| weekly_mission_1 | 初めての週次ミッション | 週次ミッションを初めて達成 | common |
+| weekly_mission_5 | ミッション常連 | 週次ミッションを累計5回達成 | rare |
+| weekly_mission_10 | ミッションファイター | 週次ミッションを累計10回達成 | epic |
+| weekly_mission_25 | ミッションレジェンド | 週次ミッションを累計25回達成 | legendary |
+
+### 図鑑発見シリーズ（zukanDiscover）
+
+NFCチェックインで新しい店舗を初めて発見（`isFirstVisit=true`）するたびにカウント。
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|---------|------|---------|--------|
+| zukan_discover_1 | 初発見者 | NFCタッチで初めて店舗を発見 | common |
+| zukan_discover_5 | 発見コレクター | 5店舗を発見 | common |
+| zukan_discover_10 | 街の探検家 | 10店舗を発見 | rare |
+| zukan_discover_25 | 発見の達人 | 25店舗を発見 | epic |
+| zukan_discover_50 | 伝説の探検家 | 50店舗を発見 | legendary |
+
+### レジェンド発見シリーズ（legendDiscover）
+
+NFCチェックインで初めて発見（`isFirstVisit=true`）かつ対象店舗がレジェンドレア度（`discoveredCount<=1` または `rarityOverride=4`）の場合にカウント。
+
+| バッジID | 名前 | 獲得条件 | レア度 |
+|---------|------|---------|--------|
+| legend_discover_1 | レジェンド発掘者 | レジェンドレア度の店舗を初めて発見 | epic |
+| legend_discover_3 | レジェンドハンター | レジェンドレア度の店舗を3店舗発見 | legendary |
+| legend_discover_10 | レジェンドマスター | レジェンドレア度の店舗を10店舗発見 | legendary |
 
 ---
 
@@ -407,8 +472,13 @@
 | イベント（specialEvents） | 4 |
 | カテゴリ別来店（categoryVisit）10グループ | 50 |
 | 曜日別利用（dayVisit）7曜日 | 21 |
-| アクション系（14カテゴリ、うちスロット関連2カテゴリは廃止） | 60（うち8個は廃止・獲得不可） |
-| **合計** | **162**（うち8個はスロット廃止により獲得不可） |
+| アクション系（14カテゴリ、うちスロット関連2・コイン・ミッション・スタンプカード計5カテゴリは廃止） | 64（うち22個は廃止・獲得不可） |
+| 秘境探検家シリーズ（hiddenExplorer） | 4 |
+| ジャンルコンプリート（genreComplete） | 10 |
+| 週次ミッション（weeklyMission） | 4 |
+| 図鑑発見（zukanDiscover） | 5 |
+| レジェンド発見（legendDiscover） | 3 |
+| **合計** | **192**（うち22個はスロット廃止・コインシステム廃止・ミッションUI廃止・スタンプシステム廃止により獲得不可） |
 
 ---
 
@@ -420,7 +490,7 @@
 - 背景透過: rembg（ローカル実行）で一括処理済み
 - 生成ツール: Nano Banana Pro（Gemini 3 Pro Image）API
 - 生成スキル: `badge-image-gen`（統一テンプレートでバッジ画像を生成）
-- 生成済み: **162/162（全完了）**
+- 生成済み: **180/192（新規バッジ8種の画像未生成: zukan_discover_* 5種・legend_discover_* 3種）**
 
 ## 獲得処理
 
@@ -437,8 +507,10 @@
 - バッジ取得フィルタリング: `getNewBadges()` はローカル定義（`kBadgeDefinitions`）に存在するバッジのみ返す
   - ローカル定義の最新情報（name/iconUrl等）で上書きして返却
   - 旧バッジ（ローカル定義に存在しない `isNew: true` のバッジ）は自動的に `isNew: false` に更新しクリーンアップ
-- 曜日別利用バッジ（dayVisit）: `incrementBadgeCounter('dayVisit_{曜日}')` で曜日ごとにカウント。**スタンプ押印時のみ付与**（日次ログインチェック `runComprehensiveBadgeCheck` の対象外）。カウンターキーは `dayVisit_monday` ～ `dayVisit_sunday`
-- トリガー実装状況: **実装済み**（13箇所 + 曜日別利用2箇所）
+- 曜日別利用バッジ（dayVisit）: `incrementBadgeCounter('dayVisit_{曜日}')` で曜日ごとにカウント。**NFCチェックイン時のみ付与**（日次ログインチェック `runComprehensiveBadgeCheck` の対象外）。カウンターキーは `dayVisit_monday` ～ `dayVisit_sunday`
+- 図鑑発見バッジ（zukanDiscover）: NFCチェックイン時に `isFirstVisit=true` の場合のみ `incrementBadgeCounter('zukanDiscover')` でカウント。`lib/views/checkin/nfc_checkin_result_view.dart` でトリガー
+- レジェンド発見バッジ（legendDiscover）: NFCチェックイン時に `isFirstVisit=true` かつ店舗が `discoveredCount<=1`（または `rarityOverride=4`）の場合のみカウント。`lib/views/checkin/nfc_checkin_result_view.dart` でトリガー
+- トリガー実装状況: **実装済み**（13箇所 + 曜日別利用1箇所 + 図鑑発見系2箇所）
   - マップ画面表示 (`mapOpened`): `lib/views/map/map_view.dart`（`daily_missions/{yyyy-MM-dd}.map_open` で1日1回のみ加算）
   - 店舗詳細表示 (`storeDetailViewed`): `lib/views/stores/store_detail_view.dart`
   - お気に入り登録 (`favoriteAdded`): `lib/views/stores/store_detail_view.dart`
@@ -451,5 +523,7 @@
   - フォロー (`followUser`): `lib/views/stores/store_detail_view.dart`（店舗フォロー時）
   - ミッション達成 (`missionCompleted`): `lib/views/missions/missions_view.dart`
   - レコメンド閲覧 (`recommendViewed`): `lib/views/stamps/daily_recommendation_view.dart`
-  - スタンプカード達成 (`stampCardCompleted`): `lib/views/stores/store_detail_view.dart`
-  - 曜日別利用 (`dayVisit_{曜日}`): `lib/views/payment/point_payment_detail_view.dart`（QR決済スタンプ押印時）、`lib/views/stores/store_detail_view.dart`（手動スタンプ更新時）
+  - スタンプカード達成 (`stampCardCompleted`): ※スタンプシステム廃止により獲得不可・トリガー削除済み
+  - 曜日別利用 (`dayVisit_{曜日}`): `lib/views/checkin/nfc_checkin_result_view.dart`（NFCチェックイン時）
+  - 図鑑発見 (`zukanDiscover`): `lib/views/checkin/nfc_checkin_result_view.dart`（NFCチェックイン・初来店時）
+  - レジェンド発見 (`legendDiscover`): `lib/views/checkin/nfc_checkin_result_view.dart`（NFCチェックイン・初来店・レジェンド店舗時）

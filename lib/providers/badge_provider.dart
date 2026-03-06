@@ -424,7 +424,8 @@ class BadgeService {
         'specialEvents', 'mapOpened', 'storeDetailViewed',
         'slotPlayed', 'slotWin', 'couponUsed', 'likeGiven',
         'commentPosted', 'followUser', 'missionCompleted',
-        'recommendViewed', 'stampCardCompleted',
+        'recommendViewed',
+        // 'stampCardCompleted' はスタンプシステム廃止により対象外
       ]) {
         currentValues[key] = badgeProgressMap[key] ?? 0;
       }
@@ -440,7 +441,7 @@ class BadgeService {
         }
       }
 
-      // 曜日別利用バッジはスタンプ押印時のみ付与（ログインチェックでは対象外）
+      // 曜日別利用バッジはNFCチェックイン時のみ付与（ログインチェックでは対象外）
 
       // 4. 全バッジ定義と比較、新規バッジを付与
       final newlyAwarded = <Map<String, dynamic>>[];
@@ -450,7 +451,7 @@ class BadgeService {
       for (final badge in kBadgeDefinitions) {
         if (existingBadgeIds.contains(badge.badgeId)) continue;
 
-        // 曜日別利用バッジはスタンプ押印時にのみ付与するため、ここではスキップ
+        // 曜日別利用バッジはNFCチェックイン時にのみ付与するため、ここではスキップ
         if (badge.type == BadgeType.dayVisit) continue;
 
         int currentValue;

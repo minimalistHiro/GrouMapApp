@@ -60,6 +60,12 @@ const _$BadgeTypeEnumMap = {
   BadgeType.missionCompleted: 'mission_completed',
   BadgeType.recommendViewed: 'recommend_viewed',
   BadgeType.stampCardCompleted: 'stamp_card_completed',
+  BadgeType.hiddenExplorer: 'hidden_explorer',
+  BadgeType.hiddenExplorerComplete: 'hidden_explorer_complete',
+  BadgeType.genreComplete: 'genre_complete',
+  BadgeType.weeklyMission: 'weekly_mission',
+  BadgeType.zukanDiscover: 'zukan_discover',
+  BadgeType.legendDiscover: 'legend_discover',
 };
 
 const _$BadgeRarityEnumMap = {

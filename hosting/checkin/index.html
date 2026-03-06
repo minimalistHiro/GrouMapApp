@@ -29,10 +29,13 @@
       box-sizing: border-box;
     }
 
-    .logo {
-      font-size: 24px;
-      font-weight: 700;
+    .store-header {
       margin-bottom: 12px;
+    }
+
+    .store-name {
+      font-size: 20px;
+      font-weight: 700;
     }
 
     h1 {
@@ -84,7 +87,9 @@
 </head>
 <body>
   <main class="container">
-    <div class="logo">ぐるまっぷ</div>
+    <div class="store-header">
+      <div id="store-name" class="store-name">読み込み中...</div>
+    </div>
     <h1>カードを獲得する</h1>
     <p>この店舗の図鑑カードを発見しました！<br>アプリがインストール済みの場合は「カードを獲得」を押してください。<br>未インストールの場合はストアからダウンロードしてください。</p>
     <a id="open-app-button" class="action-button" href="#">カードを獲得</a>
@@ -109,6 +114,29 @@
       }
 
       openAppButton.href = 'groumap://checkin' + params;
+    })();
+
+    (function loadStoreInfo() {
+      var urlParams = new URLSearchParams(window.location.search);
+      var storeId = urlParams.get('storeId');
+      var nameEl = document.getElementById('store-name');
+
+      if (!storeId) {
+        nameEl.textContent = 'ぐるまっぷ';
+        return;
+      }
+
+      fetch('https://firestore.googleapis.com/v1/projects/groumap-ea452/databases/(default)/documents/stores/' + storeId)
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          var fields = data.fields || {};
+          var name = fields.name && fields.name.stringValue;
+
+          nameEl.textContent = name || 'ぐるまっぷ';
+        })
+        .catch(function() {
+          nameEl.textContent = 'ぐるまっぷ';
+        });
     })();
   </script>
 </body>

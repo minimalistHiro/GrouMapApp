@@ -394,25 +394,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         };
       });
 
-      // 曜日別訪問バッジカウンター（スタンプ追加時のみ）
-      if (updatedStamps > previousStamps) {
-        const dayNames = [
-          'monday',
-          'tuesday',
-          'wednesday',
-          'thursday',
-          'friday',
-          'saturday',
-          'sunday'
-        ];
-        final dayName = dayNames[DateTime.now().weekday - 1];
-        BadgeService().incrementBadgeCounter(user.uid, 'dayVisit_$dayName');
-      }
-
       // スタンプカード達成時（10の倍数）の通知
       if (updatedStamps > 0 && updatedStamps % 10 == 0) {
-        // バッジカウンター: スタンプカード達成
-        BadgeService().incrementBadgeCounter(user.uid, 'stampCardCompleted');
         _showStampCompletionDialog();
       }
     } catch (e) {
@@ -1052,6 +1035,37 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               ],
             ],
           ),
+          // 秘境スポットバッジ（areaId が未設定の店舗）
+          if (widget.store['areaId'] == null ||
+              widget.store['areaId'] == '') ...[
+            const SizedBox(height: 8),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF5722).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: const Color(0xFFFF5722).withOpacity(0.4),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.explore, size: 14, color: Color(0xFFFF5722)),
+                  SizedBox(width: 4),
+                  Text(
+                    '秘境スポット',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFFFF5722),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           if (displayAddress.isNotEmpty) ...[
             const SizedBox(height: 16),
             const Text(
