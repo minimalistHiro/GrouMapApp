@@ -105,11 +105,18 @@ Firebase関連の設定変更は、すべてユーザーアプリのリポジト
 
 **Flutterコードを新規作成・変更する場合は、コードを書く前に必ず `ui-ux-rules` スキルを最初に発動すること。この手順を省略することは禁止。**
 
-1. `ui-ux-rules` スキルを発動してルールを確認する
-2. 実装後にスキル内のチェックリストと照合する
-3. 1つでも違反があれば修正してから完了とする
+1. `ui-ux-rules` スキルを発動する
+2. スキルの指示に従い `/Users/kanekohiroki/Desktop/groumapapp/UI_UX_RULES.md` を読み込む
+3. 実装前チェックリストを確認してからコードを書く
+4. 実装後にチェックリストと照合する
+5. 1つでも違反があれば修正してから完了とする
 
 このルールは、ユーザー用・店舗用アプリ両方のFlutterコード変更すべてに適用される。
+
+### UI/UXルールの参照先
+
+- **ルール本体**: `/Users/kanekohiroki/Desktop/groumapapp/UI_UX_RULES.md`
+- **スキル（トリガー）**: `.claude/skills/ui-ux-rules/SKILL.md`
 
 ## Screen Configuration Reference
 

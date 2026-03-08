@@ -55,6 +55,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   bool _didInitialLoad = false;
   String? _lastInitialUserId;
   bool _badgePopupShown = false;
+  bool _hideFloatingNavBar = false;
 
   // static: ウィジェット再生成（ValueKey変更等）を跨いで保持
   // ポップアップ表示が完了済みかどうか
@@ -309,7 +310,8 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         if (_activeCheckinKey == checkinKey) _activeCheckinKey = null;
         if (!mounted) return;
         debugPrint('createCheckinSession error: $e');
-        final msg = e.toString().contains('not-found') || e.toString().contains('failed-precondition')
+        final msg = e.toString().contains('not-found') ||
+                e.toString().contains('failed-precondition')
             ? '無効なNFCタグです。タグが正しく登録されているか確認してください。'
             : 'チェックインの準備に失敗しました。時間をおいて再度お試しください。';
         ErrorDialog.showError(context, title: 'チェックインできません', message: msg);
@@ -354,6 +356,16 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
 
   void _setCurrentTab(int index, List<_MainTab> tabs) {
     _currentIndex = index;
+    if (tabs[index] != _MainTab.map) {
+      _hideFloatingNavBar = false;
+    }
+  }
+
+  void _handleMapSearchExpandedChanged(bool isExpanded) {
+    if (!mounted || _hideFloatingNavBar == isExpanded) return;
+    setState(() {
+      _hideFloatingNavBar = isExpanded;
+    });
   }
 
   // タブ切り替え時のデータ読み込み（BottomNavigationBar用）
@@ -374,9 +386,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       if (allowed != null && nextTab != allowed) return;
 
       // ウォークスルーステップを進行
-      if (wState.step == WalkthroughStep.tapMapTab && nextTab == _MainTab.map) {
-        ref.read(walkthroughProvider.notifier).nextStep();
-      } else if (wState.step == WalkthroughStep.tapZukanTab &&
+      if (wState.step == WalkthroughStep.tapZukanTab &&
           nextTab == _MainTab.zukan) {
         ref.read(walkthroughProvider.notifier).nextStep();
       } else if (wState.step == WalkthroughStep.tapProfileTab &&
@@ -410,8 +420,6 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
   // ウォークスルーステップに応じて許可するタブを返す（nullは制限なし）
   _MainTab? _walkthroughAllowedTab(WalkthroughStep step) {
     switch (step) {
-      case WalkthroughStep.tapMapTab:
-        return _MainTab.map;
       case WalkthroughStep.tapZukanTab:
         return _MainTab.zukan;
       case WalkthroughStep.tapProfileTab:
@@ -545,7 +553,9 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     return tabs.map((tab) {
       switch (tab) {
         case _MainTab.map:
-          return const MapView();
+          return MapView(
+            onSearchExpandedChanged: _handleMapSearchExpandedChanged,
+          );
         case _MainTab.zukan:
           return const ZukanView();
         case _MainTab.profile:
@@ -1241,20 +1251,21 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       body: Stack(
         children: [
           pages[pageIndex.clamp(0, pages.length - 1)],
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildFloatingNavBar(bottomIndex, items, tabs),
-          ),
+          if (!_hideFloatingNavBar)
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _buildFloatingNavBar(bottomIndex, items, tabs),
+            ),
         ],
       ),
     );
 
-    // タブハイライトオーバーレイ（tapMapTab / tapZukanTab / tapProfileTab）
+    // タブハイライトオーバーレイ（tapZukanTab / tapProfileTab）
     final showTabOverlay = walkthroughState.isActive &&
-        (walkthroughState.step == WalkthroughStep.tapMapTab ||
-            walkthroughState.step == WalkthroughStep.tapZukanTab ||
+        !_hideFloatingNavBar &&
+        (walkthroughState.step == WalkthroughStep.tapZukanTab ||
             walkthroughState.step == WalkthroughStep.tapProfileTab);
 
     // フルスクリーンオーバーレイ（concept / learnNfcTouch）
@@ -1284,11 +1295,9 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     const placeholderIndex = -1;
 
     // ターゲットタブのビジュアルインデックスを計算
-    final targetTab = wState.step == WalkthroughStep.tapMapTab
-        ? _MainTab.map
-        : wState.step == WalkthroughStep.tapZukanTab
-            ? _MainTab.zukan
-            : _MainTab.profile;
+    final targetTab = wState.step == WalkthroughStep.tapZukanTab
+        ? _MainTab.zukan
+        : _MainTab.profile;
     final bottomTabIndex = bottomTabs.indexOf(targetTab);
     if (bottomTabIndex < 0) return const SizedBox.shrink();
     final visualIndex =
@@ -1381,41 +1390,48 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
               child: GestureDetector(
                 onTap: () => _onBottomTabChanged(index, tabs),
                 behavior: HitTestBehavior.opaque,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.all(6),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppUi.primary.withValues(alpha: 0.18)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconTheme(
-                        data: IconThemeData(
-                          color: isSelected
-                              ? AppUi.primary
-                              : const Color(0xFF9E8B7D),
-                          size: 24,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeInOut,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSelected ? 14 : 0,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppUi.primary.withValues(alpha: 0.18)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconTheme(
+                          data: IconThemeData(
+                            color: isSelected
+                                ? AppUi.primary
+                                : const Color(0xFF9E8B7D),
+                            size: 22,
+                          ),
+                          child: item.icon,
                         ),
-                        child: item.icon,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item.label ?? '',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isSelected
-                              ? AppUi.primary
-                              : const Color(0xFF9E8B7D),
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal,
-                        ),
-                      ),
-                    ],
+                        if (isSelected) ...[
+                          const SizedBox(width: 6),
+                          Text(
+                            item.label ?? '',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppUi.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),

@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 /// ウォークスルーの各ステップ
 enum WalkthroughStep {
   none,
-  concept,        // 新規: フルスクリーンコンセプト説明
-  tapMapTab,      // 既存
-  tapMarker,      // 既存
-  learnNfcTouch,  // 新規: NFCタッチ説明（操作不要）
-  tapZukanTab,    // 既存
-  tapProfileTab,  // 新規: アカウントタブ
+  concept,        // フルスクリーンコンセプト説明
+  tapMarker,      // マーカータップ誘導
+  learnNfcTouch,  // NFCタッチ説明（操作不要）
+  tapZukanTab,    // 図鑑タブ誘導
+  tapProfileTab,  // アカウントタブ誘導
 }
 
 /// メッセージの表示位置
@@ -45,13 +44,6 @@ const Map<WalkthroughStep, WalkthroughStepConfig> walkthroughStepConfigs = {
     icon: Icons.explore,
     messagePosition: MessagePosition.center,
     requiresAction: false,
-  ),
-  WalkthroughStep.tapMapTab: WalkthroughStepConfig(
-    step: WalkthroughStep.tapMapTab,
-    message: 'マップを開いてみよう！',
-    subMessage: 'グレーのマーカーが"まだ誰も発見していない"お店です',
-    icon: Icons.map,
-    messagePosition: MessagePosition.center,
   ),
   WalkthroughStep.tapMarker: WalkthroughStepConfig(
     step: WalkthroughStep.tapMarker,

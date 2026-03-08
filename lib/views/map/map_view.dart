@@ -43,10 +43,12 @@ class _MarkerVisual {
 
 class MapView extends ConsumerStatefulWidget {
   final String? selectedStoreId;
+  final ValueChanged<bool>? onSearchExpandedChanged;
 
   const MapView({
     super.key,
     this.selectedStoreId,
+    this.onSearchExpandedChanged,
   });
 
   @override
@@ -160,6 +162,7 @@ class _MapViewState extends ConsumerState<MapView>
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
   static const String _lastLocationLatKey = 'map_last_location_lat';
   static const String _lastLocationLngKey = 'map_last_location_lng';
+  static const String _mapModeKey = 'map_mode';
 
   // 位置情報取得の試行回数
   int _locationRetryCount = 0;
@@ -209,8 +212,8 @@ class _MapViewState extends ConsumerState<MapView>
       if (mounted) setState(() {});
     });
 
-
     _loadLastLocationFromPrefs();
+    _loadMapModeFromPrefs();
     _initializeMapData();
     _markMapMissions();
   }
@@ -219,6 +222,43 @@ class _MapViewState extends ConsumerState<MapView>
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     unawaited(_grantMapOpenReward(user.uid));
+  }
+
+  void _expandSearch() {
+    if (_isSearchExpanded) return;
+    setState(() {
+      _isSearchExpanded = true;
+    });
+    widget.onSearchExpandedChanged?.call(true);
+  }
+
+  void _collapseSearch() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _searchController.clear();
+    final bool wasExpanded = _isSearchExpanded;
+    setState(() {
+      _searchQuery = '';
+      _isSearchExpanded = false;
+    });
+    if (wasExpanded) {
+      widget.onSearchExpandedChanged?.call(false);
+    }
+  }
+
+  Future<void> _showSelectionRingAt(LatLng position) async {
+    final screenPos = await _mapController?.getScreenCoordinate(position);
+    if (screenPos == null || !mounted) return;
+
+    setState(() {
+      _selectedMarkerScreenPos = Offset(
+        screenPos.x.toDouble(),
+        screenPos.y.toDouble(),
+      );
+      _showSelectionRing = true;
+    });
+    _selectionRingController
+      ..reset()
+      ..forward();
   }
 
   Future<void> _grantMapOpenReward(String userId) async {
@@ -235,6 +275,9 @@ class _MapViewState extends ConsumerState<MapView>
 
   @override
   void dispose() {
+    if (_isSearchExpanded) {
+      widget.onSearchExpandedChanged?.call(false);
+    }
     _radarController.dispose();
     _selectionRingController.dispose();
     _pinFloatController.dispose();
@@ -273,6 +316,19 @@ class _MapViewState extends ConsumerState<MapView>
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_lastLocationLatKey, location.latitude);
     await prefs.setDouble(_lastLocationLngKey, location.longitude);
+  }
+
+  Future<void> _loadMapModeFromPrefs() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? savedMode = prefs.getString(_mapModeKey);
+    if (savedMode == null) return;
+    if (!mounted) return;
+    _setMapMode(savedMode);
+  }
+
+  Future<void> _saveMapModeToPrefs(String mode) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_mapModeKey, mode);
   }
 
   // 初期データ読み込み
@@ -335,9 +391,8 @@ class _MapViewState extends ConsumerState<MapView>
           .get();
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
-        final favorites = (data['favoriteStoreIds'] as List<dynamic>?)
-                ?.cast<String>() ??
-            [];
+        final favorites =
+            (data['favoriteStoreIds'] as List<dynamic>?)?.cast<String>() ?? [];
         if (mounted) {
           setState(() {
             _favoriteStoreIds = favorites;
@@ -399,8 +454,7 @@ class _MapViewState extends ConsumerState<MapView>
   Set<Circle> _buildActivityCircles() {
     final circles = <Circle>{};
     for (final store in _stores) {
-      final totalVisitCount =
-          (store['totalVisitCount'] as num?)?.toInt() ?? 0;
+      final totalVisitCount = (store['totalVisitCount'] as num?)?.toInt() ?? 0;
       if (totalVisitCount == 0) continue;
 
       final lat = store['location']?['latitude'] as double?;
@@ -480,6 +534,7 @@ class _MapViewState extends ConsumerState<MapView>
       }
       _isLegendVisible = true; // モード切り替え時に凡例を再表示
     });
+    _saveMapModeToPrefs(mode);
     _markerIconFutureCache.clear();
     _createMarkers();
   }
@@ -789,6 +844,7 @@ class _MapViewState extends ConsumerState<MapView>
           'stamps': data['stamps'] ?? 0,
           'lastVisited': data['lastVisited'],
           'totalSpending': data['totalSpending'] ?? 0.0,
+          'totalVisits': data['totalVisits'] ?? 0,
         };
       }
 
@@ -1420,7 +1476,8 @@ class _MapViewState extends ConsumerState<MapView>
         final ui.Image? image = storeIconUrl.isNotEmpty
             ? await _loadMarkerImage(storeIconUrl)
             : null;
-        final (BitmapDescriptor icon, Uint8List bytes) = await _buildMarkerBitmap(
+        final (BitmapDescriptor icon, Uint8List bytes) =
+            await _buildMarkerBitmap(
           size: size,
           fillColor: fillColor,
           borderColor: borderColor,
@@ -1549,8 +1606,7 @@ class _MapViewState extends ConsumerState<MapView>
         Offset(scaledSize / 2, circleCenter.dy - radius),
         Offset(scaledSize / 2, scaledHeight),
       );
-      final Paint legendTrianglePaint = Paint()
-        ..shader = goldGradient;
+      final Paint legendTrianglePaint = Paint()..shader = goldGradient;
       canvas.drawPath(trianglePath, legendTrianglePaint);
 
       // Draw the circle last so it fully covers the triangle overlap.
@@ -1653,7 +1709,8 @@ class _MapViewState extends ConsumerState<MapView>
         }
       } else if (isGreenPin) {
         // 緑ピン: RarityGradient.canvasGreenFillGradient を使用
-        final ui.Gradient greenGradient = RarityGradient.canvasGreenFillGradient(
+        final ui.Gradient greenGradient =
+            RarityGradient.canvasGreenFillGradient(
           Offset(scaledSize / 2, circleCenter.dy - radius),
           Offset(scaledSize / 2, scaledHeight),
         );
@@ -1702,7 +1759,8 @@ class _MapViewState extends ConsumerState<MapView>
         }
       } else {
         // 通常ピン: RarityGradient.canvasColorFillGradient を使用
-        final ui.Gradient accentFillGradient = RarityGradient.canvasColorBorderGradient(
+        final ui.Gradient accentFillGradient =
+            RarityGradient.canvasColorBorderGradient(
           pinAccentColor,
           Offset(scaledSize / 2, circleCenter.dy - radius),
           Offset(scaledSize / 2, scaledHeight),
@@ -1895,7 +1953,8 @@ class _MapViewState extends ConsumerState<MapView>
     for (final Marker marker in _markers) {
       final String markerId = marker.markerId.value;
       final int initialDelay = random.nextInt(8000); // 0〜8秒のランダム初期遅延
-      _markerSpinTimers[markerId] = Timer(Duration(milliseconds: initialDelay), () {
+      _markerSpinTimers[markerId] =
+          Timer(Duration(milliseconds: initialDelay), () {
         if (mounted) {
           _spinMarker(markerId).then((_) => _scheduleMarkerSpin(markerId));
         }
@@ -2028,7 +2087,9 @@ class _MapViewState extends ConsumerState<MapView>
             }
             // ウォークスルーステップ2 → 3に進行
             final wState = ref.read(walkthroughProvider);
-            if (wState.isActive && wState.step == WalkthroughStep.tapMarker && _isShowStoreInfo) {
+            if (wState.isActive &&
+                wState.step == WalkthroughStep.tapMarker &&
+                _isShowStoreInfo) {
               ref.read(walkthroughProvider.notifier).nextStep();
             }
             await _createMarkers();
@@ -2055,8 +2116,7 @@ class _MapViewState extends ConsumerState<MapView>
       // scheduleOverrides を最優先でチェック
       final rawOverrides = store['scheduleOverrides'];
       if (rawOverrides is Map) {
-        final todayKey =
-            '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+        final todayKey = '${now.year}-${now.month.toString().padLeft(2, '0')}-'
             '${now.day.toString().padLeft(2, '0')}';
         final override = rawOverrides[todayKey];
         if (override is Map) {
@@ -2149,8 +2209,7 @@ class _MapViewState extends ConsumerState<MapView>
     // scheduleOverrides を最優先でチェック
     final rawOverrides = store['scheduleOverrides'];
     if (rawOverrides is Map) {
-      final todayKey =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+      final todayKey = '${now.year}-${now.month.toString().padLeft(2, '0')}-'
           '${now.day.toString().padLeft(2, '0')}';
       final override = rawOverrides[todayKey];
       if (override is Map) {
@@ -2183,9 +2242,8 @@ class _MapViewState extends ConsumerState<MapView>
       'sunday',
     ];
     final int mondayFirstIndex = now.weekday == 7 ? 6 : now.weekday - 1;
-    final dayData =
-        (businessHours[days[mondayFirstIndex]] as Map?)
-            ?.cast<String, dynamic>();
+    final dayData = (businessHours[days[mondayFirstIndex]] as Map?)
+        ?.cast<String, dynamic>();
     if (dayData == null) return '';
 
     final isOpen = dayData['isOpen'] == true;
@@ -2232,8 +2290,7 @@ class _MapViewState extends ConsumerState<MapView>
     if (filter.explorationStatus.isNotEmpty) {
       final String flowerType = (store['flowerType'] ?? 'unvisited').toString();
       // flowerType: 'unvisited', 'visited'(exploring), 'regular'
-      final String status =
-          flowerType == 'visited' ? 'exploring' : flowerType;
+      final String status = flowerType == 'visited' ? 'exploring' : flowerType;
       if (!filter.explorationStatus.contains(status)) return false;
     }
 
@@ -2272,8 +2329,7 @@ class _MapViewState extends ConsumerState<MapView>
         final userStamp = _userStamps[storeId];
         final int stamps = (userStamp?['stamps'] as int?) ?? 0;
         final hasAvailable = coupons.any((coupon) {
-          final requiredStamps =
-              (coupon['requiredStampCount'] as int?) ?? 0;
+          final requiredStamps = (coupon['requiredStampCount'] as int?) ?? 0;
           return stamps >= requiredStamps;
         });
         if (!hasAvailable) return false;
@@ -2303,29 +2359,31 @@ class _MapViewState extends ConsumerState<MapView>
       orElse: () => {},
     );
 
-    if (store.isNotEmpty) {
-      setState(() {
-        _selectedStoreUid = storeId;
-        _isShowStoreInfo = true;
-        _expandedMarkerId = storeId;
-      });
+    if (store.isEmpty) return;
 
-      // 地図をその店舗の位置に移動
-      _currentCenter = store['position'];
+    final LatLng storePosition = store['position'] as LatLng;
+
+    setState(() {
+      _selectedStoreUid = storeId;
+      _isShowStoreInfo = true;
+      _expandedMarkerId = storeId;
+      _currentCenter = storePosition;
       _currentZoom = 16.0;
-      _mapController?.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: _currentCenter,
-            zoom: _currentZoom,
-            bearing: _currentBearing,
-          ),
-        ),
-      );
+    });
 
-      // マーカーを再作成してサイズを更新
-      await _createMarkers();
-    }
+    await _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _currentCenter,
+          zoom: _currentZoom,
+          bearing: _currentBearing,
+        ),
+      ),
+    );
+
+    // マーカーを再作成してサイズを更新
+    await _createMarkers();
+    await _showSelectionRingAt(storePosition);
   }
 
   @override
@@ -2394,14 +2452,7 @@ class _MapViewState extends ConsumerState<MapView>
           if (_isSearchExpanded)
             Positioned.fill(
               child: GestureDetector(
-                onTap: () {
-                  FocusScope.of(context).unfocus();
-                  _searchController.clear();
-                  setState(() {
-                    _searchQuery = '';
-                    _isSearchExpanded = false;
-                  });
-                },
+                onTap: _collapseSearch,
                 child: Container(
                   color: Colors.black.withOpacity(0.5),
                 ),
@@ -2491,7 +2542,8 @@ class _MapViewState extends ConsumerState<MapView>
             right: 16,
             child: IgnorePointer(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.72),
                   borderRadius: BorderRadius.circular(16),
@@ -2532,9 +2584,11 @@ class _MapViewState extends ConsumerState<MapView>
             top: safeTop + 8,
             right: 16,
             child: GestureDetector(
-              onTap: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+              onTap: () =>
+                  ref.read(walkthroughProvider.notifier).skipWalkthrough(),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(20),
@@ -2583,283 +2637,290 @@ class _MapViewState extends ConsumerState<MapView>
     final totalVisits = (userStamp?['totalVisits'] as num?)?.toInt() ?? 0;
     final status = _getPersonalMapStatus(totalVisits);
 
-    final double bottomNavBarHeight = MediaQuery.of(context).padding.bottom + 90;
+    final double bottomNavBarHeight =
+        MediaQuery.of(context).padding.bottom + 90;
 
     return Positioned(
       bottom: bottomNavBarHeight,
       left: 20,
       right: 20,
       child: Container(
-            decoration: BoxDecoration(
-              color: _gameBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: _gameBorder.withOpacity(0.6),
-                width: 1.5,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: _gameBorder.withOpacity(0.15),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+        decoration: BoxDecoration(
+          color: _gameBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _gameBorder.withOpacity(0.6),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _gameBorder.withOpacity(0.15),
+              blurRadius: 20,
+              spreadRadius: 2,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 店舗画像セクション
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                  child: AspectRatio(
-                    aspectRatio: 2.0,
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          color: const Color(0xFF0D1B2A),
-                          child: selectedStore['storeImageUrl'] != null &&
-                                  (selectedStore['storeImageUrl'] as String).isNotEmpty
-                              ? Image.network(
-                                  selectedStore['storeImageUrl'] as String,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(
-                                      child: Icon(
-                                        _getDefaultStoreIcon(category),
-                                        size: 40,
-                                        color: Colors.grey[600],
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Center(
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 店舗画像セクション
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: AspectRatio(
+                aspectRatio: 2.0,
+                child: Stack(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      color: const Color(0xFF0D1B2A),
+                      child: selectedStore['storeImageUrl'] != null &&
+                              (selectedStore['storeImageUrl'] as String)
+                                  .isNotEmpty
+                          ? Image.network(
+                              selectedStore['storeImageUrl'] as String,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Center(
                                   child: Icon(
                                     _getDefaultStoreIcon(category),
                                     size: 40,
                                     color: Colors.grey[600],
                                   ),
-                                ),
-                        ),
-                        // グラデーションオーバーレイ
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  const Color(0x80101E2E),
-                                ],
-                                stops: const [0.5, 1.0],
+                                );
+                              },
+                            )
+                          : Center(
+                              child: Icon(
+                                _getDefaultStoreIcon(category),
+                                size: 40,
+                                color: Colors.grey[600],
                               ),
                             ),
-                          ),
-                        ),
-                        // 営業状況バッジ（右上）
-                        Positioned(
-                          top: 10,
-                          right: 10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isOpenNow
-                                  ? _gameOpenColor.withOpacity(0.9)
-                                  : Colors.black54,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: isOpenNow ? _gameOpenColor : Colors.grey[600]!,
-                                width: 1,
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: isOpenNow ? Colors.white : Colors.grey,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  isOpenNow ? '営業中' : '営業時間外',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: isOpenNow ? Colors.white : Colors.grey[400],
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        // ジャンルバッジ（左上）
-                        Positioned(
-                          top: 10,
-                          left: 10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(
-                                color: AppUi.primary.withOpacity(0.7),
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              categoryDisplay,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFFF6B35),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
-                  ),
-                ),
-                // ゲーム風情報セクション
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 店舗名 + 来店ステータスバッジ
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              selectedStore['name'] ?? '店舗名なし',
-                              style: const TextStyle(
-                                fontSize: 16,
+                    // グラデーションオーバーレイ
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              const Color(0x80101E2E),
+                            ],
+                            stops: const [0.5, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                    // 営業状況バッジ（右上）
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isOpenNow
+                              ? _gameOpenColor.withOpacity(0.9)
+                              : Colors.black54,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color:
+                                isOpenNow ? _gameOpenColor : Colors.grey[600]!,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: isOpenNow ? Colors.white : Colors.grey,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isOpenNow ? '営業中' : '営業時間外',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color:
+                                    isOpenNow ? Colors.white : Colors.grey[400],
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 0.5,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          _buildVisitStatusBadge(status, totalVisits),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // スタンプ数 + 営業時間
-                      Row(
-                        children: [
-                          Icon(Icons.stars_rounded, color: AppUi.primary, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            'スタンプ $stamps 個',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[400],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Icon(Icons.schedule, color: Colors.grey[500], size: 14),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              () {
-                                final hours = _getTodayHours(selectedStore);
-                                return hours.isNotEmpty ? hours : '---';
-                              }(),
-                              style: TextStyle(fontSize: 12, color: Colors.grey[400]),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // 区切り線
-                      Container(
-                        height: 1,
-                        color: _gameBorder.withOpacity(0.2),
-                      ),
-                      const SizedBox(height: 12),
-                      // ゲーム風アクションボタン
-                      CustomButton(
-                        text: '詳細を見る',
-                        height: 44,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
-                        ),
-                        icon: const Icon(
-                          Icons.arrow_forward_ios,
-                          color: Colors.white,
-                          size: 14,
-                        ),
-                        textStyle: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          letterSpacing: 1.0,
-                        ),
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  StoreDetailView(store: selectedStore),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      // 閉じるボタン（×）
-                      Center(
-                        child: GestureDetector(
-                          key: _closeBtnKey,
-                          onTap: () async {
-                            setState(() {
-                              _isShowStoreInfo = false;
-                              _expandedMarkerId = '';
-                            });
-                            await _createMarkers();
-                          },
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF1A2A3A),
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: _gameBorder.withOpacity(0.5),
-                                width: 1.5,
                               ),
                             ),
-                            child: const Icon(
-                              Icons.close,
-                              size: 18,
-                              color: Colors.white54,
-                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // ジャンルバッジ（左上）
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: AppUi.primary.withOpacity(0.7),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          categoryDisplay,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF6B35),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // ゲーム風情報セクション
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 店舗名 + 来店ステータスバッジ
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          selectedStore['name'] ?? '店舗名なし',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildVisitStatusBadge(status, totalVisits),
                     ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  // スタンプ数 + 営業時間
+                  Row(
+                    children: [
+                      Icon(Icons.stars_rounded, color: AppUi.primary, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        'スタンプ $stamps 個',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[400],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(Icons.schedule, color: Colors.grey[500], size: 14),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          () {
+                            final hours = _getTodayHours(selectedStore);
+                            return hours.isNotEmpty ? hours : '---';
+                          }(),
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[400]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // 区切り線
+                  Container(
+                    height: 1,
+                    color: _gameBorder.withOpacity(0.2),
+                  ),
+                  const SizedBox(height: 12),
+                  // ゲーム風アクションボタン
+                  CustomButton(
+                    text: '詳細を見る',
+                    height: 44,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
+                    ),
+                    icon: const Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      letterSpacing: 1.0,
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              StoreDetailView(store: selectedStore),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  // 閉じるボタン（×）
+                  Center(
+                    child: GestureDetector(
+                      key: _closeBtnKey,
+                      onTap: () async {
+                        setState(() {
+                          _isShowStoreInfo = false;
+                          _expandedMarkerId = '';
+                        });
+                        await _createMarkers();
+                      },
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A2A3A),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _gameBorder.withOpacity(0.5),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.white54,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
             ),
-          ),
-        );
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildVisitStatusBadge(String status, int totalVisits) {
@@ -2891,31 +2952,31 @@ class _MapViewState extends ConsumerState<MapView>
     );
   }
 
-  // フィルター設定画面への遷移
+  // フィルター設定ボトムシートを開く
   Future<void> _openFilterSettings() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      showDialog(
+      await showGameDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('ログインが必要です'),
-          content: const Text('フィルター機能を使用するにはログインしてください。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+        title: 'ログインが必要です',
+        message: 'フィルター機能を使用するにはログインしてください。',
+        icon: Icons.lock_outline,
+        actions: [
+          GameDialogAction(
+            label: 'OK',
+            isPrimary: true,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
       );
       return;
     }
 
-    final result = await Navigator.of(context).push<MapFilterModel>(
-      MaterialPageRoute(
-        builder: (context) =>
-            FilterSettingsView(initialFilter: _mapFilter),
-      ),
+    final result = await showModalBottomSheet<MapFilterModel>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FilterSettingsView(initialFilter: _mapFilter),
     );
 
     if (result != null && mounted) {
@@ -2957,7 +3018,8 @@ class _MapViewState extends ConsumerState<MapView>
         width: 50,
         height: 50,
         decoration: BoxDecoration(
-          color: _mapFilter.isActive ? const Color(0xFFFF6B35) : _gameBackground,
+          color:
+              _mapFilter.isActive ? const Color(0xFFFF6B35) : _gameBackground,
           shape: BoxShape.circle,
           border: Border.all(
             color: _mapFilter.isActive
@@ -3003,9 +3065,7 @@ class _MapViewState extends ConsumerState<MapView>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             GestureDetector(
-              onTap: () {
-                setState(() => _isSearchExpanded = true);
-              },
+              onTap: _expandSearch,
               child: Container(
                 width: 50,
                 height: 50,
@@ -3036,13 +3096,7 @@ class _MapViewState extends ConsumerState<MapView>
         children: [
           // 閉じるボタン
           GestureDetector(
-            onTap: () {
-              _searchController.clear();
-              setState(() {
-                _searchQuery = '';
-                _isSearchExpanded = false;
-              });
-            },
+            onTap: _collapseSearch,
             child: Container(
               width: 50,
               height: 50,
@@ -3064,7 +3118,7 @@ class _MapViewState extends ConsumerState<MapView>
             child: Container(
               height: 50,
               decoration: BoxDecoration(
-                color: _gameBackground,
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(25),
                 border: Border.all(
                   color: _gameBorder.withOpacity(0.4),
@@ -3075,7 +3129,8 @@ class _MapViewState extends ConsumerState<MapView>
               child: TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.black),
+                cursorColor: Colors.black,
                 onChanged: (value) {
                   setState(() {
                     _searchQuery = value.trim();
@@ -3139,13 +3194,16 @@ class _MapViewState extends ConsumerState<MapView>
     const double resultsTopGap = 4;
 
     final query = _normalizeForSearch(_searchQuery);
-    final matchedStores = _stores.where((store) {
-      final isActive = store['isActive'] == true;
-      final isApproved = store['isApproved'] == true;
-      if (!isActive || !isApproved) return false;
-      final name = _normalizeForSearch((store['name'] ?? '').toString());
-      return name.contains(query);
-    }).take(5).toList();
+    final matchedStores = _stores
+        .where((store) {
+          final isActive = store['isActive'] == true;
+          final isApproved = store['isApproved'] == true;
+          if (!isActive || !isApproved) return false;
+          final name = _normalizeForSearch((store['name'] ?? '').toString());
+          return name.contains(query);
+        })
+        .take(5)
+        .toList();
 
     if (matchedStores.isEmpty) return const SizedBox.shrink();
 
@@ -3173,33 +3231,11 @@ class _MapViewState extends ConsumerState<MapView>
               borderRadius: index == 0
                   ? const BorderRadius.vertical(top: Radius.circular(12))
                   : index == matchedStores.length - 1
-                      ? const BorderRadius.vertical(
-                          bottom: Radius.circular(12))
+                      ? const BorderRadius.vertical(bottom: Radius.circular(12))
                       : BorderRadius.zero,
-              onTap: () {
-                FocusScope.of(context).unfocus();
-                _searchController.clear();
-                setState(() {
-                  _searchQuery = '';
-                });
-                // カメラ移動のみ（ピン拡大・ポップアップなし）
-                final storeData = _stores.firstWhere(
-                  (s) => s['id'] == store['id'],
-                  orElse: () => {},
-                );
-                if (storeData.isNotEmpty) {
-                  _currentCenter = storeData['position'] as LatLng;
-                  _currentZoom = 16.0;
-                  _mapController?.animateCamera(
-                    CameraUpdate.newCameraPosition(
-                      CameraPosition(
-                        target: _currentCenter,
-                        zoom: _currentZoom,
-                        bearing: _currentBearing,
-                      ),
-                    ),
-                  );
-                }
+              onTap: () async {
+                _collapseSearch();
+                await _selectStoreOnMap(store['id'] as String);
               },
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -3238,7 +3274,8 @@ class _MapViewState extends ConsumerState<MapView>
   }
 
   // 凡例カードの共通アコーディオンウィジェット（くの字矢印で開閉）
-  Widget _buildLegendCard({required String title, required List<Widget> items}) {
+  Widget _buildLegendCard(
+      {required String title, required List<Widget> items}) {
     final BoxDecoration cardDecoration = BoxDecoration(
       color: Colors.white.withOpacity(0.92),
       borderRadius: BorderRadius.circular(10),
@@ -3283,7 +3320,10 @@ class _MapViewState extends ConsumerState<MapView>
             ),
             // 展開時のみアイテムを表示
             if (_isLegendVisible) ...[
-              Divider(height: 1, thickness: 1, color: Colors.black.withOpacity(0.06)),
+              Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Colors.black.withOpacity(0.06)),
               Padding(
                 padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
                 child: Column(
@@ -3310,7 +3350,8 @@ class _MapViewState extends ConsumerState<MapView>
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.black87)),
+        Text(label,
+            style: const TextStyle(fontSize: 11, color: Colors.black87)),
       ],
     );
   }
@@ -3327,7 +3368,8 @@ class _MapViewState extends ConsumerState<MapView>
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.black87)),
+        Text(label,
+            style: const TextStyle(fontSize: 11, color: Colors.black87)),
         const SizedBox(width: 4),
         Text(
           subLabel,
@@ -3390,6 +3432,8 @@ class _MapViewState extends ConsumerState<MapView>
     final List<Widget> legendItems = _communitySubMode == 'exploration'
         ? [_buildLegendItem(const Color(0xFFFF6B35), 'エリア境界')]
         : [
+            _buildLegendItem(const Color(0xFFBDBDBD), '0人'),
+            const SizedBox(height: 5),
             _buildLegendItem(const Color(0xFF29B6F6), '1〜10人'),
             const SizedBox(height: 5),
             _buildLegendItem(const Color(0xFF66BB6A), '11〜30人'),

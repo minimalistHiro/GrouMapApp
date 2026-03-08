@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/map_filter_model.dart';
 import '../../services/map_filter_service.dart';
-import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_switch_tile.dart';
+import '../../widgets/game_dialog.dart';
 
 class FilterSettingsView extends StatefulWidget {
   final MapFilterModel initialFilter;
@@ -111,18 +111,19 @@ class _FilterSettingsViewState extends State<FilterSettingsView> {
       }
     } catch (e) {
       if (mounted) {
-        showDialog(
+        await showGameDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('エラー'),
-            content: const Text('フィルター設定の保存に失敗しました。'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+          title: 'エラー',
+          message: 'フィルター設定の保存に失敗しました。もう一度お試しください。',
+          icon: Icons.error_outline,
+          headerColor: Colors.red,
+          actions: [
+            GameDialogAction(
+              label: 'OK',
+              isPrimary: true,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
         );
       }
     } finally {
@@ -131,46 +132,93 @@ class _FilterSettingsViewState extends State<FilterSettingsView> {
   }
 
   Future<void> _resetFilter() async {
-    final confirmed = await showDialog<bool>(
+    await showGameDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('フィルターをリセット'),
-        content: const Text('すべてのフィルター設定を初期状態に戻しますか？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('キャンセル'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text(
-              'リセット',
-              style: TextStyle(color: Color(0xFFFF6B35)),
-            ),
-          ),
-        ],
-      ),
+      title: 'フィルターをリセット',
+      message: 'すべてのフィルター設定を初期状態に戻しますか？',
+      icon: Icons.refresh,
+      actions: [
+        GameDialogAction(
+          label: 'キャンセル',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        GameDialogAction(
+          label: 'リセット',
+          isPrimary: true,
+          color: const Color(0xFFFF6B35),
+          onPressed: () async {
+            Navigator.of(context).pop();
+            const resetFilter = MapFilterModel();
+            await MapFilterService.saveFilter(resetFilter);
+            if (mounted) {
+              setState(() {
+                _filter = resetFilter;
+              });
+            }
+          },
+        ),
+      ],
     );
-    if (confirmed == true) {
-      const resetFilter = MapFilterModel();
-      await MapFilterService.saveFilter(resetFilter);
-      if (mounted) {
-        setState(() {
-          _filter = resetFilter;
-        });
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFBF6F2),
-      appBar: CommonHeader(
-        title: 'フィルター設定',
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {},
+      child: Container(
+      height: MediaQuery.of(context).size.height * 0.88,
+      decoration: const BoxDecoration(
+        color: Color(0xFFFBF6F2),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      body: Column(
+      child: Column(
         children: [
+          // ドラッグハンドル
+          Padding(
+            padding: const EdgeInsets.only(top: 12, bottom: 4),
+            child: Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          // タイトル行
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            child: Row(
+              children: [
+                const Text(
+                  'フィルター設定',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          Divider(height: 1, color: Colors.grey[200]),
+
+          // コンテンツ
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -324,7 +372,7 @@ class _FilterSettingsViewState extends State<FilterSettingsView> {
 
           // 下部ボタン
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+            padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPadding + 16),
             decoration: BoxDecoration(
               color: Colors.white,
               boxShadow: [
@@ -359,6 +407,7 @@ class _FilterSettingsViewState extends State<FilterSettingsView> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

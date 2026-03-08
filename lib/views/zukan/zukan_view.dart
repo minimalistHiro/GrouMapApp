@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/zukan_provider.dart';
 import '../../theme/app_ui.dart';
-import '../../widgets/game_dialog.dart';
 import '../../widgets/zukan_card_face_widget.dart';
 import '../../widgets/zukan_card_widget.dart';
 import '../stores/store_detail_view.dart';
@@ -132,23 +131,7 @@ class _ZukanViewState extends ConsumerState<ZukanView> {
         return ZukanCardWidget(
           item: item,
           index: index + 1,
-          onTap: item.isDiscovered
-              ? () => _showCardZoom(context, item)
-              : () {
-                  showGameDialog(
-                    context: context,
-                    title: 'まだ未発見のお店です',
-                    message: 'お店に来店してNFCタッチすると、このカードを発見できます。',
-                    icon: Icons.explore,
-                    actions: [
-                      GameDialogAction(
-                        label: 'OK',
-                        onPressed: () => Navigator.of(context).pop(),
-                        isPrimary: true,
-                      ),
-                    ],
-                  );
-                },
+          onTap: () => _showCardZoom(context, item),
         );
       },
     );
@@ -175,36 +158,61 @@ class _ZukanViewState extends ConsumerState<ZukanView> {
                     width: 240,
                     child: AspectRatio(
                       aspectRatio: 0.60,
-                      child: ZukanCardFaceWidget(item: item),
+                      child: item.isDiscovered
+                          ? ZukanCardFaceWidget(item: item)
+                          : _buildUndiscoveredZoomCard(),
                     ),
                   ),
                   const SizedBox(height: 24),
-                  // 店舗詳細ボタン
+                  // 店舗詳細ボタン（発見済みのみ）
+                  if (item.isDiscovered)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => StoreDetailView(store: item.store),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 36,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(28),
+                        ),
+                        child: const Text(
+                          '店舗詳細を見る',
+                          style: TextStyle(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  // 閉じるボタン
                   GestureDetector(
-                    onTap: () {
-                      Navigator.of(ctx).pop();
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => StoreDetailView(store: item.store),
-                        ),
-                      );
-                    },
+                    onTap: () => Navigator.of(ctx).pop(),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 36,
-                        vertical: 14,
-                      ),
+                      width: 44,
+                      height: 44,
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      child: const Text(
-                        '店舗詳細を見る',
-                        style: TextStyle(
-                          color: Colors.black87,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
+                        color: Colors.white.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.6),
+                          width: 1.5,
                         ),
+                      ),
+                      child: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 22,
                       ),
                     ),
                   ),
@@ -225,6 +233,96 @@ class _ZukanViewState extends ConsumerState<ZukanView> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildUndiscoveredZoomCard() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: Colors.grey.shade400,
+      ),
+      padding: const EdgeInsets.all(3.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(5),
+        child: Container(
+          color: Colors.grey.shade200,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 上部: ??? + 空星
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '???',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          height: 1.0,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '☆☆☆☆',
+                      style: TextStyle(
+                        color: Colors.grey.shade500,
+                        fontSize: 11,
+                        height: 1.0,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 中央: グレー背景 + ? マーク
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: AspectRatio(
+                  aspectRatio: 1.0,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: Container(
+                      color: Colors.grey.shade300,
+                      child: Center(
+                        child: Text(
+                          '?',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 72,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // 下部: 未発見テキスト
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Text(
+                    'お店に来店してNFCタッチすると\nこのカードを発見できます',
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 9,
+                      height: 1.4,
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

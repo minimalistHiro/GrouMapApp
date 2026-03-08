@@ -1,6 +1,8 @@
 # ユーザー用アプリ 画面一覧（構成と説明）
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
+※ 2026-03-08更新（賑わい度凡例0人追加・個人モードtotalVisite読み込みバグ修正）: 賑わい度の凡例に「0人（グレー）= サークル表示なし」を先頭に追加。`_loadUserStamps()` で `totalVisits` フィールドを取得していなかったバグを修正（`users/{uid}/stores/{storeId}.totalVisits` を正しく読み込むよう変更）。これにより個人マップモードのピン色が実際の来店回数に連動するよう修正。
+※ 2026-03-08更新（マップモード選択の永続化）: MapViewの選択モード（通常/個人/コミュニティ）を `SharedPreferences`（`map_mode` キー）にローカル保存し、次回起動時に自動復元するよう変更。`_loadMapModeFromPrefs()`（起動時復元）・`_saveMapModeToPrefs()`（モード変更時保存）を追加。
 ※ 2026-03-07更新（アカウント画面ランクゲージ移設・UI改善）: ProfileViewのXP進捗カード（ルーキー→探索者のゲージ欄）を廃止し、アバターアイコン周りに円形ランクプログレスリングを追加（ポケモンGO風）。`_RankProgressPainter`（`CustomPainter`）で実装: 背景トラック（半透明白リング）＋ランクカラーの進捗アーク＋アーク先端に輝点を表示。アバター外径92px・内径76px・ストローク幅4px。アニメーションは既存の `_xpAnimController`（1200ms `Curves.easeOut`）を再利用。ゲームアクショングリッド（2列GridView）を廃止し `FloatingMenuItem` リスト形式（`_buildSettingsMenuContainer`）に変更。
 ※ 2026-03-07更新（アカウント画面ゲームUI全面刷新）: ProfileViewをゲーム性重視のUIに全面リデザイン。①プレイヤーカード: ダークネイビー背景（`Color(0xE6101E2E)`）に発見数ベース5段階ランク（Lv.1 ルーキー 0-5店舗 / Lv.2 探索者 5-15店舗 / Lv.3 冒険家 15-30店舗 / Lv.4 開拓者 30-50店舗 / Lv.5 レジェンド 50店舗+）・ランク色アバターリング・Lv.Nバッジ・3つの統計セル（発見数・バッジ・ランキング）を配置。②XP進捗カード: 1200ms `Curves.easeOut` アニメーション付きLinearProgressIndicatorで次ランクまでの進捗を可視化（`SingleTickerProviderStateMixin`）。③ゲームアクショングリッド: 2列GridViewのダークスタイルカード（`Color(0xFF0D1B2A)` + アクセントカラーボーダー: バッジ/ランキング/月次レポート/通知（StreamBuilderで未読バッジ付き）/スタンプカード（条件付き））を配置。ログアウト確認を `showGameDialog` に統一。未使用メソッド（`_buildWebImageWidget` 等）・未使用import（`dart:convert` / `http`）を削除してwarning0件に。
 ※ 2026-03-07更新（UIコンポーネント統一・ダイアログリデザイン）: `CustomButton`（`custom_button.dart`）にデフォルトオレンジグラデーション（`#FF6B35`→`#FF8C42`）を追加。`backgroundColor`・`borderColor`・`gradient` のいずれも未指定の場合に自動適用。アウトラインボタン（`borderColor`指定）・ソリッドカラーボタン（`backgroundColor`指定）には影響なし。MapViewの「詳細を見る」ボタン（`GestureDetector`+`Container`+手動グラデーション）を`CustomButton`に統一。ProfileViewのプロフィール編集ボタン（`ElevatedButton`）を`CustomButton`に統一。`GameDialog`（`game_dialog.dart`）を全面リデザイン: オレンジヘッダー・アイコンを廃止し全面白背景に変更。ダイアログの影を中立グレー（`Colors.black 12%`）に変更。ボタンが2つの場合は`Row`+`Expanded`で左右均等配置（左: グレー背景セカンダリ・右: オレンジグラデーションプライマリ）。3ボタン以上は従来通り縦並び。`icon`・`headerColor`パラメータは後方互換のため残存（表示には非反映）。
@@ -22,6 +24,7 @@
 ※ 2026-03-06更新（近接自動フォーカス）: MapViewにGeolocator位置ストリーム（5m移動ごと更新）を追加し、ユーザーが店舗の半径50m以内に入ると自動でそのピンを拡大・店舗情報パネルを表示（ピンタップと同じ挙動）。同時に`HapticFeedback.mediumImpact()`でスマホを軽く振動させる。100m以上離れるとリセットされ再来接近時に再発火。複数店舗が同時に50m以内になった場合は1店舗のみフォーカス（`_proximityTriggeredStoreIds`で重複防止）。
 ※ 2026-03-06更新（フェーズ3-D）: MissionsView に「週次」タブを追加（4タブ化: デイリー/ログイン/新規登録/週次）。週次ミッション進捗表示・達成判定ボタン・累計達成バッジ進捗を追加。NfcCheckinResultView に `checkWeeklyMission` Cloud Function 呼び出しを追加（バックグラウンド実行、達成時ダイアログ表示）。
 ※ 2026-03-06更新（フェーズ3-C）: MonthlyReportView（月次探検レポート画面）・MonthlyReportListView（過去レポート一覧画面）を追加。ProfileViewのゲームセクションに「過去のレポート」メニューを追加。DeepLinkService に `/monthly_report/{yearMonth}` ルート追加（FCM通知タップ→MonthlyReportView直接遷移）。generateMonthlyReport Scheduled Functionが毎月末23:00 JSTに実行。
+※ 2026-03-08更新（ウォークスルーtapMapTab削除）: 初回起動時はマップ画面が既に表示されているためtapMapTabステップを削除し、6ステップから5ステップに短縮。WalkthroughStep enumからtapMapTabを削除。
 ※ 2026-03-06更新（ウォークスルー改善）: ウォークスルーを4ステップから6ステップに拡張。concept（フルスクリーンコンセプト画面・3アイコン説明）・learnNfcTouch（NFCタッチ説明・フルスクリーン）・tapProfileTab（アカウントタブ案内）を追加。tapClosePanelを削除。WalkthroughStepConfigにsubMessage・requiresActionフィールドを追加。WalkthroughOverlayにフルスクリーンモード・コンセプトレイアウト・次へボタンを追加。
 ※ 2026-03-06更新（フェーズ2 ②）: MapViewに「個人マップ」「コミュニティ」フィルターチップを追加。個人マップモード（totalVisitsに応じた5段階ピン色：グレー/ライトブルー/グリーン/オレンジ/ゴールド）・コミュニティマップモード（エリアCircleオーバーレイ「開拓率」/ totalVisitCountによる賑わい度Circleオーバーレイ「賑わい度」のサブモードトグル）を追加。_setMapMode()でモード切り替えを一括管理。
 ※ 2026-03-05更新（フェーズ2 ①）: AreaExplorationView（エリア開拓率一覧画面）を追加。MapViewにエリアCircleオーバーレイ描画（_loadAreas/_buildAreaCircles）を追加。StoreDetailViewに秘境スポットバッジを追加（areaId == null の店舗）。
@@ -134,21 +137,20 @@
 - 構成: グレーアウトオーバーレイ（`Colors.black.withOpacity(0.6)`）＋操作対象を穴あきハイライト表示（`CustomPaint` + `Path.combine(PathOperation.difference)`）、白文字説明テキスト（太字・サブテキスト付き）、右上「スキップ」テキストボタン、ハイライト枠のパルスアニメーション
 - パラメータ: `targetKey`（GlobalKey）/ `targetRect`（Rect直接指定）/ `message`（説明テキスト）/ `subMessage`（補足テキスト）/ `onSkip`（スキップ時コールバック）/ `allowTapThrough`（ハイライト部分のタップ透過）/ `messagePosition`（テキスト位置: top/center/aboveTarget）/ `requiresAction`（ユーザー操作が必要か。falseなら「次へ」ボタン表示）/ `onNext`（次へボタンコールバック）/ `showConceptLayout`（コンセプト画面レイアウトを表示するか）
 - フルスクリーンモード: `requiresAction=false` かつターゲットなしの場合、画面全体を暗黒背景で覆い中央にメッセージ＋「次へ」ボタンを表示。`showConceptLayout=true` の場合は3アイコン説明レイアウト（マップで未発見の店を探す→NFCタッチで図鑑GET→コレクション達成）を表示
-- 説明: チュートリアル4ページ完了後に自動開始される6ステップのインタラクティブウォークスルー。各画面（MainNavigationView/MapView）のStackに配置。ウォークスルー開始セッション中（`_walkthroughStarted = true`）は「今日のレコメンド」ポップアップとバッジ獲得ポップアップを非表示にする（ウォークスルー完了済みユーザーは従来通り表示）
+- 説明: チュートリアル4ページ完了後に自動開始される5ステップのインタラクティブウォークスルー。各画面（MainNavigationView/MapView）のStackに配置。ウォークスルー開始セッション中（`_walkthroughStarted = true`）は「今日のレコメンド」ポップアップとバッジ獲得ポップアップを非表示にする（ウォークスルー完了済みユーザーは従来通り表示）
 
 ### WalkthroughProvider (`lib/providers/walkthrough_provider.dart`)
-- 説明: ウォークスルーの状態管理。`WalkthroughStep` enum（none/concept/tapMapTab/tapMarker/learnNfcTouch/tapZukanTab/tapProfileTab）、`WalkthroughState`（step/isActive/userId）、`WalkthroughNotifier`（startWalkthrough/nextStep/completeWalkthrough/skipWalkthrough/resetState）を提供。完了・スキップ時に Firestore `users/{uid}.walkthroughCompleted = true` を更新。`tapProfileTab` 完了時は `completeWalkthrough()` を呼び出してウォークスルーを終了
+- 説明: ウォークスルーの状態管理。`WalkthroughStep` enum（none/concept/tapMarker/learnNfcTouch/tapZukanTab/tapProfileTab）、`WalkthroughState`（step/isActive/userId）、`WalkthroughNotifier`（startWalkthrough/nextStep/completeWalkthrough/skipWalkthrough/resetState）を提供。完了・スキップ時に Firestore `users/{uid}.walkthroughCompleted = true` を更新。`tapProfileTab` 完了時は `completeWalkthrough()` を呼び出してウォークスルーを終了
 
-### ウォークスルーフロー（6ステップ）
+### ウォークスルーフロー（5ステップ）
 
 | # | ステップ | 形式 | テキスト | サブテキスト | ユーザー操作 |
 |---|---------|------|---------|------------|-----------|
 | 0 | concept | フルスクリーン（3アイコン） | 街を舞台にした探検ゲームへようこそ。 | ただし、実際に行かないと進まない。 | 「はじめる」ボタン |
-| 1 | tapMapTab | タブハイライト | マップを開いてみよう！ | グレーのマーカーが"まだ誰も発見していない"お店です | マップタブをタップ |
-| 2 | tapMarker | マップオーバーレイ | 気になるお店をタップしてみよう！ | ★の数がレア度。少ない発見者数ほどレアなお店です | 店舗マーカーをタップ |
-| 3 | learnNfcTouch | フルスクリーン | 実際のお店でNFCタッチしてみよう！ | レジ近くのスタンドにスマホをかざすと図鑑カードが発見できます。何のレア度が出るかはお楽しみ✦ | 「次へ」ボタン |
-| 4 | tapZukanTab | タブハイライト | 図鑑タブを開いてみよう！ | ？？？のシルエットは、まだ行っていないお店。コンプリートを目指そう！ | 図鑑タブをタップ |
-| 5 | tapProfileTab | タブハイライト | アカウントタブもチェック！ | バッジ・ランキング・毎月の探検レポートが見られます | アカウントタブをタップ → 完了 |
+| 1 | tapMarker | マップオーバーレイ | 気になるお店をタップしてみよう！ | ★の数がレア度。少ない発見者数ほどレアなお店です | 店舗マーカーをタップ |
+| 2 | learnNfcTouch | フルスクリーン | 実際のお店でNFCタッチしてみよう！ | レジ近くのスタンドにスマホをかざすと図鑑カードが発見できます。何のレア度が出るかはお楽しみ✦ | 「次へ」ボタン |
+| 3 | tapZukanTab | タブハイライト | 図鑑タブを開いてみよう！ | ？？？のシルエットは、まだ行っていないお店。コンプリートを目指そう！ | 図鑑タブをタップ |
+| 4 | tapProfileTab | タブハイライト | アカウントタブもチェック！ | バッジ・ランキング・毎月の探検レポートが見られます | アカウントタブをタップ → 完了 |
 
 ## ホーム・メインタブ
 
@@ -157,11 +159,11 @@
 - 説明: 主要情報と、ユーザーのスタンプ進捗に応じたおすすめ店舗レコメンドを集約したダッシュボード
 
 ### MapView (`lib/views/map/map_view.dart`)
-- 構成: GoogleMap（ダークブルー系ゲームスタイル・現在地ボタンはカスタム実装）、店舗マーカー、検索アイコンボタン（左上・折りたたみ式。ダーク背景＋シアンボーダー）＋フィルターボタン（右上・ダーク背景＋シアンボーダー）、**モードタブ（`CompactToggleBar`）**（検索バー直下・常時表示。「通常」/「個人」/「コミュニティ」の3択・`_mapMode` 文字列で状態管理）、コミュニティサブモードトグル（コミュニティ選択時のみ。「開拓率」/「賑わい度」の2択トグル）、**プレイヤー統計サークル**（右側固定・現在地/北向きボタン下に縦並び。発見数（青）/バッジ数（紫）/ランキング順位（黄）の3つの丸ボタン。各サークルタップで `showGameDialog` による説明＋現在値ポップアップを表示）、店舗情報パネル（ゲーム風）、コントロールボタン（ダーク背景＋シアンボーダー）
+- 構成: GoogleMap（ダークブルー系ゲームスタイル・現在地ボタンはカスタム実装）、店舗マーカー、検索アイコンボタン（左上・折りたたみ式。ダーク背景＋シアンボーダー）＋フィルターボタン（右上・ダーク背景＋シアンボーダー）、**モードタブ（`CompactToggleBar`）**（検索バー直下・常時表示。「通常」/「個人」/「コミュニティ」の3択・`_mapMode` 文字列で状態管理。選択したモードは `SharedPreferences`（`map_mode` キー）にローカル保存し、次回起動時に自動復元）、コミュニティサブモードトグル（コミュニティ選択時のみ。「開拓率」/「賑わい度」の2択トグル）、**プレイヤー統計サークル**（右側固定・現在地/北向きボタン下に縦並び。発見数（青）/バッジ数（紫）/ランキング順位（黄）の3つの丸ボタン。各サークルタップで `showGameDialog` による説明＋現在値ポップアップを表示）、店舗情報パネル（ゲーム風）、コントロールボタン（ダーク背景＋シアンボーダー）
 - **マップスタイル**: ダークブルー系ゲームスタイル（`#0d1b2a` ベース・水系 `#0a2030`・道路 `#1a3a52`・POI非表示・テキストはシアン系 `#8ec3b9`）。旧: POI非表示のみのデフォルトスタイル
 - 通常モード: 店舗のアイコン画像（またはカテゴリアイコン）を白丸ピンに表示。ピンアクセント色（ボーダー＋尾）が営業中=緑グラデーション（`#81C784`→`#43A047`→`#2E7D32`・`isGreenPin`）・営業時間外=グレーグラデーション（`#EEEEEE`→`#BDBDBD`→`#9E9E9E`・`isGrayPin`）で色分けされる。左上に凡例カード（緑丸=営業中・グレー丸=営業時間外）を小さく表示（`_mapMode == 'normal'`）
 - 個人モード: ピン中心に常に店舗アイコン画像（画像なし時はカテゴリアイコン・グレー）を表示。ピンアクセント色（ボーダー＋尾）を `users/{uid}/stores/{storeId}.totalVisits` に応じて5段階で変化（0件=グレーグラデーション `isGrayPin` / 1件=ライトブルー `#29B6F6` / 2〜4件=グリーン `#66BB6A` / 5〜9件=オレンジ `#FB8C00` / 10件〜=ゴールドグラデーション `#FFF9C4`→`#FFD700`→`#B8860B`）。モードトグルで「個人」選択時に切り替え（`_mapMode == 'personal'`）
-- コミュニティモード: サブモード「開拓率」ではエリアCircleオーバーレイ（`_areaCircles`）を表示。サブモード「賑わい度」では `stores.totalVisitCount` に応じた5段階Circleオーバーレイ（1〜10件=ライトブルー半径40m / 11〜30件=グリーン60m / 31〜100件=オレンジ80m / 101件〜=ゴールド100m）を表示（`_mapMode == 'community'`）
+- コミュニティモード: サブモード「開拓率」ではエリアCircleオーバーレイ（`_areaCircles`）を表示。サブモード「賑わい度」では `stores.totalVisitCount` に応じた5段階Circleオーバーレイ（0件=サークルなし（グレー凡例のみ表示） / 1〜10件=ライトブルー半径40m / 11〜30件=グリーン60m / 31〜100件=オレンジ80m / 101件〜=ゴールド100m）を表示。左上凡例カードも同じ5段階（グレー・水色・緑・オレンジ・ゴールド）で色説明を表示（`_mapMode == 'community'`）
 - 開拓状況表示: フィルター設定の「マップ表示設定 > 開拓状況表示」ONで、ピンのボーダー＋尾の色が開拓済み（スタンプ1以上）=青 `#2196F3`、未開拓=グレー `#BDBDBD` に切り替わる（`MapFilterModel.pioneerMode`）
 - ジャンル別表示: フィルター設定の「マップ表示設定 > ジャンル別表示」ONで、カテゴリアイコンでマーカーを表示（`MapFilterModel.categoryMode`）
 - 近接自動フォーカス: Geolocator位置ストリーム（5m移動ごと更新）で継続的に現在地を監視。店舗の半径50m以内に入ると自動でピンを拡大・店舗情報パネルを表示し、`HapticFeedback.mediumImpact()`で軽くバイブレーション。100m以上離れるとリセット（再来接近で再発火）。一度に1店舗のみフォーカス。
@@ -524,7 +526,7 @@ NFCチェックインフロー（Deep Link経由）
 
 その他の単独遷移・演出系
 ├─ チュートリアル（TutorialView）→ 新規登録後の `UserInfoView` 完了直後に自動表示（showTutorial=true のユーザーのみ、保険でホーム遷移時にも表示可能）
-├─ ウォークスルー（WalkthroughOverlay）→ チュートリアル完了後に自動開始（walkthroughCompleted=false のユーザーのみ・6ステップ: コンセプト→マップタブ→マーカータップ→NFCタッチ説明→図鑑タブ→アカウントタブ・ウォークスルー中はバッジ・レコメンドポップアップを非表示）
+├─ ウォークスルー（WalkthroughOverlay）→ チュートリアル完了後に自動開始（walkthroughCompleted=false のユーザーのみ・5ステップ: コンセプト→マーカータップ→NFCタッチ説明→図鑑タブ→アカウントタブ・ウォークスルー中はバッジ・レコメンドポップアップを非表示）
 ├─ バッジ獲得（BadgeAwardedView）→ ホーム画面に戻る（ウォークスルー中は表示しない）
 ├─ おすすめ店舗（DailyRecommendationView）→ その日初回ログイン時に自動表示（ウォークスルー中は表示しない）
 ├─ ポイント利用入力（PointUsageRequestView）
