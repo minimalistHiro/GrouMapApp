@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/posts_provider.dart';
 import '../../widgets/custom_button.dart';
@@ -44,9 +45,7 @@ class _PostsViewState extends ConsumerState<PostsView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(
-              color: Color(0xFFFF6B35),
-            ),
+            CustomLoadingIndicator(),
             SizedBox(height: 8),
             Text(
               '投稿を読み込み中...',
@@ -135,9 +134,7 @@ class _PostsViewState extends ConsumerState<PostsView> {
             child: Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
               child: Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFFFF6B35),
-                ),
+                child: CustomLoadingIndicator(),
               ),
             ),
           ),

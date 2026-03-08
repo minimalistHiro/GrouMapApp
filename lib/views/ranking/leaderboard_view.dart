@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/ranking_provider.dart';
@@ -37,7 +38,7 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           Expanded(
             child: rankingData.when(
               data: (rankings) => _buildRankingList(rankings),
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CustomLoadingIndicator()),
               error: (error, stack) => Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -63,7 +64,9 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
                     CustomButton(
                       text: '再試行',
                       onPressed: () {
-                        ref.read(rankingNotifierProvider.notifier).refresh(query);
+                        ref
+                            .read(rankingNotifierProvider.notifier)
+                            .refresh(query);
                       },
                     ),
                   ],
@@ -84,7 +87,8 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           // ランキングタイプ選択
           Row(
             children: [
-              const Text('ランキング:', style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('ランキング:',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(width: 16),
               Expanded(
                 child: SingleChildScrollView(
@@ -200,9 +204,10 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           children: [
             CircleAvatar(
               radius: 16,
-              backgroundImage: ranking.photoURL != null && ranking.photoURL!.isNotEmpty
-                  ? NetworkImage(ranking.photoURL!)
-                  : null,
+              backgroundImage:
+                  ranking.photoURL != null && ranking.photoURL!.isNotEmpty
+                      ? NetworkImage(ranking.photoURL!)
+                      : null,
               child: ranking.photoURL == null || ranking.photoURL!.isEmpty
                   ? const Icon(Icons.person, size: 16)
                   : null,
@@ -264,7 +269,8 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
               ),
             const SizedBox(height: 16),
             _buildDetailRow('順位:', '${ranking.rank}位'),
-            _buildDetailRow(_getRankingTypeLabel(_selectedType) + ':', _getRankingDisplayValue(ranking)),
+            _buildDetailRow(_getRankingTypeLabel(_selectedType) + ':',
+                _getRankingDisplayValue(ranking)),
             _buildDetailRow('最終更新:', _formatDate(ranking.lastUpdated)),
           ],
         ),

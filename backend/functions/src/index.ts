@@ -8,7 +8,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { defineSecret } from 'firebase-functions/params';
 import nodemailer from 'nodemailer';
 import https from 'https';
-import { createHash, randomInt } from 'crypto';
+import { createHash, randomInt, randomUUID } from 'crypto';
 import { issueQRToken, verifyQRToken } from './utils/jwt';
 
 // Firebase Admin SDK初期化
@@ -37,6 +37,7 @@ const RECOMMENDATION_IMPRESSIONS_COLLECTION = 'recommendation_impressions';
 const RECOMMENDATION_VISITS_COLLECTION = 'recommendation_visits';
 const MAX_STAMPS = 10;
 const NFC_TAGS_COLLECTION = 'nfc_tags';
+const CHECKIN_SESSIONS_COLLECTION = 'checkin_sessions';
 const INSTAGRAM_API_BASE = 'https://graph.facebook.com/v19.0';
 const DEFAULT_INSTAGRAM_SYNC_TIME = '09:00';
 const MIN_INSTAGRAM_SYNC_MINUTES = 9 * 60;
@@ -4091,6 +4092,84 @@ export const notifyCouponExpiryScheduled = onSchedule(
   },
 );
 
+// Haversine距離計算（メートル単位）
+function haversineDistance(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371000;
+  const φ1 = (a.lat * Math.PI) / 180;
+  const φ2 = (b.lat * Math.PI) / 180;
+  const Δφ = ((b.lat - a.lat) * Math.PI) / 180;
+  const Δλ = ((b.lng - a.lng) * Math.PI) / 180;
+  const x =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+// チェックインセッション作成（NFCタグ検証 + 10分有効の使い捨てトークン発行）
+export const createCheckinSession = onCall(
+  {
+    region: 'asia-northeast1',
+    enforceAppCheck: false,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError('unauthenticated', 'User must be authenticated');
+    }
+
+    const userId = request.auth.uid;
+    const { storeId, tagSecret } = request.data || {};
+    if (!storeId || !tagSecret) {
+      throw new HttpsError('invalid-argument', 'Missing required parameters: storeId and tagSecret');
+    }
+
+    // NFCタグの検証
+    const tagQuery = await db
+      .collection(NFC_TAGS_COLLECTION)
+      .where('storeId', '==', storeId)
+      .where('tagSecret', '==', tagSecret)
+      .limit(1)
+      .get();
+
+    if (tagQuery.empty) {
+      throw new HttpsError('not-found', 'Invalid NFC tag');
+    }
+
+    const tagData = tagQuery.docs[0].data();
+    if (tagData['isActive'] !== true) {
+      throw new HttpsError('failed-precondition', 'NFC tag is deactivated');
+    }
+
+    // 店舗の有効性チェック
+    const storeSnap = await db.collection('stores').doc(storeId).get();
+    if (!storeSnap.exists) {
+      throw new HttpsError('not-found', 'Store not found');
+    }
+    const storeData = storeSnap.data() as Record<string, unknown>;
+    if (storeData['isActive'] !== true || storeData['isApproved'] !== true) {
+      throw new HttpsError('failed-precondition', 'Store is not active or not approved');
+    }
+
+    // セッションドキュメントを作成（10分間有効）
+    const sessionToken = randomUUID();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await db.collection(CHECKIN_SESSIONS_COLLECTION).doc(sessionToken).set({
+      userId,
+      storeId,
+      expiresAt: Timestamp.fromDate(expiresAt),
+      used: false,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    console.log(`[createCheckinSession] session created: user=${userId}, store=${storeId}, token=${sessionToken}`);
+
+    return { sessionToken };
+  },
+);
+
 // NFCチェックイン（ユーザーアプリ用・完全自動スタンプ付与）
 export const nfcCheckin = onCall(
   {
@@ -4103,31 +4182,38 @@ export const nfcCheckin = onCall(
     }
 
     const userId = request.auth.uid;
-    const { storeId, tagSecret, selectedUserCouponIds: rawSelectedUserCouponIds } = request.data || {};
-    if (!storeId || !tagSecret) {
-      throw new HttpsError('invalid-argument', 'Missing required parameters: storeId and tagSecret');
+    const { sessionToken, userLat, userLng, selectedUserCouponIds: rawSelectedUserCouponIds } = request.data || {};
+    if (!sessionToken) {
+      throw new HttpsError('invalid-argument', 'Missing required parameter: sessionToken');
+    }
+    if (typeof userLat !== 'number' || typeof userLng !== 'number') {
+      throw new HttpsError('invalid-argument', 'Missing required parameters: userLat and userLng');
     }
     const selectedUserCouponIds: string[] = Array.isArray(rawSelectedUserCouponIds)
       ? rawSelectedUserCouponIds.filter((id: unknown) => typeof id === 'string' && (id as string).trim().length > 0)
       : [];
 
-    // 1. NFCタグの検証
-    const tagQuery = await db
-      .collection(NFC_TAGS_COLLECTION)
-      .where('storeId', '==', storeId)
-      .where('tagSecret', '==', tagSecret)
-      .limit(1)
-      .get();
-
-    if (tagQuery.empty) {
-      throw new HttpsError('not-found', 'Invalid NFC tag');
+    // 1. セッショントークンの検証
+    const sessionRef = db.collection(CHECKIN_SESSIONS_COLLECTION).doc(sessionToken);
+    const sessionSnap = await sessionRef.get();
+    if (!sessionSnap.exists) {
+      throw new HttpsError('not-found', 'Invalid or expired session');
     }
-
-    const tagDoc = tagQuery.docs[0];
-    const tagData = tagDoc.data();
-    if (tagData['isActive'] !== true) {
-      throw new HttpsError('failed-precondition', 'NFC tag is deactivated');
+    const sessionData = sessionSnap.data()!;
+    if (sessionData['used'] === true) {
+      throw new HttpsError('already-exists', 'Session already used');
     }
+    if (sessionData['userId'] !== userId) {
+      throw new HttpsError('permission-denied', 'Session user mismatch');
+    }
+    const sessionExpiresAt = (sessionData['expiresAt'] as Timestamp).toDate();
+    if (sessionExpiresAt < new Date()) {
+      throw new HttpsError('deadline-exceeded', 'Session has expired');
+    }
+    const storeId = sessionData['storeId'] as string;
+
+    // セッションを使用済みにマーク（再利用防止）
+    await sessionRef.update({ used: true });
 
     // 2. 店舗の有効性チェック
     const storeRef = db.collection('stores').doc(storeId);
@@ -4140,6 +4226,20 @@ export const nfcCheckin = onCall(
       throw new HttpsError('failed-precondition', 'Store is not active or not approved');
     }
     const storeName = (storeData['name'] ?? '').toString();
+
+    // 3. 位置情報チェック（店舗から200m以内か検証）
+    const storeLocation = storeData['location'] as { latitude?: number; longitude?: number } | undefined;
+    if (!storeLocation || typeof storeLocation.latitude !== 'number' || typeof storeLocation.longitude !== 'number') {
+      throw new HttpsError('failed-precondition', 'Store location is not configured');
+    }
+    const distanceMeters = haversineDistance(
+      { lat: userLat, lng: userLng },
+      { lat: storeLocation.latitude, lng: storeLocation.longitude },
+    );
+    console.log(`[nfcCheckin] distance check: user=(${userLat},${userLng}), store=(${storeLocation.latitude},${storeLocation.longitude}), distance=${Math.round(distanceMeters)}m`);
+    if (distanceMeters > 200) {
+      throw new HttpsError('permission-denied', `Too far from store: ${Math.round(distanceMeters)}m`);
+    }
 
     // 3. トランザクション内でスタンプ処理
     const targetUserRef = db.collection(USERS_COLLECTION).doc(userId);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/monthly_report_model.dart';
@@ -8,7 +9,8 @@ import '../../utils/share_text_generator.dart';
 class MonthlyReportView extends ConsumerWidget {
   final String yearMonth;
 
-  const MonthlyReportView({Key? key, required this.yearMonth}) : super(key: key);
+  const MonthlyReportView({Key? key, required this.yearMonth})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,7 +27,9 @@ class MonthlyReportView extends ConsumerWidget {
         elevation: 0,
         title: Text(title,
             style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87)),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black87),
         actions: [
@@ -70,7 +74,7 @@ class MonthlyReportView extends ConsumerWidget {
           }
           return _ReportBody(report: report, yearMonth: yearMonth);
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CustomLoadingIndicator()),
         error: (e, _) => Center(child: Text('エラーが発生しました: $e')),
       ),
     );
@@ -79,12 +83,6 @@ class MonthlyReportView extends ConsumerWidget {
   void _copyToClipboard(BuildContext context, MonthlyReportModel report) {
     final text = ShareTextGenerator.generateMonthlyReport(report);
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('コピーしました！SNSに貼り付けてシェアしよう'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 }
 
@@ -126,11 +124,13 @@ class _ReportBody extends StatelessWidget {
                         ),
                       ),
                       const Text('店舗を発見',
-                          style: TextStyle(fontSize: 16, color: Colors.black54)),
+                          style:
+                              TextStyle(fontSize: 16, color: Colors.black54)),
                       const SizedBox(height: 4),
                       Text(
                         '累計 ${report.totalDiscoveredCount} 店舗を発見',
-                        style: const TextStyle(fontSize: 13, color: Colors.black45),
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.black45),
                       ),
                     ],
                   ),
@@ -158,12 +158,13 @@ class _ReportBody extends StatelessWidget {
                     runSpacing: 4,
                     children: report.visitedAreas
                         .map((a) => Chip(
-                              label: Text(a,
-                                  style: const TextStyle(fontSize: 12)),
+                              label:
+                                  Text(a, style: const TextStyle(fontSize: 12)),
                               backgroundColor:
                                   const Color(0xFFFF6B35).withOpacity(0.12),
                               side: BorderSide.none,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
                               materialTapTargetSize:
                                   MaterialTapTargetSize.shrinkWrap,
                             ))
@@ -301,12 +302,6 @@ class _ReportBody extends StatelessWidget {
                     final text =
                         ShareTextGenerator.generateMonthlyReport(report);
                     Clipboard.setData(ClipboardData(text: text));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('コピーしました！SNSに貼り付けてシェアしよう'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
                   },
                   icon: const Icon(Icons.copy, size: 16),
                   label: const Text('コピーしてシェア'),
@@ -412,8 +407,7 @@ class _RecommendedStoreCard extends StatelessWidget {
             store.storeName,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style:
-                const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 2),
           Text(store.category,
@@ -441,7 +435,9 @@ class MonthlyReportListView extends ConsumerWidget {
         elevation: 0,
         title: const Text('過去のレポート',
             style: TextStyle(
-                fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87)),
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
@@ -493,7 +489,8 @@ class MonthlyReportListView extends ConsumerWidget {
                 title: Text('$year年${month}月の探検レポート',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(ym,
-                    style: const TextStyle(fontSize: 12, color: Colors.black45)),
+                    style:
+                        const TextStyle(fontSize: 12, color: Colors.black45)),
                 trailing: const Icon(Icons.chevron_right, color: Colors.grey),
                 onTap: () => Navigator.push(
                   context,
@@ -504,7 +501,7 @@ class MonthlyReportListView extends ConsumerWidget {
             },
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CustomLoadingIndicator()),
         error: (e, _) => Center(child: Text('エラーが発生しました: $e')),
       ),
     );

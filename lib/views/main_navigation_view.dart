@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -16,9 +17,11 @@ import 'stamps/daily_recommendation_view.dart';
 import 'stamps/badge_awarded_view.dart';
 import 'tutorial/tutorial_view.dart';
 import '../providers/walkthrough_provider.dart';
+import '../widgets/error_dialog.dart';
 import 'walkthrough/walkthrough_overlay.dart';
 import 'walkthrough/walkthrough_step_config.dart';
 import '../services/deep_link_service.dart';
+import '../services/nfc_checkin_service.dart';
 import '../theme/app_ui.dart';
 import 'checkin/nfc_coupon_select_view.dart';
 import 'report/monthly_report_view.dart';
@@ -220,8 +223,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       // 月次レポートDeepLinkを先に判定
-      final reportLink =
-          await _deepLinkService.getInitialMonthlyReportLink();
+      final reportLink = await _deepLinkService.getInitialMonthlyReportLink();
       if (reportLink != null) {
         _handleMonthlyReportDeepLink(reportLink);
         return;
@@ -281,11 +283,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('チェックインにはログインが必要です'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorDialog.showNotice(
+          context,
+          title: 'ログインが必要です',
+          message: 'チェックインするにはログインしてください。',
         );
         return;
       }
@@ -296,13 +297,34 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       _lastHandledCheckinKey = checkinKey;
       _lastHandledAt = now;
 
+      // NFCタグを検証してセッショントークンを発行
+      String sessionToken;
+      try {
+        final session = await NfcCheckinService().createCheckinSession(
+          storeId: link.storeId,
+          tagSecret: link.tagSecret,
+        );
+        sessionToken = session.sessionToken;
+      } on Exception catch (e) {
+        if (_activeCheckinKey == checkinKey) _activeCheckinKey = null;
+        if (!mounted) return;
+        debugPrint('createCheckinSession error: $e');
+        final msg = e.toString().contains('not-found') || e.toString().contains('failed-precondition')
+            ? '無効なNFCタグです。タグが正しく登録されているか確認してください。'
+            : 'チェックインの準備に失敗しました。時間をおいて再度お試しください。';
+        ErrorDialog.showError(context, title: 'チェックインできません', message: msg);
+        return;
+      }
+
+      if (!mounted) return;
+
       // クーポン選択画面へ遷移（チェックイン処理はこの画面内で実行される）
       Navigator.of(context)
           .push(
         MaterialPageRoute(
           builder: (_) => NfcCouponSelectView(
             storeId: link.storeId,
-            tagSecret: link.tagSecret,
+            sessionToken: sessionToken,
           ),
         ),
       )
@@ -317,11 +339,10 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         _activeCheckinKey = null;
       }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('チェックインの準備に失敗しました'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showError(
+        context,
+        title: 'チェックインできません',
+        message: 'チェックインの準備に失敗しました。時間をおいて再度お試しください。',
       );
       debugPrint('NFC checkin deep link error: $e');
     } finally {
@@ -1181,9 +1202,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         final bottomIndex = bottomTabs.isEmpty
             ? 0
             : _visualIndexForBottomTabIndex(
-                bottomTabs
-                    .indexOf(currentTab)
-                    .clamp(0, bottomTabs.length - 1),
+                bottomTabs.indexOf(currentTab).clamp(0, bottomTabs.length - 1),
                 placeholderIndex,
               );
 
@@ -1200,7 +1219,7 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
         );
       },
       loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(child: CustomLoadingIndicator()),
       ),
       error: (error, _) => Scaffold(
         body: Center(child: Text('エラー: $error')),
@@ -1218,19 +1237,17 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
     final walkthroughState = ref.watch(walkthroughProvider);
 
     final scaffold = Scaffold(
-      body: pages[pageIndex.clamp(0, pages.length - 1)],
-      bottomNavigationBar: BottomNavigationBar(
-        key: _bottomNavKey,
-        type: BottomNavigationBarType.fixed,
-        currentIndex: bottomIndex,
-        onTap: (index) => _onBottomTabChanged(index, tabs),
-        selectedItemColor: const Color(0xFFFF6B35),
-        unselectedItemColor: Colors.grey,
-        selectedLabelStyle: const TextStyle(fontSize: 10),
-        unselectedLabelStyle: const TextStyle(fontSize: 10),
-        backgroundColor: Colors.white,
-        elevation: 8,
-        items: items,
+      extendBody: true,
+      body: Stack(
+        children: [
+          pages[pageIndex.clamp(0, pages.length - 1)],
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _buildFloatingNavBar(bottomIndex, items, tabs),
+          ),
+        ],
       ),
     );
 
@@ -1325,6 +1342,87 @@ class _MainNavigationViewState extends ConsumerState<MainNavigationView> {
       showConceptLayout: isConcept,
       onNext: () => ref.read(walkthroughProvider.notifier).nextStep(),
       onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+    );
+  }
+
+  Widget _buildFloatingNavBar(
+    int currentIndex,
+    List<BottomNavigationBarItem> items,
+    List<_MainTab> tabs,
+  ) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1A14),
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.45),
+              blurRadius: 24,
+              offset: const Offset(0, 8),
+            ),
+            BoxShadow(
+              color: AppUi.primary.withValues(alpha: 0.18),
+              blurRadius: 20,
+              spreadRadius: 1,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          key: _bottomNavKey,
+          children: items.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            final isSelected = currentIndex == index;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => _onBottomTabChanged(index, tabs),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppUi.primary.withValues(alpha: 0.18)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconTheme(
+                        data: IconThemeData(
+                          color: isSelected
+                              ? AppUi.primary
+                              : const Color(0xFF9E8B7D),
+                          size: 24,
+                        ),
+                        child: item.icon,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        item.label ?? '',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isSelected
+                              ? AppUi.primary
+                              : const Color(0xFF9E8B7D),
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
     );
   }
 

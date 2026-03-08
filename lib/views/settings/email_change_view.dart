@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../widgets/error_dialog.dart';
 import 'email_change_otp_view.dart';
 
 class EmailChangeView extends ConsumerStatefulWidget {
@@ -49,18 +50,18 @@ class _EmailChangeViewState extends ConsumerState<EmailChangeView> {
     final authService = ref.read(authServiceProvider);
     final user = authService.currentUser;
     if (user == null) {
-      _showSnackBar('ログイン情報を確認できません');
+      _showErrorDialog('ログイン情報を確認できません。');
       return;
     }
 
     if (!_canChangeEmail(user)) {
-      _showSnackBar('このアカウントではメールアドレス変更ができません');
+      _showErrorDialog('このアカウントではメールアドレスを変更できません。');
       return;
     }
 
     final email = user.email;
     if (email == null || email.isEmpty) {
-      _showSnackBar('現在のメールアドレスを確認できません');
+      _showErrorDialog('現在のメールアドレスを確認できません。');
       return;
     }
 
@@ -99,18 +100,19 @@ class _EmailChangeViewState extends ConsumerState<EmailChangeView> {
       } else if (e.code == 'requires-recent-login') {
         message = '再ログインが必要です。ログアウト後にもう一度お試しください';
       }
-      _showSnackBar(message);
+      _showErrorDialog(message);
     } catch (e) {
       if (!mounted) return;
       final errorMsg = e.toString();
       if (errorMsg.contains('already-exists') || errorMsg.contains('email-already-in-use')) {
-        _showSnackBar('このメールアドレスは既に使用されています');
+        _showErrorDialog('このメールアドレスは既に使用されています。');
       } else if (errorMsg.contains('resource-exhausted')) {
-        _showSnackBar('認証コードは1分以内に再送信できません');
+        _showErrorDialog('認証コードは1分以内に再送信できません。');
       } else if (errorMsg.contains('invalid-argument')) {
-        _showSnackBar('有効なメールアドレスを入力してください');
+        _showErrorDialog('有効なメールアドレスを入力してください。');
       } else {
-        _showSnackBar('メールアドレスの変更に失敗しました: $e');
+        debugPrint('メールアドレス変更エラー: $e');
+        _showErrorDialog('メールアドレスの変更に失敗しました。時間をおいて再度お試しください。');
       }
     } finally {
       if (mounted) {
@@ -119,12 +121,11 @@ class _EmailChangeViewState extends ConsumerState<EmailChangeView> {
     }
   }
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+  void _showErrorDialog(String message) {
+    ErrorDialog.showError(
+      context,
+      title: 'メールアドレス変更エラー',
+      message: message,
     );
   }
 

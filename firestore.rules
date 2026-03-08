@@ -387,6 +387,12 @@ service cloud.firestore {
       // 書き込みはCloud Functions（registerNfcTag / nfcCheckin）のみ
       allow write: if false;
     }
+
+    // チェックインセッション（使い捨てトークン）
+    match /checkin_sessions/{sessionId} {
+      // クライアントからの直接読み書き禁止（Cloud Functions のみ操作）
+      allow read, write: if false;
+    }
     
     // バッジマスタ（アプリ内蔵に移行済み。既存データ参照用にreadのみ残す）
     match /badges/{badgeId} {

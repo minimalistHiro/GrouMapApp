@@ -7,6 +7,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/owner_settings_provider.dart';
+import '../../widgets/error_dialog.dart';
 import '../main_navigation_view.dart';
 import '../tutorial/tutorial_view.dart';
 
@@ -372,11 +373,9 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
       setState(() {
         _showBirthDateError = true;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('生年月日を選択してください'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showWarning(
+        context,
+        message: '生年月日を選択してください。',
       );
       return;
     }
@@ -390,11 +389,10 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
         final currentUser = authService.currentUser;
         final isGoogleUser = _isGoogleUser();
         if (currentUser == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('先にログインしてください'),
-              backgroundColor: Colors.red,
-            ),
+          ErrorDialog.showNotice(
+            context,
+            title: 'ログインが必要です',
+            message: '先にログインしてください。',
           );
           if (mounted) {
             setState(() {
@@ -450,11 +448,11 @@ class _UserInfoViewState extends ConsumerState<UserInfoView> {
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ユーザー情報の保存に失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
+        debugPrint('ユーザー情報保存エラー: $e');
+        ErrorDialog.showError(
+          context,
+          title: '保存に失敗しました',
+          message: 'ユーザー情報の保存に失敗しました。時間をおいて再度お試しください。',
         );
         setState(() {
           _isSubmitting = false;

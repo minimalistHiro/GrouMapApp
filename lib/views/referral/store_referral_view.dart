@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -51,7 +52,7 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
         elevation: 0,
       ),
       body: const Center(
-        child: CircularProgressIndicator(),
+        child: CustomLoadingIndicator(),
       ),
     );
   }
@@ -115,7 +116,8 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
     );
   }
 
-  Widget _buildStoreReferralContent(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildStoreReferralContent(
+      BuildContext context, WidgetRef ref, String userId) {
     return Scaffold(
       backgroundColor: const Color(0xFFFBF6F2),
       appBar: CommonHeader(
@@ -129,19 +131,19 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
           children: [
             // ヘッダーセクション
             _buildHeaderSection(),
-            
+
             const SizedBox(height: 24),
-            
+
             // 店舗紹介コードセクション
             _buildStoreReferralCodeSection(context, ref, userId),
-            
+
             const SizedBox(height: 24),
-            
+
             // 紹介方法セクション
             _buildReferralStepsSection(),
-            
+
             const SizedBox(height: 24),
-            
+
             // 注意事項セクション
             _buildNoticeSection(),
           ],
@@ -203,121 +205,124 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
     );
   }
 
-  Widget _buildStoreReferralCodeSection(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildStoreReferralCodeSection(
+      BuildContext context, WidgetRef ref, String userId) {
     return ref.watch(userDataProvider(userId)).when(
-      data: (userData) {
-        final storeReferralCode = userData?['storeReferralCode'] ?? 'コードなし';
-        final storeReferralCount = userData?['storeReferralCount'] ?? 0;
-        final storeReferralEarnings = userData?['storeReferralEarnings'] ?? 0;
+          data: (userData) {
+            final storeReferralCode = userData?['storeReferralCode'] ?? 'コードなし';
+            final storeReferralCount = userData?['storeReferralCount'] ?? 0;
+            final storeReferralEarnings =
+                userData?['storeReferralEarnings'] ?? 0;
 
-        return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                spreadRadius: 1,
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'あなたの店舗紹介コード',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              
-              // 紹介コード表示
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFF6B35).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFFFF6B35).withOpacity(0.3),
-                    width: 2,
-                  ),
-                ),
-                child: Column(
-                  children: [
-                    const Text(
-                      '店舗紹介コード',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      storeReferralCode,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFFF6B35),
-                        letterSpacing: 2,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      onPressed: () => _copyToClipboard(context, storeReferralCode),
-                      icon: const Icon(Icons.copy, size: 18),
-                      label: const Text('コピー'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFFF6B35),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 24),
-              
-              // 統計情報
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildStatItem(
-                      icon: Icons.store,
-                      label: '紹介した店舗',
-                      value: '$storeReferralCount店舗',
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildStatItem(
-                      icon: Icons.monetization_on,
-                      label: '獲得ポイント',
-                      value: '${storeReferralEarnings}pt',
-                      color: Colors.green,
-                    ),
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
-            ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'あなたの店舗紹介コード',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 紹介コード表示
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFF6B35).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFFF6B35).withOpacity(0.3),
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          '店舗紹介コード',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          storeReferralCode,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF6B35),
+                            letterSpacing: 2,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          onPressed: () =>
+                              _copyToClipboard(context, storeReferralCode),
+                          icon: const Icon(Icons.copy, size: 18),
+                          label: const Text('コピー'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFF6B35),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // 統計情報
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatItem(
+                          icon: Icons.store,
+                          label: '紹介した店舗',
+                          value: '$storeReferralCount店舗',
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildStatItem(
+                          icon: Icons.monetization_on,
+                          label: '獲得ポイント',
+                          value: '${storeReferralEarnings}pt',
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const Center(
+            child: CustomLoadingIndicator(),
           ),
+          error: (error, stack) => Text('エラー: $error'),
         );
-      },
-      loading: () => const Center(
-        child: CircularProgressIndicator(),
-      ),
-      error: (error, stack) => Text('エラー: $error'),
-    );
   }
 
   Widget _buildStatItem({
@@ -391,25 +396,20 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
             ),
           ),
           const SizedBox(height: 16),
-          
           _buildStepItem(
             stepNumber: 1,
             title: '店舗紹介コードをコピー',
             description: '上記の店舗紹介コードをコピーして、紹介したい店舗に送信します。',
             icon: Icons.copy,
           ),
-          
           const SizedBox(height: 16),
-          
           _buildStepItem(
             stepNumber: 2,
             title: '店舗にコードを送信',
             description: 'メール、SNS、または直接連絡して店舗紹介コードを共有します。',
             icon: Icons.send,
           ),
-          
           const SizedBox(height: 16),
-          
           _buildStepItem(
             stepNumber: 3,
             title: '店舗が登録',
@@ -449,9 +449,9 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
             ),
           ),
         ),
-        
+
         const SizedBox(width: 16),
-        
+
         // アイコン
         Container(
           padding: const EdgeInsets.all(8),
@@ -465,9 +465,9 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
             size: 20,
           ),
         ),
-        
+
         const SizedBox(width: 12),
-        
+
         // テキスト
         Expanded(
           child: Column(
@@ -546,17 +546,12 @@ class _StoreReferralViewState extends ConsumerState<StoreReferralView> {
 
   void _copyToClipboard(BuildContext context, String text) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('店舗紹介コードをコピーしました'),
-        backgroundColor: Colors.green,
-      ),
-    );
   }
 }
 
 // ユーザーデータプロバイダー（usersコレクションから直接取得）
-final userDataProvider = StreamProvider.autoDispose.family<Map<String, dynamic>?, String>((ref, userId) {
+final userDataProvider = StreamProvider.autoDispose
+    .family<Map<String, dynamic>?, String>((ref, userId) {
   try {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null || currentUser.uid != userId) {

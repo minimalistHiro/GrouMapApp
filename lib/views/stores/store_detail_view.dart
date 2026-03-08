@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -19,6 +20,7 @@ import '../../constants/payment_methods_constants.dart';
 import '../../widgets/pill_tab_bar.dart';
 import '../../services/mission_service.dart';
 import '../../providers/badge_provider.dart';
+import '../../widgets/error_dialog.dart';
 
 class StoreDetailView extends ConsumerStatefulWidget {
   final Map<String, dynamic> store;
@@ -258,11 +260,10 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     } catch (e) {
       print('フォロー更新エラー: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('フォローの更新に失敗しました: $e'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showError(
+        context,
+        title: '更新に失敗しました',
+        message: 'フォロー状態を更新できませんでした。時間をおいて再度お試しください。',
       );
     } finally {
       if (!mounted) return;
@@ -344,11 +345,10 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     } catch (e) {
       print('お気に入り更新エラー: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('お気に入りの更新に失敗しました: $e'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showError(
+        context,
+        title: '更新に失敗しました',
+        message: 'お気に入り状態を更新できませんでした。時間をおいて再度お試しください。',
       );
     } finally {
       if (!mounted) return;
@@ -400,11 +400,10 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       }
     } catch (e) {
       print('スタンプ数の更新に失敗しました: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('スタンプの更新に失敗しました: $e'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showError(
+        context,
+        title: '更新に失敗しました',
+        message: 'スタンプの更新に失敗しました。時間をおいて再度お試しください。',
       );
     }
   }
@@ -524,7 +523,6 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStampCard(),
           _buildStoreCouponsSection(),
           _buildStorePostsSection(),
           _buildStoreDetailsContent(),
@@ -583,7 +581,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CustomLoadingIndicator());
         }
         if (snapshot.hasError) {
           return const Center(
@@ -829,13 +827,10 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               height: 200,
               color: const Color(0xFFFF6B35),
               child: Center(
-                child: CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
-                  color: Colors.white,
-                  strokeWidth: 2,
+                child: CustomLoadingIndicator.inline(
+                  size: 40,
+                  padding: 6,
+                  primaryColor: Colors.white,
                 ),
               ),
             );
@@ -994,20 +989,17 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               const SizedBox(width: 8),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: _getCategoryColor(category).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _getCategoryColor(category).withOpacity(0.3),
-                  ),
+                  color: _getCategoryColor(category),
+                  borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
                   category,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _getCategoryColor(category),
-                    fontWeight: FontWeight.w500,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -1015,20 +1007,17 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 const SizedBox(width: 8),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    color: _getCategoryColor(category).withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: _getCategoryColor(category).withOpacity(0.2),
-                    ),
+                    color: _getCategoryColor(category).withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     subCategory,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: _getCategoryColor(category),
-                      fontWeight: FontWeight.w500,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -1040,25 +1029,23 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               widget.store['areaId'] == '') ...[
             const SizedBox(height: 8),
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFFFF5722).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: const Color(0xFFFF5722).withOpacity(0.4),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
                 ),
+                borderRadius: BorderRadius.circular(999),
               ),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.explore, size: 14, color: Color(0xFFFF5722)),
-                  SizedBox(width: 4),
+                  Icon(Icons.explore, size: 14, color: Colors.white),
+                  SizedBox(width: 6),
                   Text(
                     '秘境スポット',
                     style: TextStyle(
                       fontSize: 12,
-                      color: Color(0xFFFF5722),
+                      color: Colors.white,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1130,18 +1117,17 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
     final statusInfo = _getBusinessStatus(businessHours);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: statusInfo.color.withOpacity(0.15),
+        color: statusInfo.color,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: statusInfo.color.withOpacity(0.4)),
       ),
       child: Text(
         statusInfo.label,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: statusInfo.color,
+          color: Colors.white,
         ),
       ),
     );
@@ -1239,9 +1225,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(
-                      color: Color(0xFFFF6B35),
-                    ),
+                    CustomLoadingIndicator(),
                     SizedBox(height: 8),
                     Text(
                       'クーポンを読み込み中...',
@@ -1395,9 +1379,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(
-                      color: Color(0xFFFF6B35),
-                    ),
+                    CustomLoadingIndicator(),
                     SizedBox(height: 8),
                     Text(
                       '投稿を読み込み中...',
@@ -1494,9 +1476,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(
-              color: Color(0xFFFF6B35),
-            ),
+            CustomLoadingIndicator(),
             SizedBox(height: 8),
             Text(
               '投稿を読み込み中...',
@@ -1542,7 +1522,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CustomLoadingIndicator());
         }
 
         final allItems = (snapshot.data?.docs ?? [])
@@ -1640,8 +1620,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                                 (item['optionGroupIds'] as List<dynamic>?)
                                         ?.cast<String>() ??
                                     [];
-                            final overridesMap = (item[
-                                        'optionPriceOverrides']
+                            final overridesMap = (item['optionPriceOverrides']
                                     as Map<String, dynamic>?) ??
                                 {};
                             final optionTexts = <String>[];
@@ -1649,9 +1628,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                               final group = _menuOptionGroupsCache[gid];
                               if (group != null) {
                                 final overrideList =
-                                    (overridesMap[gid]
-                                            as List<dynamic>?) ??
-                                        [];
+                                    (overridesMap[gid] as List<dynamic>?) ?? [];
                                 final defaultOpts =
                                     (group['options'] as List<dynamic>?) ?? [];
                                 final choicesText = defaultOpts.map((opt) {
@@ -1668,8 +1645,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                                   }
                                   return name;
                                 }).join('/');
-                                optionTexts.add(
-                                    '${group['name']}: $choicesText');
+                                optionTexts
+                                    .add('${group['name']}: $choicesText');
                               }
                             }
 
@@ -1704,8 +1681,7 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
                                       children: [
                                         Text(
                                           item['name'] ?? 'メニュー名なし',
-                                          style:
-                                              const TextStyle(fontSize: 16),
+                                          style: const TextStyle(fontSize: 16),
                                         ),
                                         if (description.isNotEmpty) ...[
                                           const SizedBox(height: 2),
@@ -1794,17 +1770,11 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: (widget.store['tags'] as List)
-                  .map<Widget>((tag) => Chip(
-                        label: Text(tag.toString()),
-                        backgroundColor:
-                            const Color(0xFFFF6B35).withOpacity(0.1),
-                        labelStyle: const TextStyle(fontSize: 12),
-                      ))
-                  .toList(),
+            Text(
+              (widget.store['tags'] as List)
+                  .map((tag) => tag.toString())
+                  .join('、'),
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
             ),
             const SizedBox(height: 16),
           ],
@@ -2026,16 +1996,36 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
     required String label,
     required bool isActive,
   }) {
-    final color = isActive ? const Color(0xFFFF6B35) : Colors.grey;
-    return Chip(
-      avatar: Icon(icon, size: 16, color: color),
-      label: Text(label),
-      backgroundColor: color.withOpacity(0.1),
-      labelStyle: TextStyle(
-        fontSize: 12,
-        color: isActive ? Colors.black87 : Colors.grey,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        gradient: isActive
+            ? const LinearGradient(
+                colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
+              )
+            : null,
+        color: isActive ? null : Colors.grey.shade300,
+        borderRadius: BorderRadius.circular(999),
       ),
-      side: BorderSide(color: color.withOpacity(0.3)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: isActive ? Colors.white : Colors.grey.shade600,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isActive ? Colors.white : Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2115,16 +2105,9 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
             ],
           ),
           const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: enabledItems
-                .map((item) => Chip(
-                      label: Text(item.displayName),
-                      backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
-                      labelStyle: const TextStyle(fontSize: 12),
-                    ))
-                .toList(),
+          Text(
+            enabledItems.map((item) => item.displayName).join('、'),
+            style: const TextStyle(fontSize: 14, color: Colors.black87),
           ),
         ],
       ),
@@ -2322,13 +2305,10 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
           return Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded /
-                      loadingProgress.expectedTotalBytes!
-                  : null,
-              color: categoryColor,
-              strokeWidth: 2,
+            child: CustomLoadingIndicator.inline(
+              size: 28,
+              padding: 4,
+              primaryColor: categoryColor,
             ),
           );
         },
@@ -2872,18 +2852,17 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: statusInfo.color.withOpacity(0.15),
+                color: statusInfo.color,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: statusInfo.color.withOpacity(0.4)),
               ),
               child: Text(
                 statusInfo.label,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: statusInfo.color,
+                  color: Colors.white,
                 ),
               ),
             ),
@@ -3016,7 +2995,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       if (p is! Map) continue;
       final openTime = (p['open'] ?? '').toString();
       final closeTime = (p['close'] ?? '').toString();
-      final result = _evaluateTimeRange(openTime, closeTime, now, prefix: prefix);
+      final result =
+          _evaluateTimeRange(openTime, closeTime, now, prefix: prefix);
       if (result.label.contains('営業中') || result.label.contains('営業終了')) {
         return result;
       }
@@ -3026,7 +3006,8 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
       if (p is! Map) continue;
       final openTime = (p['open'] ?? '').toString();
       final closeTime = (p['close'] ?? '').toString();
-      final result = _evaluateTimeRange(openTime, closeTime, now, prefix: prefix);
+      final result =
+          _evaluateTimeRange(openTime, closeTime, now, prefix: prefix);
       if (result.label.contains('営業開始')) {
         return result;
       }
@@ -3058,28 +3039,32 @@ class _StoreDetailViewState extends ConsumerState<StoreDetailView>
 
     if (website.isNotEmpty) {
       icons.add(_buildSocialIcon(
-        icon: const FaIcon(FontAwesomeIcons.globe, color: Colors.white, size: 22),
+        icon:
+            const FaIcon(FontAwesomeIcons.globe, color: Colors.white, size: 22),
         backgroundColor: const Color(0xFF607D8B),
         url: website,
       ));
     }
     if (x.isNotEmpty) {
       icons.add(_buildSocialIcon(
-        icon: const FaIcon(FontAwesomeIcons.xTwitter, color: Colors.white, size: 22),
+        icon: const FaIcon(FontAwesomeIcons.xTwitter,
+            color: Colors.white, size: 22),
         backgroundColor: Colors.black,
         url: x,
       ));
     }
     if (instagram.isNotEmpty) {
       icons.add(_buildSocialIcon(
-        icon: const FaIcon(FontAwesomeIcons.instagram, color: Colors.white, size: 22),
+        icon: const FaIcon(FontAwesomeIcons.instagram,
+            color: Colors.white, size: 22),
         backgroundColor: const Color(0xFFE1306C),
         url: instagram,
       ));
     }
     if (facebook.isNotEmpty) {
       icons.add(_buildSocialIcon(
-        icon: const FaIcon(FontAwesomeIcons.facebook, color: Colors.white, size: 22),
+        icon: const FaIcon(FontAwesomeIcons.facebook,
+            color: Colors.white, size: 22),
         backgroundColor: const Color(0xFF1877F2),
         url: facebook,
       ));

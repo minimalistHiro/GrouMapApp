@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,10 +7,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/posts_provider.dart';
 import '../../services/mission_service.dart';
 import '../../widgets/common_header.dart';
+import '../../widgets/error_dialog.dart';
 
 class PostDetailView extends ConsumerStatefulWidget {
   final PostModel post;
-  
+
   const PostDetailView({
     Key? key,
     required this.post,
@@ -114,10 +116,8 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final likeDoc = await _postDocRef()
-          .collection('likes')
-          .doc(user.uid)
-          .get();
+      final likeDoc =
+          await _postDocRef().collection('likes').doc(user.uid).get();
 
       setState(() {
         _isLiked = likeDoc.exists;
@@ -188,10 +188,10 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
 
       print('🔍 既存の閲覧記録をチェック中...');
       final viewDoc = await viewRef.get();
-      
+
       if (!viewDoc.exists) {
         print('✨ 初回閲覧として記録します');
-        
+
         // 初回閲覧の場合のみ記録
         await _saveViewRecord(viewRef, user);
         await _updatePostViewCount(widget.post.id);
@@ -216,11 +216,11 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   Future<void> _saveViewRecord(DocumentReference viewRef, User user) async {
     int retryCount = 0;
     const maxRetries = 3;
-    
+
     while (retryCount < maxRetries) {
       try {
         print('💾 閲覧履歴をデータベースに保存中... (試行 ${retryCount + 1}/$maxRetries)');
-        
+
         // タイムアウトを設定して書き込みを実行
         await viewRef.set({
           'userId': user.uid,
@@ -230,18 +230,18 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
           'postId': widget.post.id,
           'postTitle': widget.post.title,
         }).timeout(const Duration(seconds: 10));
-        
+
         print('✅ 閲覧履歴の保存が完了しました');
         return; // 成功したら終了
       } catch (e) {
         retryCount++;
         print('❌ 閲覧履歴の保存に失敗 (試行 $retryCount/$maxRetries): $e');
-        
+
         if (retryCount >= maxRetries) {
           print('❌ 最大再試行回数に達しました。閲覧履歴の保存を諦めます。');
           rethrow;
         }
-        
+
         // 再試行前に少し待機
         await Future.delayed(Duration(seconds: retryCount));
       }
@@ -252,28 +252,28 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   Future<void> _updatePostViewCount(String postId) async {
     int retryCount = 0;
     const maxRetries = 3;
-    
+
     while (retryCount < maxRetries) {
       try {
         print('📈 投稿の閲覧数を更新中... (試行 ${retryCount + 1}/$maxRetries)');
-        
+
         // タイムアウトを設定して書き込みを実行
         await _postDocRef().update({
           'viewCount': FieldValue.increment(1),
           'lastViewedAt': FieldValue.serverTimestamp(),
         }).timeout(const Duration(seconds: 10));
-        
+
         print('✅ 閲覧数の更新が完了しました');
         return; // 成功したら終了
       } catch (e) {
         retryCount++;
         print('❌ 閲覧数の更新に失敗 (試行 $retryCount/$maxRetries): $e');
-        
+
         if (retryCount >= maxRetries) {
           print('❌ 最大再試行回数に達しました。閲覧数の更新を諦めます。');
           rethrow;
         }
-        
+
         // 再試行前に少し待機
         await Future.delayed(Duration(seconds: retryCount));
       }
@@ -340,11 +340,10 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       }
     } catch (e) {
       print('いいねエラー: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('いいねの更新に失敗しました: $e'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showError(
+        context,
+        title: '更新に失敗しました',
+        message: 'いいねを更新できませんでした。時間をおいて再度お試しください。',
       );
     }
   }
@@ -380,11 +379,10 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       _loadComments(); // コメントを再読み込み
     } catch (e) {
       print('コメント投稿エラー: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('コメントの投稿に失敗しました: $e'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showError(
+        context,
+        title: '投稿に失敗しました',
+        message: 'コメントを投稿できませんでした。時間をおいて再度お試しください。',
       );
     }
   }
@@ -392,7 +390,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-    
+
     if (difference.inDays == 0) {
       return '今日 ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     } else if (difference.inDays == 1) {
@@ -476,7 +474,7 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
             );
           },
         ),
-        
+
         // 画像インジケーター
         if (widget.post.imageUrls.length > 1)
           Positioned(
@@ -508,13 +506,15 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       child: Row(
         children: [
-          if (widget.post.storeName != null && widget.post.storeName!.isNotEmpty) ...[
+          if (widget.post.storeName != null &&
+              widget.post.storeName!.isNotEmpty) ...[
             CircleAvatar(
               radius: 18,
               backgroundColor: const Color(0xFFFF6B35).withOpacity(0.1),
-              backgroundImage: _storeIconUrl != null && _storeIconUrl!.isNotEmpty
-                  ? NetworkImage(_storeIconUrl!)
-                  : null,
+              backgroundImage:
+                  _storeIconUrl != null && _storeIconUrl!.isNotEmpty
+                      ? NetworkImage(_storeIconUrl!)
+                      : null,
               child: _storeIconUrl == null || _storeIconUrl!.isEmpty
                   ? const Icon(Icons.store, size: 20, color: Color(0xFFFF6B35))
                   : null,
@@ -535,7 +535,8 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      const Icon(Icons.access_time, size: 13, color: Colors.grey),
+                      const Icon(Icons.access_time,
+                          size: 13, color: Colors.grey),
                       const SizedBox(width: 3),
                       Text(
                         _formatDate(widget.post.createdAt),
@@ -550,7 +551,8 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
               ),
             ),
           ],
-          if (widget.post.storeName == null || widget.post.storeName!.isEmpty) ...[
+          if (widget.post.storeName == null ||
+              widget.post.storeName!.isEmpty) ...[
             const Icon(Icons.access_time, size: 14, color: Colors.grey),
             const SizedBox(width: 4),
             Text(
@@ -624,14 +626,17 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                 ),
 
                 // Instagramを開くボタン
-                if (_isInstagramPost && widget.post.permalink != null && widget.post.permalink!.isNotEmpty)
+                if (_isInstagramPost &&
+                    widget.post.permalink != null &&
+                    widget.post.permalink!.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 12),
                     child: GestureDetector(
                       onTap: () async {
                         final uri = Uri.parse(widget.post.permalink!);
                         if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          await launchUrl(uri,
+                              mode: LaunchMode.externalApplication);
                         }
                       },
                       child: const Text(
@@ -720,15 +725,13 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
           ),
           const Divider(height: 1),
         ],
-        
+
         // コメント一覧
         if (_isLoadingComments)
           const Padding(
             padding: EdgeInsets.all(16),
             child: Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
-              ),
+              child: CustomLoadingIndicator(),
             ),
           )
         else if (_comments.isEmpty)
@@ -794,7 +797,8 @@ class _PostDetailViewState extends ConsumerState<PostDetailView> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _formatDate((comment['createdAt'] as Timestamp).toDate()),
+                            _formatDate(
+                                (comment['createdAt'] as Timestamp).toDate()),
                             style: const TextStyle(
                               color: Colors.grey,
                               fontSize: 12,

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/point_provider.dart';
+import '../../widgets/error_dialog.dart';
 import 'point_usage_waiting_view.dart';
 
 class PointUsageRequestView extends ConsumerStatefulWidget {
@@ -17,7 +19,8 @@ class PointUsageRequestView extends ConsumerStatefulWidget {
   }) : super(key: key);
 
   @override
-  ConsumerState<PointUsageRequestView> createState() => _PointUsageRequestViewState();
+  ConsumerState<PointUsageRequestView> createState() =>
+      _PointUsageRequestViewState();
 }
 
 class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
@@ -102,7 +105,9 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
               width: double.infinity,
               height: 60,
               child: ElevatedButton(
-                onPressed: _isSubmitting ? null : () => _submit(user.uid, availablePoints),
+                onPressed: _isSubmitting
+                    ? null
+                    : () => _submit(user.uid, availablePoints),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B35),
                   foregroundColor: Colors.white,
@@ -112,7 +117,9 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
                   elevation: 4,
                 ),
                 child: _isSubmitting
-                    ? const CircularProgressIndicator(color: Colors.white)
+                    ? const CustomLoadingIndicator.inline(
+                        primaryColor: Colors.white,
+                      )
                     : const Text(
                         '確定',
                         style: TextStyle(
@@ -338,12 +345,12 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
   Future<void> _submit(String userId, int availablePoints) async {
     final points = int.tryParse(_amount) ?? 0;
     if (points <= 0) {
-      _showSnackBar('有効なポイント数を入力してください', Colors.red);
+      _showWarningDialog('有効なポイント数を入力してください。');
       return;
     }
 
     if (points > availablePoints) {
-      _showSnackBar('ポイントが不足しています', Colors.red);
+      _showWarningDialog('ポイントが不足しています。');
       return;
     }
 
@@ -364,7 +371,6 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
       });
 
       if (mounted) {
-        _showSnackBar('ポイント利用額を送信しました', const Color(0xFFFF6B35));
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => PointUsageWaitingView(
@@ -376,7 +382,8 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
       }
     } catch (e) {
       if (mounted) {
-        _showSnackBar('送信に失敗しました: $e', Colors.red);
+        debugPrint('ポイント利用額送信エラー: $e');
+        _showErrorDialog('ポイント利用額を送信できませんでした。時間をおいて再度お試しください。');
       }
     } finally {
       if (mounted) {
@@ -408,7 +415,8 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
       }
     } catch (e) {
       if (mounted) {
-        _showSnackBar('キャンセルに失敗しました: $e', Colors.red);
+        debugPrint('ポイント利用額入力キャンセルエラー: $e');
+        _showErrorDialog('入力をキャンセルできませんでした。時間をおいて再度お試しください。');
       }
     } finally {
       if (mounted) {
@@ -419,12 +427,18 @@ class _PointUsageRequestViewState extends ConsumerState<PointUsageRequestView> {
     }
   }
 
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: color,
-      ),
+  void _showErrorDialog(String message) {
+    ErrorDialog.showError(
+      context,
+      title: 'ポイント利用エラー',
+      message: message,
+    );
+  }
+
+  void _showWarningDialog(String message) {
+    ErrorDialog.showWarning(
+      context,
+      message: message,
     );
   }
 }

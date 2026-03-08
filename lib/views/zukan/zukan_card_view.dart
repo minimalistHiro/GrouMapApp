@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/zukan_provider.dart';
-import '../../widgets/stamp_card_widget.dart';
+import '../../widgets/zukan_card_face_widget.dart';
 import '../main_navigation_view.dart';
 
 /// NFCチェックイン後に表示する図鑑カード発見演出画面
@@ -131,7 +132,11 @@ class _ZukanCardViewState extends ConsumerState<ZukanCardView>
           SafeArea(
             child: _loading
                 ? const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
+                    child: CustomLoadingIndicator.inline(
+                      size: 40,
+                      padding: 6,
+                      primaryColor: Colors.white,
+                    ),
                   )
                 : Column(
                     children: [
@@ -224,8 +229,7 @@ class _ZukanCardViewState extends ConsumerState<ZukanCardView>
                             onTap: _onComplete,
                             child: Container(
                               width: double.infinity,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 16),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   colors: [
@@ -321,7 +325,7 @@ class _ZukanCardViewState extends ConsumerState<ZukanCardView>
 }
 
 // ────────────────────────────────────────────
-// カード表面
+// カード表面（ZukanCardFaceWidgetで統一UIを使用）
 // ────────────────────────────────────────────
 class _CardFront extends StatelessWidget {
   final ZukanStoreItem? storeItem;
@@ -336,185 +340,50 @@ class _CardFront extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = storeItem?.rarityColor ?? const Color(0xFF757575);
-    final category = storeItem?.category ?? 'その他';
-    final imageUrl = storeItem?.firstImageUrl;
-    final rarityStars = storeItem?.rarityStars ?? '★☆☆☆';
-    final discoveredCount = storeItem?.discoveredCount ?? 0;
+    final item = storeItem;
+
+    if (item == null) {
+      return SizedBox(
+        width: 240,
+        child: AspectRatio(
+          aspectRatio: 0.60,
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              color: const Color(0xFF16213E),
+            ),
+            child: const Center(
+              child: CustomLoadingIndicator.inline(
+                size: 40,
+                padding: 6,
+                primaryColor: Colors.white,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return AnimatedBuilder(
       animation: glowAnim,
-      builder: (_, __) => Container(
-        width: 260,
-        height: 360,
+      builder: (_, child) => DecoratedBox(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              color.withOpacity(0.3),
-              const Color(0xFF1A1A2E),
-              color.withOpacity(0.15),
-            ],
-          ),
-          border: Border.all(
-            color: color.withOpacity(0.7 * glowAnim.value),
-            width: 2,
-          ),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.4 * glowAnim.value),
+              color: item.rarityColor.withOpacity(0.45 * glowAnim.value),
               blurRadius: 30,
-              spreadRadius: 5,
+              spreadRadius: 8,
             ),
           ],
         ),
-        child: Stack(
-          children: [
-            // 背景パターン（同心円）
-            CustomPaint(
-              painter: _CardPatternPainter(color),
-              child: Container(),
-            ),
-            // コンテンツ
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // レア度バッジ
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          storeItem?.rarityLabel ?? 'コモン',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ),
-                      // カテゴリ
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white12,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          category,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 10,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // 店舗画像エリア
-                  Expanded(
-                    child: Center(
-                      child: Container(
-                        width: 140,
-                        height: 140,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: color.withOpacity(0.15),
-                          border: Border.all(
-                            color: color.withOpacity(0.3),
-                            width: 2,
-                          ),
-                        ),
-                        child: ClipOval(
-                          child: imageUrl != null && imageUrl.isNotEmpty
-                              ? Image.network(
-                                  imageUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                      _CategoryIcon(
-                                        category: category,
-                                        color: color,
-                                      ),
-                                )
-                              : _CategoryIcon(
-                                  category: category,
-                                  color: color,
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // 店舗名
-                  Text(
-                    storeName,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  // カテゴリ（下部）
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on,
-                        size: 12,
-                        color: Colors.white38,
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        category,
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // 星と発見者数
-                  Row(
-                    children: [
-                      Text(
-                        rarityStars,
-                        style: TextStyle(color: color, fontSize: 14),
-                      ),
-                      const Spacer(),
-                      const Icon(Icons.people, size: 12, color: Colors.white38),
-                      const SizedBox(width: 2),
-                      Text(
-                        '$discoveredCount人',
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
+        child: child,
+      ),
+      child: SizedBox(
+        width: 240,
+        child: AspectRatio(
+          aspectRatio: 0.60,
+          child: ZukanCardFaceWidget(item: item),
         ),
       ),
     );
@@ -531,88 +400,86 @@ class _CardBack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 260,
-      height: 360,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: const Color(0xFF16213E),
-        border: Border.all(
-          color: rarityColor.withOpacity(0.5),
-          width: 2,
-        ),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          CustomPaint(
-            painter: _CardPatternPainter(rarityColor),
-            child: Container(),
+    return SizedBox(
+      width: 240,
+      child: AspectRatio(
+        aspectRatio: 0.60,
+        child: Container(
+          decoration: const BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            // 表面と同じシルバー×白グラデーションボーダー
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFFAAAAAA),
+                Color(0xFFFFFFFF),
+                Color(0xFFCCCCCC),
+                Color(0xFFFFFFFF),
+                Color(0xFFB8B8B8),
+                Color(0xFFFFFFFF),
+                Color(0xFFAAAAAA),
+                Color(0xFFFFFFFF),
+                Color(0xFFCCCCCC),
+              ],
+              stops: [0.0, 0.1, 0.22, 0.35, 0.5, 0.65, 0.78, 0.9, 1.0],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: rarityColor.withOpacity(0.15),
-                  border: Border.all(
-                    color: rarityColor.withOpacity(0.5),
-                    width: 2,
+          padding: const EdgeInsets.all(5.0),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(5),
+            child: Container(
+              color: const Color(0xFF16213E),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  CustomPaint(
+                    painter: _CardPatternPainter(rarityColor),
+                    child: Container(),
                   ),
-                ),
-                child: const Center(
-                  child: Text('🗺️', style: TextStyle(fontSize: 36)),
-                ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: rarityColor.withOpacity(0.15),
+                          border: Border.all(
+                            color: rarityColor.withOpacity(0.5),
+                            width: 2,
+                          ),
+                        ),
+                        child: const Center(
+                          child: Text('🗺️', style: TextStyle(fontSize: 36)),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'ぐるまっぷ',
+                        style: TextStyle(
+                          color: rarityColor,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '図鑑カード',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.5),
+                          fontSize: 13,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                'ぐるまっぷ',
-                style: TextStyle(
-                  color: rarityColor,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 2,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '図鑑カード',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.5),
-                  fontSize: 13,
-                  letterSpacing: 1,
-                ),
-              ),
-            ],
+            ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-// ────────────────────────────────────────────
-// カテゴリアイコン（画像なし時のフォールバック）
-// ────────────────────────────────────────────
-class _CategoryIcon extends StatelessWidget {
-  final String category;
-  final Color color;
-
-  const _CategoryIcon({required this.category, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = StampCardWidget.getCategoryIcon(category);
-    return Container(
-      color: color.withOpacity(0.2),
-      child: Center(
-        child: Icon(
-          icon,
-          color: Colors.white.withOpacity(0.7),
-          size: 56,
         ),
       ),
     );
@@ -680,8 +547,7 @@ class _CardBackgroundPainter extends CustomPainter {
     );
 
     // スパークル（光の粒）
-    final sparkPaint = Paint()
-      ..color = color.withOpacity(0.3 * glowIntensity);
+    final sparkPaint = Paint()..color = color.withOpacity(0.3 * glowIntensity);
     final positions = [
       Offset(size.width * 0.1, size.height * 0.1),
       Offset(size.width * 0.9, size.height * 0.15),

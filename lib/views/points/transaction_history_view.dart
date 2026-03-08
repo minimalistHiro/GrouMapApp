@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../payment/point_payment_detail_view.dart';
@@ -28,7 +29,7 @@ class TransactionHistoryView extends ConsumerWidget {
           return _buildTransactionHistory(context, ref, user.uid);
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(),
+          child: CustomLoadingIndicator(),
         ),
         error: (error, _) => Center(
           child: Text('エラー: $error'),
@@ -37,7 +38,8 @@ class TransactionHistoryView extends ConsumerWidget {
     );
   }
 
-  Widget _buildTransactionHistory(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildTransactionHistory(
+      BuildContext context, WidgetRef ref, String userId) {
     final transactions = ref.watch(userPointTransactionsProvider(userId));
 
     return transactions.when(
@@ -75,7 +77,7 @@ class TransactionHistoryView extends ConsumerWidget {
         );
       },
       loading: () => const Center(
-        child: CircularProgressIndicator(),
+        child: CustomLoadingIndicator(),
       ),
       error: (error, _) => Center(
         child: Column(
@@ -111,10 +113,11 @@ class TransactionHistoryView extends ConsumerWidget {
     );
   }
 
-  Widget _buildTransactionItem(BuildContext context, PointTransactionModel transaction) {
+  Widget _buildTransactionItem(
+      BuildContext context, PointTransactionModel transaction) {
     final isEarned = transaction.amount > 0;
     // final isUsed = transaction.amount < 0; // 現状未使用
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8.0),
       child: ListTile(
@@ -199,7 +202,8 @@ class TransactionHistoryView extends ConsumerWidget {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFFF6B35),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 ),
                 child: const Text('受け取る'),
               ),
@@ -212,8 +216,10 @@ class TransactionHistoryView extends ConsumerWidget {
     );
   }
 
-  void _showTransactionDetails(BuildContext context, PointTransactionModel transaction) {
-    final totalAwarded = transaction.totalPointsAwarded ?? (transaction.amount > 0 ? transaction.amount : null);
+  void _showTransactionDetails(
+      BuildContext context, PointTransactionModel transaction) {
+    final totalAwarded = transaction.totalPointsAwarded ??
+        (transaction.amount > 0 ? transaction.amount : null);
     final normalAwarded = transaction.normalPointsAwarded ?? totalAwarded;
     final specialAwarded = transaction.specialPointsAwarded ?? 0;
     showDialog(
@@ -227,7 +233,8 @@ class TransactionHistoryView extends ConsumerWidget {
             _buildDetailRow('説明', transaction.description ?? ''),
             _buildDetailRow('ポイント', '${transaction.amount}pt'),
             if (totalAwarded != null && specialAwarded > 0)
-              _buildDetailRow('内訳', '通常${normalAwarded ?? totalAwarded}pt / 特別${specialAwarded}pt'),
+              _buildDetailRow('内訳',
+                  '通常${normalAwarded ?? totalAwarded}pt / 特別${specialAwarded}pt'),
             _buildDetailRow('店舗ID', transaction.storeId),
             _buildDetailRow('日時', _formatDateTime(transaction.createdAt)),
             if (transaction.qrCode != null)
@@ -300,7 +307,7 @@ class TransactionHistoryView extends ConsumerWidget {
 
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.year}年${dateTime.month}月${dateTime.day}日 '
-           '${dateTime.hour.toString().padLeft(2, '0')}:'
-           '${dateTime.minute.toString().padLeft(2, '0')}';
+        '${dateTime.hour.toString().padLeft(2, '0')}:'
+        '${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }

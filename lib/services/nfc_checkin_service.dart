@@ -1,6 +1,11 @@
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
+class NfcCheckinSession {
+  final String sessionToken;
+  NfcCheckinSession({required this.sessionToken});
+}
+
 class NfcCheckinResult {
   final int stampsAfter;
   final bool cardCompleted;
@@ -48,16 +53,42 @@ class NfcCheckinService {
   final FirebaseFunctions _functions =
       FirebaseFunctions.instanceFor(region: 'asia-northeast1');
 
-  Future<NfcCheckinResult> checkin({
+  /// NFCタグを検証してチェックインセッションを作成する（10分間有効）
+  Future<NfcCheckinSession> createCheckinSession({
     required String storeId,
     required String tagSecret,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('createCheckinSession');
+      final result = await callable.call({
+        'storeId': storeId,
+        'tagSecret': tagSecret,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return NfcCheckinSession(sessionToken: data['sessionToken'] as String);
+    } on FirebaseFunctionsException catch (e) {
+      debugPrint(
+          'createCheckinSession error: code=${e.code}, message=${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('createCheckinSession error: $e');
+      rethrow;
+    }
+  }
+
+  /// チェックインを実行する（セッショントークン + 現在地を送信）
+  Future<NfcCheckinResult> checkin({
+    required String sessionToken,
+    required double userLat,
+    required double userLng,
     List<String>? selectedUserCouponIds,
   }) async {
     try {
       final callable = _functions.httpsCallable('nfcCheckin');
       final params = <String, dynamic>{
-        'storeId': storeId,
-        'tagSecret': tagSecret,
+        'sessionToken': sessionToken,
+        'userLat': userLat,
+        'userLng': userLng,
       };
       if (selectedUserCouponIds != null && selectedUserCouponIds.isNotEmpty) {
         params['selectedUserCouponIds'] = selectedUserCouponIds;

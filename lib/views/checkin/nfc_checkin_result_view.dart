@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -130,7 +131,15 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
       // ━━ バッジトリガー（NFCチェックイン時） ━━
       if (userId != null) {
         // 曜日別利用バッジ（毎回のNFCチェックイン時にカウント）
-        const dayNames = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        const dayNames = [
+          'monday',
+          'tuesday',
+          'wednesday',
+          'thursday',
+          'friday',
+          'saturday',
+          'sunday'
+        ];
         final dayName = dayNames[DateTime.now().weekday - 1];
         BadgeService().incrementBadgeCounter(userId, 'dayVisit_$dayName');
 
@@ -139,9 +148,11 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
           BadgeService().incrementBadgeCounter(userId, 'zukanDiscover');
 
           // レジェンドレア度判定: rarityOverride=4 または discoveredCount<=1（初発見）
-          final discoveredCount = (storeData['discoveredCount'] as num?)?.toInt() ?? 0;
+          final discoveredCount =
+              (storeData['discoveredCount'] as num?)?.toInt() ?? 0;
           final rarityOverride = (storeData['rarityOverride'] as num?)?.toInt();
-          final isLegendaryStore = rarityOverride == 4 || (rarityOverride == null && discoveredCount <= 1);
+          final isLegendaryStore = rarityOverride == 4 ||
+              (rarityOverride == null && discoveredCount <= 1);
           if (isLegendaryStore) {
             BadgeService().incrementBadgeCounter(userId, 'legendDiscover');
           }
@@ -204,9 +215,8 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
           .get();
       if (!mounted) return;
       setState(() {
-        _availableCoupons = couponsSnap.docs
-            .map((d) => {...d.data(), 'id': d.id})
-            .toList();
+        _availableCoupons =
+            couponsSnap.docs.map((d) => {...d.data(), 'id': d.id}).toList();
         _couponsLoading = false;
       });
     } catch (e) {
@@ -236,7 +246,8 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
               child: Column(
                 children: [
                   // タイトル
-                  const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 56),
+                  const Icon(Icons.check_circle,
+                      color: Color(0xFF4CAF50), size: 56),
                   const SizedBox(height: 8),
                   const Text(
                     'チェックイン成功！',
@@ -267,7 +278,8 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.all(32),
-                        child: CircularProgressIndicator(color: AppUi.primary),
+                        child:
+                            CustomLoadingIndicator(primaryColor: AppUi.primary),
                       ),
                     )
                   else
@@ -280,7 +292,8 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                       completedCards: _completedCards,
                       punchIndex: _punchIndex,
                       scaleAnimation: _scaleAnim,
-                      shineAnimation: widget.result.cardCompleted ? _shineAnim : null,
+                      shineAnimation:
+                          widget.result.cardCompleted ? _shineAnim : null,
                     ),
                   const SizedBox(height: 16),
 
@@ -391,12 +404,14 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
           // 利用したクーポン一覧
           ..._allUsedCoupons.map((coupon) {
             final title = coupon['title'] as String? ?? 'クーポン';
-            final discountValue = (coupon['discountValue'] as num?)?.toInt() ?? 0;
+            final discountValue =
+                (coupon['discountValue'] as num?)?.toInt() ?? 0;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
                 children: [
-                  const Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 20),
+                  const Icon(Icons.check_circle,
+                      color: Color(0xFF4CAF50), size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -517,7 +532,8 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
             children: widget.result.awardedCoupons.map((coupon) {
               final title = coupon['title'] as String? ?? 'クーポン';
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF2EC),
                   borderRadius: BorderRadius.circular(20),
@@ -526,11 +542,13 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.card_giftcard, size: 16, color: AppUi.primary),
+                    const Icon(Icons.card_giftcard,
+                        size: 16, color: AppUi.primary),
                     const SizedBox(width: 4),
                     Text(
                       title,
-                      style: const TextStyle(fontSize: 12, color: AppUi.primary),
+                      style:
+                          const TextStyle(fontSize: 12, color: AppUi.primary),
                     ),
                   ],
                 ),
@@ -558,8 +576,10 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
         ...(_availableCoupons.map((coupon) {
           final title = coupon['title'] as String? ?? '';
           final description = coupon['description'] as String? ?? '';
-          final requiredStamps = (coupon['requiredStamps'] as num?)?.toInt() ?? 0;
-          final needsMore = requiredStamps > 0 && currentStamps < requiredStamps;
+          final requiredStamps =
+              (coupon['requiredStamps'] as num?)?.toInt() ?? 0;
+          final needsMore =
+              requiredStamps > 0 && currentStamps < requiredStamps;
           final remaining = requiredStamps - currentStamps;
 
           return Card(
@@ -598,7 +618,8 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.bold,
-                                color: needsMore ? Colors.grey[600] : Colors.black,
+                                color:
+                                    needsMore ? Colors.grey[600] : Colors.black,
                               ),
                             ),
                             if (description.isNotEmpty)
@@ -606,7 +627,9 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                                 description,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: needsMore ? Colors.grey[500] : Colors.black54,
+                                  color: needsMore
+                                      ? Colors.grey[500]
+                                      : Colors.black54,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -622,7 +645,8 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(AppUi.controlRadius),
+                        borderRadius:
+                            BorderRadius.circular(AppUi.controlRadius),
                       ),
                       child: Center(
                         child: Text(
@@ -650,7 +674,8 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
     if (userId == null) return;
 
     try {
-      final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+      final functions =
+          FirebaseFunctions.instanceFor(region: 'asia-northeast1');
       final result = await functions.httpsCallable('checkWeeklyMission').call();
       final data = Map<String, dynamic>.from(result.data as Map);
 
@@ -672,13 +697,15 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
       barrierDismissible: true,
       builder: (context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.emoji_events, size: 64, color: Color(0xFFFF8F00)),
+                const Icon(Icons.emoji_events,
+                    size: 64, color: Color(0xFFFF8F00)),
                 const SizedBox(height: 16),
                 const Text(
                   '週次ミッション達成！',
@@ -716,9 +743,10 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                         ),
                         const SizedBox(height: 4),
                         ...newBadges.map((b) => Text(
-                          b,
-                          style: const TextStyle(fontSize: 13, color: Colors.black87),
-                        )),
+                              b,
+                              style: const TextStyle(
+                                  fontSize: 13, color: Colors.black87),
+                            )),
                       ],
                     ),
                   ),
@@ -731,9 +759,11 @@ class _NfcCheckinResultViewState extends State<NfcCheckinResultView>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppUi.primary,
                       foregroundColor: AppUi.onPrimary,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text('OK',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

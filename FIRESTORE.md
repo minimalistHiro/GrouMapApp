@@ -222,8 +222,23 @@
   - write: `isOwner()` のみ（Cloud Functions `registerNfcTag` / `nfcCheckin` からも書き込み可能）
 - 設計メモ:
   - NFCタグにURL型NDEFレコード（`https://groumapapp.web.app/checkin?storeId={storeId}&secret={tagSecret}`）を書き込み
-  - ユーザーがタッチ → Universal Links/App Links でアプリ起動 → Cloud Functions `nfcCheckin` で検証・スタンプ付与
+  - ユーザーがタッチ → Universal Links/App Links でアプリ起動 → Cloud Functions `createCheckinSession` でセッション発行 → `nfcCheckin` で位置情報検証・スタンプ付与
   - NFCタグは書き込み後にロック（書き込み禁止）をかけ、第三者による書き換えを防止
+
+### checkin_sessions
+- `checkin_sessions/{sessionId}`: NFCチェックインセッション（使い捨てトークン）
+  - `userId`: チェックインを実行するユーザーUID（string）
+  - `storeId`: 対象店舗ID（string）
+  - `expiresAt`: セッション有効期限（Timestamp、作成から10分後）
+  - `used`: 使用済みフラグ（bool、初期値: false）
+  - `createdAt`: 作成日時（Timestamp）
+- アクセス制御メモ（`firestore.rules`）:
+  - read / write: `false`（クライアントから直接アクセス禁止。Cloud Functions `createCheckinSession` / `nfcCheckin` のみ操作）
+- 設計メモ:
+  - Deep Link受信時に `createCheckinSession` Cloud Function が `tagSecret` を検証し、10分有効のセッショントークン（UUID）を発行
+  - `nfcCheckin` はセッショントークンと現在地（`userLat` / `userLng`）を受け取り、①セッション有効性・②店舗から200m以内かを検証してからスタンプ処理を実行
+  - セッション使用後は `used: true` にマークし再利用を防止
+  - ブラウザ履歴からURLを再オープンしても、チェックイン時に位置情報が200m超の場合は `permission-denied` で拒否される
 
 ### news
 - `news/{newsId}`: ニュース

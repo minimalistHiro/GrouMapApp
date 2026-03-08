@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/zukan_provider.dart';
 import '../../theme/app_ui.dart';
-import '../../widgets/common_header.dart';
+import '../../widgets/game_dialog.dart';
+import '../../widgets/zukan_card_face_widget.dart';
 import '../../widgets/zukan_card_widget.dart';
 import '../stores/store_detail_view.dart';
 
@@ -23,31 +25,30 @@ class _ZukanViewState extends ConsumerState<ZukanView> {
 
     return Scaffold(
       backgroundColor: AppUi.surface,
-      appBar: CommonHeader(
-        title: const Text('図鑑'),
-        showBack: false,
-      ),
-      body: zukanAsync.when(
-        data: (allItems) {
-          return Column(
-            children: [
-              // 開拓サマリーバー
-              _buildSummaryBar(allItems, isLoggedIn),
-              // グリッド
-              Expanded(
-                child: allItems.isEmpty
-                    ? _buildEmptyState()
-                    : _buildFlatGrid(context, allItems),
-              ),
-            ],
-          );
-        },
-        loading: () => const Center(
-          child: CircularProgressIndicator(color: AppUi.primary),
-        ),
-        error: (e, _) => Center(
-          child: Text('読み込みエラー: $e',
-              style: const TextStyle(color: Colors.black54)),
+      body: SafeArea(
+        bottom: false,
+        child: zukanAsync.when(
+          data: (allItems) {
+            return Column(
+              children: [
+                // 開拓サマリーバー
+                _buildSummaryBar(allItems, isLoggedIn),
+                // グリッド
+                Expanded(
+                  child: allItems.isEmpty
+                      ? _buildEmptyState()
+                      : _buildFlatGrid(context, allItems),
+                ),
+              ],
+            );
+          },
+          loading: () => const Center(
+            child: CustomLoadingIndicator(primaryColor: AppUi.primary),
+          ),
+          error: (e, _) => Center(
+            child: Text('読み込みエラー: $e',
+                style: const TextStyle(color: Colors.black54)),
+          ),
         ),
       ),
     );
@@ -59,7 +60,18 @@ class _ZukanViewState extends ConsumerState<ZukanView> {
     final rate = total == 0 ? 0.0 : discovered / total;
 
     return Container(
-      color: Colors.white,
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.07),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -107,12 +119,12 @@ class _ZukanViewState extends ConsumerState<ZukanView> {
 
   Widget _buildFlatGrid(BuildContext context, List<ZukanStoreItem> items) {
     return GridView.builder(
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.all(10),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 5,
-        childAspectRatio: 0.60,
-        mainAxisSpacing: 4,
-        crossAxisSpacing: 4,
+        crossAxisCount: 4,
+        childAspectRatio: 0.65,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
@@ -121,36 +133,96 @@ class _ZukanViewState extends ConsumerState<ZukanView> {
           item: item,
           index: index + 1,
           onTap: item.isDiscovered
-              ? () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => StoreDetailView(store: item.store),
-                    ),
-                  );
-                }
+              ? () => _showCardZoom(context, item)
               : () {
-                  showDialog(
+                  showGameDialog(
                     context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('まだ未発見のお店です'),
-                      content: const Text(
-                        'お店に来店してNFCタッチすると、このカードを発見できます。',
+                    title: 'まだ未発見のお店です',
+                    message: 'お店に来店してNFCタッチすると、このカードを発見できます。',
+                    icon: Icons.explore,
+                    actions: [
+                      GameDialogAction(
+                        label: 'OK',
+                        onPressed: () => Navigator.of(context).pop(),
+                        isPrimary: true,
                       ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(ctx).pop(),
-                          child: const Text(
-                            'OK',
-                            style: TextStyle(
-                              color: Colors.blue,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   );
                 },
+        );
+      },
+    );
+  }
+
+  void _showCardZoom(BuildContext context, ZukanStoreItem item) {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black.withOpacity(0.88),
+      transitionDuration: const Duration(milliseconds: 280),
+      pageBuilder: (ctx, _, __) => Center(
+        child: Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 拡大カード
+                  SizedBox(
+                    width: 240,
+                    child: AspectRatio(
+                      aspectRatio: 0.60,
+                      child: ZukanCardFaceWidget(item: item),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // 店舗詳細ボタン
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StoreDetailView(store: item.store),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 36,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: const Text(
+                        '店舗詳細を見る',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      transitionBuilder: (ctx, anim, _, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.85, end: 1.0).animate(
+              CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+            ),
+            child: child,
+          ),
         );
       },
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'custom_loading_indicator.dart';
 
 /// カスタムスタンプカードウィジェット
 /// スタンプ押印画面やスタンプカード一覧で再利用可能なパーツ
@@ -55,8 +56,7 @@ class StampCardWidget extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
         ],
       ),
       child: Column(
@@ -112,9 +112,7 @@ class StampCardWidget extends StatelessWidget {
           SizedBox(
             height: _gridHeight,
             child: const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
-              ),
+              child: CustomLoadingIndicator(),
             ),
           ),
         ],
@@ -137,8 +135,7 @@ class StampCardWidget extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(
-              color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
+          BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
         ],
       ),
       child: Center(
@@ -171,12 +168,10 @@ class StampCardWidget extends StatelessWidget {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(
-                      color:
-                          getCategoryColor(storeCategory).withOpacity(0.2),
+                      color: getCategoryColor(storeCategory).withOpacity(0.2),
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: getCategoryColor(storeCategory)
-                            .withOpacity(0.3),
+                        color: getCategoryColor(storeCategory).withOpacity(0.3),
                         width: 2,
                       ),
                     ),

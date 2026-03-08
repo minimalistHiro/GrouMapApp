@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/auth_provider.dart';
@@ -378,9 +379,7 @@ class _AccountDeletionProcessingViewState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(
-              color: Color(0xFFFF6B35),
-            ),
+            CustomLoadingIndicator(),
             SizedBox(height: 16),
             Text(
               '退会処理を実行しています…',

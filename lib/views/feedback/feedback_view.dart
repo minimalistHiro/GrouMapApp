@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../providers/feedback_provider.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/error_dialog.dart';
 
 class FeedbackView extends ConsumerStatefulWidget {
   const FeedbackView({Key? key}) : super(key: key);
@@ -17,7 +19,7 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
   final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
   final _emailController = TextEditingController();
-  
+
   String _selectedCategory = 'general';
   bool _isSubmitting = false;
 
@@ -67,15 +69,17 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
               child: Text('ログインが必要です'),
             );
           }
-          return _buildFeedbackForm(context, ref, user.uid, user.displayName ?? 'ユーザー');
+          return _buildFeedbackForm(
+              context, ref, user.uid, user.displayName ?? 'ユーザー');
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CustomLoadingIndicator()),
         error: (error, _) => Center(child: Text('エラー: $error')),
       ),
     );
   }
 
-  Widget _buildFeedbackForm(BuildContext context, WidgetRef ref, String userId, String userName) {
+  Widget _buildFeedbackForm(
+      BuildContext context, WidgetRef ref, String userId, String userName) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Form(
@@ -174,7 +178,8 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
               decoration: const InputDecoration(
                 hintText: '件名を入力してください',
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -204,13 +209,15 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
               decoration: const InputDecoration(
                 hintText: 'メールアドレスを入力してください',
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 16),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
                   return 'メールアドレスを入力してください';
                 }
-                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value.trim())) {
+                if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                    .hasMatch(value.trim())) {
                   return '有効なメールアドレスを入力してください';
                 }
                 return null;
@@ -234,7 +241,8 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
               decoration: const InputDecoration(
                 hintText: 'フィードバックの内容を詳しく入力してください',
                 border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 alignLabelWithHint: true,
               ),
               validator: (value) {
@@ -255,7 +263,9 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
               width: double.infinity,
               child: CustomButton(
                 text: _isSubmitting ? '送信中...' : 'フィードバックを送信',
-                onPressed: _isSubmitting ? null : () => _submitFeedback(context, ref, userId, userName),
+                onPressed: _isSubmitting
+                    ? null
+                    : () => _submitFeedback(context, ref, userId, userName),
                 borderRadius: 999,
               ),
             ),
@@ -299,7 +309,8 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
     );
   }
 
-  Future<void> _submitFeedback(BuildContext context, WidgetRef ref, String userId, String userName) async {
+  Future<void> _submitFeedback(BuildContext context, WidgetRef ref,
+      String userId, String userName) async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -310,13 +321,13 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
 
     try {
       await ref.read(feedbackProvider).submitFeedback(
-        userId: userId,
-        userName: userName,
-        userEmail: _emailController.text.trim(),
-        subject: _subjectController.text.trim(),
-        message: _messageController.text.trim(),
-        category: _selectedCategory,
-      );
+            userId: userId,
+            userName: userName,
+            userEmail: _emailController.text.trim(),
+            subject: _subjectController.text.trim(),
+            message: _messageController.text.trim(),
+            category: _selectedCategory,
+          );
 
       if (mounted) {
         // 成功ダイアログを表示
@@ -339,11 +350,11 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('送信に失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
+        debugPrint('フィードバック送信エラー: $e');
+        ErrorDialog.showError(
+          context,
+          title: '送信に失敗しました',
+          message: 'フィードバックを送信できませんでした。時間をおいて再度お試しください。',
         );
       }
     } finally {
@@ -355,4 +366,3 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
     }
   }
 }
-

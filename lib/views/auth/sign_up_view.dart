@@ -44,7 +44,6 @@ class _SignUpViewState extends ConsumerState<SignUpView> {
         _showErrorDialog(signInNotifier);
       } else if (next == SignInState.success) {
         if (signInNotifier.lastOperation == 'アカウント作成') {
-          SuccessSnackBar.show(context, message: 'アカウントを作成しました。認証コードを送信しました');
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
               builder: (context) => const EmailVerificationPendingView(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/area_provider.dart';
 import '../../theme/app_ui.dart';
@@ -31,10 +32,8 @@ class _AreaExplorationViewState extends ConsumerState<AreaExplorationView> {
           Expanded(
             child: ratesAsync.when(
               data: (rates) => _buildAreaList(rates),
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
-              error: (e, _) =>
-                  Center(child: Text('読み込みに失敗しました: $e')),
+              loading: () => const Center(child: CustomLoadingIndicator()),
+              error: (e, _) => Center(child: Text('読み込みに失敗しました: $e')),
             ),
           ),
         ],
@@ -62,14 +61,12 @@ class _AreaExplorationViewState extends ConsumerState<AreaExplorationView> {
       onTap: () => setState(() => _showMyRate = isMyRate),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? AppUi.primary : Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color:
-                isSelected ? AppUi.primary : Colors.grey.shade300,
+            color: isSelected ? AppUi.primary : Colors.grey.shade300,
           ),
           boxShadow: isSelected
               ? [
@@ -118,11 +115,9 @@ class _AreaExplorationViewState extends ConsumerState<AreaExplorationView> {
   }
 
   Widget _buildAreaCard(AreaExplorationRate rate) {
-    final progress =
-        _showMyRate ? rate.myRate : rate.communityRate;
-    final visitedCount = _showMyRate
-        ? rate.myVisitedStores
-        : rate.communityDiscoveredStores;
+    final progress = _showMyRate ? rate.myRate : rate.communityRate;
+    final visitedCount =
+        _showMyRate ? rate.myVisitedStores : rate.communityDiscoveredStores;
     final percent = (progress * 100).toInt();
     final areaColor = rate.area.displayColor;
 

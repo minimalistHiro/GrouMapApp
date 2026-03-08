@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,6 +9,7 @@ import '../../services/coin_service.dart';
 import '../../services/mission_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/walkthrough_provider.dart';
+import '../../widgets/error_dialog.dart';
 import '../walkthrough/walkthrough_overlay.dart';
 import '../walkthrough/walkthrough_step_config.dart';
 
@@ -136,8 +138,10 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
             .toList();
         _newStoresThisWeek = weeklyData['newStoresThisWeek'] as int? ?? 0;
         _totalVisitsThisWeek = weeklyData['totalVisitsThisWeek'] as int? ?? 0;
-        _weeklyMissionAchievedThisWeek = weeklyData['achievedThisWeek'] as bool? ?? false;
-        _weeklyMissionTotalCount = weeklyData['totalAchievedCount'] as int? ?? 0;
+        _weeklyMissionAchievedThisWeek =
+            weeklyData['achievedThisWeek'] as bool? ?? false;
+        _weeklyMissionTotalCount =
+            weeklyData['totalAchievedCount'] as int? ?? 0;
         _isLoading = false;
         // 新規登録ミッション未達成なら「新規登録」タブを初期選択
         if (!_isRegistrationComplete && _selectedTabIndex == 0) {
@@ -182,7 +186,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
         if (data['isActive'] != true) continue;
         // isOwner店舗はユーザー向け一覧に表示しない（FIRESTORE.mdの表示ルール）
         if (data['isOwner'] == true) continue;
-        if (!visitedIds.contains(doc.id) && !exchangedStoreIds.contains(doc.id)) {
+        if (!visitedIds.contains(doc.id) &&
+            !exchangedStoreIds.contains(doc.id)) {
           unvisited.add({
             'storeId': doc.id,
             'storeName': data['name'] ?? '不明な店舗',
@@ -203,24 +208,36 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
     try {
       final now = DateTime.now();
       final dayOfWeek = now.weekday; // 1=月曜, 7=日曜
-      final weekStart = DateTime(now.year, now.month, now.day - (dayOfWeek - 1));
+      final weekStart =
+          DateTime(now.year, now.month, now.day - (dayOfWeek - 1));
 
       // 週IDを計算
       final jan1 = DateTime(weekStart.year, 1, 1);
-      final weekNum = ((weekStart.difference(jan1).inDays + jan1.weekday - 1) / 7).ceil() + 1;
+      final weekNum =
+          ((weekStart.difference(jan1).inDays + jan1.weekday - 1) / 7).ceil() +
+              1;
       final weekId = '${weekStart.year}-W${weekNum.toString().padLeft(2, '0')}';
 
       final firestore = FirebaseFirestore.instance;
 
       // weekly_mission_progress/{userId} を取得
-      final progressDoc = await firestore.collection('weekly_mission_progress').doc(userId).get();
+      final progressDoc = await firestore
+          .collection('weekly_mission_progress')
+          .doc(userId)
+          .get();
       final progressData = progressDoc.data() ?? {};
-      final achievedWeeks = List<String>.from(progressData['achievedWeeks'] as List? ?? []);
-      final totalAchievedCount = (progressData['totalAchievedCount'] as num?)?.toInt() ?? 0;
+      final achievedWeeks =
+          List<String>.from(progressData['achievedWeeks'] as List? ?? []);
+      final totalAchievedCount =
+          (progressData['totalAchievedCount'] as num?)?.toInt() ?? 0;
       final achievedThisWeek = achievedWeeks.contains(weekId);
 
       // 今週の来店データを集計
-      final userStoresSnap = await firestore.collection('users').doc(userId).collection('stores').get();
+      final userStoresSnap = await firestore
+          .collection('users')
+          .doc(userId)
+          .collection('stores')
+          .get();
 
       int newStoresThisWeek = 0;
       int totalVisitsThisWeek = 0;
@@ -228,7 +245,9 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
       for (final storeDoc in userStoresSnap.docs) {
         final sd = storeDoc.data();
         final lastVisited = (sd['lastVisited'] as Timestamp?)?.toDate();
-        if (lastVisited != null && lastVisited.isAfter(weekStart.subtract(const Duration(seconds: 1)))) {
+        if (lastVisited != null &&
+            lastVisited
+                .isAfter(weekStart.subtract(const Duration(seconds: 1)))) {
           totalVisitsThisWeek++;
           // 初回来店チェック
           final storeUserSnap = await firestore
@@ -238,8 +257,11 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
               .doc(userId)
               .get();
           if (storeUserSnap.exists) {
-            final firstVisitAt = (storeUserSnap.data()!['firstVisitAt'] as Timestamp?)?.toDate();
-            if (firstVisitAt != null && firstVisitAt.isAfter(weekStart.subtract(const Duration(seconds: 1)))) {
+            final firstVisitAt =
+                (storeUserSnap.data()!['firstVisitAt'] as Timestamp?)?.toDate();
+            if (firstVisitAt != null &&
+                firstVisitAt
+                    .isAfter(weekStart.subtract(const Duration(seconds: 1)))) {
               newStoresThisWeek++;
             }
           }
@@ -466,11 +488,10 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('報酬の受け取りに失敗しました'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorDialog.showError(
+          context,
+          title: '受け取りに失敗しました',
+          message: '報酬を受け取れませんでした。時間をおいて再度お試しください。',
         );
       }
     }
@@ -526,8 +547,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Image.asset(
-                          'assets/images/icon_coin.png', width: 28, height: 28),
+                      Image.asset('assets/images/icon_coin.png',
+                          width: 28, height: 28),
                       const SizedBox(width: 8),
                       Text(
                         '+${mission.coinReward} コイン',
@@ -588,8 +609,7 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(
-                  'assets/images/icon_coin.png', width: 28, height: 28),
+              Image.asset('assets/images/icon_coin.png', width: 28, height: 28),
               const SizedBox(width: 8),
               Text(
                 '所持コイン: $_userCoins',
@@ -635,128 +655,132 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
     return Stack(
       children: [
         Scaffold(
-      backgroundColor: const Color(0xFFFBF6F2),
-      appBar: CommonHeader(
-        title: Text(_isCoinExchangeMode ? 'コイン交換' : 'ミッション'),
-      ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFFF6B35),
-              ),
-            )
-          : _isCoinExchangeMode
-              ? Column(
-                  children: [
-                    _buildCoinBalanceCard(),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: _loadAllMissionData,
-                        child: _buildCoinExchangeTab(),
-                      ),
-                    ),
-                  ],
+          backgroundColor: const Color(0xFFFBF6F2),
+          appBar: CommonHeader(
+            title: Text(_isCoinExchangeMode ? 'コイン交換' : 'ミッション'),
+          ),
+          body: _isLoading
+              ? const Center(
+                  child: CustomLoadingIndicator(),
                 )
-              : Column(
-              children: [
-                _buildCoinBalanceCard(),
-                const SizedBox(height: 12),
-                // タブバー
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: PillTabBar(
-                    labels: const ['デイリー', 'ログイン', '新規登録', '週次'],
-                    selectedIndex: _selectedTabIndex,
-                    onChanged: (index) {
-                      setState(() {
-                        _selectedTabIndex = index;
-                      });
-                    },
-                    activeColor: const Color(0xFFFF8F00),
-                    disabledIndices:
-                        _isRegistrationComplete ? const {} : const {0, 1, 3},
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // タブ説明
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _currentTabDescription,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: _loadAllMissionData,
-                    child: _selectedTabIndex == 3
-                        ? _buildWeeklyMissionTab()
-                        : ListView(
-                            padding: const EdgeInsets.only(bottom: 24),
-                            children: [
-                              // 新規登録タブ＆未達成時のガイドメッセージ
-                              if (_selectedTabIndex == 2 &&
-                                  !_isRegistrationComplete)
-                                Container(
-                                  margin: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  padding: const EdgeInsets.all(16),
-                                  decoration: BoxDecoration(
-                                    gradient: const LinearGradient(
-                                      colors: [
-                                        Color(0xFFFF6B35),
-                                        Color(0xFFFF8F00)
-                                      ],
-                                      begin: Alignment.centerLeft,
-                                      end: Alignment.centerRight,
-                                    ),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Row(
+              : _isCoinExchangeMode
+                  ? Column(
+                      children: [
+                        _buildCoinBalanceCard(),
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: _loadAllMissionData,
+                            child: _buildCoinExchangeTab(),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        _buildCoinBalanceCard(),
+                        const SizedBox(height: 12),
+                        // タブバー
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: PillTabBar(
+                            labels: const ['デイリー', 'ログイン', '新規登録', '週次'],
+                            selectedIndex: _selectedTabIndex,
+                            onChanged: (index) {
+                              setState(() {
+                                _selectedTabIndex = index;
+                              });
+                            },
+                            activeColor: const Color(0xFFFF8F00),
+                            disabledIndices: _isRegistrationComplete
+                                ? const {}
+                                : const {0, 1, 3},
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        // タブ説明
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _currentTabDescription,
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: _loadAllMissionData,
+                            child: _selectedTabIndex == 3
+                                ? _buildWeeklyMissionTab()
+                                : ListView(
+                                    padding: const EdgeInsets.only(bottom: 24),
                                     children: [
-                                      const Icon(Icons.flag,
-                                          color: Colors.white, size: 28),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'まずは新規登録ミッションを完了しよう!',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                              ),
+                                      // 新規登録タブ＆未達成時のガイドメッセージ
+                                      if (_selectedTabIndex == 2 &&
+                                          !_isRegistrationComplete)
+                                        Container(
+                                          margin: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 8),
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [
+                                                Color(0xFFFF6B35),
+                                                Color(0xFFFF8F00)
+                                              ],
+                                              begin: Alignment.centerLeft,
+                                              end: Alignment.centerRight,
                                             ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              'すべてのミッションを達成すると、デイリーミッションやログインボーナスが解放されます',
-                                              style: TextStyle(
-                                                color: Colors.white
-                                                    .withOpacity(0.9),
-                                                fontSize: 12,
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(Icons.flag,
+                                                  color: Colors.white,
+                                                  size: 28),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    const Text(
+                                                      'まずは新規登録ミッションを完了しよう!',
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      'すべてのミッションを達成すると、デイリーミッションやログインボーナスが解放されます',
+                                                      style: TextStyle(
+                                                        color: Colors.white
+                                                            .withOpacity(0.9),
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
-                                      ),
+                                      ..._currentMissions
+                                          .map(_buildMissionCard),
                                     ],
                                   ),
-                                ),
-                              ..._currentMissions.map(_buildMissionCard),
-                            ],
                           ),
-                  ),
-                ),
-              ],
-            ),
+                        ),
+                      ],
+                    ),
         ),
       ],
     );
@@ -840,8 +864,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Image.asset(
-                      'assets/images/icon_coin.png', width: 18, height: 18),
+                  Image.asset('assets/images/icon_coin.png',
+                      width: 18, height: 18),
                   const SizedBox(width: 4),
                   Text(
                     '+${mission.coinReward}',
@@ -991,8 +1015,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Image.asset(
-                    'assets/images/icon_coin.png', width: 18, height: 18),
+                Image.asset('assets/images/icon_coin.png',
+                    width: 18, height: 18),
                 const SizedBox(width: 4),
                 Text(
                   '+${mission.coinReward}',
@@ -1046,7 +1070,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
                       color: const Color(0xFFFF6B35).withOpacity(0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.flag, color: Color(0xFFFF6B35), size: 22),
+                    child: const Icon(Icons.flag,
+                        color: Color(0xFFFF6B35), size: 22),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -1070,14 +1095,18 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
                   ),
                   if (_weeklyMissionAchievedThisWeek)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: const Color(0xFF4CAF50),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Text(
                         '達成済み',
-                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                 ],
@@ -1105,20 +1134,28 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _isCheckingWeeklyMission ? null : _claimWeeklyMission,
+                    onPressed:
+                        _isCheckingWeeklyMission ? null : _claimWeeklyMission,
                     icon: _isCheckingWeeklyMission
                         ? const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CustomLoadingIndicator.inline(
+                              size: 18,
+                              padding: 3,
+                              primaryColor: Colors.white,
+                            ),
                           )
                         : const Icon(Icons.emoji_events, size: 18),
-                    label: Text(_isCheckingWeeklyMission ? '確認中...' : 'ミッション達成！バッジを受け取る'),
+                    label: Text(_isCheckingWeeklyMission
+                        ? '確認中...'
+                        : 'ミッション達成！バッジを受け取る'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF6B35),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -1218,7 +1255,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
           size: 22,
         ),
         const SizedBox(width: 10),
-        Icon(icon, color: met ? const Color(0xFF4CAF50) : Colors.grey[500], size: 18),
+        Icon(icon,
+            color: met ? const Color(0xFF4CAF50) : Colors.grey[500], size: 18),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
@@ -1289,7 +1327,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
     setState(() => _isCheckingWeeklyMission = true);
 
     try {
-      final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast1');
+      final functions =
+          FirebaseFunctions.instanceFor(region: 'asia-northeast1');
       final result = await functions.httpsCallable('checkWeeklyMission').call();
       final data = Map<String, dynamic>.from(result.data as Map);
 
@@ -1297,7 +1336,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
 
       final newlyAchieved = data['newlyAchieved'] as bool? ?? false;
       final newBadges = List<String>.from(data['newBadges'] as List? ?? []);
-      final totalCount = (data['weeklyMissionCount'] as num?)?.toInt() ?? _weeklyMissionTotalCount;
+      final totalCount = (data['weeklyMissionCount'] as num?)?.toInt() ??
+          _weeklyMissionTotalCount;
 
       setState(() {
         _weeklyMissionAchievedThisWeek = true;
@@ -1312,11 +1352,10 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
       debugPrint('週次ミッションチェックエラー: $e');
       if (mounted) setState(() => _isCheckingWeeklyMission = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('ミッション達成の確認に失敗しました'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorDialog.showError(
+          context,
+          title: '確認に失敗しました',
+          message: 'ミッション達成状況を確認できませんでした。時間をおいて再度お試しください。',
         );
       }
     }
@@ -1327,13 +1366,15 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
       context: context,
       builder: (context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.emoji_events, size: 64, color: Color(0xFFFF8F00)),
+                const Icon(Icons.emoji_events,
+                    size: 64, color: Color(0xFFFF8F00)),
                 const SizedBox(height: 16),
                 const Text(
                   '週次ミッション達成！',
@@ -1357,13 +1398,15 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
                       children: [
                         const Text(
                           '新バッジを獲得！',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFFF8F00)),
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFFF8F00)),
                         ),
                         const SizedBox(height: 4),
                         ...newBadges.map((b) => Text(
-                          b,
-                          style: const TextStyle(fontSize: 13),
-                        )),
+                              b,
+                              style: const TextStyle(fontSize: 13),
+                            )),
                       ],
                     ),
                   ),
@@ -1376,9 +1419,11 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF6B35),
                       foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('OK', style: TextStyle(fontWeight: FontWeight.bold)),
+                    child: const Text('OK',
+                        style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -1574,8 +1619,8 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Image.asset(
-                      'assets/images/icon_coin.png', width: 20, height: 20),
+                  Image.asset('assets/images/icon_coin.png',
+                      width: 20, height: 20),
                   const SizedBox(width: 6),
                   const Text(
                     '-10 コイン',
@@ -1630,8 +1675,7 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
         setState(() {
           _userCoins -= 10;
           _exchangedStoreIds.add(store['storeId'] as String);
-          _unvisitedStores
-              .removeWhere((s) => s['storeId'] == store['storeId']);
+          _unvisitedStores.removeWhere((s) => s['storeId'] == store['storeId']);
         });
       }
       if (mounted) {
@@ -1639,11 +1683,10 @@ class _MissionsViewState extends ConsumerState<MissionsView> {
       }
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('クーポンの交換に失敗しました'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorDialog.showError(
+          context,
+          title: '交換に失敗しました',
+          message: 'クーポンを交換できませんでした。時間をおいて再度お試しください。',
         );
       }
     }

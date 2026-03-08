@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../widgets/common_header.dart';
@@ -60,8 +61,9 @@ class _LiveChatViewState extends State<LiveChatView> {
     });
 
     try {
-      final roomRef =
-          FirebaseFirestore.instance.collection('service_chat_rooms').doc(roomId);
+      final roomRef = FirebaseFirestore.instance
+          .collection('service_chat_rooms')
+          .doc(roomId);
       final roomSnap = await roomRef.get();
       if (!roomSnap.exists) {
         await roomRef.set({
@@ -231,7 +233,7 @@ class _LiveChatViewState extends State<LiveChatView> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                  child: CircularProgressIndicator(),
+                  child: CustomLoadingIndicator(),
                 );
               }
 
@@ -257,9 +259,8 @@ class _LiveChatViewState extends State<LiveChatView> {
                   final createdAt = data['createdAt'];
                   final timeText = _formatTime(createdAt);
                   final isMe = senderId == user.uid;
-                  final statusText = isMe && data['readByOwnerAt'] != null
-                      ? '既読'
-                      : null;
+                  final statusText =
+                      isMe && data['readByOwnerAt'] != null ? '既読' : null;
                   return _ChatBubble(
                     message: _ChatMessage(
                       text: text,
@@ -373,12 +374,10 @@ class _ChatBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final alignment =
         message.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final bubbleColor =
-        message.isMe ? const Color(0xFFFF6B35) : Colors.white;
+    final bubbleColor = message.isMe ? const Color(0xFFFF6B35) : Colors.white;
     final textColor = message.isMe ? Colors.white : Colors.black87;
-    final border = message.isMe
-        ? null
-        : Border.all(color: const Color(0xFFE0E0E0));
+    final border =
+        message.isMe ? null : Border.all(color: const Color(0xFFE0E0E0));
 
     return Column(
       crossAxisAlignment: alignment,

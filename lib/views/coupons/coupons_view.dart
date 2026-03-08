@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
@@ -10,6 +11,7 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_top_tab_bar.dart';
 import '../../widgets/common_header.dart';
 import '../../widgets/coupon_list_card.dart';
+import '../../widgets/error_dialog.dart';
 import 'coupon_detail_view.dart';
 
 class CouponsView extends ConsumerWidget {
@@ -74,7 +76,7 @@ class CouponsView extends ConsumerWidget {
         data: (user) {
           return _buildCouponsContent(context, ref, user?.uid);
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CustomLoadingIndicator()),
         error: (error, _) => Center(child: Text('エラー: $error')),
       ),
     );
@@ -154,9 +156,7 @@ class CouponsView extends ConsumerWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(
-              color: Color(0xFFFF6B35),
-            ),
+            CustomLoadingIndicator(),
             SizedBox(height: 8),
             Text(
               'クーポンを読み込み中...',
@@ -243,7 +243,7 @@ class CouponsView extends ConsumerWidget {
       },
       loading: () {
         if (!timedOut) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(child: CustomLoadingIndicator());
         }
         return Center(
           child: Column(
@@ -333,7 +333,7 @@ class CouponsView extends ConsumerWidget {
           },
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: CustomLoadingIndicator()),
       error: (error, _) => Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -964,12 +964,12 @@ class CouponsView extends ConsumerWidget {
       String storeId, String userId) async {
     try {
       await ref.read(couponProvider).obtainCoupon(userId, couponId, storeId);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('クーポンを取得しました！')),
-      );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('エラー: $e')),
+      debugPrint('クーポン取得エラー: $e');
+      ErrorDialog.showError(
+        context,
+        title: '取得に失敗しました',
+        message: 'クーポンの取得に失敗しました。時間をおいて再度お試しください。',
       );
     }
   }

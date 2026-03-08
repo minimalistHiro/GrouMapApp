@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -84,9 +85,11 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
       if (userDoc.exists) {
         final userData = userDoc.data()!;
         setState(() {
-          _referralCode = userData['referralCode'] ?? _generateReferralCode(user.uid);
+          _referralCode =
+              userData['referralCode'] ?? _generateReferralCode(user.uid);
           _referralCount = userData['referralCount'] ?? 0;
-          final earningsPoints = userData['referralEarningsPoints'] ?? userData['referralEarnings'];
+          final earningsPoints = userData['referralEarningsPoints'] ??
+              userData['referralEarnings'];
           if (earningsPoints is int) {
             _totalEarnings = earningsPoints;
           } else if (earningsPoints is num) {
@@ -126,14 +129,6 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
   Future<void> _copyReferralCode() async {
     if (_referralCode != null) {
       await Clipboard.setData(ClipboardData(text: _referralCode!));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('紹介コードをコピーしました'),
-            backgroundColor: Color(0xFFFF6B35),
-          ),
-        );
-      }
     }
   }
 
@@ -141,15 +136,8 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
   Future<void> _inviteFriend() async {
     if (_referralCode != null) {
       // 実際の実装では、SNSやメールでの招待機能を実装
-      await Clipboard.setData(ClipboardData(text: 'ぐるまっぷアプリで友達紹介コード「$_referralCode」を使って登録してください！'));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('招待メッセージをコピーしました'),
-            backgroundColor: Color(0xFFFF6B35),
-          ),
-        );
-      }
+      await Clipboard.setData(
+          ClipboardData(text: 'ぐるまっぷアプリで友達紹介コード「$_referralCode」を使って登録してください！'));
     }
   }
 
@@ -169,9 +157,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
           return _buildBody(ref);
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFFFF6B35),
-          ),
+          child: CustomLoadingIndicator(),
         ),
         error: (error, _) => Center(
           child: Text('エラー: $error'),
@@ -183,9 +169,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
   Widget _buildBody(WidgetRef ref) {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFFFF6B35),
-        ),
+        child: CustomLoadingIndicator(),
       );
     }
 
@@ -221,17 +205,25 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
     }
 
     final ownerSettings = ref.watch(ownerSettingsProvider).maybeWhen(
-      data: (settings) => _resolveCurrentSettings(settings),
-      orElse: () => <String, dynamic>{},
-    );
+          data: (settings) => _resolveCurrentSettings(settings),
+          orElse: () => <String, dynamic>{},
+        );
     final inviterCoins = _resolveRewardPoints(
       ownerSettings,
-      ['friendCampaignInviterPoints', 'friendCampaignUserPoints', 'friendCampaignPoints'],
+      [
+        'friendCampaignInviterPoints',
+        'friendCampaignUserPoints',
+        'friendCampaignPoints'
+      ],
       _defaultRewardCoins,
     );
     final inviteeCoins = _resolveRewardPoints(
       ownerSettings,
-      ['friendCampaignInviteePoints', 'friendCampaignFriendPoints', 'friendCampaignPoints'],
+      [
+        'friendCampaignInviteePoints',
+        'friendCampaignFriendPoints',
+        'friendCampaignPoints'
+      ],
       _defaultRewardCoins,
     );
 
@@ -242,29 +234,29 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
         children: [
           // ヘッダー部分
           _buildHeader(),
-          
+
           const SizedBox(height: 24),
-          
+
           // 紹介コードカード
           _buildReferralCodeCard(),
-          
+
           const SizedBox(height: 24),
-          
+
           // 統計情報
           _buildStatsCard(),
-          
+
           const SizedBox(height: 24),
-          
+
           // 招待方法ガイド
           _buildInviteGuide(),
-          
+
           const SizedBox(height: 24),
 
           // アプリダウンロード
           _buildDownloadButtons(),
 
           const SizedBox(height: 24),
-          
+
           // 特典情報
           _buildRewardsInfo(inviterCoins, inviteeCoins),
         ],
@@ -399,7 +391,7 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
             ),
           ),
           const SizedBox(height: 16),
-          
+
           // 紹介コード表示
           Container(
             width: double.infinity,
@@ -434,9 +426,9 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
               ],
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // アクションボタン
           Row(
             children: [
@@ -506,7 +498,6 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
             ),
           ),
           const SizedBox(height: 16),
-          
           Row(
             children: [
               Expanded(
@@ -604,28 +595,24 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
             ),
           ),
           const SizedBox(height: 16),
-          
           _buildGuideStep(
             step: 1,
             title: '紹介コードをコピー',
             description: '上記の紹介コードをコピーして友達に送信します',
             icon: Icons.copy,
           ),
-          
           _buildGuideStep(
             step: 2,
             title: '友達にアプリをダウンロードしてもらう',
             description: '友達にぐるまっぷアプリをダウンロードしてもらいます',
             icon: Icons.download,
           ),
-          
           _buildGuideStep(
             step: 3,
             title: '紹介コードで登録',
             description: '友達がアプリで紹介コードを使って登録します',
             icon: Icons.person_add,
           ),
-          
           _buildGuideStep(
             step: 4,
             title: 'コインを獲得',
@@ -667,9 +654,9 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
               ),
             ),
           ),
-          
+
           const SizedBox(width: 16),
-          
+
           // アイコン
           Container(
             width: 40,
@@ -684,9 +671,9 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
               size: 20,
             ),
           ),
-          
+
           const SizedBox(width: 16),
-          
+
           // テキスト
           Expanded(
             child: Column(
@@ -743,25 +730,20 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
             ),
           ),
           const SizedBox(height: 16),
-          
           _buildRewardItem(
             title: 'あなたの特典',
             description: '友達1人につき${inviterCoins}コイン獲得',
             icon: Icons.stars,
             color: Colors.amber,
           ),
-
           const SizedBox(height: 12),
-
           _buildRewardItem(
             title: '友達の特典',
             description: '${inviteeCoins}コインをプレゼント',
             icon: Icons.card_giftcard,
             color: Colors.green,
           ),
-
           const SizedBox(height: 16),
-
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
@@ -891,7 +873,8 @@ class _FriendReferralViewState extends ConsumerState<FriendReferralView> {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
-  Map<String, dynamic> _resolveCurrentSettings(Map<String, dynamic>? ownerSettings) {
+  Map<String, dynamic> _resolveCurrentSettings(
+      Map<String, dynamic>? ownerSettings) {
     final rawCurrent = ownerSettings?['current'];
     if (rawCurrent is Map<String, dynamic>) {
       return rawCurrent;

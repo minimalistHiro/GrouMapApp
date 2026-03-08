@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
@@ -58,7 +59,7 @@ class _PointsViewState extends ConsumerState<PointsView>
           return _buildPointsContent(context, ref, user.uid);
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(),
+          child: CustomLoadingIndicator(),
         ),
         error: (error, _) => Center(
           child: Column(
@@ -88,7 +89,8 @@ class _PointsViewState extends ConsumerState<PointsView>
     );
   }
 
-  Widget _buildPointsContent(BuildContext context, WidgetRef ref, String userId) {
+  Widget _buildPointsContent(
+      BuildContext context, WidgetRef ref, String userId) {
     final transactions = ref.watch(userPointTransactionsProvider(userId));
 
     return Column(
@@ -154,20 +156,23 @@ class _PointsViewState extends ConsumerState<PointsView>
     );
   }
 
-
-  Widget _buildAllTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {
+  Widget _buildAllTransactions(BuildContext context,
+      AsyncValue<List<PointTransactionModel>> transactions) {
     return _buildTransactionList(context, transactions, null);
   }
 
-  Widget _buildUsedTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {
+  Widget _buildUsedTransactions(BuildContext context,
+      AsyncValue<List<PointTransactionModel>> transactions) {
     return _buildTransactionList(context, transactions, false);
   }
 
-  Widget _buildEarnedTransactions(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions) {
+  Widget _buildEarnedTransactions(BuildContext context,
+      AsyncValue<List<PointTransactionModel>> transactions) {
     return _buildTransactionList(context, transactions, true);
   }
 
-  Widget _buildTransactionList(BuildContext context, AsyncValue<List<PointTransactionModel>> transactions, bool? isEarned) {
+  Widget _buildTransactionList(BuildContext context,
+      AsyncValue<List<PointTransactionModel>> transactions, bool? isEarned) {
     return transactions.when(
       data: (transactionList) {
         // フィルタリング
@@ -196,7 +201,7 @@ class _PointsViewState extends ConsumerState<PointsView>
             ),
           );
         }
-        
+
         return ListView.builder(
           padding: const EdgeInsets.all(16.0),
           itemCount: filteredList.length,
@@ -209,7 +214,7 @@ class _PointsViewState extends ConsumerState<PointsView>
       loading: () => const Center(
         child: Padding(
           padding: EdgeInsets.all(32.0),
-          child: CircularProgressIndicator(),
+          child: CustomLoadingIndicator(),
         ),
       ),
       error: (error, _) => Center(
@@ -224,7 +229,8 @@ class _PointsViewState extends ConsumerState<PointsView>
     );
   }
 
-  Widget _buildTransactionItem(WidgetRef ref, PointTransactionModel transaction) {
+  Widget _buildTransactionItem(
+      WidgetRef ref, PointTransactionModel transaction) {
     final isEarned = transaction.amount > 0;
     final storeAsync = ref.watch(storeProvider(transaction.storeId));
     final usedNormal = transaction.usedNormalPoints ?? 0;
@@ -241,7 +247,9 @@ class _PointsViewState extends ConsumerState<PointsView>
       child: ListTile(
         leading: storeAsync.when(
           data: (store) {
-            final iconUrl = (store != null && store.images.isNotEmpty) ? store.images.first : null;
+            final iconUrl = (store != null && store.images.isNotEmpty)
+                ? store.images.first
+                : null;
             final avatar = CircleAvatar(
               backgroundColor: Colors.white,
               backgroundImage: (iconUrl != null && iconUrl.isNotEmpty)
@@ -296,5 +304,4 @@ class _PointsViewState extends ConsumerState<PointsView>
       ),
     );
   }
-
 }

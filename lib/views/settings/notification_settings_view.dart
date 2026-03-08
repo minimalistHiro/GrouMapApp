@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,10 +11,12 @@ class NotificationSettingsView extends ConsumerStatefulWidget {
   const NotificationSettingsView({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<NotificationSettingsView> createState() => _NotificationSettingsViewState();
+  ConsumerState<NotificationSettingsView> createState() =>
+      _NotificationSettingsViewState();
 }
 
-class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsView> {
+class _NotificationSettingsViewState
+    extends ConsumerState<NotificationSettingsView> {
   // プッシュ通知設定
   bool _couponIssued = true;
   bool _post = true;
@@ -42,11 +45,16 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
         setState(() => _isLoading = false);
         return;
       }
-      final snapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final data = snapshot.data();
 
-      final pushSettings = data?['notificationSettings'] as Map<String, dynamic>?;
-      final emailSettings = data?['emailNotificationSettings'] as Map<String, dynamic>?;
+      final pushSettings =
+          data?['notificationSettings'] as Map<String, dynamic>?;
+      final emailSettings =
+          data?['emailNotificationSettings'] as Map<String, dynamic>?;
 
       final rankingOptOut = data?['rankingOptOut'] as bool? ?? false;
 
@@ -165,7 +173,7 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
     return Scaffold(
       appBar: const CommonHeader(title: '通知設定'),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CustomLoadingIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

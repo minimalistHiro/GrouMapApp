@@ -77,58 +77,31 @@ class GameDialog extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: headerColor.withOpacity(0.30),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
+                color: const Color(0xFF9BB8D4).withOpacity(0.6),
+                blurRadius: 40,
+                spreadRadius: 8,
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildHeader(),
-              _buildContent(),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      width: double.infinity,
-      height: 120,
-      decoration: BoxDecoration(
-        color: headerColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Center(
-        child: Container(
-          width: 68,
-          height: 68,
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.22),
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: Colors.white.withOpacity(0.55),
-              width: 2.0,
-            ),
-          ),
-          child: Icon(
-            icon,
-            size: 36,
-            color: Colors.white,
-          ),
+          child: _buildContent(),
         ),
       ),
     );
   }
 
   Widget _buildContent() {
+    final hasTwoActions = actions.length == 2;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             title,
@@ -139,7 +112,7 @@ class GameDialog extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
             message,
             style: const TextStyle(
@@ -149,29 +122,44 @@ class GameDialog extends StatelessWidget {
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 22),
-          ...actions.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final action = entry.value;
-            final isLast = idx == actions.length - 1;
-            return Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
-              child: CustomButton(
-                text: action.label,
-                onPressed: action.onPressed,
-                backgroundColor: action.isPrimary
-                    ? (action.color ?? headerColor)
-                    : Colors.white,
-                textColor: action.isPrimary
-                    ? Colors.white
-                    : (action.color ?? headerColor),
-                borderColor:
-                    action.isPrimary ? null : (action.color ?? headerColor),
-              ),
-            );
-          }),
+          const SizedBox(height: 24),
+          if (hasTwoActions)
+            Row(
+              children: [
+                Expanded(child: _buildButton(actions[0])),
+                const SizedBox(width: 12),
+                Expanded(child: _buildButton(actions[1])),
+              ],
+            )
+          else
+            ...actions.asMap().entries.map((entry) {
+              final isLast = entry.key == actions.length - 1;
+              return Padding(
+                padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+                child: _buildButton(entry.value),
+              );
+            }),
         ],
       ),
     );
+  }
+
+  Widget _buildButton(GameDialogAction action) {
+    if (action.isPrimary) {
+      return CustomButton(
+        text: action.label,
+        onPressed: action.onPressed,
+        gradient: action.color != null
+            ? LinearGradient(colors: [action.color!, action.color!])
+            : null,
+      );
+    } else {
+      return CustomButton(
+        text: action.label,
+        onPressed: action.onPressed,
+        backgroundColor: const Color(0xFFF0F0F0),
+        textColor: const Color(0xFF6B6B6B),
+      );
+    }
   }
 }

@@ -15,6 +15,7 @@ import 'views/main_navigation_view.dart';
 import 'providers/auth_provider.dart';
 import 'services/push_notification_service.dart';
 import 'widgets/app_update_gate.dart';
+import 'widgets/custom_loading_indicator.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -130,7 +131,7 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
             },
             loading: () => const Scaffold(
               body: Center(
-                child: CircularProgressIndicator(),
+                child: CustomLoadingIndicator(),
               ),
             ),
             error: (_, __) =>
@@ -143,7 +144,7 @@ class _AuthWrapperState extends ConsumerState<AuthWrapper> {
       },
       loading: () => const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(),
+          child: CustomLoadingIndicator(),
         ),
       ),
       error: (error, _) => Scaffold(

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -60,7 +61,6 @@ final userBadgeCountProvider =
   }
 });
 
-
 // 今日すでにスロットを回したかチェック
 final todaySlotPlayedProvider = FutureProvider.autoDispose<bool>((ref) async {
   final user = FirebaseAuth.instance.currentUser;
@@ -108,20 +108,17 @@ class _HomeViewState extends ConsumerState<HomeView> {
   Widget _buildLoadingIndicatorWithLabel(
     String label, {
     Color? color,
-    double? strokeWidth,
   }) {
     if (!_showDebugLoadingLabels) {
-      return CircularProgressIndicator(
-        color: color,
-        strokeWidth: strokeWidth ?? 4,
+      return CustomLoadingIndicator(
+        primaryColor: color ?? const Color(0xFFFF6B35),
       );
     }
     return Stack(
       alignment: Alignment.center,
       children: [
-        CircularProgressIndicator(
-          color: color,
-          strokeWidth: strokeWidth ?? 4,
+        CustomLoadingIndicator(
+          primaryColor: color ?? const Color(0xFFFF6B35),
         ),
         Positioned(
           bottom: -18,
@@ -180,7 +177,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
       ),
     );
   }
-
 
   @override
   void initState() {
@@ -1833,8 +1829,10 @@ class _HomeViewState extends ConsumerState<HomeView> {
       return const SizedBox.shrink();
     }
 
-    final coinCoupons = ref.watch(coinExchangeCouponsProvider(userId)).asData?.value ?? [];
-    final stampCoupons = ref.watch(stampRewardCouponsProvider(userId)).asData?.value ?? [];
+    final coinCoupons =
+        ref.watch(coinExchangeCouponsProvider(userId)).asData?.value ?? [];
+    final stampCoupons =
+        ref.watch(stampRewardCouponsProvider(userId)).asData?.value ?? [];
     final allCoupons = [...coinCoupons, ...stampCoupons];
 
     if (allCoupons.isEmpty) {
@@ -1856,8 +1854,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFB300).withOpacity(0.15),
                   borderRadius: BorderRadius.circular(10),

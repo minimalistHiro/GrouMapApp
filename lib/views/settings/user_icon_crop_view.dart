@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 
 import '../../widgets/common_header.dart';
 import '../../widgets/custom_button.dart';
@@ -145,7 +146,8 @@ class _UserIconCropViewState extends State<UserIconCropView> {
     );
     final inverse = Matrix4.inverted(_controller.value);
     final topLeft = MatrixUtils.transformPoint(inverse, cropRect.topLeft);
-    final bottomRight = MatrixUtils.transformPoint(inverse, cropRect.bottomRight);
+    final bottomRight =
+        MatrixUtils.transformPoint(inverse, cropRect.bottomRight);
     Rect srcRect = Rect.fromPoints(topLeft, bottomRight);
     final imageRect = Rect.fromLTWH(
       0,
@@ -167,8 +169,10 @@ class _UserIconCropViewState extends State<UserIconCropView> {
       Rect.fromLTWH(0, 0, outputSize.toDouble(), outputSize.toDouble()),
       paint,
     );
-    final outputImage = await recorder.endRecording().toImage(outputSize, outputSize);
-    final byteData = await outputImage.toByteData(format: ui.ImageByteFormat.png);
+    final outputImage =
+        await recorder.endRecording().toImage(outputSize, outputSize);
+    final byteData =
+        await outputImage.toByteData(format: ui.ImageByteFormat.png);
     return byteData!.buffer.asUint8List();
   }
 
@@ -181,17 +185,23 @@ class _UserIconCropViewState extends State<UserIconCropView> {
       body: SafeArea(
         child: image == null
             ? const Center(
-                child: CircularProgressIndicator(color: Colors.white),
+                child: CustomLoadingIndicator.inline(
+                  size: 40,
+                  padding: 6,
+                  primaryColor: Colors.white,
+                ),
               )
             : Column(
                 children: [
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final size = math.min(constraints.maxWidth, constraints.maxHeight);
+                        final size = math.min(
+                            constraints.maxWidth, constraints.maxHeight);
                         _viewerSize = Size(size, size);
                         if (!_didInitTransform && image != null) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) => _resetTransform());
+                          WidgetsBinding.instance
+                              .addPostFrameCallback((_) => _resetTransform());
                         }
                         return Center(
                           child: SizedBox(
@@ -220,8 +230,10 @@ class _UserIconCropViewState extends State<UserIconCropView> {
                                     child: CustomPaint(
                                       painter: _CropOverlayPainter(
                                         cropScale: _cropScale,
-                                        borderColor: Colors.white.withOpacity(0.9),
-                                        maskColor: Colors.black.withOpacity(0.55),
+                                        borderColor:
+                                            Colors.white.withOpacity(0.9),
+                                        maskColor:
+                                            Colors.black.withOpacity(0.55),
                                       ),
                                     ),
                                   ),

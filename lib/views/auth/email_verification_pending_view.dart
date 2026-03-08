@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/error_dialog.dart';
 import '../main_navigation_view.dart';
 import 'user_info_view.dart';
 
@@ -218,12 +219,9 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
   Future<void> _verifyEmailOtp() async {
     final code = _codeController.text.trim();
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('6桁の認証コードを入力してください'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
-        ),
+      ErrorDialog.showWarning(
+        context,
+        message: '6桁の認証コードを入力してください。',
       );
       return;
     }
@@ -246,11 +244,11 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('認証に失敗しました: $e'),
-          backgroundColor: Colors.red,
-        ),
+      debugPrint('メール認証エラー: $e');
+      await ErrorDialog.showError(
+        context,
+        title: '認証に失敗しました',
+        message: '認証コードを確認して、もう一度お試しください。',
       );
     } finally {
       if (mounted) {
@@ -304,22 +302,13 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
     });
     try {
       await ref.read(authServiceProvider).sendEmailVerification();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('認証コードを送信しました'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('送信に失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
+        debugPrint('認証コード送信エラー: $e');
+        await ErrorDialog.showError(
+          context,
+          title: '送信に失敗しました',
+          message: '認証コードを送信できませんでした。時間をおいて再度お試しください。',
         );
       }
     } finally {
@@ -451,18 +440,9 @@ class _EmailVerificationPendingViewState extends ConsumerState<EmailVerification
 
   Future<void> _showErrorDialog(String message) async {
     if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('エラー'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
-      ),
+    await ErrorDialog.showError(
+      context,
+      message: message,
     );
   }
 }

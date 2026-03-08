@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -250,13 +251,10 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
                 height: double.infinity,
                 color: const Color(0xFFFF6B35),
                 child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                    color: Colors.white,
-                    strokeWidth: 2,
+                  child: CustomLoadingIndicator.inline(
+                    size: 40,
+                    padding: 6,
+                    primaryColor: Colors.white,
                   ),
                 ),
               );
@@ -651,7 +649,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
                       const Expanded(
                         child: Text(
                           'お会計時に店舗スタッフにクーポン利用を伝えてください',
-                          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.black87, height: 1.5),
                         ),
                       ),
                     ],
@@ -682,7 +681,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
                       const Expanded(
                         child: Text(
                           'アプリのQRコード画面を店舗スタッフに提示してください',
-                          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.black87, height: 1.5),
                         ),
                       ),
                     ],
@@ -713,7 +713,8 @@ class _CouponDetailViewState extends ConsumerState<CouponDetailView> {
                       const Expanded(
                         child: Text(
                           '店舗スタッフがQRコードを読み取り、クーポンを適用します',
-                          style: TextStyle(fontSize: 14, color: Colors.black87, height: 1.5),
+                          style: TextStyle(
+                              fontSize: 14, color: Colors.black87, height: 1.5),
                         ),
                       ),
                     ],

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../widgets/error_dialog.dart';
 
 class PointUsageApprovalView extends StatefulWidget {
   final String storeId;
@@ -44,7 +46,7 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
         stream: requestRef.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CustomLoadingIndicator());
           }
 
           if (!snapshot.hasData || !snapshot.data!.exists) {
@@ -57,7 +59,9 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
           final storeName = (data['storeName'] ?? widget.storeName).toString();
           final isExpired = status == 'usage_expired' || _isExpired(data);
 
-          if (status == 'usage_pending_user_approval' && isExpired && !_didMarkExpired) {
+          if (status == 'usage_pending_user_approval' &&
+              isExpired &&
+              !_didMarkExpired) {
             _didMarkExpired = true;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _markExpired(requestRef);
@@ -81,17 +85,24 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey.shade300),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+                      BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 2)),
                     ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('店舗', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text('店舗',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
                       const SizedBox(height: 4),
-                      Text(storeName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      Text(storeName,
+                          style: const TextStyle(
+                              fontSize: 20, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 16),
-                      const Text('利用ポイント', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text('利用ポイント',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
                       const SizedBox(height: 4),
                       Text(
                         '$usedPoints pt',
@@ -108,7 +119,9 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isProcessing ? null : () => _updateStatus(requestRef, 'usage_approved'),
+                    onPressed: _isProcessing
+                        ? null
+                        : () => _updateStatus(requestRef, 'usage_approved'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFFF6B35),
                       foregroundColor: Colors.white,
@@ -118,9 +131,10 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
                         ? const SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
+                            child: CustomLoadingIndicator.inline(
+                              size: 20,
+                              padding: 3,
+                              primaryColor: Colors.white,
                             ),
                           )
                         : const Text('承認する'),
@@ -130,7 +144,9 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton(
-                    onPressed: _isProcessing ? null : () => _updateStatus(requestRef, 'usage_rejected'),
+                    onPressed: _isProcessing
+                        ? null
+                        : () => _updateStatus(requestRef, 'usage_rejected'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.red,
                       side: const BorderSide(color: Colors.red),
@@ -147,7 +163,8 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
     );
   }
 
-  Future<void> _updateStatus(DocumentReference<Map<String, dynamic>> requestRef, String status) async {
+  Future<void> _updateStatus(
+      DocumentReference<Map<String, dynamic>> requestRef, String status) async {
     setState(() {
       _isProcessing = true;
     });
@@ -156,19 +173,21 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
       await requestRef.update({
         'status': status,
         'updatedAt': FieldValue.serverTimestamp(),
-        if (status == 'usage_approved') 'usageApprovedAt': FieldValue.serverTimestamp(),
-        if (status == 'usage_rejected') 'usageRejectedAt': FieldValue.serverTimestamp(),
+        if (status == 'usage_approved')
+          'usageApprovedAt': FieldValue.serverTimestamp(),
+        if (status == 'usage_rejected')
+          'usageRejectedAt': FieldValue.serverTimestamp(),
       });
       if (mounted) {
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('更新に失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
+        debugPrint('ポイント利用承認更新エラー: $e');
+        ErrorDialog.showError(
+          context,
+          title: '更新に失敗しました',
+          message: 'ポイント利用リクエストを更新できませんでした。時間をおいて再度お試しください。',
         );
       }
     } finally {
@@ -180,7 +199,8 @@ class _PointUsageApprovalViewState extends State<PointUsageApprovalView> {
     }
   }
 
-  Future<void> _markExpired(DocumentReference<Map<String, dynamic>> requestRef) async {
+  Future<void> _markExpired(
+      DocumentReference<Map<String, dynamic>> requestRef) async {
     try {
       await requestRef.update({
         'status': 'usage_expired',
