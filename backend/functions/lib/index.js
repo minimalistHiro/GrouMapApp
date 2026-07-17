@@ -16,6 +16,7 @@ const nodemailer_1 = __importDefault(require("nodemailer"));
 const https_2 = __importDefault(require("https"));
 const crypto_1 = require("crypto");
 const jwt_1 = require("./utils/jwt");
+const stamp_progress_1 = require("./stamp_progress");
 // Firebase Admin SDK初期化
 (0, app_1.initializeApp)();
 const db = (0, firestore_2.getFirestore)();
@@ -2067,14 +2068,18 @@ exports.punchStamp = (0, https_1.onCall)({
     if (!request.auth) {
         throw new https_1.HttpsError('unauthenticated', 'Store must be authenticated');
     }
-    const { userId, storeId, selectedCouponIds: rawSelectedCouponIds } = request.data || {};
+    const { userId, storeId, selectedCouponIds: rawSelectedCouponIds, selectedUserCouponIds: rawSelectedUserCouponIds, } = request.data || {};
     if (!userId || !storeId) {
         throw new https_1.HttpsError('invalid-argument', 'Missing required parameters: userId and storeId');
     }
     const selectedCouponIds = Array.isArray(rawSelectedCouponIds)
         ? rawSelectedCouponIds.filter((id) => typeof id === 'string' && id.trim().length > 0)
         : [];
+    const selectedUserCouponIds = Array.isArray(rawSelectedUserCouponIds)
+        ? rawSelectedUserCouponIds.filter((id) => typeof id === 'string' && id.trim().length > 0)
+        : [];
     console.log('[punchStamp] selectedCouponIds:', selectedCouponIds);
+    console.log('[punchStamp] selectedUserCouponIds:', selectedUserCouponIds);
     const storeUserId = request.auth.uid;
     const storeUserRef = db.collection(USERS_COLLECTION).doc(storeUserId);
     const storeRef = db.collection('stores').doc(storeId);
@@ -2082,7 +2087,7 @@ exports.punchStamp = (0, https_1.onCall)({
     const targetStoreRef = targetUserRef.collection('stores').doc(storeId);
     const storeUserStatsRef = db.collection('store_users').doc(storeId).collection('users').doc(userId);
     const result = await db.runTransaction(async (txn) => {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
         const [storeUserSnap, storeSnap] = await Promise.all([
             txn.get(storeUserRef),
             txn.get(storeRef),
@@ -2109,19 +2114,12 @@ exports.punchStamp = (0, https_1.onCall)({
         const todayJst = getJstDateString();
         const lastStampDate = (_g = targetStoreSnap.data()) === null || _g === void 0 ? void 0 : _g['lastStampDate'];
         if (typeof lastStampDate === 'string' && lastStampDate === todayJst) {
+            console.info('[punchStamp] already stamped', { userId, storeId, todayJst });
             throw new https_1.HttpsError('already-exists', 'Already stamped today for this store');
         }
-        const currentStamps = asInt((_h = targetStoreSnap.data()) === null || _h === void 0 ? void 0 : _h['stamps'], 0);
-        let stampsAfter = 0;
-        let cardCompleted = false;
-        if (currentStamps >= 1) {
-            // 救済措置: 既存スタンプ保有者はスタンプを +1 加算
-            const nextStamps = currentStamps + 1;
-            cardCompleted = nextStamps % MAX_STAMPS === 0;
-            stampsAfter = nextStamps;
-        }
-        // currentStamps == 0 の場合は来店記録のみ（stampsAfter = 0 のまま）
+        const stampProgress = (0, stamp_progress_1.calculateStampProgress)((_h = targetStoreSnap.data()) === null || _h === void 0 ? void 0 : _h['stamps'], MAX_STAMPS);
         const couponReads = [];
+        const userCouponReads = [];
         if (selectedCouponIds.length > 0) {
             for (const couponId of selectedCouponIds) {
                 const couponRef = db
@@ -2151,27 +2149,22 @@ exports.punchStamp = (0, https_1.onCall)({
                 });
             }
         }
-        // スタンプ加算（救済措置対象ユーザーのみ）+ 1日1回制限用の日付記録
-        if (currentStamps >= 1) {
-            txn.set(targetStoreRef, stripUndefined({
-                storeId,
-                storeName: storeName || undefined,
-                stamps: stampsAfter,
-                lastStampDate: todayJst,
-                lastVisited: firestore_2.FieldValue.serverTimestamp(),
-                updatedAt: firestore_2.FieldValue.serverTimestamp(),
-            }), { merge: true });
+        if (selectedUserCouponIds.length > 0) {
+            for (const couponId of selectedUserCouponIds) {
+                const couponRef = db.collection('user_coupons').doc(couponId);
+                const couponSnap = await txn.get(couponRef);
+                userCouponReads.push({ couponId, couponRef, couponSnap });
+            }
         }
-        else {
-            // 新規ユーザー（stamps=0）: 来店記録のみ
-            txn.set(targetStoreRef, stripUndefined({
-                storeId,
-                storeName: storeName || undefined,
-                lastStampDate: todayJst,
-                lastVisited: firestore_2.FieldValue.serverTimestamp(),
-                updatedAt: firestore_2.FieldValue.serverTimestamp(),
-            }), { merge: true });
-        }
+        // 全ユーザーへスタンプを1個付与し、1日1回制限用の日付も同時に記録する
+        txn.set(targetStoreRef, stripUndefined({
+            storeId,
+            storeName: storeName || undefined,
+            stamps: stampProgress.stampsAfter,
+            lastStampDate: todayJst,
+            lastVisited: firestore_2.FieldValue.serverTimestamp(),
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        }), { merge: true });
         const todayStr = todayJst;
         const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayStr);
         txn.set(statsRef, {
@@ -2251,13 +2244,44 @@ exports.punchStamp = (0, https_1.onCall)({
                 }
             }
         }
+        if (userCouponReads.length > 0) {
+            for (const entry of userCouponReads) {
+                const { couponId, couponRef, couponSnap } = entry;
+                if (!couponSnap.exists) {
+                    throw new https_1.HttpsError('not-found', `User coupon not found: ${couponId}`);
+                }
+                const couponData = (_k = couponSnap.data()) !== null && _k !== void 0 ? _k : {};
+                if (couponData['userId'] !== userId) {
+                    throw new https_1.HttpsError('permission-denied', `User coupon owner mismatch: ${couponId}`);
+                }
+                if (couponData['storeId'] !== storeId) {
+                    throw new https_1.HttpsError('permission-denied', `User coupon store mismatch: ${couponId}`);
+                }
+                if (couponData['isUsed'] === true) {
+                    throw new https_1.HttpsError('failed-precondition', `User coupon already used: ${couponId}`);
+                }
+                txn.update(couponRef, {
+                    isUsed: true,
+                    usedAt: firestore_2.FieldValue.serverTimestamp(),
+                    usedVia: 'qr_stamp',
+                });
+            }
+        }
+        console.info('[punchStamp] stamp transaction prepared', {
+            userId,
+            storeId,
+            stampsBefore: stampProgress.currentStamps,
+            stampsAfter: stampProgress.stampsAfter,
+            selectedCouponCount: selectedCouponIds.length,
+            selectedUserCouponCount: selectedUserCouponIds.length,
+        });
         return {
             userId,
             storeId,
             storeName,
-            stampsAdded: currentStamps >= 1 ? 1 : 0,
-            stampsAfter,
-            cardCompleted,
+            stampsAdded: stampProgress.stampsAdded,
+            stampsAfter: stampProgress.stampsAfter,
+            cardCompleted: stampProgress.cardCompleted,
         };
     });
     const requestRef = db
@@ -3528,40 +3552,29 @@ exports.nfcCheckin = (0, https_1.onCall)({
         const todayJst = getJstDateString();
         const lastStampDate = (_a = targetStoreSnap.data()) === null || _a === void 0 ? void 0 : _a['lastStampDate'];
         if (typeof lastStampDate === 'string' && lastStampDate === todayJst) {
+            console.info('[nfcCheckin] already checked in', { userId, storeId, todayJst });
             throw new https_1.HttpsError('already-exists', 'Already checked in today for this store');
         }
-        const currentStamps = asInt((_b = targetStoreSnap.data()) === null || _b === void 0 ? void 0 : _b['stamps'], 0);
+        const stampProgress = (0, stamp_progress_1.calculateStampProgress)((_b = targetStoreSnap.data()) === null || _b === void 0 ? void 0 : _b['stamps'], MAX_STAMPS);
         const isFirstVisit = !storeUserStatsSnap.exists;
         const currentTotalVisits = asInt((_c = storeUserStatsSnap.data()) === null || _c === void 0 ? void 0 : _c['totalVisits'], 0);
         const newTotalVisits = isFirstVisit ? 1 : currentTotalVisits + 1;
-        let stampsAfter = 0;
-        let cardCompleted = false;
-        if (currentStamps >= 1) {
-            // 救済措置: 既存スタンプ保有者はスタンプを +1 加算
-            const nextStamps = currentStamps + 1;
-            cardCompleted = nextStamps % MAX_STAMPS === 0;
-            stampsAfter = nextStamps;
-            txn.set(targetStoreRef, stripUndefined({
-                storeId,
-                storeName: storeName || undefined,
-                stamps: nextStamps,
-                totalVisits: newTotalVisits,
-                lastStampDate: todayJst,
-                lastVisited: firestore_2.FieldValue.serverTimestamp(),
-                updatedAt: firestore_2.FieldValue.serverTimestamp(),
-            }), { merge: true });
-        }
-        else {
-            // 新規ユーザー（stamps=0）: 来店記録のみ（スタンプ加算なし）
-            txn.set(targetStoreRef, stripUndefined({
-                storeId,
-                storeName: storeName || undefined,
-                totalVisits: newTotalVisits,
-                lastStampDate: todayJst,
-                lastVisited: firestore_2.FieldValue.serverTimestamp(),
-                updatedAt: firestore_2.FieldValue.serverTimestamp(),
-            }), { merge: true });
-        }
+        txn.set(targetStoreRef, stripUndefined({
+            storeId,
+            storeName: storeName || undefined,
+            stamps: stampProgress.stampsAfter,
+            totalVisits: newTotalVisits,
+            lastStampDate: todayJst,
+            lastVisited: firestore_2.FieldValue.serverTimestamp(),
+            updatedAt: firestore_2.FieldValue.serverTimestamp(),
+        }), { merge: true });
+        console.info('[nfcCheckin] stamp transaction prepared', {
+            userId,
+            storeId,
+            stampsBefore: stampProgress.currentStamps,
+            stampsAfter: stampProgress.stampsAfter,
+            totalVisitsAfter: newTotalVisits,
+        });
         // 日次統計
         const statsRef = db.collection('store_stats').doc(storeId).collection('daily').doc(todayJst);
         txn.set(statsRef, {
@@ -3599,8 +3612,8 @@ exports.nfcCheckin = (0, https_1.onCall)({
             userId,
             storeId,
             storeName,
-            stampsAfter,
-            cardCompleted,
+            stampsAfter: stampProgress.stampsAfter,
+            cardCompleted: stampProgress.cardCompleted,
             isFirstVisit,
         };
     });

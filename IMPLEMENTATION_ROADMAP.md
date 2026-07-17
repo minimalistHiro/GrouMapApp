@@ -23,15 +23,14 @@
 
 ## ⚠️ 設計書間の重要な調整事項
 
-### スタンプ救済措置の方針（正規仕様: nfc-zukan-flow-redesign.md を採用）
+### スタンプ付与の現行方針（2026-07-17更新）
 
-`block-a-cloud-functions.md`（スタンプ全停止）と `nfc-zukan-flow-redesign.md`（救済措置付き廃止）で方針が異なる。
-BUSINESS_MODEL.md の記述（「既存スタンプ保有者は救済措置として継続」）と整合する **nfc-zukan-flow-redesign.md を採用**する。
+旧設計書の「スタンプ全停止」「既存ユーザーのみ救済」は現行仕様ではない。実装済みの共通スタンプ計算と BUSINESS_MODEL.md の2026-07-17方針を優先する。
 
 | ユーザー種別 | 判定 | 動作 |
 |------------|------|------|
-| 既存スタンプ保有者（`currentStamps >= 1`） | 救済措置対象 | NFCチェックイン時にスタンプ +1 加算継続 |
-| 新規ユーザー（`currentStamps == 0`） | 図鑑移行済み | スタンプ加算なし・来店記録のみ |
+| 既存スタンプ保有者（`currentStamps >= 1`） | 継続対象 | QR/NFC成功時にスタンプ +1 |
+| 新規ユーザー（`currentStamps == 0` または未設定） | 新規付与対象 | QR/NFC成功時にスタンプ0→1 |
 
 ### `business-model-simplification.md` の扱い
 
@@ -80,12 +79,11 @@ Cloud Functions 側の変更は **nfc-zukan-flow-redesign.md の仕様を優先*
 #### ① バックエンド（Cloud Functions）
 
 設計書:
-- [nfc-zukan-flow-redesign.md](.claude/plans/nfc-zukan-flow-redesign.md) **← スタンプ救済措置の正規仕様。Cloud Functions の実装仕様はこちらを優先**
+- [nfc-zukan-flow-redesign.md](.claude/plans/nfc-zukan-flow-redesign.md) **← 図鑑フローの設計資料。スタンプ対象は本書の2026-07-17現行方針を優先**
 - [block-a-cloud-functions.md](.claude/plans/block-a-cloud-functions.md) **← コイン付与削除・フォロー source 変更の詳細はこちらを参照**
 
 **`nfcCheckin` 関数の変更:**
-- [x] `currentStamps >= 1` の既存ユーザーはスタンプ +1 加算継続（救済措置）
-- [x] `currentStamps == 0` の新規ユーザーはスタンプ加算なし（来店記録のみ）
+- [x] 未設定・0・1以上の全ユーザーへスタンプ +1（2026-07-17更新）
 - [x] `isFirstVisit` フラグを追加（初回来店時のみ `stores/{storeId}.discoveredCount` を +1）
 - [x] 来店ボーナスコイン付与を削除
 - [x] スタンプ達成クーポン自動付与を削除
@@ -93,7 +91,7 @@ Cloud Functions 側の変更は **nfc-zukan-flow-redesign.md の仕様を優先*
 - [x] 戻り値を `{ storeName, stampsAfter, cardCompleted, isFirstVisit, awardedCoupons: [], usedCoupons, usageVerificationCode }` に変更
 
 **`punchStamp` 関数の変更:**
-- [x] `currentStamps >= 1` のユーザーのみスタンプ +1 加算（救済措置と整合）
+- [x] 未設定・0・1以上の全ユーザーへスタンプ +1（2026-07-17更新）
 - [x] スタンプ達成クーポン自動付与を削除
 - [x] 自動フォローの `source` を `punch_checkin` に変更
 
@@ -109,7 +107,7 @@ Cloud Functions 側の変更は **nfc-zukan-flow-redesign.md の仕様を優先*
 - [zukan-view-design.md](.claude/plans/zukan-view-design.md)（ZukanView・ZukanCardWidget・Provider の詳細実装定義）
 
 **モデル変更:**
-- [x] `NfcCheckinResult` モデルに `isFirstVisit` 追加、`coinsAdded` 削除（`stampsAfter`, `cardCompleted` は救済措置のため維持）
+- [x] `NfcCheckinResult` モデルに `isFirstVisit` 追加、`coinsAdded` 削除（`stampsAfter`, `cardCompleted` は全ユーザー付与のため維持）
 
 **新規ファイル作成（zukan-view-design.md に従う）:**
 - [x] `lib/providers/zukan_provider.dart`（`zukanAllStoresProvider`, `userVisitedStoreIdsProvider`, `zukanStoresProvider`, `userDiscoveredStoreCountProvider`, `ZukanStoreItem` クラス）
@@ -464,7 +462,7 @@ Cloud Functions 側の変更は **nfc-zukan-flow-redesign.md の仕様を優先*
   └─ immediate-tasks-design.md #9    STORE_AGREEMENT.md 作成（運用タスク）
 
 フェーズ1
-  ├─ nfc-zukan-flow-redesign.md      ←── 最初（Cloud Functions + スタンプ救済措置 + モデル変更）
+  ├─ nfc-zukan-flow-redesign.md      ←── 図鑑フロー + モデル変更（スタンプ対象は現行方針を優先）
   │   ※ block-a-cloud-functions.md のコイン削除・フォロー source 変更の詳細も参照
   │       ↓
   ├─ zukan-view-design.md            ←── nfc-zukan と並行（ZukanView・ZukanCardWidget 詳細実装）
@@ -506,7 +504,7 @@ Cloud Functions 側の変更は **nfc-zukan-flow-redesign.md の仕様を優先*
 
 | 設計書 | フェーズ | ステータス | 備考 |
 |--------|---------|-----------|------|
-| [nfc-zukan-flow-redesign.md](.claude/plans/nfc-zukan-flow-redesign.md) | 1 | 設計完了 | **Cloud Functions の正規仕様（スタンプ救済措置）** |
+| [nfc-zukan-flow-redesign.md](.claude/plans/nfc-zukan-flow-redesign.md) | 1 | 設計完了 | 図鑑フロー仕様（スタンプ対象は2026-07-17方針で上書き） |
 | [block-a-cloud-functions.md](.claude/plans/block-a-cloud-functions.md) | 1 | 設計完了 | コイン削除・フォロー source の詳細参照用 |
 | [zukan-view-design.md](.claude/plans/zukan-view-design.md) | 1 | 設計完了 | ZukanView・ZukanCardWidget の詳細実装定義 |
 | [ui-navigation-redesign-3tabs.md](.claude/plans/ui-navigation-redesign-3tabs.md) | 1 | 設計完了 | |

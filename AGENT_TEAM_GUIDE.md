@@ -46,7 +46,7 @@ claude
 | ファイル | 確認目的 |
 |---------|---------|
 | `IMPLEMENTATION_ROADMAP.md` | 各フェーズのタスク一覧・チェックボックス状態 |
-| `.claude/plans/nfc-zukan-flow-redesign.md` | Cloud Functions の正規仕様（スタンプ救済措置） |
+| `.claude/plans/nfc-zukan-flow-redesign.md` | 図鑑フロー仕様（スタンプ対象は `IMPLEMENTATION_ROADMAP.md` の2026-07-17方針を優先） |
 | `.claude/plans/immediate-tasks-design.md` | #9〜#14 の各タスク詳細 |
 | `FIRESTORE.md` | Firestoreスキーマ・ルール |
 
@@ -130,15 +130,14 @@ Claude Code のエージェントチームは、複数の Claude インスタン
 
 参照ファイル（必ず最初に全て読むこと）:
 - IMPLEMENTATION_ROADMAP.md（フェーズ1 ① タスク一覧）
-- .claude/plans/nfc-zukan-flow-redesign.md（★正規仕様。スタンプ救済措置あり）
+- .claude/plans/nfc-zukan-flow-redesign.md（図鑑フロー仕様。スタンプ対象は IMPLEMENTATION_ROADMAP.md の現行方針を優先）
 - .claude/plans/block-a-cloud-functions.md（コイン削除・フォロー source の詳細）
 - FIRESTORE.md（スキーマ確認）
 
 実装タスク:
 
 【nfcCheckin 関数の変更】
-- currentStamps >= 1 の既存ユーザーはスタンプ +1 加算継続（救済措置）
-- currentStamps == 0 の新規ユーザーはスタンプ加算なし（来店記録のみ）
+- currentStamps が未設定・0・1以上の全ユーザーへスタンプ +1
 - isFirstVisit フラグを追加（初回来店時のみ stores/{storeId}.discoveredCount を +1）
 - 来店ボーナスコイン付与を削除
 - スタンプ達成クーポン自動付与を削除
@@ -146,7 +145,7 @@ Claude Code のエージェントチームは、複数の Claude インスタン
 - 戻り値を { storeName, stampsAfter, cardCompleted, isFirstVisit, awardedCoupons: [], usedCoupons, usageVerificationCode } に変更
 
 【punchStamp 関数の変更】
-- currentStamps >= 1 のユーザーのみスタンプ +1 加算（救済措置と整合）
+- currentStamps が未設定・0・1以上の全ユーザーへスタンプ +1
 - スタンプ達成クーポン自動付与を削除
 - 自動フォローの source を 'punch_checkin' に変更
 

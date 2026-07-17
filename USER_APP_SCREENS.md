@@ -1,6 +1,7 @@
 # ユーザー用アプリ 画面一覧（構成と説明）
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
+※ 2026-07-17更新（スタンプ付与不整合修正）: QR押印とNFCチェックインの両方で、スタンプ未設定・0を含む全ユーザーへ同一店舗1日1個のスタンプを付与する仕様に統一。`lastStampDate` によるJST基準の1日1回制限は維持。
 ※ 2026-03-08更新（賑わい度凡例0人追加・個人モードtotalVisite読み込みバグ修正）: 賑わい度の凡例に「0人（グレー）= サークル表示なし」を先頭に追加。`_loadUserStamps()` で `totalVisits` フィールドを取得していなかったバグを修正（`users/{uid}/stores/{storeId}.totalVisits` を正しく読み込むよう変更）。これにより個人マップモードのピン色が実際の来店回数に連動するよう修正。
 ※ 2026-03-08更新（マップモード選択の永続化）: MapViewの選択モード（通常/個人/コミュニティ）を `SharedPreferences`（`map_mode` キー）にローカル保存し、次回起動時に自動復元するよう変更。`_loadMapModeFromPrefs()`（起動時復元）・`_saveMapModeToPrefs()`（モード変更時保存）を追加。
 ※ 2026-03-07更新（アカウント画面ランクゲージ移設・UI改善）: ProfileViewのXP進捗カード（ルーキー→探索者のゲージ欄）を廃止し、アバターアイコン周りに円形ランクプログレスリングを追加（ポケモンGO風）。`_RankProgressPainter`（`CustomPainter`）で実装: 背景トラック（半透明白リング）＋ランクカラーの進捗アーク＋アーク先端に輝点を表示。アバター外径92px・内径76px・ストローク幅4px。アニメーションは既存の `_xpAnimController`（1200ms `Curves.easeOut`）を再利用。ゲームアクショングリッド（2列GridView）を廃止し `FloatingMenuItem` リスト形式（`_buildSettingsMenuContainer`）に変更。

@@ -127,10 +127,10 @@
 | **Deep Link受信** | `DeepLinkService`（`app_links`パッケージ）がコールドスタート・ウォームスタートの両方でNFCタグURLを受信し、`MainNavigationView`で `createCheckinSession` を呼び出してセッションを発行後、`NfcCouponSelectView`に遷移。正規ホストは `groumapapp.web.app`。旧タグ互換として `groumap-ea452.web.app` も一時的に受理。`storeId:secret` キーの5秒重複抑止 + アクティブ画面中の同一キー再push防止で二重遷移を防止 |
 | **セキュリティ（セッショントークン）** | Deep Link受信時に Cloud Functions `createCheckinSession` が `tagSecret` を検証し、10分間有効な使い捨てセッショントークン（UUID、Firestore `checkin_sessions` に保存）を発行。`nfcCheckin` はセッショントークンを使用後に `used: true` にマークし再利用を防止。ブラウザ履歴から翌日に同じURLを開いても、位置情報チェックで拒否される |
 | **セキュリティ（位置情報チェック）** | チェックイン実行時に `geolocator` で現在地を取得し、店舗の `location`（緯度・経度）と Haversine 距離計算で比較。200m超過の場合は Cloud Functions が `permission-denied` を返し、「店舗から離れすぎています」ダイアログを表示してチェックインを拒否。位置情報の権限を拒否した場合もチェックイン不可 |
-| **クーポン同時利用** | チェックイン画面（`NfcCouponSelectView`）で当該店舗の未使用・有効期限内クーポンを一覧表示し、複数選択してチェックインと同時に利用可能。クーポンなしでもチェックインのみ実行可能 |
-| **チェックイン結果** | `NfcCheckinResultView`にスタンプカード（押印アニメーション・コンプリートシャイン、既存スタンプ保有者のみ）、獲得バッジ、利用可能クーポンを表示。`stampsAfter == 0` の新規ユーザーは自動的に `ZukanCardView` に遷移。「カードを見る」ボタンで任意に遷移可能 |
+| **クーポン同時利用** | チェックイン画面（`NfcCouponSelectView`）で当該店舗の未使用・有効期限内クーポンを一覧表示し、複数選択してチェックインと同時に利用可能。クーポンなしでもチェックインのみ実行可能。QR押印では通常クーポンと特別クーポンの使用処理を `punchStamp` の同一トランザクションで行い、押印だけ成功する中間状態を防止 |
+| **チェックイン結果** | `NfcCheckinResultView`にスタンプカード（押印アニメーション・コンプリートシャイン）、獲得バッジ、利用可能クーポンを表示。スタンプ未設定・0の新規ユーザーにも初回チェックインで1個付与 |
 | **クーポン利用確認コード** | クーポン利用時は6桁確認コード（Cloud Functions生成）とリアルタイム時計（1秒更新）を表示。スタッフ目視確認用で、スクリーンショット不正対策 |
-| **1日1回スタンプ制限** | `users/{uid}/stores/{storeId}.lastStampDate`（yyyy-MM-dd JST形式）で同一店舗への1日1回制限を管理。QRスキャン（`punchStamp`）とNFCチェックイン（`nfcCheckin`）の両方に適用 |
+| **1日1回スタンプ制限** | `users/{uid}/stores/{storeId}.lastStampDate`（yyyy-MM-dd JST形式）で同一店舗への1日1回制限を管理。QRスキャン（`punchStamp`）とNFCチェックイン（`nfcCheckin`）の両方で、スタンプ未設定・0を含む全ユーザーへ成功時に1個付与。当日2回目は来店数・統計・クーポンを変更せず `already-exists` を返す |
 | **エラーハンドリング** | `FirebaseFunctionsException`のエラーコード別メッセージを `showGameDialog` で表示（`already-exists`=本日発見済み / `not-found`=無効セッション / `permission-denied`（距離超過）=「店舗から200m以内でチェックインしてください」 / `permission-denied`（その他）=利用不可 / `deadline-exceeded`=セッション期限切れ（再NFCタッチ案内） / `unauthenticated`=未ログイン） |
 
 ### 1.6 QRコード機能
@@ -162,8 +162,8 @@
 |------|------|
 | **スタンプカード一覧** | ユーザーが持つ各店舗のスタンプカードを一覧表示 |
 | **スタンプ獲得** | 来店時のQRチェックインでスタンプを獲得 |
-| **スタンプカード運用（廃止）** | ※スタンプシステム完全廃止（2026-03-05）。来店体験は図鑑NFCタッチ方式に完全移行。既存スタンプデータは保持。新規スタンプ付与は全店舗で停止 |
-| **スタンプ達成特典（廃止）** | ※スタンプ完全廃止に伴い廃止。`stampEnabled` フラグも不要。来店記録・トランザクションは継続取得 |
+| **スタンプカード運用** | 図鑑を主軸としつつ、QR押印・NFCチェックインの成功時に未設定・0を含む全ユーザーへ同一店舗1日1個を付与。JST基準の `lastStampDate` で重複を防止 |
+| **スタンプ達成特典** | 既存の達成特典データと表示を維持。日常のスタンプ付与はQR/NFC共通ロジックで累積 |
 | **スタンプ達成クーポンUI（廃止）** | ※廃止済み |
 | **スタンプ履歴** | 全て/獲得履歴のタブで時系列表示 |
 | **取引履歴** | クーポン利用履歴とスタンプ受取導線を表示 |
@@ -628,12 +628,12 @@
 | `syncInstagramPosts` | 指定店舗のInstagram投稿を手動同期（動画除外） |
 | `syncInstagramPostsScheduled` | 30分ごとに実行され、同期時刻到達店舗のみInstagram投稿を自動同期 |
 | `setStoreOwnerFlagOnCreate` | 店舗作成時にisOwnerユーザーが作成者なら `isOwner: true` を自動設定 |
-| `syncStampsWithVisits` | 全店舗のスタンプ数と来店数の不整合チェック・一括同期。不整合ユーザーのdisplayName/profileImageUrl/storeNameをレスポンスに含める（最大50件）。`mode: 'check'` で確認のみ、`mode: 'sync'` で実際に同期実行 |
+| `syncStampsWithVisits` | 全店舗のスタンプ数と来店数の不整合チェック・一括同期。不整合ユーザーのdisplayName/profileImageUrl/storeNameをレスポンスに含める（最大50件）。`dryRun: true` で確認のみ、`dryRun: false` でスタンプ数が来店回数より少ないデータだけ同期 |
 | `syncStoreOwnerFlags` | 既存店舗のisOwnerフラグ一括同期（ワンタイム実行用Callable） |
 | `migrateStampCard` | 物理スタンプカードをデジタルに移行するCallable Function。Firestoreトランザクション内でスタッフ権限確認・二重移行チェック・スタンプ加算・`stamp_migrations` 記録を実行。来店ボーナスは付与しない |
 | `notifyFollowersOnNewInstagramPost` | Instagram投稿同期時にフォロワーへプッシュ通知を送信。`public_instagram_posts` の新規ドキュメント作成（`onDocumentCreated`）で発火し、`stores/{storeId}/followers` のフォロワーに通知（動画除外・`notificationSettings.post` 設定を尊重）。再同期時は `merge: true` のため既存ドキュメント更新となりトリガーされず重複通知なし |
 | `createCheckinSession` | NFCタグ検証＋チェックインセッション発行。`tagSecret` を検証し、10分有効の使い捨てセッショントークン（UUID）を `checkin_sessions/{sessionId}` に保存して返す。Deep Link受信直後（`MainNavigationView`）から呼び出し |
-| `nfcCheckin` | NFCタグチェックイン処理。セッショントークン検証（有効期限・使用済みチェック・userId照合）→位置情報チェック（店舗 `location` との Haversine 距離 200m以内）→セッションを `used:true` にマーク→店舗確認→1日1回チェックイン制限（`lastStampDate`）→`isFirstVisit` 判定（初回のみ `stores/{storeId}.discoveredCount` を +1）→来店記録（`store_users` / `transactions`）→`store_stats/daily.visitorCount` +1→バッジ判定→自動フォロー（`source:'nfc_checkin'`）→友達紹介コイン処理（維持）→選択クーポン使用処理（6桁確認コード生成）。`NfcCheckinResult`（isFirstVisit/storeName/awardedCoupons/usedCoupons/usageVerificationCode）を返す |
+| `nfcCheckin` | NFCタグチェックイン処理。セッショントークン検証（有効期限・使用済みチェック・userId照合）→位置情報チェック（店舗 `location` との Haversine 距離 200m以内）→セッションを `used:true` にマーク→店舗確認→1日1回チェックイン制限（`lastStampDate`）→全ユーザーへスタンプ+1→`isFirstVisit` 判定（初回のみ `stores/{storeId}.discoveredCount` を +1）→来店記録（`store_users` / `transactions`）→`store_stats/daily.visitorCount` +1→バッジ判定→自動フォロー（`source:'nfc_checkin'`）→友達紹介コイン処理（維持）→選択クーポン使用処理（6桁確認コード生成）。`NfcCheckinResult`（stampsAfter/cardCompleted/isFirstVisit/storeName/awardedCoupons/usedCoupons/usageVerificationCode）を返す |
 | `registerNfcTag` | NFCタグの登録。`nfc_tags/{tagId}`にstoreId・tagSecret・createdAtを保存。管理者オーナー専用 |
 | `notifyCouponExpiryScheduled` | コイン交換クーポンの有効期限通知（毎日10:00 JST）。有効期限7日前・3日前のクーポンを検出し、対象ユーザーにお知らせ通知を自動作成。`expiryNotified7d`/`expiryNotified3d` フラグで重複防止 |
 

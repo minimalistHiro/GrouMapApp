@@ -1,7 +1,15 @@
 # 開発 TODO（ぐるまっぷ）
 
-> 最終更新: 2026-03-05（フェーズ1〜2前の小タスク群を設計・追加）
+> 最終更新: 2026-07-17（QR/NFCスタンプ付与の現行仕様を反映）
 > ゲーム性（図鑑・地図塗り）を主軸とした設計変更に伴う、実装の残タスク一覧。
+
+---
+
+## 運用保守
+
+- [ ] **Cloud Functions ランタイムを Node.js 20 から更新**
+  - Firebaseデプロイ警告: Node.js 20は2026-04-30に非推奨、2026-10-30に廃止予定
+  - `firebase-functions` の更新と合わせて、テスト後に段階的にデプロイする
 
 ---
 
@@ -11,8 +19,8 @@
 
 ### Cloud Functions / バックエンド
 
-- [ ] **`nfcCheckin` 修正**（スタンプ救済措置 + isFirstVisit + discoveredCount）
-  - `currentStamps >= 1` のユーザーにのみスタンプ +1（救済措置）、`== 0` は来店記録のみ
+- [x] **`nfcCheckin` 修正**（スタンプ付与 + isFirstVisit + discoveredCount）
+  - 未設定・0を含む全ユーザーへ、同一店舗1日1個のスタンプを付与（2026-07-17本番反映）
   - `isFirstVisit` フラグを戻り値に追加
   - 初回来店時に `stores/{storeId}.discoveredCount` を +1（トランザクション内）
   - 来店ボーナスコイン付与を削除（友達紹介コインは維持）
@@ -20,8 +28,9 @@
   - 自動フォローの source を `'nfc_checkin'` に変更
   - プラン: **`nfc-zukan-flow-redesign.md` Phase 1**（block-a の nfcCheckin 部分を上書き）
 
-- [ ] **`punchStamp` 修正**
-  - スタンプ計算削除（全ユーザー・全店舗）
+- [x] **`punchStamp` 修正**
+  - 未設定・0を含む全ユーザーへ、同一店舗1日1個のスタンプを付与（2026-07-17本番反映）
+  - 選択クーポンの使用処理を押印と同一Firestoreトランザクションへ統合
   - スタンプ達成クーポン自動付与を削除
   - 自動フォローの source を `'punch_checkin'` に変更
   - プラン: **`block-a-cloud-functions.md`**

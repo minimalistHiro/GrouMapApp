@@ -607,7 +607,7 @@
   - `isRegularHoliday`: 不定休フラグ（true/false）
   - `isActive`: 店舗公開フラグ（初期値はフィールド未設定。5項目（店舗プロフィール・位置情報・メニュー・店内画像・決済方法）全完了時に `isActive` フィールドが未設定の場合のみ自動 `true` に初期化。以降は設定画面のトグルで手動切り替え可能で、自動上書きは行わない）
   - `isApproved`: 承認フラグ（承認ボタンでtrue）
-  - `stampEnabled`: スタンプ発行フラグ（bool。**省略/trueの場合は通常通りスタンプ付与。falseの場合はスタンプ0の新規ユーザーへのスタンプ付与を停止し来店記録のみ取得。スタンプ1〜9を保有する既存ユーザーは引き続き10個まで付与。対象店舗のみ手動設定。後方互換性のため、フィールド不在はtrue扱い**）
+  - `stampEnabled`: 旧スタンプ制御フラグ（bool?、互換データとして保持）。2026-07-17以降の `punchStamp` / `nfcCheckin` はこの値で対象を分岐せず、未設定・0を含む全ユーザーへ1日1個付与
   - `approvalStatus`: 承認ステータス（`pending`/`approved`/`rejected`）
   - `approvedAt`: 承認日時
   - `approvedBy`: 承認者UID
@@ -781,6 +781,7 @@
   - `obtainedAt`: 取得日時
   - `usedAt`: 使用日時（使用済みの場合。店舗スタッフによる使用処理時は `FieldValue.serverTimestamp()` で更新）
   - `isUsed`: 使用済みフラグ（店舗スタッフが会計・スタンプフロー完了時に `true` に更新）
+  - `usedVia`: 使用経路（QR押印と同時利用の場合は `qr_stamp`）
   - `storeId`: 店舗ID
   - `orderId`: 注文ID（任意）
   - `storeName`: 店舗名（コイン交換・スタンプ達成クーポン時）
@@ -966,7 +967,7 @@
   - `rankingOptOut`: ランキング参加オプトアウトフラグ（bool、デフォルト: false。true の場合は「名無し探検家」として匿名表示）
   - `readNotifications`: 既読通知ID配列
   - `stores/{storeId}`: スタンプ/来店情報
-    - `stamps`: スタンプ数
+    - `stamps`: スタンプ数（QR押印 `punchStamp` / NFCチェックイン `nfcCheckin` の成功時に、未設定・0を含む全ユーザーへ1日1個加算）
     - `lastVisited`: 最終来店
     - `lastStampDate`: 最終スタンプ日（`yyyy-MM-dd` 形式、Asia/Tokyo。1日1回スタンプ制限用。string?）
     - `totalVisits`: 累計来店回数（`nfcCheckin` トランザクション内でミラー書き込み。個人マップモードのピン色判定に使用。初回来店時 `1`、以降は `+1`）
