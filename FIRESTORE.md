@@ -683,11 +683,12 @@
   - `expiryNotified7d`: 7日前有効期限通知済みフラグ（bool、Cloud Functions `notifyCouponExpiryScheduled` がセット）
   - `expiryNotified3d`: 3日前有効期限通知済みフラグ（bool、Cloud Functions `notifyCouponExpiryScheduled` がセット）
 - アクセス制御メモ（`firestore.rules`）:
-  - `allow read`: ユーザー本人（`resource.data.userId == request.auth.uid`）または `isStoreStaff()`（店舗スタッフ）
+  - `allow read`: ユーザー本人（`resource.data.userId == request.auth.uid`）、全体オーナー（`isOwner()`）、またはクーポンの `storeId` に対する店舗メンバー（`isStoreMember(resource.data.storeId)`）
   - `allow create`: ユーザー本人のみ（または未認証ゲスト）
-  - `allow update`: ユーザー本人、または `isUserCouponStoreUse()` 条件を満たす店舗スタッフ
-    - `isUserCouponStoreUse()`: `isStoreStaff()` かつ変更フィールドが `['isUsed', 'usedAt']` のみ かつ `isUsed` が `false → true` への変更
+  - `allow update`: ユーザー本人、または `isUserCouponStoreUse()` 条件を満たす全体オーナー／対象店舗メンバー
+    - `isUserCouponStoreUse()`: `isOwner()` またはクーポンの `storeId` に対する `isStoreMember()` であり、変更フィールドが `['isUsed', 'usedAt']` のみ、かつ `isUsed` が `false → true` への変更
   - `allow delete`: 禁止
+- 複合インデックス: `[isActive ASC, requiredStampCount ASC]`（`firestore.indexes.json` に定義。`punchStamp` / `migrateStampCard` / `nfcCheckin` が有効なスタンプ達成特典を検索する際に使用）
 - 複合インデックス: `[userId ASC, storeId ASC, isUsed ASC]`（`firestore.indexes.json` に定義済み。店舗用アプリのQRスキャンフローで特定店舗・特定ユーザーの未使用特別クーポンを取得する際に使用）
 - 複合インデックス: `[type ASC, isUsed ASC, validUntil ASC]`（`firestore.indexes.json` に定義済み。`notifyCouponExpiryScheduled` で有効期限が近いコイン交換クーポンを検索する際に使用）
 

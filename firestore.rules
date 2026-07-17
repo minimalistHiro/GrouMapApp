@@ -239,10 +239,11 @@ service cloud.firestore {
       }
     }
 
-    // 店舗スタッフが特別クーポンを使用済みにするための条件（isUsed / usedAt のみ変更可）
+    // オーナーまたは対象店舗メンバーが特別クーポンを使用済みにするための条件
+    // （isUsed / usedAt のみ変更可）
     function isUserCouponStoreUse() {
       return request.auth != null
-        && isStoreStaff()
+        && (isOwner() || isStoreMember(resource.data.storeId))
         && request.resource.data.diff(resource.data).changedKeys()
           .hasOnly(['isUsed', 'usedAt'])
         && request.resource.data.isUsed == true
@@ -252,7 +253,9 @@ service cloud.firestore {
     // ユーザークーポン（トップレベル）
     match /user_coupons/{userCouponId} {
       allow read: if request.auth != null &&
-        (resource.data.userId == request.auth.uid || isStoreStaff());
+        (resource.data.userId == request.auth.uid
+          || isOwner()
+          || isStoreMember(resource.data.storeId));
       // 未ログインの取得を許可（guest）
       allow create: if (request.auth != null && request.resource.data.userId == request.auth.uid)
         || (request.auth == null && request.resource.data.userId == 'guest');
