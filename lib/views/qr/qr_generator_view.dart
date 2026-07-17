@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -8,6 +9,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../widgets/common_header.dart';
+import '../../widgets/error_dialog.dart';
 import '../payment/point_payment_view.dart';
 import '../payment/point_payment_detail_view.dart';
 import '../points/point_usage_approval_view.dart';
@@ -30,7 +32,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
   ProviderSubscription<dynamic>? _authStateSub; // 未使用化（下位互換のため保持）
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _storesSub;
-  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>> _storeRequestDocSubs = {};
+  final Map<String, StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>>
+      _storeRequestDocSubs = {};
 
   @override
   void initState() {
@@ -76,7 +79,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
   }
 
   /// 他画面へのNavigator.pushをラップし、遷移中は輝度を元に戻し、戻ってきたら再度MAXにする
-  Future<T?> _pushWithBrightness<T>(BuildContext context, Route<T> route) async {
+  Future<T?> _pushWithBrightness<T>(
+      BuildContext context, Route<T> route) async {
     await _resetBrightness();
     final result = await Navigator.of(context).push(route);
     if (mounted) {
@@ -108,7 +112,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
                   return _buildQRCodeList(context, user);
                 },
                 loading: () => const Center(
-                  child: CircularProgressIndicator(),
+                  child: CustomLoadingIndicator(),
                 ),
                 error: (error, _) => Center(
                   child: Text('エラー: $error'),
@@ -121,13 +125,13 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
     );
   }
 
-
   Widget _buildQRCodeList(BuildContext context, User user) {
     final qrTokenState = ref.watch(qrTokenProvider);
-    
+
     // デバッグログ
-    print('QRGeneratorView: QRTokenState - isLoading: ${qrTokenState.isLoading}, hasToken: ${qrTokenState.hasToken}, error: ${qrTokenState.error}');
-    
+    print(
+        'QRGeneratorView: QRTokenState - isLoading: ${qrTokenState.isLoading}, hasToken: ${qrTokenState.hasToken}, error: ${qrTokenState.error}');
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -140,7 +144,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
     );
   }
 
-  Widget _buildQRCodeDisplay(BuildContext context, QRTokenState qrTokenState, User user) {
+  Widget _buildQRCodeDisplay(
+      BuildContext context, QRTokenState qrTokenState, User user) {
     return Card(
       elevation: 4,
       child: Padding(
@@ -151,14 +156,15 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
             // 残り時間表示
             if (qrTokenState.hasToken) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: qrTokenState.remainingSeconds > 10 
+                  color: qrTokenState.remainingSeconds > 10
                       ? Colors.green.withOpacity(0.1)
                       : Colors.orange.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: qrTokenState.remainingSeconds > 10 
+                    color: qrTokenState.remainingSeconds > 10
                         ? Colors.green
                         : Colors.orange,
                   ),
@@ -168,7 +174,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
                   children: [
                     Icon(
                       Icons.timer,
-                      color: qrTokenState.remainingSeconds > 10 ? Colors.green : Colors.orange,
+                      color: qrTokenState.remainingSeconds > 10
+                          ? Colors.green
+                          : Colors.orange,
                       size: 16,
                     ),
                     const SizedBox(width: 4),
@@ -177,7 +185,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: qrTokenState.remainingSeconds > 10 ? Colors.green : Colors.orange,
+                        color: qrTokenState.remainingSeconds > 10
+                            ? Colors.green
+                            : Colors.orange,
                       ),
                     ),
                   ],
@@ -185,7 +195,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
               ),
               const SizedBox(height: 16),
             ],
-            
+
             // QRコード画像
             Container(
               padding: const EdgeInsets.all(16),
@@ -204,7 +214,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
               ),
             ),
             const SizedBox(height: 16),
-            
+
             // エラー表示
             if (qrTokenState.error != null) ...[
               Container(
@@ -255,7 +265,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(),
+              CustomLoadingIndicator(),
               SizedBox(height: 16),
               Text('トークンを生成中...'),
             ],
@@ -313,7 +323,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
                   ),
                   const Spacer(),
                   IconButton(
-                    onPressed: () => _copyToClipboard(context, qrTokenState.token!),
+                    onPressed: () =>
+                        _copyToClipboard(context, qrTokenState.token!),
                     icon: const Icon(Icons.copy, size: 16),
                     tooltip: 'コピー',
                     padding: EdgeInsets.zero,
@@ -360,7 +371,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
         const SizedBox(width: 10),
         Flexible(
           child: Text(
-            displayName != null && displayName.isNotEmpty ? displayName : 'ユーザー',
+            displayName != null && displayName.isNotEmpty
+                ? displayName
+                : 'ユーザー',
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -421,12 +434,15 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
   }
 
   bool _isUsageApprovalAlreadyNotified(Map<String, dynamic> data) {
-    final notified = data['usageApprovalNotified'] ?? data['usageInputNotified'];
+    final notified =
+        data['usageApprovalNotified'] ?? data['usageInputNotified'];
     if (notified is bool && notified) return true;
-    if (data.containsKey('usageApprovalNotifiedAt') && data['usageApprovalNotifiedAt'] != null) {
+    if (data.containsKey('usageApprovalNotifiedAt') &&
+        data['usageApprovalNotifiedAt'] != null) {
       return true;
     }
-    return data.containsKey('usageInputNotifiedAt') && data['usageInputNotifiedAt'] != null;
+    return data.containsKey('usageInputNotifiedAt') &&
+        data['usageInputNotifiedAt'] != null;
   }
 
   Future<void> _markRequestNotified({
@@ -502,12 +518,14 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
         .snapshots()
         .listen((storesSnap) {
       if (!mounted) return;
-      print('PendingListener:stores snapshot -> count=${storesSnap.docs.length}');
+      print(
+          'PendingListener:stores snapshot -> count=${storesSnap.docs.length}');
       // 既に購読済みの storeId を維持しつつ、新規 storeId を追加監視
       final currentStoreIds =
           _storeRequestDocSubs.keys.map((key) => key.split(':').first).toSet();
       final incomingStoreIds = storesSnap.docs.map((d) => d.id).toSet();
-      print('PendingListener:current=${currentStoreIds.toList()} incoming=${incomingStoreIds.toList()}');
+      print(
+          'PendingListener:current=${currentStoreIds.toList()} incoming=${incomingStoreIds.toList()}');
 
       // 新規 storeId に対して購読を追加
       for (final storeId in incomingStoreIds.difference(currentStoreIds)) {
@@ -517,28 +535,33 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
             .doc(storeId)
             .collection(userId)
             .doc('usage_request');
-        print('PendingListener:attach usage sub -> path=point_requests/$storeId/$userId/usage_request');
+        print(
+            'PendingListener:attach usage sub -> path=point_requests/$storeId/$userId/usage_request');
         final usageSub = usageRef.snapshots().listen((doc) async {
           if (!mounted) return;
-          print('PendingListener:usage snapshot -> storeId=$storeId exists=${doc.exists}');
+          print(
+              'PendingListener:usage snapshot -> storeId=$storeId exists=${doc.exists}');
           if (!doc.exists) return;
           final data = doc.data() as Map<String, dynamic>;
           final status = (data['status'] ?? '').toString();
           final requestType = (data['requestType'] ?? '').toString();
           print('PendingListener:doc data -> status=$status');
-          if (status == 'usage_pending_user_approval' && requestType == 'usage') {
+          if (status == 'usage_pending_user_approval' &&
+              requestType == 'usage') {
             if (_isUsageRequestExpired(data)) {
               await _markUsageExpired(storeId: storeId, userId: userId);
               return;
             }
             if (_isUsageApprovalAlreadyNotified(data)) return;
             final combinedRequestId = '${storeId}_$userId';
-            if (_isNavigatingToUsageInput || _lastHandledUsageRequestId == combinedRequestId) return;
+            if (_isNavigatingToUsageInput ||
+                _lastHandledUsageRequestId == combinedRequestId) return;
 
             _isNavigatingToUsageInput = true;
             _lastHandledUsageRequestId = combinedRequestId;
             try {
-              await _markUsageApprovalNotified(storeId: storeId, userId: userId);
+              await _markUsageApprovalNotified(
+                  storeId: storeId, userId: userId);
               await _pushWithBrightness(
                 context,
                 MaterialPageRoute(
@@ -564,17 +587,20 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
             .doc(storeId)
             .collection(userId)
             .doc('award_request');
-        print('PendingListener:attach award sub -> path=point_requests/$storeId/$userId/award_request');
+        print(
+            'PendingListener:attach award sub -> path=point_requests/$storeId/$userId/award_request');
         final awardSub = awardRef.snapshots().listen((doc) async {
           if (!mounted) return;
-          print('PendingListener:award snapshot -> storeId=$storeId exists=${doc.exists}');
+          print(
+              'PendingListener:award snapshot -> storeId=$storeId exists=${doc.exists}');
           if (!doc.exists) return;
           final data = doc.data() as Map<String, dynamic>;
           final status = (data['status'] ?? '').toString();
           if (status != 'accepted') return;
           if (_isRequestAlreadyNotified(data)) return;
           final combinedRequestId = '${storeId}_$userId';
-          if (_isNavigatingToConfirmation || _lastHandledRequestId == combinedRequestId) return;
+          if (_isNavigatingToConfirmation ||
+              _lastHandledRequestId == combinedRequestId) return;
 
           _isNavigatingToConfirmation = true;
           _lastHandledRequestId = combinedRequestId;
@@ -584,7 +610,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
             final usedPoints = _parseRequestUsedPoints(data);
             final usedCouponIds = _parseRequestCouponIds(data);
             await _markRequestNotified(storeId: storeId, userId: userId);
-            print('PendingListener:navigate accepted -> requestId=$combinedRequestId');
+            print(
+                'PendingListener:navigate accepted -> requestId=$combinedRequestId');
             await _pushWithBrightness(
               context,
               MaterialPageRoute(
@@ -631,7 +658,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
     if (_isNavigatingToConfirmation) return;
     try {
       // インデックス不要: すべての storeId を stores から取得し、各 {userId}/request を直接確認
-      final storesSnap = await FirebaseFirestore.instance.collection('stores').get(const GetOptions(source: Source.server));
+      final storesSnap = await FirebaseFirestore.instance
+          .collection('stores')
+          .get(const GetOptions(source: Source.server));
       print('PendingOnce:stores -> count=${storesSnap.docs.length}');
       for (final storeDoc in storesSnap.docs) {
         final storeId = storeDoc.id;
@@ -641,24 +670,28 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
             .collection(userId)
             .doc('usage_request')
             .get(const GetOptions(source: Source.server));
-        print('PendingOnce:check usage -> storeId=$storeId exists=${usageDoc.exists}');
+        print(
+            'PendingOnce:check usage -> storeId=$storeId exists=${usageDoc.exists}');
         if (usageDoc.exists) {
           final data = usageDoc.data() as Map<String, dynamic>;
           final combinedRequestId = '${storeId}_$userId';
           final status = (data['status'] ?? '').toString();
           final requestType = (data['requestType'] ?? '').toString();
 
-          if (status == 'usage_pending_user_approval' && requestType == 'usage') {
+          if (status == 'usage_pending_user_approval' &&
+              requestType == 'usage') {
             if (_isUsageRequestExpired(data)) {
               await _markUsageExpired(storeId: storeId, userId: userId);
               continue;
             }
             if (_isUsageApprovalAlreadyNotified(data)) continue;
-            if (_isNavigatingToUsageInput || _lastHandledUsageRequestId == combinedRequestId) return;
+            if (_isNavigatingToUsageInput ||
+                _lastHandledUsageRequestId == combinedRequestId) return;
             _isNavigatingToUsageInput = true;
             _lastHandledUsageRequestId = combinedRequestId;
             try {
-              await _markUsageApprovalNotified(storeId: storeId, userId: userId);
+              await _markUsageApprovalNotified(
+                  storeId: storeId, userId: userId);
               await _pushWithBrightness(
                 context,
                 MaterialPageRoute(
@@ -681,7 +714,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
             .collection(userId)
             .doc('award_request')
             .get(const GetOptions(source: Source.server));
-        print('PendingOnce:check award -> storeId=$storeId exists=${awardDoc.exists}');
+        print(
+            'PendingOnce:check award -> storeId=$storeId exists=${awardDoc.exists}');
         if (!awardDoc.exists) continue;
         final data = awardDoc.data() as Map<String, dynamic>;
         final combinedRequestId = '${storeId}_$userId';
@@ -724,7 +758,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
 
   void _showManualInputDialog(BuildContext context) {
     final TextEditingController qrCodeController = TextEditingController();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -757,11 +791,9 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
               if (qrCode.isNotEmpty) {
                 _processQRCode(context, qrCode);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('QRコードを入力してください'),
-                    backgroundColor: Colors.red,
-                  ),
+                ErrorDialog.showWarning(
+                  context,
+                  message: 'QRコードを入力してください。',
                 );
               }
             },
@@ -778,14 +810,12 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
 
   void _processQRCode(BuildContext context, String qrCode) async {
     print('QRコード処理開始: $qrCode');
-    
+
     if (qrCode.isEmpty) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('QRコードを入力してください'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorDialog.showWarning(
+          context,
+          message: 'QRコードを入力してください。',
         );
       }
       return;
@@ -808,7 +838,8 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
         }
 
         // ストア配下を直接確認して pending を検出（point_requests/{storeId}/{userId}/request）
-        final storesSnap = await FirebaseFirestore.instance.collection('point_requests').get();
+        final storesSnap =
+            await FirebaseFirestore.instance.collection('point_requests').get();
         for (final storeDoc in storesSnap.docs) {
           final storeId = storeDoc.id;
           final doc = await FirebaseFirestore.instance
@@ -856,7 +887,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
     // QRコードの形式をチェック（店舗IDかどうか）
     final isStoreId = _isStoreId(qrCode);
     print('店舗ID判定結果: $isStoreId');
-    
+
     if (isStoreId) {
       print('店舗IDとして処理: $qrCode');
       // 店舗IDの場合、存在確認してからポイント支払い画面に遷移
@@ -892,19 +923,20 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
   }
 
   // 店舗の存在確認とナビゲーション
-  Future<void> _validateStoreAndNavigate(BuildContext context, String storeId) async {
+  Future<void> _validateStoreAndNavigate(
+      BuildContext context, String storeId) async {
     print('店舗存在確認開始: $storeId');
-    
+
     // ローディング表示
     if (!context.mounted) return;
-    
+
     if (_isNavigatingToPayment) {
       print('支払い画面への遷移は既に進行中のためスキップ');
       return;
     }
     _isNavigatingToPayment = true;
     _showLoadingDialog(context);
-    
+
     // タイムアウト処理（10秒で強制終了）
     Timer? timeoutTimer;
     timeoutTimer = Timer(const Duration(seconds: 10), () {
@@ -917,7 +949,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
         '処理がタイムアウトしました。通信環境をご確認のうえ、もう一度お試しください。',
       );
     });
-    
+
     try {
       print('Firestoreで店舗を検索中: $storeId');
       // 店舗の存在確認
@@ -976,7 +1008,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
         // ローディングを必ず閉じる（タイマーも停止）
         timeoutTimer.cancel();
         _closeLoadingDialog(context);
-        
+
         _showErrorDialog(
           context,
           '店舗情報の確認中にエラーが発生しました',
@@ -984,7 +1016,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
         );
       }
     }
-    
+
     _isNavigatingToPayment = false;
   }
 
@@ -1006,9 +1038,7 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
         barrierDismissible: false,
         useRootNavigator: true,
         builder: (context) => const Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFFFF6B35),
-          ),
+          child: CustomLoadingIndicator(),
         ),
       );
     } catch (e) {
@@ -1018,25 +1048,10 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
 
   // エラーダイアログを表示する共通メソッド
   void _showErrorDialog(BuildContext context, String title, String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(message),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+    ErrorDialog.showError(
+      context,
+      title: title,
+      message: message,
     );
   }
 
@@ -1052,23 +1067,5 @@ class _QRGeneratorViewState extends ConsumerState<QRGeneratorView> {
   // クリップボードにコピーする関数
   void _copyToClipboard(BuildContext context, String text) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.check, color: Colors.white, size: 20),
-            SizedBox(width: 8),
-            Text('QRコード文字列をコピーしました'),
-          ],
-        ),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    );
   }
-
 }

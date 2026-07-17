@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -68,7 +69,7 @@ class _StampCardsViewState extends State<StampCardsView> {
       }
 
       print('スタンプカードの読み込みを開始...');
-      
+
       // 新しい構造: users/{userId}/stores から直接取得
       final QuerySnapshot userStoresSnapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -77,40 +78,41 @@ class _StampCardsViewState extends State<StampCardsView> {
           .get();
 
       print('取得したユーザー店舗数: ${userStoresSnapshot.docs.length}');
-      
+
       final List<Map<String, dynamic>> stampCards = [];
-      
+
       for (final userStoreDoc in userStoresSnapshot.docs) {
         final userStoreData = userStoreDoc.data() as Map<String, dynamic>;
         final storeId = userStoreDoc.id;
-        
+
         // 店舗の詳細情報を取得
         final storeDocSnapshot = await FirebaseFirestore.instance
             .collection('stores')
             .doc(storeId)
             .get();
-        
+
         if (!storeDocSnapshot.exists) {
           print('店舗が見つかりません: $storeId');
           continue;
         }
-        
+
         final storeData = storeDocSnapshot.data() as Map<String, dynamic>;
-        
+
         // 店舗がアクティブで承認済みかチェック
         final isActive = storeData['isActive'] as bool? ?? false;
         final isApproved = storeData['isApproved'] as bool? ?? false;
-        
+
         if (!isActive || !isApproved) {
           print('店舗がアクティブでないか承認されていません: $storeId');
           continue;
         }
-        
+
         // ユーザーのスタンプデータを取得
         final rawStamps = userStoreData['stamps'] as int? ?? 0;
         final lastVisited = userStoreData['lastVisited'];
         final totalSpendingRaw = userStoreData['totalSpending'];
-        final totalSpending = (totalSpendingRaw is num) ? totalSpendingRaw.toDouble() : 0.0;
+        final totalSpending =
+            (totalSpendingRaw is num) ? totalSpendingRaw.toDouble() : 0.0;
 
         stampCards.add({
           'storeId': storeId,
@@ -124,12 +126,13 @@ class _StampCardsViewState extends State<StampCardsView> {
           'isApproved': isApproved,
         });
       }
-      
+
       // スタンプ数が多い順にソート
-      stampCards.sort((a, b) => (b['stamps'] as int).compareTo(a['stamps'] as int));
-      
+      stampCards
+          .sort((a, b) => (b['stamps'] as int).compareTo(a['stamps'] as int));
+
       print('読み込んだスタンプカード数: ${stampCards.length}');
-      
+
       if (mounted) {
         setState(() {
           _stampCards = stampCards;
@@ -176,9 +179,7 @@ class _StampCardsViewState extends State<StampCardsView> {
 
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFFFF6B35),
-        ),
+        child: CustomLoadingIndicator(),
       );
     }
 

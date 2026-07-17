@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,10 +11,12 @@ class NotificationSettingsView extends ConsumerStatefulWidget {
   const NotificationSettingsView({Key? key}) : super(key: key);
 
   @override
-  ConsumerState<NotificationSettingsView> createState() => _NotificationSettingsViewState();
+  ConsumerState<NotificationSettingsView> createState() =>
+      _NotificationSettingsViewState();
 }
 
-class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsView> {
+class _NotificationSettingsViewState
+    extends ConsumerState<NotificationSettingsView> {
   // プッシュ通知設定
   bool _couponIssued = true;
   bool _post = true;
@@ -22,6 +25,9 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
   bool _announcements = true;
   bool _newsletters = true;
   bool _promotions = false;
+
+  // ランキング設定
+  bool _rankingParticipation = true; // trueのとき参加（rankingOptOut = false）
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -39,11 +45,18 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
         setState(() => _isLoading = false);
         return;
       }
-      final snapshot = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final data = snapshot.data();
 
-      final pushSettings = data?['notificationSettings'] as Map<String, dynamic>?;
-      final emailSettings = data?['emailNotificationSettings'] as Map<String, dynamic>?;
+      final pushSettings =
+          data?['notificationSettings'] as Map<String, dynamic>?;
+      final emailSettings =
+          data?['emailNotificationSettings'] as Map<String, dynamic>?;
+
+      final rankingOptOut = data?['rankingOptOut'] as bool? ?? false;
 
       setState(() {
         _couponIssued = pushSettings?['couponIssued'] as bool? ?? true;
@@ -51,6 +64,7 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
         _announcements = emailSettings?['announcements'] as bool? ?? true;
         _newsletters = emailSettings?['newsletters'] as bool? ?? true;
         _promotions = emailSettings?['promotions'] as bool? ?? false;
+        _rankingParticipation = !rankingOptOut;
         _isLoading = false;
       });
     } catch (e) {
@@ -97,6 +111,29 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
     }
   }
 
+  Future<void> _saveRankingSettings() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    if (_isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'rankingOptOut': !_rankingParticipation,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (!mounted) return;
+      ErrorDialog.show(
+        context,
+        title: '保存に失敗しました',
+        message: 'ランキング設定の保存に失敗しました。時間をおいて再度お試しください。',
+        details: e.toString(),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   Future<void> _saveEmailSettings() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -136,7 +173,7 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
     return Scaffold(
       appBar: const CommonHeader(title: '通知設定'),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: CustomLoadingIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
@@ -203,6 +240,22 @@ class _NotificationSettingsViewState extends ConsumerState<NotificationSettingsV
                         : (value) {
                             setState(() => _promotions = value);
                             _saveEmailSettings();
+                          },
+                  ),
+                ]),
+                const SizedBox(height: 24),
+                _buildSectionLabel('ランキング設定'),
+                const SizedBox(height: 8),
+                _buildCard([
+                  CustomSwitchListTile(
+                    title: const Text('ランキングに参加する'),
+                    subtitle: const Text('OFFにすると「名無し探検家」として匿名表示されます'),
+                    value: _rankingParticipation,
+                    onChanged: _isSaving
+                        ? null
+                        : (value) {
+                            setState(() => _rankingParticipation = value);
+                            _saveRankingSettings();
                           },
                   ),
                 ]),

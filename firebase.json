@@ -54,13 +54,32 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "public": "build/web",
+    "site": "groumapapp",
+    "public": "hosting",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
     ],
     "headers": [
+      {
+        "source": "**/*.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": ".well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ]
+      },
       {
         "source": ".well-known/apple-app-site-association",
         "headers": [

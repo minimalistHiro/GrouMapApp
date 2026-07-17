@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../providers/auth_provider.dart';
@@ -162,12 +163,13 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
             );
         final favoriteIds = _extractFavoriteIds(userData);
         final followedIds = _extractFollowedIds(userData);
-        return _buildStoreListScaffold(favoriteIds: favoriteIds, followedIds: followedIds);
+        return _buildStoreListScaffold(
+            favoriteIds: favoriteIds, followedIds: followedIds);
       },
       loading: () => const Scaffold(
         backgroundColor: Colors.grey,
         body: Center(
-          child: CircularProgressIndicator(),
+          child: CustomLoadingIndicator(),
         ),
       ),
       error: (error, _) => Scaffold(
@@ -180,7 +182,8 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     );
   }
 
-  Widget _buildStoreListScaffold({Set<String>? favoriteIds, Set<String>? followedIds}) {
+  Widget _buildStoreListScaffold(
+      {Set<String>? favoriteIds, Set<String>? followedIds}) {
     return DefaultTabController(
       length: 3,
       child: Scaffold(
@@ -196,7 +199,9 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
               ],
             ),
             Expanded(
-              child: _buildBody(favoriteIds: favoriteIds ?? {}, followedIds: followedIds ?? {}),
+              child: _buildBody(
+                  favoriteIds: favoriteIds ?? {},
+                  followedIds: followedIds ?? {}),
             ),
           ],
         ),
@@ -204,12 +209,11 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     );
   }
 
-  Widget _buildBody({required Set<String> favoriteIds, required Set<String> followedIds}) {
+  Widget _buildBody(
+      {required Set<String> favoriteIds, required Set<String> followedIds}) {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: Color(0xFFFF6B35),
-        ),
+        child: CustomLoadingIndicator(),
       );
     }
 
@@ -305,8 +309,7 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
     final followed = <Map<String, dynamic>>[];
     for (final store in stores) {
       final storeId = store['id']?.toString();
-      if (storeId != null && followedIds.contains(storeId))
-        followed.add(store);
+      if (storeId != null && followedIds.contains(storeId)) followed.add(store);
     }
     return followed;
   }
@@ -584,13 +587,10 @@ class _StoreListViewState extends ConsumerState<StoreListView> {
           loadingBuilder: (context, child, loadingProgress) {
             if (loadingProgress == null) return child;
             return Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                        loadingProgress.expectedTotalBytes!
-                    : null,
-                color: _getCategoryColor(category),
-                strokeWidth: 2,
+              child: CustomLoadingIndicator.inline(
+                size: 28,
+                padding: 4,
+                primaryColor: _getCategoryColor(category),
               ),
             );
           },

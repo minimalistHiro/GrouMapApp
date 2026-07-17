@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -6,11 +7,13 @@ import '../../providers/store_provider.dart';
 import '../../providers/qr_token_provider.dart';
 import '../../models/store_model.dart';
 import '../../models/point_transaction_model.dart';
+import '../../widgets/error_dialog.dart';
+import '../../widgets/game_dialog.dart';
 import 'payment_success_view.dart';
 
 class PointPaymentView extends ConsumerStatefulWidget {
   final String storeId;
-  
+
   PointPaymentView({
     Key? key,
     required this.storeId,
@@ -86,11 +89,9 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
   void _onPayPressed() {
     final amount = int.tryParse(_amount);
     if (amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('有効な金額を入力してください'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showWarning(
+        context,
+        message: '有効な金額を入力してください。',
       );
       return;
     }
@@ -99,36 +100,27 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
   }
 
   void _showPaymentConfirmation(int amount) {
-    showDialog(
+    showGameDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('支払い確認'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.payment, size: 64, color: Color(0xFFFF6B35)),
-            const SizedBox(height: 16),
-            Text('${amount.toString()}ポイントを支払いますか？'),
-          ],
+      title: '支払い確認',
+      message: '${amount.toString()}ポイントを支払いますか？',
+      icon: Icons.payment,
+      headerColor: const Color(0xFFFF6B35),
+      actions: [
+        GameDialogAction(
+          label: 'キャンセル',
+          onPressed: () => Navigator.of(context).pop(),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('キャンセル'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _processPayment(amount);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFF6B35),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('支払う'),
-          ),
-        ],
-      ),
+        GameDialogAction(
+          label: '支払う',
+          onPressed: () {
+            Navigator.of(context).pop();
+            _processPayment(amount);
+          },
+          isPrimary: true,
+          color: const Color(0xFFFF6B35),
+        ),
+      ],
     );
   }
 
@@ -244,7 +236,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
       print('支払い処理エラー: $e');
       if (mounted) {
         String errorMessage = '支払い処理に失敗しました';
-        
+
         if (e.toString().contains('ポイントが不足しています')) {
           errorMessage = e.toString();
         } else if (e.toString().contains('ポイント残高が見つかりません')) {
@@ -254,13 +246,11 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         } else if (e.toString().contains('店舗情報が取得できませんでした')) {
           errorMessage = '店舗情報の取得に失敗しました';
         }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
-          ),
+
+        ErrorDialog.showError(
+          context,
+          title: '支払いに失敗しました',
+          message: errorMessage,
         );
       }
     } finally {
@@ -284,9 +274,10 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
   }) async {
     try {
       // 取引履歴を作成
-      final transactionId = FirebaseFirestore.instance.collection('point_transactions').doc().id;
+      final transactionId =
+          FirebaseFirestore.instance.collection('point_transactions').doc().id;
       final now = DateTime.now();
-      
+
       final transaction = PointTransactionModel(
         transactionId: transactionId,
         userId: userId,
@@ -335,27 +326,30 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         'totalUsedPoints': points,
       });
       final today = DateTime.now();
-      final todayStr = '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+      final todayStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
       final storeStatsRef = FirebaseFirestore.instance
           .collection('store_stats')
           .doc(storeId)
           .collection('daily')
           .doc(todayStr);
-      batch.set(storeStatsRef, {
-        'date': todayStr,
-        'pointsUsed': FieldValue.increment(points),
-        'visitorCount': FieldValue.increment(1),
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      batch.set(
+          storeStatsRef,
+          {
+            'date': todayStr,
+            'pointsUsed': FieldValue.increment(points),
+            'visitorCount': FieldValue.increment(1),
+            'lastUpdated': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
       await batch.commit();
 
       // ユーザーのポイントを更新
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .update({
-        if (usedSpecialPoints > 0) 'specialPoints': FieldValue.increment(-usedSpecialPoints),
-        if (usedNormalPoints > 0) 'points': FieldValue.increment(-usedNormalPoints),
+      await FirebaseFirestore.instance.collection('users').doc(userId).update({
+        if (usedSpecialPoints > 0)
+          'specialPoints': FieldValue.increment(-usedSpecialPoints),
+        if (usedNormalPoints > 0)
+          'points': FieldValue.increment(-usedNormalPoints),
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -398,10 +392,10 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
   Widget build(BuildContext context) {
     // FutureProviderを使って店舗情報を取得
     final storeAsync = ref.watch(storeProvider(widget.storeId));
-    
+
     print('PointPaymentView: build - storeId: ${widget.storeId}');
     print('PointPaymentView: storeAsync状態: ${storeAsync.runtimeType}');
-    
+
     if (storeAsync is AsyncLoading) {
       print('PointPaymentView: ローディング中');
     } else if (storeAsync is AsyncData) {
@@ -423,10 +417,10 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
         children: [
           // 店舗情報セクション
           _buildStoreInfo(storeAsync),
-          
+
           // 金額表示セクション
           _buildAmountDisplay(),
-          
+
           // 電卓セクション
           Expanded(
             child: _buildCalculator(),
@@ -457,7 +451,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
               child: Text('店舗情報が見つかりません'),
             );
           }
-          
+
           return Row(
             children: [
               // 店舗アイコン
@@ -479,7 +473,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
                           errorBuilder: (context, error, stackTrace) {
                             return Center(
                               child: Text(
-                                store.name.isNotEmpty 
+                                store.name.isNotEmpty
                                     ? store.name.substring(0, 1).toUpperCase()
                                     : '店',
                                 style: const TextStyle(
@@ -494,7 +488,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
                       )
                     : Center(
                         child: Text(
-                          store.name.isNotEmpty 
+                          store.name.isNotEmpty
                               ? store.name.substring(0, 1).toUpperCase()
                               : '店',
                           style: const TextStyle(
@@ -541,9 +535,7 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
           );
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFFFF6B35),
-          ),
+          child: CustomLoadingIndicator(),
         ),
         error: (error, stackTrace) => Center(
           child: Column(
@@ -665,7 +657,9 @@ class _PointPaymentViewState extends ConsumerState<PointPaymentView> {
                 elevation: 4,
               ),
               child: _isProcessing
-                  ? const CircularProgressIndicator(color: Colors.white)
+                  ? const CustomLoadingIndicator.inline(
+                      primaryColor: Colors.white,
+                    )
                   : const Text(
                       '支払う',
                       style: TextStyle(

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:math';
@@ -455,8 +456,7 @@ class _DailyRecommendationViewState
   @override
   Widget build(BuildContext context) {
     final content = _isLoading
-        ? const Center(
-            child: CircularProgressIndicator(color: Color(0xFFFF6B35)))
+        ? const Center(child: CustomLoadingIndicator())
         : _error != null
             ? Center(
                 child: Text(

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -369,19 +370,6 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
       // 新規登録ミッション: スタンプ初獲得
       MissionService().markRegistrationMission(userId, 'first_stamp');
 
-      // 曜日別訪問バッジカウンター
-      const dayNames = [
-        'monday',
-        'tuesday',
-        'wednesday',
-        'thursday',
-        'friday',
-        'saturday',
-        'sunday'
-      ];
-      final dayName = dayNames[DateTime.now().weekday - 1];
-      BadgeService().incrementBadgeCounter(userId, 'dayVisit_$dayName');
-
       // 来店ボーナス: +1コイン付与（二重付与防止）
       await _awardVisitCoinBonus(userId, eventsSnap.docs.first);
     } catch (_) {
@@ -560,9 +548,9 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
           child: SizedBox(
             width: 24,
             height: 24,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Color(0xFFFF6B35),
+            child: CustomLoadingIndicator.inline(
+              size: 24,
+              padding: 4,
             ),
           ),
         ),
@@ -842,7 +830,8 @@ class _PointPaymentDetailViewState extends State<PointPaymentDetailView>
     final currentCycleDisplay = _displayStamps % _maxStamps;
     final completedCards = _stamps ~/ _maxStamps;
     // コンプリートは10の倍数に到達した瞬間のみ表示
-    final justCompleted = _displayStamps > 0 && _displayStamps % _maxStamps == 0;
+    final justCompleted =
+        _displayStamps > 0 && _displayStamps % _maxStamps == 0;
     return StampCardWidget(
       storeName: _storeName,
       storeCategory: _storeCategory,

@@ -11,6 +11,8 @@ _$RankingModelImpl _$$RankingModelImplFromJson(Map<String, dynamic> json) =>
       userId: json['userId'] as String,
       displayName: json['displayName'] as String,
       photoURL: json['photoURL'] as String?,
+      discoveredStoreCount:
+          (json['discoveredStoreCount'] as num?)?.toInt() ?? 0,
       totalPoints: (json['totalPoints'] as num).toInt(),
       badgeCount: (json['badgeCount'] as num).toInt(),
       stampCount: (json['stampCount'] as num).toInt(),
@@ -27,6 +29,7 @@ Map<String, dynamic> _$$RankingModelImplToJson(_$RankingModelImpl instance) =>
       'userId': instance.userId,
       'displayName': instance.displayName,
       'photoURL': instance.photoURL,
+      'discoveredStoreCount': instance.discoveredStoreCount,
       'totalPoints': instance.totalPoints,
       'badgeCount': instance.badgeCount,
       'stampCount': instance.stampCount,

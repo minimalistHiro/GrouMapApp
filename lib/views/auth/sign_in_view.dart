@@ -270,8 +270,9 @@ class _SignInViewState extends ConsumerState<SignInView> {
 
   void _handlePasswordReset() {
     if (_emailController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('メールアドレスを入力してください')),
+      ErrorDialog.showWarning(
+        context,
+        message: 'パスワード再設定用のメールアドレスを入力してください。',
       );
       return;
     }

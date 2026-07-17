@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -45,7 +46,7 @@ class _PointUsageWaitingViewState extends State<PointUsageWaitingView> {
         stream: requestRef.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CustomLoadingIndicator());
           }
 
           if (!snapshot.hasData || !snapshot.data!.exists) {
@@ -104,7 +105,8 @@ class _PointUsageWaitingViewState extends State<PointUsageWaitingView> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
+                BoxShadow(
+                    color: Colors.black12, blurRadius: 6, offset: Offset(0, 3)),
               ],
             ),
             child: const Text(

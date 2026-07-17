@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../services/nfc_checkin_service.dart';
 import '../../theme/app_ui.dart';
 import '../../widgets/common_header.dart';
+import '../../widgets/custom_button.dart';
+import '../../widgets/game_dialog.dart';
 import 'nfc_checkin_result_view.dart';
 
 /// NFCチェックイン時のクーポン利用選択画面
 /// NFCタッチ → この画面（クーポン選択） → チェックイン + クーポン利用 → 結果画面
 class NfcCouponSelectView extends StatefulWidget {
   final String storeId;
-  final String tagSecret;
+  final String sessionToken;
 
   const NfcCouponSelectView({
     super.key,
     required this.storeId,
-    required this.tagSecret,
+    required this.sessionToken,
   });
 
   @override
@@ -104,10 +108,62 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
     setState(() => _processing = true);
 
     try {
+      // 位置情報の権限チェックと取得
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        await showGameDialog(
+          context: context,
+          title: '位置情報が必要です',
+          message: 'チェックインには位置情報の許可が必要です。設定から位置情報を許可してください。',
+          icon: Icons.location_off,
+          headerColor: Colors.red,
+          actions: [
+            GameDialogAction(
+              label: 'OK',
+              isPrimary: true,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        );
+        return;
+      }
+
+      Position position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 10),
+        );
+      } catch (e) {
+        debugPrint('位置情報取得エラー: $e');
+        if (!mounted) return;
+        await showGameDialog(
+          context: context,
+          title: '位置情報の取得に失敗しました',
+          message: 'しばらく待ってから再度お試しください。',
+          icon: Icons.location_searching,
+          headerColor: Colors.orange,
+          actions: [
+            GameDialogAction(
+              label: 'OK',
+              isPrimary: true,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        );
+        return;
+      }
+
       final service = NfcCheckinService();
       final result = await service.checkin(
-        storeId: widget.storeId,
-        tagSecret: widget.tagSecret,
+        sessionToken: widget.sessionToken,
+        userLat: position.latitude,
+        userLng: position.longitude,
         selectedUserCouponIds: _selectedCouponIds.toList(),
       );
 
@@ -129,35 +185,70 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
       );
     } on FirebaseFunctionsException catch (e) {
       if (!mounted) return;
+      String title = 'エラー';
       String message;
+      IconData icon = Icons.error_outline;
+      Color headerColor = Colors.red;
       switch (e.code) {
         case 'already-exists':
-          message = '本日はすでにチェックイン済みです';
+          message = '本日はすでに発見済みです';
+          icon = Icons.check_circle_outline;
+          headerColor = AppUi.primary;
           break;
         case 'not-found':
-          message = '無効なチェックインタグです';
+          message = '無効なNFCタグです';
           break;
         case 'permission-denied':
-          message = 'この店舗は現在利用できません';
+          if (e.message != null && e.message!.contains('Too far')) {
+            title = '店舗から離れています';
+            message = '店舗から200m以内でチェックインしてください。店舗の近くに移動してから再度お試しください。';
+            icon = Icons.location_off;
+          } else {
+            message = 'この店舗は現在利用できません';
+          }
+          break;
+        case 'deadline-exceeded':
+          title = 'セッション期限切れ';
+          message = 'チェックイン画面を開いてから10分が経過しました。再度NFCにタッチしてチェックインしてください。';
+          icon = Icons.timer_off;
+          headerColor = Colors.orange;
           break;
         case 'unauthenticated':
-          message = 'チェックインにはログインが必要です';
+          message = '発見にはログインが必要です';
           break;
         default:
-          message = 'チェックインに失敗しました: ${e.message}';
+          message = '発見に失敗しました。もう一度お試しください。';
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      debugPrint('NFC checkin error (Functions): ${e.code} ${e.message}');
+      await showGameDialog(
+        context: context,
+        title: title,
+        message: message,
+        icon: icon,
+        headerColor: headerColor,
+        actions: [
+          GameDialogAction(
+            label: 'OK',
+            isPrimary: true,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('チェックインに失敗しました'),
-          backgroundColor: Colors.red,
-        ),
-      );
       debugPrint('NFC checkin error: $e');
+      await showGameDialog(
+        context: context,
+        title: 'エラー',
+        message: '発見に失敗しました。もう一度お試しください。',
+        actions: [
+          GameDialogAction(
+            label: 'OK',
+            isPrimary: true,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      );
     } finally {
       if (mounted) setState(() => _processing = false);
     }
@@ -167,10 +258,10 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppUi.surface,
-      appBar: CommonHeader(title: const Text('チェックイン')),
+      appBar: CommonHeader(title: const Text('お店を発見'), showBack: false),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: AppUi.primary),
+              child: CustomLoadingIndicator(primaryColor: AppUi.primary),
             )
           : Column(
               children: [
@@ -212,7 +303,7 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
                     ),
                   ),
                 ),
-                // チェックインボタン
+                // 発見ボタン
                 SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
@@ -222,7 +313,7 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
                           Padding(
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Text(
-                              '${_selectedCouponIds.length}件のクーポンを利用してチェックイン',
+                              '${_selectedCouponIds.length}件のクーポンを利用して発見する',
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.bold,
@@ -230,38 +321,16 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
                               ),
                             ),
                           ),
-                        SizedBox(
-                          width: double.infinity,
+                        CustomButton(
+                          text: _selectedCouponIds.isEmpty
+                              ? 'クーポンを使わずに発見する'
+                              : '発見する',
+                          onPressed: _processing ? null : _doCheckin,
+                          isLoading: _processing,
                           height: 52,
-                          child: ElevatedButton(
-                            onPressed: _processing ? null : _doCheckin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppUi.primary,
-                              foregroundColor: AppUi.onPrimary,
-                              disabledBackgroundColor: Colors.grey[300],
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                    AppUi.controlRadius),
-                              ),
-                            ),
-                            child: _processing
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2.5,
-                                    ),
-                                  )
-                                : Text(
-                                    _selectedCouponIds.isEmpty
-                                        ? 'クーポンを使わずにチェックイン'
-                                        : 'チェックインする',
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                          textStyle: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
@@ -280,7 +349,6 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(AppUi.cardRadius),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
       ),
       child: Row(
         children: [
@@ -326,7 +394,7 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
                     Icon(Icons.nfc, size: 16, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Text(
-                      'NFCチェックイン',
+                      'NFCタッチで発見',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey[600],
@@ -364,7 +432,7 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'そのままチェックインしてスタンプを獲得しましょう',
+            'このままお店を発見しましょう',
             style: TextStyle(
               fontSize: 13,
               color: Colors.black38,
@@ -440,22 +508,12 @@ class _NfcCouponSelectViewState extends State<NfcCouponSelectView> {
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppUi.primary.withOpacity(0.05)
-              : Colors.white,
+          color: isSelected ? AppUi.primary.withOpacity(0.05) : Colors.white,
           borderRadius: BorderRadius.circular(AppUi.controlRadius),
           border: Border.all(
             color: isSelected ? AppUi.primary : AppUi.border,
             width: isSelected ? 2 : 1,
           ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppUi.primary.withOpacity(0.15),
-                    blurRadius: 8,
-                  )
-                ]
-              : [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 4)],
         ),
         child: Row(
           children: [

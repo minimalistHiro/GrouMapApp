@@ -1,5 +1,5 @@
 """
-Nano Banana Pro (Gemini 3 Pro Image) 画像生成スクリプト
+Nano Banana 2 (Gemini 3.1 Flash Image) 画像生成スクリプト
 Usage: python3 generate_image.py "プロンプト" "出力パス" "アスペクト比" "画像サイズ" ["参考画像パス"]
 """
 import sys
@@ -26,7 +26,7 @@ def generate_image(
         contents = prompt
 
     response = client.models.generate_content(
-        model="gemini-3-pro-image-preview",
+        model="gemini-3-1-flash-image-preview",
         contents=contents,
         config=types.GenerateContentConfig(
             response_modalities=["TEXT", "IMAGE"],

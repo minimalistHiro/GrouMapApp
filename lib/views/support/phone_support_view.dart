@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter/services.dart';
+import '../../widgets/error_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PhoneSupportView extends StatelessWidget {
@@ -537,12 +538,6 @@ class PhoneSupportView extends StatelessWidget {
 
   void _copyPhoneNumber(BuildContext context) {
     Clipboard.setData(const ClipboardData(text: '080-6050-7194'));
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('電話番号をクリップボードにコピーしました'),
-        backgroundColor: Color(0xFFFF6B35),
-      ),
-    );
   }
 
   void _callPhoneNumber(BuildContext context) async {
@@ -551,19 +546,18 @@ class PhoneSupportView extends StatelessWidget {
       if (await canLaunchUrl(Uri.parse(phoneNumber))) {
         await launchUrl(Uri.parse(phoneNumber));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('電話アプリを開けませんでした'),
-            backgroundColor: Colors.red,
-          ),
+        ErrorDialog.showError(
+          context,
+          title: '起動できませんでした',
+          message: '電話アプリを開けませんでした。',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('エラーが発生しました'),
-          backgroundColor: Colors.red,
-        ),
+      debugPrint('電話サポート起動エラー: $e');
+      ErrorDialog.showError(
+        context,
+        title: 'エラーが発生しました',
+        message: '電話アプリを開けませんでした。時間をおいて再度お試しください。',
       );
     }
   }

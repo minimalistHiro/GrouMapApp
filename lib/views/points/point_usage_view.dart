@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import '../../providers/point_provider.dart';
 import '../../providers/owner_settings_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../widgets/error_dialog.dart';
 
 class PointUsageView extends ConsumerStatefulWidget {
   const PointUsageView({Key? key}) : super(key: key);
@@ -20,7 +22,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
   final _amountController = TextEditingController();
   final _storeIdController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   bool _isProcessing = false;
 
   @override
@@ -50,7 +52,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
           return _buildContent(context, user.uid);
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(),
+          child: CustomLoadingIndicator(),
         ),
         error: (error, _) => Center(
           child: Text('エラー: $error'),
@@ -71,7 +73,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
           // 現在のポイント残高
           _buildBalanceCard(context, userData, pointBalance),
           const SizedBox(height: 24),
-          
+
           // ポイント使用フォーム
           Card(
             elevation: 4,
@@ -90,7 +92,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // 店舗ID
                     CustomTextField(
                       controller: _storeIdController,
@@ -104,7 +106,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // 使用ポイント数
                     CustomTextField(
                       controller: _amountController,
@@ -123,7 +125,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
                       },
                     ),
                     const SizedBox(height: 16),
-                    
+
                     // 説明
                     CustomTextField(
                       controller: _descriptionController,
@@ -132,13 +134,15 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
                       maxLines: 3,
                     ),
                     const SizedBox(height: 24),
-                    
+
                     // 使用ボタン
                     SizedBox(
                       width: double.infinity,
                       child: CustomButton(
                         text: _isProcessing ? '処理中...' : 'ポイントを使用',
-                        onPressed: _isProcessing ? null : () => _usePoints(context, userId),
+                        onPressed: _isProcessing
+                            ? null
+                            : () => _usePoints(context, userId),
                         backgroundColor: const Color(0xFFFF6B35),
                         icon: const Icon(Icons.shopping_cart, size: 20),
                       ),
@@ -199,7 +203,7 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
                   ],
                 );
               },
-              loading: () => const CircularProgressIndicator(),
+              loading: () => const CustomLoadingIndicator.inline(),
               error: (error, _) => const Text(
                 'エラー',
                 style: TextStyle(color: Colors.red),
@@ -245,13 +249,13 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
     try {
       final pointProcessor = ref.read(pointProcessorProvider);
       final points = int.parse(_amountController.text);
-      
+
       await pointProcessor.usePoints(
         userId: userId,
         storeId: _storeIdController.text,
         points: points,
-        description: _descriptionController.text.isEmpty 
-            ? 'ポイント使用' 
+        description: _descriptionController.text.isEmpty
+            ? 'ポイント使用'
             : _descriptionController.text,
       );
 
@@ -262,7 +266,9 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
         'storeId': storeId,
         'amount': -points, // 使用はマイナス
         'paymentAmount': null,
-        'description': _descriptionController.text.isEmpty ? 'ポイント使用' : _descriptionController.text,
+        'description': _descriptionController.text.isEmpty
+            ? 'ポイント使用'
+            : _descriptionController.text,
         'status': 'completed',
         'paymentMethod': 'points',
         'createdAt': FieldValue.serverTimestamp(),
@@ -277,23 +283,16 @@ class _PointUsageViewState extends ConsumerState<PointUsageView> {
           .add(txData);
 
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$pointsポイントを使用しました'),
-            backgroundColor: const Color(0xFFFF6B35),
-          ),
-        );
-        
         // フォームをリセット
         _formKey.currentState?.reset();
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ポイント使用に失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
+        debugPrint('ポイント使用エラー: $e');
+        ErrorDialog.showError(
+          context,
+          title: 'ポイント使用に失敗しました',
+          message: 'ポイントを使用できませんでした。時間をおいて再度お試しください。',
         );
       }
     } finally {

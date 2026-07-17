@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/store_provider.dart';
+import '../../widgets/error_dialog.dart';
 import 'point_payment_detail_view.dart';
 
 class PointRequestConfirmationView extends ConsumerStatefulWidget {
   final String requestId;
 
-  const PointRequestConfirmationView({Key? key, required this.requestId}) : super(key: key);
+  const PointRequestConfirmationView({Key? key, required this.requestId})
+      : super(key: key);
 
   @override
-  ConsumerState<PointRequestConfirmationView> createState() => _PointRequestConfirmationViewState();
+  ConsumerState<PointRequestConfirmationView> createState() =>
+      _PointRequestConfirmationViewState();
 }
 
-class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfirmationView> {
+class _PointRequestConfirmationViewState
+    extends ConsumerState<PointRequestConfirmationView> {
   bool _isProcessing = false;
   bool _didNavigate = false;
 
@@ -26,10 +31,10 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
     if (parts.length != 2) {
       return const Stream<DocumentSnapshot<Map<String, dynamic>>>.empty();
     }
-    
+
     final storeId = parts[0];
     final userId = parts[1];
-    
+
     return FirebaseFirestore.instance
         .collection('point_requests')
         .doc(storeId)
@@ -48,7 +53,7 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
         stream: _getRequestStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CustomLoadingIndicator());
           }
 
           if (!snapshot.hasData || !snapshot.data!.exists) {
@@ -58,19 +63,26 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
           final data = snapshot.data!.data()!;
           final String storeId = (data['storeId'] ?? '').toString();
           final String userId = (data['userId'] ?? '').toString();
-          final int points = (data['userPoints'] is int) ? data['userPoints'] as int : int.tryParse('${data['userPoints']}') ?? 0;
+          final int points = (data['userPoints'] is int)
+              ? data['userPoints'] as int
+              : int.tryParse('${data['userPoints']}') ?? 0;
           final int normalPoints = _parseInt(data['normalPoints']);
           final int specialPoints = _parseInt(data['specialPoints']);
           final int totalPoints = _parseInt(data['totalPoints']);
-          final num amountNum = (data['amount'] is num) ? data['amount'] as num : num.tryParse('${data['amount']}') ?? 0;
+          final num amountNum = (data['amount'] is num)
+              ? data['amount'] as num
+              : num.tryParse('${data['amount']}') ?? 0;
           final int usedPoints = (data['usedPoints'] is int)
               ? data['usedPoints'] as int
               : int.tryParse('${data['usedPoints'] ?? 0}') ?? 0;
-          final List<String> usedCouponIds = _parseCouponIds(data['selectedCouponIds']);
+          final List<String> usedCouponIds =
+              _parseCouponIds(data['selectedCouponIds']);
           final String status = (data['status'] ?? '').toString();
           final int resolvedPoints = totalPoints > 0 ? totalPoints : points;
-          final int resolvedNormalPoints = normalPoints > 0 ? normalPoints : resolvedPoints;
-          final int resolvedSpecialPoints = specialPoints > 0 ? specialPoints : 0;
+          final int resolvedNormalPoints =
+              normalPoints > 0 ? normalPoints : resolvedPoints;
+          final int resolvedSpecialPoints =
+              specialPoints > 0 ? specialPoints : 0;
 
           if (status == 'accepted') {
             if (!_didNavigate) {
@@ -79,20 +91,20 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                 if (!mounted) return;
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(
-                  builder: (_) => PointPaymentDetailView(
-                    storeId: storeId,
-                    paid: amountNum.toInt(),
-                    pointsAwarded: resolvedPoints,
-                    pointsUsed: usedPoints,
-                    usedCouponIds: usedCouponIds,
-                    normalPointsAwarded: resolvedNormalPoints,
-                    specialPointsAwarded: resolvedSpecialPoints,
+                    builder: (_) => PointPaymentDetailView(
+                      storeId: storeId,
+                      paid: amountNum.toInt(),
+                      pointsAwarded: resolvedPoints,
+                      pointsUsed: usedPoints,
+                      usedCouponIds: usedCouponIds,
+                      normalPointsAwarded: resolvedNormalPoints,
+                      specialPointsAwarded: resolvedSpecialPoints,
+                    ),
                   ),
-                ),
-              );
-            });
+                );
+              });
             }
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CustomLoadingIndicator());
           }
 
           if (status != 'pending') {
@@ -114,7 +126,10 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.grey.shade300),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+                      BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 4,
+                          offset: Offset(0, 2)),
                     ],
                   ),
                   child: storeAsync.when(
@@ -123,29 +138,46 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('店舗', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          const Text('店舗',
+                              style:
+                                  TextStyle(fontSize: 12, color: Colors.grey)),
                           const SizedBox(height: 4),
-                          Text(storeName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                          Text(storeName,
+                              style: const TextStyle(
+                                  fontSize: 20, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 16),
-                          const Text('付与ポイント', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          const Text('付与ポイント',
+                              style:
+                                  TextStyle(fontSize: 12, color: Colors.grey)),
                           const SizedBox(height: 4),
-                          Text('$resolvedPoints ポイント', style: const TextStyle(fontSize: 18, color: Color(0xFFFF6B35), fontWeight: FontWeight.bold)),
+                          Text('$resolvedPoints ポイント',
+                              style: const TextStyle(
+                                  fontSize: 18,
+                                  color: Color(0xFFFF6B35),
+                                  fontWeight: FontWeight.bold)),
                           if (resolvedSpecialPoints > 0) ...[
                             const SizedBox(height: 4),
                             Text(
                               '通常${resolvedNormalPoints}pt / 特別${resolvedSpecialPoints}pt',
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey[600]),
                             ),
                           ],
                           const SizedBox(height: 16),
-                          const Text('支払い金額', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          const Text('支払い金額',
+                              style:
+                                  TextStyle(fontSize: 12, color: Colors.grey)),
                           const SizedBox(height: 4),
-                          Text('${amountNum.toString()} 円', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text('${amountNum.toString()} 円',
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold)),
                         ],
                       );
                     },
-                    loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (e, st) => Text('店舗情報の取得に失敗しました: $e', style: const TextStyle(color: Colors.red)),
+                    loading: () =>
+                        const Center(child: CustomLoadingIndicator()),
+                    error: (e, st) => Text('店舗情報の取得に失敗しました: $e',
+                        style: const TextStyle(color: Colors.red)),
                   ),
                 ),
                 const Spacer(),
@@ -172,7 +204,8 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                   child: ElevatedButton(
                     onPressed: _isProcessing
                         ? null
-                        : () => _showCancelDialog(storeId: storeId, userId: userId),
+                        : () =>
+                            _showCancelDialog(storeId: storeId, userId: userId),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
@@ -182,9 +215,10 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
                         ? const SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
+                            child: CustomLoadingIndicator.inline(
+                              size: 20,
+                              padding: 3,
+                              primaryColor: Colors.white,
                             ),
                           )
                         : const Text('キャンセル'),
@@ -276,21 +310,15 @@ class _PointRequestConfirmationViewState extends ConsumerState<PointRequestConfi
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('リクエストをキャンセルしました'),
-            backgroundColor: Colors.orange,
-          ),
-        );
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('キャンセルに失敗しました: $e'),
-            backgroundColor: Colors.red,
-          ),
+        debugPrint('ポイント付与リクエストキャンセルエラー: $e');
+        ErrorDialog.showError(
+          context,
+          title: 'キャンセルに失敗しました',
+          message: 'リクエストをキャンセルできませんでした。時間をおいて再度お試しください。',
         );
       }
     } finally {

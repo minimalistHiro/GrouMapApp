@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/custom_loading_indicator.dart';
 import '../../widgets/common_header.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
@@ -6,6 +7,7 @@ import '../../providers/badge_provider.dart';
 import '../../models/badge_model.dart';
 import '../../data/badge_definitions.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/game_dialog.dart';
 
 class BadgesView extends ConsumerStatefulWidget {
   const BadgesView({Key? key}) : super(key: key);
@@ -48,7 +50,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
           return _buildBadgesContent(context, user.uid);
         },
         loading: () => const Center(
-          child: CircularProgressIndicator(),
+          child: CustomLoadingIndicator(),
         ),
         error: (error, _) => Center(
           child: Text('エラー: $error'),
@@ -75,7 +77,7 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
         return _buildBadgeGrid(filteredBadges, earnedBadgeIds);
       },
       loading: () => const Center(
-        child: CircularProgressIndicator(),
+        child: CustomLoadingIndicator(),
       ),
       error: (error, _) => Center(
         child: Text('バッジの読み込みに失敗しました'),
@@ -152,53 +154,56 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
   Widget _buildBadgeCard(BadgeModel badge, {required bool isEarned}) {
     return GestureDetector(
       onTap: () => _showBadgeDetail(context, badge, isEarned: isEarned),
-      child: Container(
-        decoration: BoxDecoration(
-          color: isEarned ? Colors.white : Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 3,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (isEarned)
+            SizedBox(
+              width: 72,
+              height: 72,
+              child: _getBadgeIcon(badge.iconUrl, size: 72),
+            )
+          else
             Container(
-              width: 80,
-              height: 80,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
-                color: isEarned
-                    ? const Color(0xFFFF6B35).withOpacity(0.1)
-                    : Colors.grey[200],
-                borderRadius: BorderRadius.circular(40),
+                color: const Color(0xFFFBF6F2),
+                borderRadius: BorderRadius.circular(36),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.white.withOpacity(0.9),
+                    blurRadius: 6,
+                    spreadRadius: 0,
+                    offset: const Offset(-3, -3),
+                  ),
+                  BoxShadow(
+                    color: const Color(0xFFCFBFB5).withOpacity(0.8),
+                    blurRadius: 6,
+                    spreadRadius: 0,
+                    offset: const Offset(3, 3),
+                  ),
+                ],
               ),
-              child: isEarned
-                  ? _getBadgeIcon(badge.iconUrl, size: 48)
-                  : Icon(
-                      Icons.help_outline,
-                      size: 48,
-                      color: Colors.grey[400],
-                    ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              badge.name,
-              style: TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: isEarned ? Colors.black87 : Colors.grey[700],
+              child: Icon(
+                Icons.question_mark,
+                size: 32,
+                color: Colors.grey[400],
               ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-          ],
-        ),
+          const SizedBox(height: 6),
+          Text(
+            badge.name,
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: isEarned ? Colors.black87 : Colors.grey[500],
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
@@ -227,104 +232,209 @@ class _BadgesViewState extends ConsumerState<BadgesView> {
     );
   }
 
-  void _showBadgeDetail(BuildContext context, BadgeModel badge, {required bool isEarned}) {
-    showDialog(
+  void _showBadgeDetail(BuildContext context, BadgeModel badge,
+      {required bool isEarned}) {
+    showGeneralDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Center(
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  color: isEarned
-                      ? const Color(0xFFFF6B35).withOpacity(0.1)
-                      : Colors.grey[200],
-                  borderRadius: BorderRadius.circular(150),
-                ),
-                child: isEarned
-                    ? _getBadgeIcon(badge.iconUrl, size: 144)
-                    : Icon(
-                        Icons.help_outline,
-                        size: 144,
-                        color: Colors.grey[400],
-                      ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              badge.name,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              badge.category ?? '未分類',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[600],
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Text(
-            badge.description,
-            style: const TextStyle(fontSize: 14),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('閉じる'),
-          ),
-        ],
+      barrierDismissible: true,
+      barrierLabel: '',
+      barrierColor: Colors.black.withOpacity(0.55),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (_, __, ___) =>
+          _BadgeDetailDialog(badge: badge, isEarned: isEarned),
+      transitionBuilder: (_, animation, __, child) => FadeTransition(
+        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+        child: child,
       ),
     );
   }
 
+  // game_dialog import は残すが、フィルターダイアログのみ使用
   void _showFilterDialog(BuildContext context) {
     final categories = _buildCategories(kBadgeDefinitions);
 
-    showDialog(
+    showGameDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('フィルター'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: categories.map((category) {
-              return ListTile(
-                title: Text(category),
-                leading: Radio<String>(
-                  value: category,
-                  groupValue: _selectedCategory,
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedCategory = value!;
-                    });
-                    Navigator.of(context).pop();
-                  },
-                ),
-              );
-            }).toList(),
+      title: 'カテゴリ選択',
+      message: '表示するバッジのカテゴリを選んでください',
+      icon: Icons.filter_list,
+      actions: [
+        ...categories.map(
+          (category) => GameDialogAction(
+            label: category,
+            isPrimary: category == _selectedCategory,
+            onPressed: () {
+              setState(() {
+                _selectedCategory = category;
+              });
+              Navigator.of(context).pop();
+            },
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('キャンセル'),
+        GameDialogAction(
+          label: 'キャンセル',
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ],
+    );
+  }
+}
+
+// ────────────────────────────────────────────
+// バッジ詳細ポップアップ（GameDialogと同一スタイル）
+// ────────────────────────────────────────────
+class _BadgeDetailDialog extends StatelessWidget {
+  final BadgeModel badge;
+  final bool isEarned;
+
+  const _BadgeDetailDialog({required this.badge, required this.isEarned});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 28),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF9BB8D4).withOpacity(0.6),
+                blurRadius: 40,
+                spreadRadius: 8,
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // バッジ画像（大）
+              if (isEarned) _buildEarnedBadge() else _buildUnearnedBadge(),
+
+              const SizedBox(height: 16),
+
+              // バッジ名
+              Text(
+                badge.name,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D2D2D),
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 6),
+
+              // カテゴリピル
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isEarned
+                      ? const Color(0xFFFF6B35).withOpacity(0.12)
+                      : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  badge.category ?? '未分類',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isEarned
+                        ? const Color(0xFFFF6B35)
+                        : Colors.grey[600],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // 説明文
+              Text(
+                badge.description,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF6B6B6B),
+                  height: 1.6,
+                ),
+                textAlign: TextAlign.center,
+              ),
+
+              const SizedBox(height: 24),
+
+              // 閉じるボタン
+              CustomButton(
+                text: '閉じる',
+                onPressed: () => Navigator.of(context).pop(),
+                backgroundColor: const Color(0xFFF0F0F0),
+                textColor: const Color(0xFF6B6B6B),
+                borderRadius: 999,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEarnedBadge() {
+    final iconPath = badge.iconUrl;
+    if (iconPath.isEmpty) {
+      return const Icon(
+        Icons.emoji_events,
+        size: 120,
+        color: Color(0xFFFF6B35),
+      );
+    }
+    return Image.asset(
+      'assets/images/badges/$iconPath',
+      width: 120,
+      height: 120,
+      fit: BoxFit.contain,
+      errorBuilder: (_, __, ___) => const Icon(
+        Icons.emoji_events,
+        size: 120,
+        color: Color(0xFFFF6B35),
+      ),
+    );
+  }
+
+  Widget _buildUnearnedBadge() {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F0EC),
+        borderRadius: BorderRadius.circular(60),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.white.withOpacity(0.9),
+            blurRadius: 10,
+            spreadRadius: 0,
+            offset: const Offset(-5, -5),
+          ),
+          BoxShadow(
+            color: const Color(0xFFCFBFB5).withOpacity(0.8),
+            blurRadius: 10,
+            spreadRadius: 0,
+            offset: const Offset(5, 5),
           ),
         ],
+      ),
+      child: Icon(
+        Icons.question_mark,
+        size: 52,
+        color: Colors.grey[400],
       ),
     );
   }

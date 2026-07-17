@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["T9U9A227FB.com.groumap.groumapapp"],
+        "components": [
+          {
+            "/": "/checkin",
+            "comment": "NFCスタンプチェックイン"
+          }
+        ]
+      }
+    ]
+  }
+}

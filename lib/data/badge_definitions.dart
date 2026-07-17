@@ -14,7 +14,7 @@ const Map<String, List<String>> kCategoryGroupMap = {
   'shokudo_other': ['ビュッフェ', '食堂', '料理旅館', 'その他'],
 };
 
-/// アプリ内蔵バッジ定義（全162個）
+/// アプリ内蔵バッジ定義（全180個）
 /// バッジ画像は assets/images/badges/{badgeId}.png に配置
 const List<BadgeModel> kBadgeDefinitions = [
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -267,11 +267,60 @@ const List<BadgeModel> kBadgeDefinitions = [
   BadgeModel(badgeId: 'recommend_viewed_5', name: 'レコメンドウォッチャー', description: 'レコメンドを5回閲覧', iconUrl: 'recommend_viewed_5.png', type: BadgeType.recommendViewed, requiredValue: 5, rarity: BadgeRarity.rare, category: 'レコメンド'),
   BadgeModel(badgeId: 'recommend_viewed_10', name: 'レコメンドマニア', description: 'レコメンドを10回閲覧', iconUrl: 'recommend_viewed_10.png', type: BadgeType.recommendViewed, requiredValue: 10, rarity: BadgeRarity.epic, category: 'レコメンド'),
 
-  // スタンプカード達成（stampCardCompleted）4個
+  // スタンプカード達成（stampCardCompleted）4個 ※スタンプシステム廃止に伴い廃止・獲得不可
+  // 既に獲得済みのバッジは維持。新規獲得トリガーは削除済み。
   BadgeModel(badgeId: 'stamp_card_completed_1', name: 'カード達成', description: 'スタンプカードを初めて達成', iconUrl: 'stamp_card_completed_1.png', type: BadgeType.stampCardCompleted, requiredValue: 1, rarity: BadgeRarity.common, category: 'スタンプカード'),
   BadgeModel(badgeId: 'stamp_card_completed_3', name: 'カードコレクター', description: 'スタンプカードを3枚達成', iconUrl: 'stamp_card_completed_3.png', type: BadgeType.stampCardCompleted, requiredValue: 3, rarity: BadgeRarity.rare, category: 'スタンプカード'),
   BadgeModel(badgeId: 'stamp_card_completed_5', name: 'カードマスター', description: 'スタンプカードを5枚達成', iconUrl: 'stamp_card_completed_5.png', type: BadgeType.stampCardCompleted, requiredValue: 5, rarity: BadgeRarity.epic, category: 'スタンプカード'),
   BadgeModel(badgeId: 'stamp_card_completed_10', name: 'カードレジェンド', description: 'スタンプカードを10枚達成', iconUrl: 'stamp_card_completed_10.png', type: BadgeType.stampCardCompleted, requiredValue: 10, rarity: BadgeRarity.legendary, category: 'スタンプカード'),
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // 秘境探検家シリーズ（hiddenExplorer）4個
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BadgeModel(badgeId: 'hidden_explorer_1', name: '秘境探検家 ★', description: 'エリア外（秘境スポット）の店舗に初めて来店', iconUrl: 'hidden_explorer_1.png', type: BadgeType.hiddenExplorer, requiredValue: 1, rarity: BadgeRarity.rare, category: '秘境探検家'),
+  BadgeModel(badgeId: 'hidden_explorer_2', name: '秘境探検家 ★★', description: 'エリア外の店舗に3店舗来店', iconUrl: 'hidden_explorer_2.png', type: BadgeType.hiddenExplorer, requiredValue: 3, rarity: BadgeRarity.epic, category: '秘境探検家'),
+  BadgeModel(badgeId: 'hidden_explorer_3', name: '秘境探検家 ★★★', description: 'エリア外の店舗に5店舗来店', iconUrl: 'hidden_explorer_3.png', type: BadgeType.hiddenExplorer, requiredValue: 5, rarity: BadgeRarity.legendary, category: '秘境探検家'),
+  BadgeModel(badgeId: 'hidden_explorer_4', name: '真の冒険者', description: '現在登録されている全エリア外店舗を制覇', iconUrl: 'hidden_explorer_4.png', type: BadgeType.hiddenExplorerComplete, requiredValue: 1, rarity: BadgeRarity.legendary, category: '秘境探検家'),
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // ジャンル別コンプリートバッジ（genreComplete）10個
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BadgeModel(badgeId: 'genre_complete_cafe_sweets', name: 'カフェ・スイーツ完全制覇', description: 'カフェ・スイーツ系の全店舗を訪問', iconUrl: 'genre_complete_cafe_sweets.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'cafe_sweets'),
+  BadgeModel(badgeId: 'genre_complete_washoku', name: '和食完全制覇', description: '和食系の全店舗を訪問', iconUrl: 'genre_complete_washoku.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'washoku'),
+  BadgeModel(badgeId: 'genre_complete_izakaya_bar', name: '居酒屋・バー完全制覇', description: '居酒屋・バー系の全店舗を訪問', iconUrl: 'genre_complete_izakaya_bar.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'izakaya_bar'),
+  BadgeModel(badgeId: 'genre_complete_yakitori_age', name: '焼き鳥・揚げ物完全制覇', description: '焼き鳥・揚げ物系の全店舗を訪問', iconUrl: 'genre_complete_yakitori_age.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'yakitori_age'),
+  BadgeModel(badgeId: 'genre_complete_nabe_yakiniku', name: '鍋・焼肉完全制覇', description: '鍋・焼肉系の全店舗を訪問', iconUrl: 'genre_complete_nabe_yakiniku.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'nabe_yakiniku'),
+  BadgeModel(badgeId: 'genre_complete_ramen_chinese', name: 'ラーメン・中華完全制覇', description: 'ラーメン・中華系の全店舗を訪問', iconUrl: 'genre_complete_ramen_chinese.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'ramen_chinese'),
+  BadgeModel(badgeId: 'genre_complete_asian_ethnic', name: 'アジア・エスニック完全制覇', description: 'アジア・エスニック系の全店舗を訪問', iconUrl: 'genre_complete_asian_ethnic.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'asian_ethnic'),
+  BadgeModel(badgeId: 'genre_complete_western_french', name: '洋食・フレンチ完全制覇', description: '洋食・フレンチ系の全店舗を訪問', iconUrl: 'genre_complete_western_french.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'western_french'),
+  BadgeModel(badgeId: 'genre_complete_italian_meat', name: 'イタリアン・肉料理完全制覇', description: 'イタリアン・肉料理系の全店舗を訪問', iconUrl: 'genre_complete_italian_meat.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'italian_meat'),
+  BadgeModel(badgeId: 'genre_complete_shokudo_other', name: '食堂・その他完全制覇', description: '食堂・その他の全店舗を訪問', iconUrl: 'genre_complete_shokudo_other.png', type: BadgeType.genreComplete, requiredValue: 1, rarity: BadgeRarity.epic, category: 'ジャンルコンプリート', categoryGroupKey: 'shokudo_other'),
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // 週次ミッション達成バッジ（weeklyMission）4個
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BadgeModel(badgeId: 'weekly_mission_1', name: '初めての週次ミッション', description: '週次ミッションを初めて達成', iconUrl: 'weekly_mission_1.png', type: BadgeType.weeklyMission, requiredValue: 1, rarity: BadgeRarity.common, category: '週次ミッション'),
+  BadgeModel(badgeId: 'weekly_mission_5', name: 'ミッション常連', description: '週次ミッションを累計5回達成', iconUrl: 'weekly_mission_5.png', type: BadgeType.weeklyMission, requiredValue: 5, rarity: BadgeRarity.rare, category: '週次ミッション'),
+  BadgeModel(badgeId: 'weekly_mission_10', name: 'ミッションファイター', description: '週次ミッションを累計10回達成', iconUrl: 'weekly_mission_10.png', type: BadgeType.weeklyMission, requiredValue: 10, rarity: BadgeRarity.epic, category: '週次ミッション'),
+  BadgeModel(badgeId: 'weekly_mission_25', name: 'ミッションレジェンド', description: '週次ミッションを累計25回達成', iconUrl: 'weekly_mission_25.png', type: BadgeType.weeklyMission, requiredValue: 25, rarity: BadgeRarity.legendary, category: '週次ミッション'),
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // 図鑑発見シリーズ（zukanDiscover）5個
+  // NFCチェックイン時に新しい店舗を発見（isFirstVisit=true）するたびにカウント
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BadgeModel(badgeId: 'zukan_discover_1', name: '初発見者', description: 'NFCタッチで初めて店舗を発見', iconUrl: 'zukan_discover_1.png', type: BadgeType.zukanDiscover, requiredValue: 1, rarity: BadgeRarity.common, category: '図鑑発見'),
+  BadgeModel(badgeId: 'zukan_discover_5', name: '発見コレクター', description: '5店舗を発見', iconUrl: 'zukan_discover_5.png', type: BadgeType.zukanDiscover, requiredValue: 5, rarity: BadgeRarity.common, category: '図鑑発見'),
+  BadgeModel(badgeId: 'zukan_discover_10', name: '街の探検家', description: '10店舗を発見', iconUrl: 'zukan_discover_10.png', type: BadgeType.zukanDiscover, requiredValue: 10, rarity: BadgeRarity.rare, category: '図鑑発見'),
+  BadgeModel(badgeId: 'zukan_discover_25', name: '発見の達人', description: '25店舗を発見', iconUrl: 'zukan_discover_25.png', type: BadgeType.zukanDiscover, requiredValue: 25, rarity: BadgeRarity.epic, category: '図鑑発見'),
+  BadgeModel(badgeId: 'zukan_discover_50', name: '伝説の探検家', description: '50店舗を発見', iconUrl: 'zukan_discover_50.png', type: BadgeType.zukanDiscover, requiredValue: 50, rarity: BadgeRarity.legendary, category: '図鑑発見'),
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // レジェンド発見シリーズ（legendDiscover）3個
+  // NFCチェックイン時にレジェンドレア度の店舗を初めて発見するたびにカウント
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  BadgeModel(badgeId: 'legend_discover_1', name: 'レジェンド発掘者', description: 'レジェンドレア度の店舗を初めて発見', iconUrl: 'legend_discover_1.png', type: BadgeType.legendDiscover, requiredValue: 1, rarity: BadgeRarity.epic, category: 'レジェンド発見'),
+  BadgeModel(badgeId: 'legend_discover_3', name: 'レジェンドハンター', description: 'レジェンドレア度の店舗を3店舗発見', iconUrl: 'legend_discover_3.png', type: BadgeType.legendDiscover, requiredValue: 3, rarity: BadgeRarity.legendary, category: 'レジェンド発見'),
+  BadgeModel(badgeId: 'legend_discover_10', name: 'レジェンドマスター', description: 'レジェンドレア度の店舗を10店舗発見', iconUrl: 'legend_discover_10.png', type: BadgeType.legendDiscover, requiredValue: 10, rarity: BadgeRarity.legendary, category: 'レジェンド発見'),
 ];
 
 /// badgeIdからBadgeModelを検索
@@ -339,6 +388,18 @@ String badgeTypeDisplayName(BadgeType type) {
       return 'レコメンド';
     case BadgeType.stampCardCompleted:
       return 'スタンプカード';
+    case BadgeType.hiddenExplorer:
+      return '秘境探検家';
+    case BadgeType.hiddenExplorerComplete:
+      return '秘境探検家';
+    case BadgeType.genreComplete:
+      return 'ジャンルコンプリート';
+    case BadgeType.weeklyMission:
+      return '週次ミッション';
+    case BadgeType.zukanDiscover:
+      return '図鑑発見';
+    case BadgeType.legendDiscover:
+      return 'レジェンド発見';
   }
 }
 

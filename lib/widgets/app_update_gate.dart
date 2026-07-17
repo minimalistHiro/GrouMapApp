@@ -8,6 +8,8 @@ import '../providers/app_info_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/owner_settings_provider.dart';
 import 'custom_button.dart';
+import 'custom_loading_indicator.dart';
+import 'error_dialog.dart';
 
 class AppUpdateGate extends ConsumerWidget {
   const AppUpdateGate({super.key, required this.child});
@@ -42,7 +44,8 @@ class AppUpdateGate extends ConsumerWidget {
     final appVersionAsync = ref.watch(appVersionProvider);
     return appVersionAsync.when(
       data: (currentVersion) {
-        final isOutdated = _compareVersions(currentVersion, minRequiredVersion) < 0;
+        final isOutdated =
+            _compareVersions(currentVersion, minRequiredVersion) < 0;
         if (!isOutdated) {
           return child;
         }
@@ -56,14 +59,15 @@ class AppUpdateGate extends ConsumerWidget {
       },
       loading: () => const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(),
+          child: CustomLoadingIndicator(),
         ),
       ),
       error: (_, __) => child,
     );
   }
 
-  Map<String, dynamic> _resolveCurrentSettings(Map<String, dynamic>? ownerSettings) {
+  Map<String, dynamic> _resolveCurrentSettings(
+      Map<String, dynamic>? ownerSettings) {
     final rawCurrent = ownerSettings?['current'];
     if (rawCurrent is Map<String, dynamic>) {
       return rawCurrent;
@@ -197,7 +201,8 @@ class ForceUpdateScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 CustomButton(
                   text: 'ストアで更新',
-                  onPressed: storeUrl == null ? null : () async => _openStore(context),
+                  onPressed:
+                      storeUrl == null ? null : () async => _openStore(context),
                   backgroundColor: const Color(0xFFE75B41),
                 ),
                 if (storeUrl == null)
@@ -225,11 +230,10 @@ class ForceUpdateScreen extends StatelessWidget {
     }
     final uri = Uri.tryParse(storeUrl!);
     if (uri == null || !(await canLaunchUrl(uri))) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('ストアURLを開けませんでした'),
-          backgroundColor: Colors.red,
-        ),
+      ErrorDialog.showError(
+        context,
+        title: '開けませんでした',
+        message: 'ストアURLを開けませんでした。',
       );
       return;
     }

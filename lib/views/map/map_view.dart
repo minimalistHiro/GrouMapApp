@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
@@ -12,6 +14,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../stores/store_detail_view.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/rarity_gradient.dart';
+import '../../widgets/compact_toggle_bar.dart';
 import '../../theme/app_ui.dart';
 import '../../models/map_filter_model.dart';
 import '../../services/map_filter_service.dart';
@@ -21,16 +25,17 @@ import '../../providers/badge_provider.dart';
 import '../../providers/walkthrough_provider.dart';
 import '../walkthrough/walkthrough_overlay.dart';
 import '../walkthrough/walkthrough_step_config.dart';
+import '../../widgets/game_dialog.dart';
 
 class _MarkerVisual {
   final Color color;
-  final IconData iconData;
+  final IconData? iconData;
   final bool useImage;
   final Color? iconColor;
 
   const _MarkerVisual({
     required this.color,
-    required this.iconData,
+    this.iconData,
     required this.useImage,
     this.iconColor,
   });
@@ -38,17 +43,20 @@ class _MarkerVisual {
 
 class MapView extends ConsumerStatefulWidget {
   final String? selectedStoreId;
+  final ValueChanged<bool>? onSearchExpandedChanged;
 
   const MapView({
     super.key,
     this.selectedStoreId,
+    this.onSearchExpandedChanged,
   });
 
   @override
   ConsumerState<MapView> createState() => _MapViewState();
 }
 
-class _MapViewState extends ConsumerState<MapView> {
+class _MapViewState extends ConsumerState<MapView>
+    with TickerProviderStateMixin {
   GoogleMapController? _mapController;
   Set<Marker> _markers = {};
   LatLng? _currentLocation;
@@ -59,6 +67,11 @@ class _MapViewState extends ConsumerState<MapView> {
   int _markerBuildToken = 0;
   final Map<String, Future<BitmapDescriptor>> _markerIconFutureCache = {};
   final Map<String, ui.Image> _markerImageCache = {};
+  // Y軸スピンアニメーション用
+  final Map<String, Uint8List> _markerBytesCache = {};
+  final Map<String, String> _markerIdToCacheKey = {};
+  final Map<String, BitmapDescriptor> _markerSpinIcons = {};
+  final Map<String, Timer> _markerSpinTimers = {};
 
   // データベースから取得した店舗データ
   List<Map<String, dynamic>> _stores = [];
@@ -77,12 +90,14 @@ class _MapViewState extends ConsumerState<MapView> {
   final GlobalKey _closeBtnKey = GlobalKey();
   final GlobalKey _mapAreaKey = GlobalKey();
 
-  // フィルタ/表示モード
-  bool _showOpenNowOnly = false; // 「営業中のみ」表示
-  bool _categoryMode = false; // 「ジャンル別」表示（カテゴリーごとにアイコン）
-  bool _pioneerMode = false; // 「開拓」表示（未開拓/開拓/常連 のスタンプ状況）
-  bool _showExplorationMode = false; // 「開拓・未開拓」ボーダー色表示
-  String _selectedMode = 'none'; // 'none' | 'category' | 'pioneer'
+  // マップモード: 'normal' | 'personal' | 'community'
+  String _mapMode = 'normal';
+  bool _personalMapMode = false;
+  bool _communityMapMode = false;
+  String _communitySubMode = 'exploration'; // 'exploration' | 'activity'
+
+  // 凡例カードの表示状態
+  bool _isLegendVisible = true;
 
   // 詳細フィルター
   MapFilterModel _mapFilter = const MapFilterModel();
@@ -90,24 +105,115 @@ class _MapViewState extends ConsumerState<MapView> {
   Map<String, List<Map<String, dynamic>>> _storeCoupons = {};
   bool _filterDataLoaded = false;
 
+  // エリアオーバーレイ
+  Set<Circle> _areaCircles = {};
+
   // 検索
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _isSearchExpanded = false;
+
+  // ゲームUIカラー定数
+  static const Color _gameBackground = Color(0xE6101E2E);
+  static const Color _gameBorder = Color(0xFF00E5FF);
+  static const Color _gameOpenColor = Color(0xFF00E676);
+
+  // ゲームマップスタイル（ダークブルー系）
+  static const String _gameMapStyle = '''[
+  {"elementType":"geometry","stylers":[{"color":"#0d1b2a"}]},
+  {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+  {"elementType":"labels.text.fill","stylers":[{"color":"#8ec3b9"}]},
+  {"elementType":"labels.text.stroke","stylers":[{"color":"#1a3a4a"}]},
+  {"featureType":"administrative","elementType":"geometry","stylers":[{"color":"#2a4a6a"}]},
+  {"featureType":"administrative.country","elementType":"labels.text.fill","stylers":[{"color":"#9ec3b9"}]},
+  {"featureType":"administrative.locality","elementType":"labels.text.fill","stylers":[{"color":"#c4d8dd"}]},
+  {"featureType":"poi","stylers":[{"visibility":"off"}]},
+  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#1a3a52"}]},
+  {"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#0d2a3a"}]},
+  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#7ea3b9"}]},
+  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#1e4a6e"}]},
+  {"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#0d2a3a"}]},
+  {"featureType":"road.highway","elementType":"labels.text.fill","stylers":[{"color":"#a0c8d8"}]},
+  {"featureType":"transit","stylers":[{"visibility":"simplified"}]},
+  {"featureType":"transit.station","elementType":"labels.text.fill","stylers":[{"color":"#7ea3b9"}]},
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#0a2030"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#515c6d"}]},
+  {"featureType":"water","elementType":"labels.text.stroke","stylers":[{"color":"#17263c"}]}
+]''';
+
+  // レーダーアニメーション
+  late AnimationController _radarController;
+  late Animation<double> _radarAnimation;
+
+  // 選択リングアニメーション
+  late AnimationController _selectionRingController;
+  Offset? _selectedMarkerScreenPos;
+  bool _showSelectionRing = false;
+
+  // ピンアニメーション（ふわふわ）
+  late AnimationController _pinFloatController;
+
+  // プレイヤーHUD統計
+  int _playerDiscoveredCount = 0;
+  int _playerBadgeCount = 0;
+  int _playerRank = 0;
 
   // デフォルトの座標（東京駅周辺）
   static const LatLng _defaultLocation = LatLng(35.6812, 139.7671);
   static const String _lastLocationLatKey = 'map_last_location_lat';
   static const String _lastLocationLngKey = 'map_last_location_lng';
+  static const String _mapModeKey = 'map_mode';
 
   // 位置情報取得の試行回数
   int _locationRetryCount = 0;
   static const int _maxLocationRetries = 3;
 
+  // 近接自動フォーカス
+  StreamSubscription<Position>? _positionStreamSubscription;
+  final Set<String> _proximityTriggeredStoreIds = {}; // 既にフォーカスを発火した店舗ID
+  static const double _proximityRadiusMeters = 50.0; // 50m以内でフォーカス
+  static const double _proximityResetRadiusMeters = 100.0; // 100m以上離れるとリセット
+
   @override
   void initState() {
     super.initState();
     _currentCenter = _defaultLocation;
+
+    // レーダーアニメーション
+    _radarController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+    _radarAnimation = CurvedAnimation(
+      parent: _radarController,
+      curve: Curves.easeOut,
+    );
+    _radarController.addListener(() {
+      if (mounted) setState(() {});
+    });
+
+    // 選択リングアニメーション
+    _selectionRingController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
+    _selectionRingController.addStatusListener((status) {
+      if (status == AnimationStatus.completed && mounted) {
+        setState(() => _showSelectionRing = false);
+      }
+    });
+
+    // ピンふわふわアニメーション（2.5秒周期で上下）
+    _pinFloatController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    )..repeat(reverse: true);
+    _pinFloatController.addListener(() {
+      if (mounted) setState(() {});
+    });
+
     _loadLastLocationFromPrefs();
+    _loadMapModeFromPrefs();
     _initializeMapData();
     _markMapMissions();
   }
@@ -116,6 +222,43 @@ class _MapViewState extends ConsumerState<MapView> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     unawaited(_grantMapOpenReward(user.uid));
+  }
+
+  void _expandSearch() {
+    if (_isSearchExpanded) return;
+    setState(() {
+      _isSearchExpanded = true;
+    });
+    widget.onSearchExpandedChanged?.call(true);
+  }
+
+  void _collapseSearch() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _searchController.clear();
+    final bool wasExpanded = _isSearchExpanded;
+    setState(() {
+      _searchQuery = '';
+      _isSearchExpanded = false;
+    });
+    if (wasExpanded) {
+      widget.onSearchExpandedChanged?.call(false);
+    }
+  }
+
+  Future<void> _showSelectionRingAt(LatLng position) async {
+    final screenPos = await _mapController?.getScreenCoordinate(position);
+    if (screenPos == null || !mounted) return;
+
+    setState(() {
+      _selectedMarkerScreenPos = Offset(
+        screenPos.x.toDouble(),
+        screenPos.y.toDouble(),
+      );
+      _showSelectionRing = true;
+    });
+    _selectionRingController
+      ..reset()
+      ..forward();
   }
 
   Future<void> _grantMapOpenReward(String userId) async {
@@ -132,6 +275,16 @@ class _MapViewState extends ConsumerState<MapView> {
 
   @override
   void dispose() {
+    if (_isSearchExpanded) {
+      widget.onSearchExpandedChanged?.call(false);
+    }
+    _radarController.dispose();
+    _selectionRingController.dispose();
+    _pinFloatController.dispose();
+    for (final Timer t in _markerSpinTimers.values) {
+      t.cancel();
+    }
+    _positionStreamSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -165,12 +318,26 @@ class _MapViewState extends ConsumerState<MapView> {
     await prefs.setDouble(_lastLocationLngKey, location.longitude);
   }
 
+  Future<void> _loadMapModeFromPrefs() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? savedMode = prefs.getString(_mapModeKey);
+    if (savedMode == null) return;
+    if (!mounted) return;
+    _setMapMode(savedMode);
+  }
+
+  Future<void> _saveMapModeToPrefs(String mode) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_mapModeKey, mode);
+  }
+
   // 初期データ読み込み
   Future<void> _initializeMapData() async {
-    // フィルター設定とお気に入りを並行読み込み
+    // フィルター設定・お気に入り・エリアデータを並行読み込み
     await Future.wait([
       _loadFilterSettings(),
       _loadFavoriteStoreIds(),
+      _loadAreas(),
     ]);
 
     // 店舗データを先に読み込む
@@ -188,6 +355,9 @@ class _MapViewState extends ConsumerState<MapView> {
       await _loadStoreCoupons();
     }
 
+    // プレイヤー統計を読み込む
+    unawaited(_loadPlayerStats());
+
     _filterDataLoaded = true;
 
     // 特定の店舗が選択されている場合、その店舗を選択状態にする
@@ -203,7 +373,6 @@ class _MapViewState extends ConsumerState<MapView> {
       if (mounted) {
         setState(() {
           _mapFilter = filter;
-          _showOpenNowOnly = filter.showOpenNowOnly;
         });
       }
     } catch (e) {
@@ -222,9 +391,8 @@ class _MapViewState extends ConsumerState<MapView> {
           .get();
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
-        final favorites = (data['favoriteStoreIds'] as List<dynamic>?)
-                ?.cast<String>() ??
-            [];
+        final favorites =
+            (data['favoriteStoreIds'] as List<dynamic>?)?.cast<String>() ?? [];
         if (mounted) {
           setState(() {
             _favoriteStoreIds = favorites;
@@ -234,6 +402,153 @@ class _MapViewState extends ConsumerState<MapView> {
     } catch (e) {
       print('お気に入り店舗の読み込みに失敗しました: $e');
     }
+  }
+
+  // エリア情報を読み込む
+  Future<void> _loadAreas() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('areas')
+          .where('isActive', isEqualTo: true)
+          .get();
+      final areas = snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['areaId'] = doc.id;
+        return data;
+      }).toList();
+      if (mounted) {
+        setState(() {
+          _areaCircles = _buildAreaCircles(areas);
+        });
+      }
+    } catch (e) {
+      debugPrint('エリア情報の読み込みに失敗しました: $e');
+    }
+  }
+
+  // エリアの Circle セットを生成する
+  Set<Circle> _buildAreaCircles(List<Map<String, dynamic>> areas) {
+    final circles = <Circle>{};
+    for (final area in areas) {
+      if (area['isActive'] != true) continue;
+      final lat = area['center']?['latitude'] as double?;
+      final lng = area['center']?['longitude'] as double?;
+      if (lat == null || lng == null) continue;
+      final radius = (area['radiusMeters'] as num?)?.toDouble() ?? 500.0;
+      final colorHex = area['color'] as String?;
+      final baseColor =
+          _parseHexColor(colorHex, defaultColor: const Color(0xFFFF6B35));
+      circles.add(Circle(
+        circleId: CircleId(area['areaId'] as String),
+        center: LatLng(lat, lng),
+        radius: radius,
+        fillColor: baseColor.withOpacity(0.15),
+        strokeColor: baseColor.withOpacity(0.6),
+        strokeWidth: 2,
+      ));
+    }
+    return circles;
+  }
+
+  // 賑わい度のサークルオーバーレイを生成する
+  Set<Circle> _buildActivityCircles() {
+    final circles = <Circle>{};
+    for (final store in _stores) {
+      final totalVisitCount = (store['totalVisitCount'] as num?)?.toInt() ?? 0;
+      if (totalVisitCount == 0) continue;
+
+      final lat = store['location']?['latitude'] as double?;
+      final lng = store['location']?['longitude'] as double?;
+      if (lat == null || lng == null) continue;
+      final storeId = store['id'] as String;
+
+      Color fillColor;
+      double radius;
+      if (totalVisitCount <= 10) {
+        fillColor = const Color(0x1A29B6F6);
+        radius = 40;
+      } else if (totalVisitCount <= 30) {
+        fillColor = const Color(0x3366BB6A);
+        radius = 60;
+      } else if (totalVisitCount <= 100) {
+        fillColor = const Color(0x4DFB8C00);
+        radius = 80;
+      } else {
+        fillColor = const Color(0x66FFB300);
+        radius = 100;
+      }
+
+      circles.add(Circle(
+        circleId: CircleId('activity_$storeId'),
+        center: LatLng(lat, lng),
+        radius: radius,
+        fillColor: fillColor,
+        strokeWidth: 0,
+      ));
+    }
+    return circles;
+  }
+
+  // アクティブなサークルセットを返す
+  Set<Circle> _getActiveCircles() {
+    Set<Circle> result = {};
+    if (_communityMapMode) {
+      if (_communitySubMode == 'exploration') {
+        result = {..._areaCircles};
+      } else {
+        result = {..._buildActivityCircles()};
+      }
+    }
+    result.addAll(_buildRadarCircles());
+    return result;
+  }
+
+  Set<Circle> _buildRadarCircles() {
+    if (_currentLocation == null) return {};
+    final t = _radarAnimation.value;
+    final circles = <Circle>{};
+    for (int i = 0; i < 3; i++) {
+      final phase = (t + i / 3) % 1.0;
+      final radius = 20.0 + phase * 180.0;
+      final opacity = (1.0 - phase) * 0.5;
+      circles.add(Circle(
+        circleId: CircleId('radar_$i'),
+        center: _currentLocation!,
+        radius: radius,
+        fillColor: _gameBorder.withOpacity(opacity * 0.3),
+        strokeColor: _gameBorder.withOpacity(opacity),
+        strokeWidth: 2,
+      ));
+    }
+    return circles;
+  }
+
+  // マップモードを切り替えるメソッド（normal / personal / community）
+  void _setMapMode(String mode) {
+    setState(() {
+      _mapMode = mode;
+      _personalMapMode = mode == 'personal';
+      _communityMapMode = mode == 'community';
+      if (mode != 'community') {
+        _communitySubMode = 'exploration'; // リセット
+      }
+      _isLegendVisible = true; // モード切り替え時に凡例を再表示
+    });
+    _saveMapModeToPrefs(mode);
+    _markerIconFutureCache.clear();
+    _createMarkers();
+  }
+
+  // hex 文字列を Color に変換するヘルパー
+  Color _parseHexColor(String? hexColor, {required Color defaultColor}) {
+    if (hexColor == null || hexColor.isEmpty) return defaultColor;
+    final hex = hexColor.replaceAll('#', '');
+    if (hex.length == 6) {
+      return Color(int.parse('FF$hex', radix: 16));
+    } else if (hex.length == 8) {
+      return Color(int.parse(hex, radix: 16));
+    }
+    return defaultColor;
   }
 
   // 店舗のクーポンデータを読み込む
@@ -364,6 +679,9 @@ class _MapViewState extends ConsumerState<MapView> {
               'updatedAt': data['updatedAt'],
               'isVisited': false,
               'flowerType': 'unvisited',
+              'areaId': data['areaId'], // エリアID（null = 秘境スポット）
+              'discoveredCount': data['discoveredCount'],
+              'rarityOverride': data['rarityOverride'],
             };
             stores.add(storeData);
             print('店舗を追加: ${storeData['name']} at ${storeData['position']}');
@@ -526,6 +844,7 @@ class _MapViewState extends ConsumerState<MapView> {
           'stamps': data['stamps'] ?? 0,
           'lastVisited': data['lastVisited'],
           'totalSpending': data['totalSpending'] ?? 0.0,
+          'totalVisits': data['totalVisits'] ?? 0,
         };
       }
 
@@ -652,6 +971,9 @@ class _MapViewState extends ConsumerState<MapView> {
           ),
         );
         print('地図を現在地に移動しました');
+
+        // 位置ストリームがまだ開始されていなければ開始
+        _startProximityMonitoring();
       }
     } catch (e) {
       print('現在地の取得に失敗しました: $e');
@@ -667,34 +989,132 @@ class _MapViewState extends ConsumerState<MapView> {
     }
   }
 
+  // 近接監視ストリームを開始
+  void _startProximityMonitoring() {
+    if (_positionStreamSubscription != null) return; // 既に開始済み
+
+    const locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 5, // 5m移動ごとに更新
+    );
+
+    _positionStreamSubscription =
+        Geolocator.getPositionStream(locationSettings: locationSettings)
+            .listen((Position position) {
+      if (!mounted) return;
+      final LatLng userLatLng = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _currentLocation = userLatLng;
+      });
+      _checkProximityToStores(userLatLng);
+    });
+  }
+
+  // ユーザーの現在地と各店舗の距離をチェックし、50m以内ならフォーカスを当てる
+  void _checkProximityToStores(LatLng userLatLng) {
+    // リセット処理: 100m以上離れた店舗は triggered セットから除外
+    _proximityTriggeredStoreIds.removeWhere((storeId) {
+      final store = _stores.firstWhere(
+        (s) => s['id'] == storeId,
+        orElse: () => {},
+      );
+      if (store.isEmpty) return true;
+      final LatLng storePos = store['position'] as LatLng;
+      final double distance = Geolocator.distanceBetween(
+        userLatLng.latitude,
+        userLatLng.longitude,
+        storePos.latitude,
+        storePos.longitude,
+      );
+      return distance > _proximityResetRadiusMeters;
+    });
+
+    // 近接チェック: 50m以内でまだ発火していない店舗を探す
+    for (final store in _stores) {
+      final String storeId = store['id'] as String;
+      if (_proximityTriggeredStoreIds.contains(storeId)) continue;
+
+      final LatLng storePos = store['position'] as LatLng;
+      final double distance = Geolocator.distanceBetween(
+        userLatLng.latitude,
+        userLatLng.longitude,
+        storePos.latitude,
+        storePos.longitude,
+      );
+
+      if (distance <= _proximityRadiusMeters) {
+        _proximityTriggeredStoreIds.add(storeId);
+        _onProximityFocus(storeId);
+        break; // 一度に1店舗だけフォーカス
+      }
+    }
+  }
+
+  // 近接フォーカスの実行（ピンタップと同じ挙動 + バイブレーション）
+  Future<void> _onProximityFocus(String storeId) async {
+    if (!mounted) return;
+    // すでにこの店舗が選択中なら何もしない
+    if (_expandedMarkerId == storeId) return;
+
+    // 軽くバイブレーション
+    HapticFeedback.mediumImpact();
+
+    setState(() {
+      _expandedMarkerId = storeId;
+      _isShowStoreInfo = true;
+      _selectedStoreUid = storeId;
+    });
+
+    // 地図をその店舗の位置に移動
+    final store = _stores.firstWhere(
+      (s) => s['id'] == storeId,
+      orElse: () => {},
+    );
+    if (store.isNotEmpty) {
+      final LatLng storePos = store['position'] as LatLng;
+      _currentCenter = storePos;
+      _currentZoom = 16.0;
+      _mapController?.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentCenter,
+            zoom: _currentZoom,
+            bearing: _currentBearing,
+          ),
+        ),
+      );
+    }
+
+    await _createMarkers();
+  }
+
   // 位置情報エラーダイアログを表示
   void _showLocationErrorDialog(String message) {
     if (!mounted) return;
 
-    showDialog(
+    final bool needsSettings = message.contains('永続的に拒否');
+
+    showGameDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('位置情報エラー'),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('OK'),
-            ),
-            if (message.contains('永続的に拒否'))
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Geolocator.openAppSettings();
-                },
-                child: const Text('設定を開く'),
-              ),
-          ],
-        );
-      },
+      title: '位置情報エラー',
+      message: message,
+      icon: Icons.location_off_rounded,
+      actions: [
+        if (needsSettings)
+          GameDialogAction(
+            label: '設定を開く',
+            onPressed: () {
+              Navigator.of(context).pop();
+              Geolocator.openAppSettings();
+            },
+            isPrimary: true,
+          ),
+        GameDialogAction(
+          label: 'OK',
+          onPressed: () => Navigator.of(context).pop(),
+          isPrimary: !needsSettings,
+        ),
+      ],
     );
   }
 
@@ -917,12 +1337,67 @@ class _MapViewState extends ConsumerState<MapView> {
     }
   }
 
+  // 個人マップの5段階ステータス判定
+  String _getPersonalMapStatus(int totalVisits) {
+    if (totalVisits == 0) return 'undiscovered';
+    if (totalVisits == 1) return 'discovered';
+    if (totalVisits <= 4) return 'exploring';
+    if (totalVisits <= 9) return 'regular';
+    return 'legend';
+  }
+
+  Color _getPersonalMapColor(String status) {
+    switch (status) {
+      case 'undiscovered':
+        return const Color(0xFFBDBDBD);
+      case 'discovered':
+        return const Color(0xFF29B6F6);
+      case 'exploring':
+        return const Color(0xFF66BB6A);
+      case 'regular':
+        return const Color(0xFFFB8C00);
+      case 'legend':
+        return const Color(0xFFFFB300);
+      default:
+        return const Color(0xFFBDBDBD);
+    }
+  }
+
+  IconData _getPersonalMapIcon(String status) {
+    switch (status) {
+      case 'undiscovered':
+        return Icons.radio_button_unchecked;
+      case 'discovered':
+        return Icons.explore;
+      case 'exploring':
+        return Icons.directions_walk;
+      case 'regular':
+        return Icons.radio_button_checked;
+      case 'legend':
+        return Icons.star;
+      default:
+        return Icons.radio_button_unchecked;
+    }
+  }
+
   _MarkerVisual _resolveMarkerVisual({
     required String flowerType,
     required String category,
     required String storeIconUrl,
+    String storeId = '',
   }) {
-    if (_pioneerMode) {
+    // 個人マップモード（最優先）: 常に店舗アイコン画像を表示
+    if (_personalMapMode) {
+      final bool canUseImage = storeIconUrl.isNotEmpty;
+      return _MarkerVisual(
+        color: Colors.white,
+        iconData: canUseImage ? null : _getDefaultStoreIcon(category),
+        useImage: canUseImage,
+        iconColor: canUseImage ? null : const Color(0xFF9E9E9E),
+      );
+    }
+
+    if (_mapFilter.pioneerMode) {
       switch (flowerType) {
         case 'unvisited':
           return const _MarkerVisual(
@@ -955,7 +1430,7 @@ class _MapViewState extends ConsumerState<MapView> {
       }
     }
 
-    if (_categoryMode) {
+    if (_mapFilter.categoryMode) {
       final Color baseColor = _getDefaultStoreColor(category);
       return _MarkerVisual(
         color: Colors.white,
@@ -984,6 +1459,9 @@ class _MapViewState extends ConsumerState<MapView> {
     required Color? iconColor,
     required String storeIconUrl,
     Color pinAccentColor = const Color(0xFFFF6B35),
+    bool isLegend = false,
+    bool isGrayPin = false,
+    bool isGreenPin = false,
   }) {
     final cachedFuture = _markerIconFutureCache[cacheKey];
     if (cachedFuture != null) {
@@ -998,7 +1476,8 @@ class _MapViewState extends ConsumerState<MapView> {
         final ui.Image? image = storeIconUrl.isNotEmpty
             ? await _loadMarkerImage(storeIconUrl)
             : null;
-        final BitmapDescriptor icon = await _buildMarkerBitmap(
+        final (BitmapDescriptor icon, Uint8List bytes) =
+            await _buildMarkerBitmap(
           size: size,
           fillColor: fillColor,
           borderColor: borderColor,
@@ -1008,7 +1487,11 @@ class _MapViewState extends ConsumerState<MapView> {
           image: image,
           devicePixelRatio: MediaQuery.of(context).devicePixelRatio,
           pinAccentColor: pinAccentColor,
+          isLegend: isLegend,
+          isGrayPin: isGrayPin,
+          isGreenPin: isGreenPin,
         );
+        _markerBytesCache[cacheKey] = bytes;
         completer.complete(icon);
       } catch (_) {
         _markerIconFutureCache.remove(cacheKey);
@@ -1045,7 +1528,7 @@ class _MapViewState extends ConsumerState<MapView> {
     }
   }
 
-  Future<BitmapDescriptor> _buildMarkerBitmap({
+  Future<(BitmapDescriptor, Uint8List)> _buildMarkerBitmap({
     required double size,
     required Color fillColor,
     required Color borderColor,
@@ -1055,6 +1538,9 @@ class _MapViewState extends ConsumerState<MapView> {
     required ui.Image? image,
     required double devicePixelRatio,
     Color pinAccentColor = const Color(0xFFFF6B35),
+    bool isLegend = false,
+    bool isGrayPin = false,
+    bool isGreenPin = false,
   }) async {
     const double pinHeightScale = 1.4;
     final double scaledSize = size * devicePixelRatio;
@@ -1107,41 +1593,224 @@ class _MapViewState extends ConsumerState<MapView> {
     canvas.drawShadow(
         pinPath, Colors.black.withOpacity(0.25), 4 * devicePixelRatio, true);
 
-    final Paint triangleFillPaint = Paint()..color = pinAccentColor;
-    canvas.drawPath(trianglePath, triangleFillPaint);
-    if (borderWidth > 0) {
-      final Paint triangleBorderPaint = Paint()
-        ..color = pinAccentColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = triangleBorderWidth;
-      canvas.drawPath(trianglePath, triangleBorderPaint);
-    }
-
-    // Draw the circle last so it fully covers the triangle overlap.
-    final Paint circleFillPaint = Paint()..color = fillColor;
-    canvas.drawPath(circlePath, circleFillPaint);
-
-    if (image != null) {
-      canvas.save();
-      canvas.clipPath(circlePath);
-      final Rect dstRect = Rect.fromLTWH(
-        circleCenter.dx - radius,
+    // legendのときはゴールドグラデーションを使用
+    if (isLegend) {
+      final Rect gradientRect = Rect.fromLTWH(
+        0,
         circleCenter.dy - radius,
-        radius * 2,
-        radius * 2,
+        scaledSize,
+        scaledHeight - (circleCenter.dy - radius),
       );
-      final Rect srcRect =
-          Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble());
-      canvas.drawImageRect(image, srcRect, dstRect, Paint());
-      canvas.restore();
-    }
+      final ui.Gradient goldGradient = RarityGradient.canvasFillGradient(
+        4,
+        Offset(scaledSize / 2, circleCenter.dy - radius),
+        Offset(scaledSize / 2, scaledHeight),
+      );
+      final Paint legendTrianglePaint = Paint()..shader = goldGradient;
+      canvas.drawPath(trianglePath, legendTrianglePaint);
 
-    if (borderWidth > 0) {
-      final Paint circleBorderPaint = Paint()
-        ..color = pinAccentColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = circleBorderWidth;
-      canvas.drawPath(circlePath, circleBorderPaint);
+      // Draw the circle last so it fully covers the triangle overlap.
+      final Paint circleFillPaint = Paint()
+        ..shader = RarityGradient.canvasFillGradient(
+          4,
+          Offset(scaledSize / 2, circleCenter.dy - radius),
+          Offset(scaledSize / 2, circleCenter.dy + radius),
+        );
+      canvas.drawPath(circlePath, circleFillPaint);
+
+      if (image != null) {
+        canvas.save();
+        canvas.clipPath(circlePath);
+        final Rect dstRect = Rect.fromLTWH(
+          circleCenter.dx - radius,
+          circleCenter.dy - radius,
+          radius * 2,
+          radius * 2,
+        );
+        final Rect srcRect = Rect.fromLTWH(
+            0, 0, image.width.toDouble(), image.height.toDouble());
+        canvas.drawImageRect(image, srcRect, dstRect, Paint());
+        canvas.restore();
+      }
+
+      if (borderWidth > 0) {
+        final Paint legendCircleBorderPaint = Paint()
+          ..shader = gradientRect.isEmpty
+              ? null
+              : RarityGradient.canvasBorderGradient(
+                  4,
+                  Offset(scaledSize / 2, circleCenter.dy - radius),
+                  Offset(scaledSize / 2, circleCenter.dy + radius),
+                )
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = circleBorderWidth;
+        canvas.drawPath(circlePath, legendCircleBorderPaint);
+      }
+    } else {
+      if (isGrayPin) {
+        // グレーピン: 上から下へ明→暗のグラデーション
+        final Rect grayGradientRect = Rect.fromLTWH(
+          0,
+          circleCenter.dy - radius,
+          scaledSize,
+          scaledHeight - (circleCenter.dy - radius),
+        );
+        final ui.Gradient grayGradient = RarityGradient.canvasFillGradient(
+          1,
+          Offset(scaledSize / 2, circleCenter.dy - radius),
+          Offset(scaledSize / 2, scaledHeight),
+        );
+        final Paint triangleFillPaint = Paint()..shader = grayGradient;
+        canvas.drawPath(trianglePath, triangleFillPaint);
+        if (borderWidth > 0) {
+          final Paint triangleBorderPaint = Paint()
+            ..shader = grayGradient
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = triangleBorderWidth;
+          canvas.drawPath(trianglePath, triangleBorderPaint);
+        }
+
+        // Draw the circle last so it fully covers the triangle overlap.
+        final Paint circleFillPaint = Paint()
+          ..shader = RarityGradient.canvasFillGradient(
+            1,
+            Offset(scaledSize / 2, circleCenter.dy - radius),
+            Offset(scaledSize / 2, circleCenter.dy + radius),
+          );
+        canvas.drawPath(circlePath, circleFillPaint);
+
+        if (image != null) {
+          canvas.save();
+          canvas.clipPath(circlePath);
+          final Rect dstRect = Rect.fromLTWH(
+            circleCenter.dx - radius,
+            circleCenter.dy - radius,
+            radius * 2,
+            radius * 2,
+          );
+          final Rect srcRect = Rect.fromLTWH(
+              0, 0, image.width.toDouble(), image.height.toDouble());
+          canvas.drawImageRect(image, srcRect, dstRect, Paint());
+          canvas.restore();
+        }
+
+        if (borderWidth > 0) {
+          final ui.Gradient circleBorderGradient =
+              RarityGradient.canvasBorderGradient(
+            1,
+            Offset(scaledSize / 2, circleCenter.dy - radius),
+            Offset(scaledSize / 2, circleCenter.dy + radius),
+          );
+          final Paint circleBorderPaint = Paint()
+            ..shader = grayGradientRect.isEmpty ? null : circleBorderGradient
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = circleBorderWidth;
+          canvas.drawPath(circlePath, circleBorderPaint);
+        }
+      } else if (isGreenPin) {
+        // 緑ピン: RarityGradient.canvasGreenFillGradient を使用
+        final ui.Gradient greenGradient =
+            RarityGradient.canvasGreenFillGradient(
+          Offset(scaledSize / 2, circleCenter.dy - radius),
+          Offset(scaledSize / 2, scaledHeight),
+        );
+        final Paint triangleFillPaint = Paint()..shader = greenGradient;
+        canvas.drawPath(trianglePath, triangleFillPaint);
+        if (borderWidth > 0) {
+          final Paint triangleBorderPaint = Paint()
+            ..shader = greenGradient
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = triangleBorderWidth;
+          canvas.drawPath(trianglePath, triangleBorderPaint);
+        }
+
+        // Draw the circle last so it fully covers the triangle overlap.
+        final Paint circleFillPaint = Paint()
+          ..shader = RarityGradient.canvasGreenFillGradient(
+            Offset(scaledSize / 2, circleCenter.dy - radius),
+            Offset(scaledSize / 2, circleCenter.dy + radius),
+          );
+        canvas.drawPath(circlePath, circleFillPaint);
+
+        if (image != null) {
+          canvas.save();
+          canvas.clipPath(circlePath);
+          final Rect dstRect = Rect.fromLTWH(
+            circleCenter.dx - radius,
+            circleCenter.dy - radius,
+            radius * 2,
+            radius * 2,
+          );
+          final Rect srcRect = Rect.fromLTWH(
+              0, 0, image.width.toDouble(), image.height.toDouble());
+          canvas.drawImageRect(image, srcRect, dstRect, Paint());
+          canvas.restore();
+        }
+
+        if (borderWidth > 0) {
+          final Paint circleBorderPaint = Paint()
+            ..shader = RarityGradient.canvasGreenFillGradient(
+              Offset(scaledSize / 2, circleCenter.dy - radius),
+              Offset(scaledSize / 2, circleCenter.dy + radius),
+            )
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = circleBorderWidth;
+          canvas.drawPath(circlePath, circleBorderPaint);
+        }
+      } else {
+        // 通常ピン: RarityGradient.canvasColorFillGradient を使用
+        final ui.Gradient accentFillGradient =
+            RarityGradient.canvasColorBorderGradient(
+          pinAccentColor,
+          Offset(scaledSize / 2, circleCenter.dy - radius),
+          Offset(scaledSize / 2, scaledHeight),
+        );
+        final Paint triangleFillPaint = Paint()..shader = accentFillGradient;
+        canvas.drawPath(trianglePath, triangleFillPaint);
+        if (borderWidth > 0) {
+          final Paint triangleBorderPaint = Paint()
+            ..shader = accentFillGradient
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = triangleBorderWidth;
+          canvas.drawPath(trianglePath, triangleBorderPaint);
+        }
+
+        // Draw the circle last so it fully covers the triangle overlap.
+        final Paint circleFillPaint = Paint()
+          ..shader = RarityGradient.canvasColorFillGradient(
+            fillColor,
+            Offset(scaledSize / 2, circleCenter.dy - radius),
+            Offset(scaledSize / 2, circleCenter.dy + radius),
+          );
+        canvas.drawPath(circlePath, circleFillPaint);
+
+        if (image != null) {
+          canvas.save();
+          canvas.clipPath(circlePath);
+          final Rect dstRect = Rect.fromLTWH(
+            circleCenter.dx - radius,
+            circleCenter.dy - radius,
+            radius * 2,
+            radius * 2,
+          );
+          final Rect srcRect = Rect.fromLTWH(
+              0, 0, image.width.toDouble(), image.height.toDouble());
+          canvas.drawImageRect(image, srcRect, dstRect, Paint());
+          canvas.restore();
+        }
+
+        if (borderWidth > 0) {
+          final Paint circleBorderPaint = Paint()
+            ..shader = RarityGradient.canvasColorBorderGradient(
+              pinAccentColor,
+              Offset(scaledSize / 2, circleCenter.dy - radius),
+              Offset(scaledSize / 2, circleCenter.dy + radius),
+            )
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = circleBorderWidth;
+          canvas.drawPath(circlePath, circleBorderPaint);
+        }
+      }
     }
 
     if (iconData != null) {
@@ -1169,7 +1838,128 @@ class _MapViewState extends ConsumerState<MapView> {
         .toImage(scaledSize.toInt(), scaledHeight.toInt());
     final ByteData? byteData =
         await renderedImage.toByteData(format: ui.ImageByteFormat.png);
-    return BitmapDescriptor.fromBytes(byteData!.buffer.asUint8List());
+    final Uint8List bytes = byteData!.buffer.asUint8List();
+    return (BitmapDescriptor.fromBytes(bytes), bytes);
+  }
+
+  // ピンアニメーションを適用したマーカーセットを返す
+  Set<Marker> _getAnimatedMarkers() {
+    // ふわふわ: easeInOut カーブで anchor.dy を 1.0 〜 1.12 に揺らす
+    final double t = CurvedAnimation(
+      parent: _pinFloatController,
+      curve: Curves.easeInOut,
+    ).value;
+    final double floatAnchorDy = 1.0 + sin(t * pi) * 0.12;
+
+    if (floatAnchorDy == 1.0 && _markerSpinIcons.isEmpty) return _markers;
+
+    return _markers.map((marker) {
+      final String id = marker.markerId.value;
+      final BitmapDescriptor? spinIcon = _markerSpinIcons[id];
+      if (spinIcon != null) {
+        return marker.copyWith(
+          anchorParam: Offset(0.5, floatAnchorDy),
+          iconParam: spinIcon,
+        );
+      }
+      return marker.copyWith(
+        anchorParam: Offset(0.5, floatAnchorDy),
+      );
+    }).toSet();
+  }
+
+  // Y軸スピン用: PNG画像をX方向にスケールして新しいビットマップを生成
+  Future<Uint8List> _buildScaledImage(ui.Image src, double scaleX) async {
+    final double w = src.width.toDouble();
+    final double h = src.height.toDouble();
+    final ui.PictureRecorder recorder = ui.PictureRecorder();
+    final Canvas canvas = Canvas(recorder);
+    // 縦軸中心でX方向スケール（Y軸スピンのシミュレーション）
+    canvas.translate(w / 2, 0);
+    canvas.scale(scaleX, 1.0);
+    canvas.translate(-w / 2, 0);
+    canvas.drawImage(src, Offset.zero, Paint());
+    final ui.Image img =
+        await recorder.endRecording().toImage(w.toInt(), h.toInt());
+    final ByteData? bd = await img.toByteData(format: ui.ImageByteFormat.png);
+    return bd!.buffer.asUint8List();
+  }
+
+  // 指定マーカーのY軸スピンアニメーションを実行
+  Future<void> _spinMarker(String markerId) async {
+    final String? cacheKey = _markerIdToCacheKey[markerId];
+    if (cacheKey == null) return;
+    final Uint8List? bytes = _markerBytesCache[cacheKey];
+    if (bytes == null) return;
+
+    final ui.Codec codec = await ui.instantiateImageCodec(bytes);
+    final ui.FrameInfo frame = await codec.getNextFrame();
+    final ui.Image srcImage = frame.image;
+
+    // 5〜6回転、cubic ease-out（最初は速く重力の法則で減速）
+    final int rotations = 5 + Random().nextInt(2); // 5 or 6
+    final double totalAngle = rotations * 2 * pi;
+    const int totalDurationMs = 2000;
+    const int frameIntervalMs = 50;
+    const int totalFrames = totalDurationMs ~/ frameIntervalMs; // 40フレーム
+
+    for (int i = 1; i <= totalFrames; i++) {
+      await Future.delayed(const Duration(milliseconds: frameIntervalMs));
+      if (!mounted) return;
+
+      final double t = i / totalFrames;
+      // cubic ease-out: 1 - (1-t)^3 → 最初速く、末端で急減速
+      final double easedT = 1.0 - pow(1.0 - t, 3).toDouble();
+      final double angle = totalAngle * easedT;
+      // Y軸スピンをX方向スケールで擬似表現（対称なので絶対値）
+      final double scaleX = cos(angle).abs();
+
+      if (i == totalFrames) {
+        setState(() => _markerSpinIcons.remove(markerId));
+      } else if (scaleX > 0.98) {
+        // 正面向きのときは元画像をそのまま表示
+        setState(() => _markerSpinIcons.remove(markerId));
+      } else {
+        final Uint8List scaledBytes = await _buildScaledImage(srcImage, scaleX);
+        if (!mounted) return;
+        setState(() {
+          _markerSpinIcons[markerId] = BitmapDescriptor.fromBytes(scaledBytes);
+        });
+      }
+    }
+  }
+
+  // 指定マーカーの次のスピンをランダム間隔でスケジュール
+  void _scheduleMarkerSpin(String markerId) {
+    _markerSpinTimers[markerId]?.cancel();
+    if (!mounted) return;
+    final int delayMs = 5000 + Random().nextInt(7000); // 5〜12秒
+    _markerSpinTimers[markerId] = Timer(Duration(milliseconds: delayMs), () {
+      if (mounted) {
+        _spinMarker(markerId).then((_) => _scheduleMarkerSpin(markerId));
+      }
+    });
+  }
+
+  // 全マーカーのランダムスピンスケジュールを初期化
+  void _scheduleRandomSpins() {
+    for (final Timer t in _markerSpinTimers.values) {
+      t.cancel();
+    }
+    _markerSpinTimers.clear();
+    _markerSpinIcons.clear();
+
+    final Random random = Random();
+    for (final Marker marker in _markers) {
+      final String markerId = marker.markerId.value;
+      final int initialDelay = random.nextInt(8000); // 0〜8秒のランダム初期遅延
+      _markerSpinTimers[markerId] =
+          Timer(Duration(milliseconds: initialDelay), () {
+        if (mounted) {
+          _spinMarker(markerId).then((_) => _scheduleMarkerSpin(markerId));
+        }
+      });
+    }
   }
 
   // マーカーを作成
@@ -1182,7 +1972,7 @@ class _MapViewState extends ConsumerState<MapView> {
     // 店舗マーカー
     for (final store in _stores) {
       // 「営業中のみ」モード時のフィルタ
-      if (_showOpenNowOnly && !_isStoreOpenNow(store)) {
+      if (_mapFilter.showOpenNowOnly && !_isStoreOpenNow(store)) {
         continue;
       }
       // 詳細フィルターの適用
@@ -1198,26 +1988,53 @@ class _MapViewState extends ConsumerState<MapView> {
         flowerType: flowerType,
         category: category,
         storeIconUrl: storeIconUrl,
+        storeId: storeId,
       );
-      final double size = isExpanded ? 80.0 : 40.0;
+      final double size = isExpanded ? 116.0 : 58.0;
       final double borderWidth = isExpanded ? 2.4 : 1.2;
       final Color borderColor = visual.useImage ? Colors.black : Colors.white70;
       final Color iconColor = visual.iconColor ??
           (visual.useImage ? Colors.grey[700]! : Colors.white);
 
-      // 開拓・未開拓モード時のピンアクセント色
+      // ピンアクセント色の決定
       Color pinAccentColor = const Color(0xFFFF6B35);
-      if (_showExplorationMode) {
+      bool isLegend = false;
+      bool isGrayPin = false;
+      bool isGreenPin = false;
+
+      if (_personalMapMode) {
+        // 個人モード: 来店回数に応じたステータス色
+        final totalVisits =
+            (_userStamps[storeId]?['totalVisits'] as num?)?.toInt() ?? 0;
+        final status = _getPersonalMapStatus(totalVisits);
+        pinAccentColor = _getPersonalMapColor(status);
+        isLegend = status == 'legend';
+        isGrayPin = status == 'undiscovered';
+      } else if (_mapFilter.pioneerMode) {
+        // 開拓モード: スタンプ数で色分け
         final stamps = _userStamps[storeId]?['stamps'] ?? 0;
         if (stamps >= 1) {
           pinAccentColor = const Color(0xFF2196F3); // 開拓済み = 青
         } else {
           pinAccentColor = const Color(0xFFBDBDBD); // 未開拓 = グレー
+          isGrayPin = true;
+        }
+      } else {
+        // 通常モード: 営業中=緑、営業時間外=グレー
+        final isOpen = _isStoreOpenNow(store);
+        if (isOpen) {
+          pinAccentColor = const Color(0xFF43A047);
+          isGreenPin = true;
+        } else {
+          pinAccentColor = const Color(0xFFBDBDBD);
+          isGrayPin = true;
         }
       }
 
-      final String cacheKey =
-          '${_selectedMode}|$flowerType|$category|$isExpanded|$storeIconUrl|${_showExplorationMode ? pinAccentColor.value : 0}';
+      final String cacheKey = _personalMapMode
+          ? 'personal|${(_userStamps[storeId]?['totalVisits'] as num?)?.toInt() ?? 0}|$isExpanded|$storeIconUrl|$flowerType|$category'
+          : '${_mapMode}|${_mapFilter.categoryMode}|${_mapFilter.pioneerMode}|$flowerType|$category|$isExpanded|$storeIconUrl|${pinAccentColor.value}';
+      _markerIdToCacheKey[storeId] = cacheKey;
       final BitmapDescriptor markerIcon = await _getMarkerIcon(
         cacheKey: cacheKey,
         size: size,
@@ -1228,6 +2045,9 @@ class _MapViewState extends ConsumerState<MapView> {
         iconColor: iconColor,
         storeIconUrl: visual.useImage ? storeIconUrl : '',
         pinAccentColor: pinAccentColor,
+        isLegend: isLegend,
+        isGrayPin: isGrayPin,
+        isGreenPin: isGreenPin,
       );
 
       markers.add(
@@ -1237,6 +2057,7 @@ class _MapViewState extends ConsumerState<MapView> {
           icon: markerIcon,
           anchor: const Offset(0.5, 1.0),
           onTap: () async {
+            HapticFeedback.mediumImpact();
             setState(() {
               if (_expandedMarkerId == storeId) {
                 _expandedMarkerId = '';
@@ -1247,9 +2068,28 @@ class _MapViewState extends ConsumerState<MapView> {
                 _selectedStoreUid = storeId;
               }
             });
+            // 選択リングアニメーション
+            if (_isShowStoreInfo) {
+              final screenPos = await _mapController
+                  ?.getScreenCoordinate(store['position'] as LatLng);
+              if (screenPos != null && mounted) {
+                setState(() {
+                  _selectedMarkerScreenPos = Offset(
+                    screenPos.x.toDouble(),
+                    screenPos.y.toDouble(),
+                  );
+                  _showSelectionRing = true;
+                });
+                _selectionRingController
+                  ..reset()
+                  ..forward();
+              }
+            }
             // ウォークスルーステップ2 → 3に進行
             final wState = ref.read(walkthroughProvider);
-            if (wState.isActive && wState.step == WalkthroughStep.tapMarker && _isShowStoreInfo) {
+            if (wState.isActive &&
+                wState.step == WalkthroughStep.tapMarker &&
+                _isShowStoreInfo) {
               ref.read(walkthroughProvider.notifier).nextStep();
             }
             await _createMarkers();
@@ -1265,6 +2105,7 @@ class _MapViewState extends ConsumerState<MapView> {
     setState(() {
       _markers = markers;
     });
+    _scheduleRandomSpins();
   }
 
   // 「営業中」かどうかを判定（scheduleOverrides優先）
@@ -1275,8 +2116,7 @@ class _MapViewState extends ConsumerState<MapView> {
       // scheduleOverrides を最優先でチェック
       final rawOverrides = store['scheduleOverrides'];
       if (rawOverrides is Map) {
-        final todayKey =
-            '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+        final todayKey = '${now.year}-${now.month.toString().padLeft(2, '0')}-'
             '${now.day.toString().padLeft(2, '0')}';
         final override = rawOverrides[todayKey];
         if (override is Map) {
@@ -1369,8 +2209,7 @@ class _MapViewState extends ConsumerState<MapView> {
     // scheduleOverrides を最優先でチェック
     final rawOverrides = store['scheduleOverrides'];
     if (rawOverrides is Map) {
-      final todayKey =
-          '${now.year}-${now.month.toString().padLeft(2, '0')}-'
+      final todayKey = '${now.year}-${now.month.toString().padLeft(2, '0')}-'
           '${now.day.toString().padLeft(2, '0')}';
       final override = rawOverrides[todayKey];
       if (override is Map) {
@@ -1403,9 +2242,8 @@ class _MapViewState extends ConsumerState<MapView> {
       'sunday',
     ];
     final int mondayFirstIndex = now.weekday == 7 ? 6 : now.weekday - 1;
-    final dayData =
-        (businessHours[days[mondayFirstIndex]] as Map?)
-            ?.cast<String, dynamic>();
+    final dayData = (businessHours[days[mondayFirstIndex]] as Map?)
+        ?.cast<String, dynamic>();
     if (dayData == null) return '';
 
     final isOpen = dayData['isOpen'] == true;
@@ -1452,8 +2290,7 @@ class _MapViewState extends ConsumerState<MapView> {
     if (filter.explorationStatus.isNotEmpty) {
       final String flowerType = (store['flowerType'] ?? 'unvisited').toString();
       // flowerType: 'unvisited', 'visited'(exploring), 'regular'
-      final String status =
-          flowerType == 'visited' ? 'exploring' : flowerType;
+      final String status = flowerType == 'visited' ? 'exploring' : flowerType;
       if (!filter.explorationStatus.contains(status)) return false;
     }
 
@@ -1492,8 +2329,7 @@ class _MapViewState extends ConsumerState<MapView> {
         final userStamp = _userStamps[storeId];
         final int stamps = (userStamp?['stamps'] as int?) ?? 0;
         final hasAvailable = coupons.any((coupon) {
-          final requiredStamps =
-              (coupon['requiredStampCount'] as int?) ?? 0;
+          final requiredStamps = (coupon['requiredStampCount'] as int?) ?? 0;
           return stamps >= requiredStamps;
         });
         if (!hasAvailable) return false;
@@ -1523,29 +2359,31 @@ class _MapViewState extends ConsumerState<MapView> {
       orElse: () => {},
     );
 
-    if (store.isNotEmpty) {
-      setState(() {
-        _selectedStoreUid = storeId;
-        _isShowStoreInfo = true;
-        _expandedMarkerId = storeId;
-      });
+    if (store.isEmpty) return;
 
-      // 地図をその店舗の位置に移動
-      _currentCenter = store['position'];
+    final LatLng storePosition = store['position'] as LatLng;
+
+    setState(() {
+      _selectedStoreUid = storeId;
+      _isShowStoreInfo = true;
+      _expandedMarkerId = storeId;
+      _currentCenter = storePosition;
       _currentZoom = 16.0;
-      _mapController?.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: _currentCenter,
-            zoom: _currentZoom,
-            bearing: _currentBearing,
-          ),
-        ),
-      );
+    });
 
-      // マーカーを再作成してサイズを更新
-      await _createMarkers();
-    }
+    await _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _currentCenter,
+          zoom: _currentZoom,
+          bearing: _currentBearing,
+        ),
+      ),
+    );
+
+    // マーカーを再作成してサイズを更新
+    await _createMarkers();
+    await _showSelectionRingAt(storePosition);
   }
 
   @override
@@ -1555,7 +2393,7 @@ class _MapViewState extends ConsumerState<MapView> {
         children: [
           // Google Map
           GoogleMap(
-            style: '[{"featureType":"poi","elementType":"all","stylers":[{"visibility":"off"}]}]',
+            style: _gameMapStyle,
             initialCameraPosition: CameraPosition(
               target: _currentCenter,
               zoom: _currentZoom,
@@ -1575,7 +2413,8 @@ class _MapViewState extends ConsumerState<MapView> {
                 );
               }
             },
-            markers: _markers,
+            markers: _getAnimatedMarkers(),
+            circles: _getActiveCircles(),
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
             zoomControlsEnabled: false,
@@ -1594,20 +2433,71 @@ class _MapViewState extends ConsumerState<MapView> {
             },
           ),
 
+          // モードトグル（通常 / 個人 / コミュニティ）
+          if (!_isSearchExpanded) _buildModeToggle(),
+
+          // コミュニティモード サブモードトグル（開拓率 / 賑わい度）
+          _buildCommunitySubModeToggle(),
+
+          // 通常モード 凡例カード
+          if (_mapMode == 'normal') _buildNormalModeLegend(),
+
+          // 個人モード 凡例カード
+          _buildPersonalModeLegend(),
+
+          // コミュニティモード 凡例カード
+          _buildCommunityModeLegend(),
+
+          // 検索フォーカス時のグレーアウトオーバーレイ（タブ・凡例カードの上、検索バーの下）
+          if (_isSearchExpanded)
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: _collapseSearch,
+                child: Container(
+                  color: Colors.black.withOpacity(0.5),
+                ),
+              ),
+            ),
+
           // 検索バー
           _buildSearchBar(),
-
-          // 開拓・未開拓トグル
-          _buildExplorationToggle(),
 
           // 検索結果リスト
           if (_searchQuery.isNotEmpty) _buildSearchResults(),
 
-          // 拡大されたマーカーオーバーレイ
+          // 地図コントロールボタン（詳細カードの下に描画）
+          _buildMapControls(),
+
+          // 拡大されたマーカーオーバーレイ（最前面）
           if (_isShowStoreInfo) _buildStoreInfoCard(),
 
-          // 地図コントロールボタン
-          _buildMapControls(),
+          // 選択リングアニメーション
+          if (_showSelectionRing && _selectedMarkerScreenPos != null)
+            Positioned(
+              left: _selectedMarkerScreenPos!.dx - 60,
+              top: _selectedMarkerScreenPos!.dy - 60,
+              child: AnimatedBuilder(
+                animation: _selectionRingController,
+                builder: (context, child) {
+                  final t = _selectionRingController.value;
+                  final size = 120.0 * (0.5 + t * 0.5);
+                  return Opacity(
+                    opacity: (1.0 - t).clamp(0.0, 1.0),
+                    child: Container(
+                      width: size,
+                      height: size,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppUi.primary,
+                          width: 2.0 * (1.0 - t),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
 
           // ウォークスルーオーバーレイ（ステップ2: マーカータップ誘導）
           _buildMapWalkthroughOverlay(),
@@ -1622,34 +2512,99 @@ class _MapViewState extends ConsumerState<MapView> {
 
     if (wState.step == WalkthroughStep.tapMarker) {
       final config = walkthroughStepConfigs[WalkthroughStep.tapMarker];
-      return WalkthroughOverlay(
-        message: config?.message ?? '',
-        messagePosition: config?.messagePosition ?? MessagePosition.top,
-        passThrough: true,
-        overlayOpacity: 0.3,
-        onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
-      );
-    }
+      final safeTop = MediaQuery.of(context).padding.top;
 
-    if (wState.step == WalkthroughStep.tapClosePanel && _isShowStoreInfo) {
-      final config = walkthroughStepConfigs[WalkthroughStep.tapClosePanel];
-      return WalkthroughOverlay(
-        targetKey: _closeBtnKey,
-        message: config?.message ?? '',
-        messagePosition: config?.messagePosition ?? MessagePosition.top,
-        allowTapThrough: true,
-        onTargetTap: () async {
-          final wState = ref.read(walkthroughProvider);
-          if (wState.isActive && wState.step == WalkthroughStep.tapClosePanel) {
-            ref.read(walkthroughProvider.notifier).nextStep();
-          }
-          setState(() {
-            _isShowStoreInfo = false;
-            _expandedMarkerId = '';
-          });
-          await _createMarkers();
-        },
-        onSkip: () => ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+      return Stack(
+        children: [
+          // 中央を透明に・端を暗くする放射グラデーション（ピンが目立つように）
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment.center,
+                    radius: 0.85,
+                    colors: [
+                      Colors.black.withOpacity(0.0),
+                      Colors.black.withOpacity(0.55),
+                    ],
+                    stops: const [0.3, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // メッセージバナー（マップへのタップは透過）
+          Positioned(
+            top: safeTop + 60,
+            left: 16,
+            right: 16,
+            child: IgnorePointer(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.72),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      config?.message ?? '',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        height: 1.5,
+                      ),
+                    ),
+                    if (config?.subMessage != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        config!.subMessage!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 13,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // スキップボタン（タップ可能）
+          Positioned(
+            top: safeTop + 8,
+            right: 16,
+            child: GestureDetector(
+              onTap: () =>
+                  ref.read(walkthroughProvider.notifier).skipWalkthrough(),
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'スキップ',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
 
@@ -1679,310 +2634,354 @@ class _MapViewState extends ConsumerState<MapView> {
             ? '$categoryText / $subCategoryText'
             : categoryText;
 
+    final totalVisits = (userStamp?['totalVisits'] as num?)?.toInt() ?? 0;
+    final status = _getPersonalMapStatus(totalVisits);
+
+    final double bottomNavBarHeight =
+        MediaQuery.of(context).padding.bottom + 90;
+
     return Positioned(
-      bottom: 20,
+      bottom: bottomNavBarHeight,
       left: 20,
       right: 20,
-      child: Stack(
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
+      child: Container(
+        decoration: BoxDecoration(
+          color: _gameBackground,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _gameBorder.withOpacity(0.6),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _gameBorder.withOpacity(0.15),
+              blurRadius: 20,
+              spreadRadius: 2,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 店舗イメージ画像セクション
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(12),
-                  ),
-                  child: AspectRatio(
-                    aspectRatio: 2.0,
-                    child: Stack(
-                      children: [
-                        Container(
-                          width: double.infinity,
-                          color: Colors.grey[300],
-                          child: selectedStore['storeImageUrl'] != null &&
-                                  (selectedStore['storeImageUrl'] as String).isNotEmpty
-                              ? Image.network(
-                                  selectedStore['storeImageUrl'] as String,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(
-                                      child: Icon(
-                                        _getDefaultStoreIcon(category),
-                                        size: 40,
-                                        color: Colors.grey,
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Center(
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 店舗画像セクション
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: AspectRatio(
+                aspectRatio: 2.0,
+                child: Stack(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      color: const Color(0xFF0D1B2A),
+                      child: selectedStore['storeImageUrl'] != null &&
+                              (selectedStore['storeImageUrl'] as String)
+                                  .isNotEmpty
+                          ? Image.network(
+                              selectedStore['storeImageUrl'] as String,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Center(
                                   child: Icon(
                                     _getDefaultStoreIcon(category),
                                     size: 40,
-                                    color: Colors.grey,
+                                    color: Colors.grey[600],
                                   ),
-                                ),
-                        ),
-                        // ジャンルバッジ
-                        Positioned(
-                          top: 10,
-                          left: 10,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              categoryDisplay,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFFFF6B35),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                // テキスト情報セクション
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 店舗名
-                      Text(
-                        selectedStore['name'] ?? '店舗名なし',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      // 営業時間バッジ + カテゴリ/サブカテゴリ
-                      Row(
-                        children: [
-                          // 営業状況バッジ
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: (isOpenNow
-                                      ? Colors.green[600]!
-                                      : Colors.grey[600]!)
-                                  .withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: (isOpenNow
-                                          ? Colors.green[600]!
-                                          : Colors.grey[600]!)
-                                      .withOpacity(0.3)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  isOpenNow
-                                      ? Icons.schedule
-                                      : Icons.schedule_outlined,
-                                  color: isOpenNow
-                                      ? Colors.green[600]
-                                      : Colors.grey[600],
-                                  size: 14,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  () {
-                                    final hours =
-                                        _getTodayHours(selectedStore);
-                                    if (isOpenNow) {
-                                      return hours.isNotEmpty
-                                          ? '営業中  $hours'
-                                          : '営業中';
-                                    } else {
-                                      return hours.isNotEmpty
-                                          ? hours
-                                          : '営業時間外';
-                                    }
-                                  }(),
-                                  style: TextStyle(
-                                    color: isOpenNow
-                                        ? Colors.green[600]
-                                        : Colors.grey[600],
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          // カテゴリ/サブカテゴリ
-                          Expanded(
-                            child: Text(
-                              categoryDisplay,
-                              style: TextStyle(
-                                fontSize: 12,
+                                );
+                              },
+                            )
+                          : Center(
+                              child: Icon(
+                                _getDefaultStoreIcon(category),
+                                size: 40,
                                 color: Colors.grey[600],
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
+                    ),
+                    // グラデーションオーバーレイ
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              const Color(0x80101E2E),
+                            ],
+                            stops: const [0.5, 1.0],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      // スタンプ進捗インジケータ
-                      SizedBox(
-                        height: 18,
-                        child: Row(
-                          children: List.generate(10, (index) {
-                            final isActive = index < stamps;
-                            return Container(
-                              width: 16,
-                              height: 16,
-                              margin: EdgeInsets.only(
-                                  right: index == 9 ? 0 : 6),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isActive
-                                    ? const Color(0xFFFF6B35)
-                                        .withOpacity(0.2)
-                                    : Colors.grey[200],
-                                border: Border.all(
-                                  color: isActive
-                                      ? const Color(0xFFFF6B35)
-                                      : Colors.grey[300]!,
-                                ),
-                              ),
-                              child: isActive
-                                  ? const Icon(
-                                      Icons.check,
-                                      size: 11,
-                                      color: Color(0xFFFF6B35),
-                                    )
-                                  : null,
-                            );
-                          }),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      // 詳細を見るボタン
-                      CustomButton(
-                        text: '詳細を見る',
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  StoreDetailView(store: selectedStore),
+                    ),
+                    // 営業状況バッジ（右上）
+                    Positioned(
+                      top: 10,
+                      right: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isOpenNow
+                              ? _gameOpenColor.withOpacity(0.9)
+                              : Colors.black54,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color:
+                                isOpenNow ? _gameOpenColor : Colors.grey[600]!,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: isOpenNow ? Colors.white : Colors.grey,
+                                shape: BoxShape.circle,
+                              ),
                             ),
-                          );
-                        },
-                        height: 44,
+                            const SizedBox(width: 4),
+                            Text(
+                              isOpenNow ? '営業中' : '営業時間外',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color:
+                                    isOpenNow ? Colors.white : Colors.grey[400],
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // 閉じるボタン（視認性向上のため白背景追加）
-          Positioned(
-            top: 8,
-            right: 8,
-            child: GestureDetector(
-              key: _closeBtnKey,
-              onTap: () async {
-                // ウォークスルーステップ3 → 4に進行
-                final wState = ref.read(walkthroughProvider);
-                if (wState.isActive && wState.step == WalkthroughStep.tapClosePanel) {
-                  ref.read(walkthroughProvider.notifier).nextStep();
-                }
-                setState(() {
-                  _isShowStoreInfo = false;
-                  _expandedMarkerId = '';
-                });
-                await _createMarkers();
-              },
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
+                    ),
+                    // ジャンルバッジ（左上）
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: AppUi.primary.withOpacity(0.7),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          categoryDisplay,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFFFF6B35),
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.close,
-                  size: 20,
-                ),
               ),
             ),
-          ),
-        ],
+            // ゲーム風情報セクション
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 店舗名 + 来店ステータスバッジ
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          selectedStore['name'] ?? '店舗名なし',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 0.5,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildVisitStatusBadge(status, totalVisits),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // スタンプ数 + 営業時間
+                  Row(
+                    children: [
+                      Icon(Icons.stars_rounded, color: AppUi.primary, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        'スタンプ $stamps 個',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[400],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(Icons.schedule, color: Colors.grey[500], size: 14),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          () {
+                            final hours = _getTodayHours(selectedStore);
+                            return hours.isNotEmpty ? hours : '---';
+                          }(),
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.grey[400]),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // 区切り線
+                  Container(
+                    height: 1,
+                    color: _gameBorder.withOpacity(0.2),
+                  ),
+                  const SizedBox(height: 12),
+                  // ゲーム風アクションボタン
+                  CustomButton(
+                    text: '詳細を見る',
+                    height: 44,
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
+                    ),
+                    icon: const Icon(
+                      Icons.arrow_forward_ios,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      letterSpacing: 1.0,
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              StoreDetailView(store: selectedStore),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  // 閉じるボタン（×）
+                  Center(
+                    child: GestureDetector(
+                      key: _closeBtnKey,
+                      onTap: () async {
+                        setState(() {
+                          _isShowStoreInfo = false;
+                          _expandedMarkerId = '';
+                        });
+                        await _createMarkers();
+                      },
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A2A3A),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _gameBorder.withOpacity(0.5),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: Colors.white54,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // フィルター設定画面への遷移
+  Widget _buildVisitStatusBadge(String status, int totalVisits) {
+    final color = _getPersonalMapColor(status);
+    final label = switch (status) {
+      'undiscovered' => '未発見',
+      'discovered' => '初発見',
+      'exploring' => '探索中',
+      'regular' => '常連',
+      'legend' => 'レジェンド',
+      _ => '',
+    };
+    if (label.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(0.6), width: 1),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          color: color,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  // フィルター設定ボトムシートを開く
   Future<void> _openFilterSettings() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      showDialog(
+      await showGameDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('ログインが必要です'),
-          content: const Text('フィルター機能を使用するにはログインしてください。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+        title: 'ログインが必要です',
+        message: 'フィルター機能を使用するにはログインしてください。',
+        icon: Icons.lock_outline,
+        actions: [
+          GameDialogAction(
+            label: 'OK',
+            isPrimary: true,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
       );
       return;
     }
 
-    final result = await Navigator.of(context).push<MapFilterModel>(
-      MaterialPageRoute(
-        builder: (context) =>
-            FilterSettingsView(initialFilter: _mapFilter),
-      ),
+    final result = await showModalBottomSheet<MapFilterModel>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FilterSettingsView(initialFilter: _mapFilter),
     );
 
     if (result != null && mounted) {
       setState(() {
         _mapFilter = result;
-        _showOpenNowOnly = result.showOpenNowOnly;
       });
 
       // クーポンフィルターが有効な場合はクーポンデータを再読み込み
@@ -1999,90 +2998,139 @@ class _MapViewState extends ConsumerState<MapView> {
     }
   }
 
-  Widget _buildExplorationToggle() {
+  Widget _buildSearchBar() {
     final double topPadding = MediaQuery.of(context).padding.top;
     const double searchTopOffset = 4;
-    const double searchHeight = 50;
-    const double toggleTopGap = 6;
-    return Positioned(
-      top: topPadding + searchTopOffset + searchHeight + toggleTopGap,
-      left: 20,
+
+    // ゲーム風シャドウ装飾
+    final boxShadow = [
+      BoxShadow(
+        color: Colors.black.withOpacity(0.3),
+        blurRadius: 10,
+        offset: const Offset(0, 2),
+      ),
+    ];
+
+    // フィルターボタン（常に表示）
+    Widget filterButton = GestureDetector(
+      onTap: _openFilterSettings,
       child: Container(
-        padding: const EdgeInsets.only(left: 10, right: 4, top: 4, bottom: 4),
+        width: 50,
+        height: 50,
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color:
+              _mapFilter.isActive ? const Color(0xFFFF6B35) : _gameBackground,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: _mapFilter.isActive
+                ? AppUi.primary.withOpacity(0.6)
+                : _gameBorder.withOpacity(0.4),
+            width: 1,
+          ),
+          boxShadow: boxShadow,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            const Text(
-              '開拓・未開拓',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            Icon(
+              Icons.tune,
+              color: _mapFilter.isActive ? Colors.white : Colors.grey[400],
+              size: 24,
             ),
-            const SizedBox(width: 2),
-            SizedBox(
-              height: 28,
-              width: 44,
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: Switch(
-                  value: _showExplorationMode,
-                  onChanged: (val) async {
-                    setState(() {
-                      _showExplorationMode = val;
-                    });
-                    _markerIconFutureCache.clear();
-                    await _createMarkers();
-                  },
-                  activeColor: Colors.white,
-                  activeTrackColor: AppUi.primary,
-                  inactiveThumbColor: Colors.white,
-                  inactiveTrackColor: const Color(0xFFE0E0E0),
-                  trackOutlineColor:
-                      const WidgetStatePropertyAll(Colors.transparent),
+            if (_mapFilter.isActive)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),
     );
-  }
 
-  Widget _buildSearchBar() {
-    final double topPadding = MediaQuery.of(context).padding.top;
-    const double searchTopOffset = 4;
+    if (!_isSearchExpanded) {
+      // 折りたたみ状態: 左に検索アイコン、右にフィルターボタン
+      return Positioned(
+        top: topPadding + searchTopOffset,
+        left: 20,
+        right: 20,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            GestureDetector(
+              onTap: _expandSearch,
+              child: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: _gameBackground,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: _gameBorder.withOpacity(0.4),
+                    width: 1,
+                  ),
+                  boxShadow: boxShadow,
+                ),
+                child: Icon(Icons.search, color: Colors.grey[400], size: 24),
+              ),
+            ),
+            filterButton,
+          ],
+        ),
+      );
+    }
+
+    // 展開状態: 左に戻るボタン、中央に検索フィールド
     return Positioned(
       top: topPadding + searchTopOffset,
       left: 20,
       right: 20,
       child: Row(
         children: [
-          // 検索ボックス
+          // 閉じるボタン
+          GestureDetector(
+            onTap: _collapseSearch,
+            child: Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: _gameBackground,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: _gameBorder.withOpacity(0.4),
+                  width: 1,
+                ),
+                boxShadow: boxShadow,
+              ),
+              child: Icon(Icons.arrow_back, color: Colors.grey[400], size: 24),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 検索フィールド
           Expanded(
             child: Container(
               height: 50,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(25),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                border: Border.all(
+                  color: _gameBorder.withOpacity(0.4),
+                  width: 1,
+                ),
+                boxShadow: boxShadow,
               ),
               child: TextField(
                 controller: _searchController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.black),
+                cursorColor: Colors.black,
                 onChanged: (value) {
                   setState(() {
                     _searchQuery = value.trim();
@@ -2091,12 +3139,12 @@ class _MapViewState extends ConsumerState<MapView> {
                 decoration: InputDecoration(
                   hintText: '店舗名を入力してください',
                   hintStyle: TextStyle(
-                    color: Colors.grey[600],
+                    color: Colors.grey[500],
                     fontSize: 16,
                   ),
-                  prefixIcon: const Icon(
+                  prefixIcon: Icon(
                     Icons.search,
-                    color: Colors.grey,
+                    color: Colors.grey[400],
                     size: 24,
                   ),
                   suffixIcon: _searchQuery.isNotEmpty
@@ -2107,9 +3155,9 @@ class _MapViewState extends ConsumerState<MapView> {
                               _searchQuery = '';
                             });
                           },
-                          child: const Icon(
+                          child: Icon(
                             Icons.close,
-                            color: Colors.grey,
+                            color: Colors.grey[400],
                             size: 20,
                           ),
                         )
@@ -2117,52 +3165,6 @@ class _MapViewState extends ConsumerState<MapView> {
                   border: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // フィルターボタン
-          GestureDetector(
-            onTap: _openFilterSettings,
-            child: Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: _mapFilter.isActive
-                    ? const Color(0xFFFF6B35)
-                    : Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Icon(
-                    Icons.tune,
-                    color: _mapFilter.isActive ? Colors.white : Colors.grey[700],
-                    size: 24,
-                  ),
-                  // フィルター有効時のインジケーター
-                  if (_mapFilter.isActive)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                ],
               ),
             ),
           ),
@@ -2192,13 +3194,16 @@ class _MapViewState extends ConsumerState<MapView> {
     const double resultsTopGap = 4;
 
     final query = _normalizeForSearch(_searchQuery);
-    final matchedStores = _stores.where((store) {
-      final isActive = store['isActive'] == true;
-      final isApproved = store['isApproved'] == true;
-      if (!isActive || !isApproved) return false;
-      final name = _normalizeForSearch((store['name'] ?? '').toString());
-      return name.contains(query);
-    }).take(5).toList();
+    final matchedStores = _stores
+        .where((store) {
+          final isActive = store['isActive'] == true;
+          final isApproved = store['isApproved'] == true;
+          if (!isActive || !isApproved) return false;
+          final name = _normalizeForSearch((store['name'] ?? '').toString());
+          return name.contains(query);
+        })
+        .take(5)
+        .toList();
 
     if (matchedStores.isEmpty) return const SizedBox.shrink();
 
@@ -2226,33 +3231,11 @@ class _MapViewState extends ConsumerState<MapView> {
               borderRadius: index == 0
                   ? const BorderRadius.vertical(top: Radius.circular(12))
                   : index == matchedStores.length - 1
-                      ? const BorderRadius.vertical(
-                          bottom: Radius.circular(12))
+                      ? const BorderRadius.vertical(bottom: Radius.circular(12))
                       : BorderRadius.zero,
-              onTap: () {
-                FocusScope.of(context).unfocus();
-                _searchController.clear();
-                setState(() {
-                  _searchQuery = '';
-                });
-                // カメラ移動のみ（ピン拡大・ポップアップなし）
-                final storeData = _stores.firstWhere(
-                  (s) => s['id'] == store['id'],
-                  orElse: () => {},
-                );
-                if (storeData.isNotEmpty) {
-                  _currentCenter = storeData['position'] as LatLng;
-                  _currentZoom = 16.0;
-                  _mapController?.animateCamera(
-                    CameraUpdate.newCameraPosition(
-                      CameraPosition(
-                        target: _currentCenter,
-                        zoom: _currentZoom,
-                        bearing: _currentBearing,
-                      ),
-                    ),
-                  );
-                }
+              onTap: () async {
+                _collapseSearch();
+                await _selectStoreOnMap(store['id'] as String);
               },
               child: Padding(
                 padding: const EdgeInsets.symmetric(
@@ -2272,89 +3255,266 @@ class _MapViewState extends ConsumerState<MapView> {
     );
   }
 
-  // 検索バー下にフィルタ用のチップを表示
-  Widget _buildFilterChips() {
+  // 上部モードトグル（通常 / 個人 / コミュニティ）
+  Widget _buildModeToggle() {
+    const modes = ['normal', 'personal', 'community'];
     final double topPadding = MediaQuery.of(context).padding.top;
-    const double searchTopOffset = 4;
-    const double searchHeight = 50;
-    const double chipsTopGap = 6;
-    final double topY =
-        topPadding + searchTopOffset + searchHeight + chipsTopGap;
     return Positioned(
-      top: topY,
-      left: 20,
-      right: 90, // 右側は現在位置ボタンと重ならないよう余白
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
+      top: topPadding + 16,
+      left: 78,
+      right: 78,
+      child: Center(
+        child: CompactToggleBar(
+          labels: const ['通常', '個人', 'コミュニティ'],
+          selectedIndex: modes.indexOf(_mapMode).clamp(0, 2),
+          onChanged: (index) => _setMapMode(modes[index]),
+        ),
+      ),
+    );
+  }
+
+  // 凡例カードの共通アコーディオンウィジェット（くの字矢印で開閉）
+  Widget _buildLegendCard(
+      {required String title, required List<Widget> items}) {
+    final BoxDecoration cardDecoration = BoxDecoration(
+      color: Colors.white.withOpacity(0.92),
+      borderRadius: BorderRadius.circular(10),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.12),
+          blurRadius: 6,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    );
+    return GestureDetector(
+      onTap: () => setState(() => _isLegendVisible = !_isLegendVisible),
+      child: Container(
+        decoration: cardDecoration,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            FilterChip(
-              label: const Text('営業中'),
-              selected: _showOpenNowOnly,
-              onSelected: (val) async {
-                setState(() {
-                  _showOpenNowOnly = val;
-                });
-                await _createMarkers();
-              },
+            // ヘッダー行（常に表示）
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    _isLegendVisible ? Icons.expand_less : Icons.expand_more,
+                    size: 16,
+                    color: Colors.black45,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(width: 8),
-            ChoiceChip(
-              label: const Text('ジャンル別'),
-              selected: _selectedMode == 'category',
-              onSelected: (val) async {
-                setState(() {
-                  if (val) {
-                    _selectedMode = 'category';
-                    _categoryMode = true;
-                    _pioneerMode = false;
-                  } else {
-                    _selectedMode = 'none';
-                    _categoryMode = false;
-                    _pioneerMode = false;
-                  }
-                });
-                await _createMarkers();
-              },
-            ),
-            const SizedBox(width: 8),
-            ChoiceChip(
-              label: const Text('開拓'),
-              selected: _selectedMode == 'pioneer',
-              onSelected: (val) async {
-                setState(() {
-                  if (val) {
-                    _selectedMode = 'pioneer';
-                    _pioneerMode = true;
-                    _categoryMode = false;
-                  } else {
-                    _selectedMode = 'none';
-                    _pioneerMode = false;
-                    _categoryMode = false;
-                  }
-                });
-                await _createMarkers();
-              },
-            ),
+            // 展開時のみアイテムを表示
+            if (_isLegendVisible) ...[
+              Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Colors.black.withOpacity(0.06)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: items,
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
+  // 凡例の1行アイテム（丸ドット＋ラベル）
+  Widget _buildLegendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(label,
+            style: const TextStyle(fontSize: 11, color: Colors.black87)),
+      ],
+    );
+  }
+
+  // 凡例の1行アイテム（丸ドット＋ラベル＋サブラベル）
+  Widget _buildLegendItemWithSub(Color color, String label, String subLabel) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(label,
+            style: const TextStyle(fontSize: 11, color: Colors.black87)),
+        const SizedBox(width: 4),
+        Text(
+          subLabel,
+          style: const TextStyle(fontSize: 10, color: Colors.black45),
+        ),
+      ],
+    );
+  }
+
+  // 通常モード用 凡例カード（営業時間内/外の色説明）
+  Widget _buildNormalModeLegend() {
+    final double topPadding = MediaQuery.of(context).padding.top;
+    final double topY = topPadding + 62;
+    return Positioned(
+      top: topY,
+      left: 20,
+      child: _buildLegendCard(
+        title: '凡例',
+        items: [
+          _buildLegendItem(const Color(0xFF43A047), '営業中'),
+          const SizedBox(height: 5),
+          _buildLegendItem(const Color(0xFFBDBDBD), '営業時間外'),
+        ],
+      ),
+    );
+  }
+
+  // 個人モード用 凡例カード（5段階ステータス）
+  Widget _buildPersonalModeLegend() {
+    if (_mapMode != 'personal') return const SizedBox.shrink();
+    final double topPadding = MediaQuery.of(context).padding.top;
+    final double topY = topPadding + 62;
+    return Positioned(
+      top: topY,
+      left: 20,
+      child: _buildLegendCard(
+        title: '凡例',
+        items: [
+          _buildLegendItemWithSub(const Color(0xFFBDBDBD), '未発見', '0回'),
+          const SizedBox(height: 5),
+          _buildLegendItemWithSub(const Color(0xFF29B6F6), '初発見', '1回'),
+          const SizedBox(height: 5),
+          _buildLegendItemWithSub(const Color(0xFF66BB6A), '探索中', '2〜4回'),
+          const SizedBox(height: 5),
+          _buildLegendItemWithSub(const Color(0xFFFB8C00), '常連', '5〜9回'),
+          const SizedBox(height: 5),
+          _buildLegendItemWithSub(const Color(0xFFFFB300), 'レジェンド', '10回〜'),
+        ],
+      ),
+    );
+  }
+
+  // コミュニティモード用 凡例カード
+  Widget _buildCommunityModeLegend() {
+    if (!_communityMapMode) return const SizedBox.shrink();
+    final double topPadding = MediaQuery.of(context).padding.top;
+    // サブモードトグル(34px程度) + gap(8)
+    final double topY = topPadding + 62 + 42;
+
+    final List<Widget> legendItems = _communitySubMode == 'exploration'
+        ? [_buildLegendItem(const Color(0xFFFF6B35), 'エリア境界')]
+        : [
+            _buildLegendItem(const Color(0xFFBDBDBD), '0人'),
+            const SizedBox(height: 5),
+            _buildLegendItem(const Color(0xFF29B6F6), '1〜10人'),
+            const SizedBox(height: 5),
+            _buildLegendItem(const Color(0xFF66BB6A), '11〜30人'),
+            const SizedBox(height: 5),
+            _buildLegendItem(const Color(0xFFFB8C00), '31〜100人'),
+            const SizedBox(height: 5),
+            _buildLegendItem(const Color(0xFFFFB300), '100人以上'),
+          ];
+
+    return Positioned(
+      top: topY,
+      left: 20,
+      child: _buildLegendCard(title: '凡例', items: legendItems),
+    );
+  }
+
+  // コミュニティモード時のサブモードトグル（開拓率 / 賑わい度）
+  Widget _buildCommunitySubModeToggle() {
+    if (!_communityMapMode) return const SizedBox.shrink();
+    final double topPadding = MediaQuery.of(context).padding.top;
+    // modeToggle(44) と search(50) が同じ高さ(top+4)、gap(8)
+    final double topY = topPadding + 62;
+    return Positioned(
+      top: topY,
+      left: 20,
+      child: CompactToggleBar(
+        labels: const ['開拓率', '賑わい度'],
+        selectedIndex: _communitySubMode == 'exploration' ? 0 : 1,
+        onChanged: (index) {
+          setState(() {
+            _communitySubMode = index == 0 ? 'exploration' : 'activity';
+          });
+        },
+      ),
+    );
+  }
+
+  Future<void> _loadPlayerStats() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      if (!mounted || !doc.exists) return;
+      final data = doc.data()!;
+      final discoveredCount =
+          (data['discoveredStoreCount'] as num?)?.toInt() ?? 0;
+      final badgeCount = (data['badgeCount'] as num?)?.toInt() ?? 0;
+
+      // ランキング順位を取得（自分より発見数が多いユーザー数 + 1）
+      int rank = 0;
+      try {
+        final countSnapshot = await FirebaseFirestore.instance
+            .collection('ranking_scores')
+            .doc('all_time')
+            .collection('users')
+            .where('discoveredStoreCount', isGreaterThan: discoveredCount)
+            .count()
+            .get();
+        rank = (countSnapshot.count ?? 0) + 1;
+      } catch (e) {
+        debugPrint('ランキング順位の取得失敗: $e');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _playerDiscoveredCount = discoveredCount;
+        _playerBadgeCount = badgeCount;
+        _playerRank = rank;
+      });
+    } catch (e) {
+      debugPrint('プレイヤー統計の読み込み失敗: $e');
+    }
+  }
+
   Widget _buildMapControls() {
     final double topPadding = MediaQuery.of(context).padding.top;
-    const double searchTopOffset = 4;
-    const double searchHeight = 50;
-    const double toggleTopGap = 6;
-    const double toggleHeight = 36;
-    const double controlsTopGap = 8;
-    final double topY = topPadding +
-        searchTopOffset +
-        searchHeight +
-        toggleTopGap +
-        toggleHeight +
-        controlsTopGap;
+    // modeToggle と search が同じ高さ(top+4+50)、gap(8)
+    final double topY = topPadding + 62;
 
     return Positioned(
       top: topY,
@@ -2383,11 +3543,15 @@ class _MapViewState extends ConsumerState<MapView> {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: Colors.black,
+                color: const Color(0xFF0D1B2A),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: _gameBorder.withOpacity(0.5),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -2419,11 +3583,15 @@ class _MapViewState extends ConsumerState<MapView> {
               width: 50,
               height: 50,
               decoration: BoxDecoration(
-                color: Colors.black,
+                color: const Color(0xFF0D1B2A),
                 shape: BoxShape.circle,
+                border: Border.all(
+                  color: _gameBorder.withOpacity(0.5),
+                  width: 1,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -2434,6 +3602,119 @@ class _MapViewState extends ConsumerState<MapView> {
                 color: Colors.white,
                 size: 24,
               ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // 発見数
+          GestureDetector(
+            onTap: () => showGameDialog(
+              context: context,
+              title: '発見した店舗数',
+              message:
+                  'これまでに発見（訪問）した店舗の総数です。\n新しいお店を訪れると数が増えていきます！\n\n現在: $_playerDiscoveredCount 店舗',
+              icon: Icons.search_rounded,
+              headerColor: const Color(0xFF29B6F6),
+              actions: [
+                GameDialogAction(
+                  label: '閉じる',
+                  onPressed: () => Navigator.of(context).pop(),
+                  isPrimary: true,
+                ),
+              ],
+            ),
+            child: _buildStatCircle(
+              icon: Icons.search_rounded,
+              iconColor: const Color(0xFF29B6F6),
+              value: '$_playerDiscoveredCount',
+            ),
+          ),
+          const SizedBox(height: 10),
+          // バッジ数
+          GestureDetector(
+            onTap: () => showGameDialog(
+              context: context,
+              title: '獲得バッジ数',
+              message:
+                  'これまでに獲得したバッジの総数です。\nミッションをクリアしてバッジを集めよう！\n\n現在: $_playerBadgeCount 個',
+              icon: Icons.military_tech_rounded,
+              headerColor: const Color(0xFFB97CF0),
+              actions: [
+                GameDialogAction(
+                  label: '閉じる',
+                  onPressed: () => Navigator.of(context).pop(),
+                  isPrimary: true,
+                ),
+              ],
+            ),
+            child: _buildStatCircle(
+              icon: Icons.military_tech_rounded,
+              iconColor: const Color(0xFFB97CF0),
+              value: '$_playerBadgeCount',
+            ),
+          ),
+          const SizedBox(height: 10),
+          // 順位
+          GestureDetector(
+            onTap: () => showGameDialog(
+              context: context,
+              title: 'ランキング順位',
+              message:
+                  '発見した店舗数に基づくランキングの順位です。\nより多くの店舗を発見して上位を目指そう！\n\n現在: ${_playerRank > 0 ? '$_playerRank 位' : '集計中'}',
+              icon: Icons.leaderboard_rounded,
+              headerColor: const Color(0xFFFFB300),
+              actions: [
+                GameDialogAction(
+                  label: '閉じる',
+                  onPressed: () => Navigator.of(context).pop(),
+                  isPrimary: true,
+                ),
+              ],
+            ),
+            child: _buildStatCircle(
+              icon: Icons.leaderboard_rounded,
+              iconColor: const Color(0xFFFFB300),
+              value: _playerRank > 0 ? '$_playerRank' : '-',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCircle({
+    required IconData icon,
+    required Color iconColor,
+    required String value,
+  }) {
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D1B2A),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: _gameBorder.withOpacity(0.5),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: iconColor, size: 16),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],

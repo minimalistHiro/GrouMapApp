@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:groumapapp/widgets/app_loading_overlay.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -20,10 +21,10 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
   final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
   final _emailController = TextEditingController();
-  
+
   String _selectedCategory = 'その他';
   bool _isLoading = false;
-  
+
   final List<String> _categories = [
     'QRコードスキャンについて',
     '店舗情報の変更',
@@ -52,7 +53,7 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
   Future<void> _loadUserEmail() async {
     final authState = ref.read(authStateProvider);
     final user = authState.value;
-    
+
     if (user != null) {
       if ((user.email ?? '').isNotEmpty) {
         _emailController.text = user.email!;
@@ -61,7 +62,7 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
           .collection('users')
           .doc(user.uid)
           .get();
-      
+
       if (userDoc.exists && mounted) {
         final email = userDoc.data()?['email'] as String?;
         if (email != null) {
@@ -83,7 +84,7 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
     try {
       final authState = ref.read(authStateProvider);
       final user = authState.value;
-      
+
       // お問い合わせ内容をFirestoreに保存
       await FirebaseFirestore.instance.collection('support_requests').add({
         'userId': user?.uid ?? 'anonymous',
@@ -154,19 +155,19 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
   }
 
   Future<void> _sendEmail() async {
-    final subject = Uri.encodeComponent('[お問い合わせ] ${_subjectController.text.trim()}');
-    final body = Uri.encodeComponent(
-      'カテゴリ: $_selectedCategory\n'
-      '件名: ${_subjectController.text.trim()}\n'
-      '返信先: ${_emailController.text.trim()}\n\n'
-      '---お問い合わせ内容---\n'
-      '${_messageController.text.trim()}\n\n'
-      '---\n'
-      'このメールはGroumapアプリのお問い合わせフォームから送信されました。'
-    );
-    
-    final emailUrl = Uri.parse('mailto:info@groumapapp.com?subject=$subject&body=$body');
-    
+    final subject =
+        Uri.encodeComponent('[お問い合わせ] ${_subjectController.text.trim()}');
+    final body = Uri.encodeComponent('カテゴリ: $_selectedCategory\n'
+        '件名: ${_subjectController.text.trim()}\n'
+        '返信先: ${_emailController.text.trim()}\n\n'
+        '---お問い合わせ内容---\n'
+        '${_messageController.text.trim()}\n\n'
+        '---\n'
+        'このメールはGroumapアプリのお問い合わせフォームから送信されました。');
+
+    final emailUrl =
+        Uri.parse('mailto:info@groumapapp.com?subject=$subject&body=$body');
+
     try {
       if (await canLaunchUrl(emailUrl)) {
         await launchUrl(emailUrl);
@@ -202,35 +203,29 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
                   children: [
                     // ヘッダー情報
                     _buildHeaderCard(),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // お問い合わせフォーム
                     _buildFormCard(),
-                    
+
                     const SizedBox(height: 24),
-                    
+
                     // 送信ボタン
                     _buildSubmitButton(),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // 注意事項
                     _buildNoticeCard(),
-                    
+
                     const SizedBox(height: 16),
                   ],
                 ),
               ),
             ),
           ),
-          if (_isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
-            ),
+          if (_isLoading) const AppLoadingOverlay(),
         ],
       ),
     );
@@ -320,7 +315,8 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
             child: DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: const InputDecoration(
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 border: InputBorder.none,
                 prefixIcon: Icon(Icons.category, size: 20),
               ),
@@ -342,9 +338,9 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
               },
             ),
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // メールアドレス
           const Text(
             'メールアドレス',
@@ -370,24 +366,27 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFFF6B35), width: 2),
+                borderSide:
+                    const BorderSide(color: Color(0xFFFF6B35), width: 2),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
                 return 'メールアドレスを入力してください';
               }
-              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                  .hasMatch(value)) {
                 return '有効なメールアドレスを入力してください';
               }
               return null;
             },
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // 件名
           const Text(
             '件名',
@@ -413,9 +412,11 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFFF6B35), width: 2),
+                borderSide:
+                    const BorderSide(color: Color(0xFFFF6B35), width: 2),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
@@ -427,9 +428,9 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
               return null;
             },
           ),
-          
+
           const SizedBox(height: 20),
-          
+
           // メッセージ
           const Text(
             'お問い合わせ内容',
@@ -454,7 +455,8 @@ class _EmailSupportViewState extends ConsumerState<EmailSupportView> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFFF6B35), width: 2),
+                borderSide:
+                    const BorderSide(color: Color(0xFFFF6B35), width: 2),
               ),
               contentPadding: const EdgeInsets.all(16),
             ),

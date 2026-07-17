@@ -3340,3 +3340,29 @@
 - [ ] STORE_SALES_PRESENTATION.md の「3つの仕組みで解決」が「発見される / 低コスト / QRスキャンだけ」であること
 - [ ] 「リピーター育成」がメインの3大メリットとして掲載されていないこと（機能紹介セクションへの記載は問題なし）
 - [ ] STORE_FEATURE_GUIDE.md / STORE_FEATURE_GUIDE_SIMPLE.md に具体的な月額料金（○○円〜）が記載されていないこと（料金情報は STORE_SALES_PRESENTATION.md にのみ記載）
+
+## 2026-03-05
+
+### ユーザー用アプリ・Hosting — NFCチェックイン導線の単線化
+
+**インストール済み端末（正常系）**
+- [ ] iOS端末で `https://groumapapp.web.app/checkin?storeId=...&secret=...` をNFCタッチで1回開く → アプリが1回だけ起動し `NfcCouponSelectView` が1回だけ表示されること
+- [ ] Android端末で同URLをNFCタッチで1回開く → アプリ直起動またはWeb1回表示のいずれかになり、最終的に `NfcCouponSelectView` が1回だけ表示されること
+- [ ] `/checkin` Webページの「アプリで開く」ボタンを押す → `groumap://checkin?...` でアプリが開き `NfcCouponSelectView` に遷移すること
+
+**重複遷移防止（境界値）**
+- [ ] 同一タグを5秒以内に連続2回タッチする → 2回目は無視され、チェックイン画面が重複pushされないこと
+- [ ] 同一タグを5秒以上あけて再タッチする → 2回目は新規受付され、通常どおりチェックイン導線に進むこと
+- [ ] アプリ起動直後（initial link）と復帰時（link stream）で同一URLが連続受信される状況を作る → 画面遷移が1回に留まること
+
+**未インストール端末・Webフォールバック（正常系）**
+- [ ] 未インストール端末でNFCタッチする → `/checkin` Webページのみ表示され、自動でアプリ再起動しないこと
+- [ ] `/checkin` Webページを開く → iOS/App Store と Android/Google Play の両導線が表示されること
+- [ ] `/checkin` Webページを表示後に何もしないで30秒待機する → `groumap://` の自動実行が発生しないこと
+
+**Deep Link受理条件（異常系）**
+- [ ] `https://groumapapp.web.app/checkin?secret=...`（`storeId`欠落）を開く → チェックイン遷移されないこと
+- [ ] `https://groumapapp.web.app/checkin?storeId=...`（`secret`欠落）を開く → チェックイン遷移されないこと
+- [ ] `https://groumapapp.web.app/other?storeId=...&secret=...` を開く → チェックイン遷移されないこと
+- [ ] `groumap://other?storeId=...&secret=...` を開く → チェックイン遷移されないこと
+- [ ] 互換期間中に `https://groumap-ea452.web.app/checkin?storeId=...&secret=...` を開く → チェックイン遷移できること

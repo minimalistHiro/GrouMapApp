@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../widgets/common_header.dart';
+import '../../widgets/error_dialog.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ContactView extends StatelessWidget {
@@ -61,13 +62,17 @@ class ContactView extends StatelessWidget {
     if (await canLaunchUrl(uri)) {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('電話アプリを起動できませんでした。')),
+        ErrorDialog.showError(
+          context,
+          title: '起動できませんでした',
+          message: '電話アプリを起動できませんでした。',
         );
       }
     } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('電話機能が利用できません。')),
+      ErrorDialog.showError(
+        context,
+        title: '電話機能を利用できません',
+        message: 'この端末では電話機能を利用できません。',
       );
     }
   }
@@ -80,13 +85,17 @@ class ContactView extends StatelessWidget {
     if (await canLaunchUrl(uri)) {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('メールアプリを起動できませんでした。')),
+        ErrorDialog.showError(
+          context,
+          title: '起動できませんでした',
+          message: 'メールアプリを起動できませんでした。',
         );
       }
     } else if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('メール機能が利用できません。')),
+      ErrorDialog.showError(
+        context,
+        title: 'メール機能を利用できません',
+        message: 'この端末ではメール機能を利用できません。',
       );
     }
   }

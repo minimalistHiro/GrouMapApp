@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
+import '../../widgets/error_dialog.dart';
 
 class PasswordChangeView extends ConsumerStatefulWidget {
   const PasswordChangeView({Key? key}) : super(key: key);
@@ -43,18 +44,18 @@ class _PasswordChangeViewState extends ConsumerState<PasswordChangeView> {
     final authService = ref.read(authServiceProvider);
     final user = authService.currentUser;
     if (user == null) {
-      _showSnackBar('ログイン情報を確認できません');
+      _showErrorDialog('ログイン情報を確認できません。');
       return;
     }
 
     if (!_canChangePassword(user)) {
-      _showSnackBar('このアカウントではパスワード変更ができません');
+      _showErrorDialog('このアカウントではパスワードを変更できません。');
       return;
     }
 
     final email = user.email;
     if (email == null || email.isEmpty) {
-      _showSnackBar('メールアドレスを確認できません');
+      _showErrorDialog('メールアドレスを確認できません。');
       return;
     }
 
@@ -69,12 +70,6 @@ class _PasswordChangeViewState extends ConsumerState<PasswordChangeView> {
       await user.updatePassword(_newPasswordController.text);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('パスワードを変更しました'),
-          backgroundColor: Colors.green,
-        ),
-      );
       Navigator.of(context).pop(true);
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -86,10 +81,11 @@ class _PasswordChangeViewState extends ConsumerState<PasswordChangeView> {
       } else if (e.code == 'requires-recent-login') {
         message = '再ログインが必要です。ログアウト後にもう一度お試しください';
       }
-      _showSnackBar(message);
+      _showErrorDialog(message);
     } catch (e) {
       if (!mounted) return;
-      _showSnackBar('パスワード変更に失敗しました: $e');
+      debugPrint('パスワード変更エラー: $e');
+      _showErrorDialog('パスワードの変更に失敗しました。時間をおいて再度お試しください。');
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
@@ -97,12 +93,11 @@ class _PasswordChangeViewState extends ConsumerState<PasswordChangeView> {
     }
   }
 
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
+  void _showErrorDialog(String message) {
+    ErrorDialog.showError(
+      context,
+      title: 'パスワード変更エラー',
+      message: message,
     );
   }
 

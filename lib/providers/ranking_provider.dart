@@ -122,11 +122,70 @@ class RankingQuery {
 class RankingService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // ranking_scores コレクションから期間別ランキングを取得
+  Future<List<RankingModel>> _getRankingFromScores(RankingQuery query) async {
+    final periodId = _buildPeriodId(query.period);
+    final snapshot = await _firestore
+        .collection('ranking_scores')
+        .doc(periodId)
+        .collection('users')
+        .orderBy('score', descending: true)
+        .limit(query.limit)
+        .get();
+
+    final rankings = <RankingModel>[];
+    for (int i = 0; i < snapshot.docs.length; i++) {
+      final doc = snapshot.docs[i];
+      final data = doc.data();
+      final isOptOut = data['rankingOptOut'] as bool? ?? false;
+      rankings.add(RankingModel(
+        userId: doc.id,
+        displayName: isOptOut ? '名無し探検家' : (data['displayName'] as String? ?? '不明なユーザー'),
+        photoURL: isOptOut ? null : (data['photoURL'] as String?),
+        discoveredStoreCount: (data['score'] as num?)?.toInt() ?? 0,
+        totalPoints: 0,
+        badgeCount: 0,
+        stampCount: 0,
+        totalPayment: 0,
+        coins: 0,
+        lastUpdated: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        rank: i + 1,
+      ));
+    }
+    return rankings;
+  }
+
+  // 期間IDを生成するヘルパー
+  String _buildPeriodId(RankingPeriodType period) {
+    final now = DateTime.now();
+    final yyyy = now.year;
+    final mm = now.month.toString().padLeft(2, '0');
+    final dd = now.day.toString().padLeft(2, '0');
+
+    switch (period) {
+      case RankingPeriodType.allTime:
+        return 'alltime';
+      case RankingPeriodType.monthly:
+        return '$yyyy-$mm';
+      case RankingPeriodType.weekly:
+        final startOfYear = DateTime(yyyy, 1, 1);
+        final weekNum = ((now.difference(startOfYear).inDays + startOfYear.weekday) / 7).ceil();
+        return '$yyyy-W${weekNum.toString().padLeft(2, '0')}';
+      case RankingPeriodType.daily:
+        return '$yyyy-$mm-$dd';
+    }
+  }
+
   // ランキングデータを一度だけ取得（FutureProvider用）
   Future<List<RankingModel>> getRankingDataOnce(RankingQuery query) async {
+    // discoveredStoreCount は ranking_scores から高速取得
+    if (query.type == RankingType.discoveredStoreCount) {
+      return _getRankingFromScores(query);
+    }
+
     try {
       debugPrint('RankingService: Getting ranking data once for type: ${query.type}, period: ${query.period}');
-      
+
       final snapshot = await _firestore
           .collection('users')
           .get()
@@ -211,6 +270,8 @@ class RankingService {
       // ランキングタイプに応じてソート
       rankings.sort((a, b) {
         switch (query.type) {
+          case RankingType.discoveredStoreCount:
+            return b.discoveredStoreCount.compareTo(a.discoveredStoreCount);
           case RankingType.totalPoints:
             return b.totalPoints.compareTo(a.totalPoints);
           case RankingType.badgeCount:
@@ -301,6 +362,8 @@ class RankingService {
         // ランキングタイプに応じてソート
         rankings.sort((a, b) {
           switch (query.type) {
+            case RankingType.discoveredStoreCount:
+              return b.discoveredStoreCount.compareTo(a.discoveredStoreCount);
             case RankingType.totalPoints:
               return b.totalPoints.compareTo(a.totalPoints);
             case RankingType.badgeCount:
@@ -537,6 +600,8 @@ class RankingService {
   // ソートフィールドを取得
   String _getOrderByField(RankingType type) {
     switch (type) {
+      case RankingType.discoveredStoreCount:
+        return 'discoveredStoreCount';
       case RankingType.totalPoints:
         return 'points';
       case RankingType.badgeCount:

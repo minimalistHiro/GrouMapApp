@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/error_dialog.dart';
 
 class EmailChangeOtpView extends ConsumerStatefulWidget {
   final String newEmail;
@@ -31,12 +32,9 @@ class _EmailChangeOtpViewState extends ConsumerState<EmailChangeOtpView> {
   Future<void> _verifyOtp() async {
     final code = _codeController.text.trim();
     if (!RegExp(r'^\d{6}$').hasMatch(code)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('6桁の認証コードを入力してください'),
-          backgroundColor: Colors.orange,
-          duration: Duration(seconds: 2),
-        ),
+      ErrorDialog.showWarning(
+        context,
+        message: '6桁の認証コードを入力してください。',
       );
       return;
     }
@@ -48,20 +46,14 @@ class _EmailChangeOtpViewState extends ConsumerState<EmailChangeOtpView> {
       // ユーザーオブジェクトを最新状態に更新
       await ref.read(authServiceProvider).currentUser?.reload();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('メールアドレスを変更しました'),
-          backgroundColor: Colors.green,
-        ),
-      );
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('認証に失敗しました: $e'),
-          backgroundColor: Colors.red,
-        ),
+      debugPrint('メール変更認証エラー: $e');
+      ErrorDialog.showError(
+        context,
+        title: '認証に失敗しました',
+        message: '認証コードを確認して、もう一度お試しください。',
       );
     } finally {
       if (mounted) {
@@ -76,20 +68,13 @@ class _EmailChangeOtpViewState extends ConsumerState<EmailChangeOtpView> {
     try {
       await ref.read(authServiceProvider).sendEmailChangeOtp(widget.newEmail);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('認証コードを再送信しました'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('送信に失敗しました: $e'),
-          backgroundColor: Colors.red,
-        ),
+      debugPrint('メール変更認証コード再送信エラー: $e');
+      ErrorDialog.showError(
+        context,
+        title: '送信に失敗しました',
+        message: '認証コードを再送信できませんでした。時間をおいて再度お試しください。',
       );
     } finally {
       if (mounted) {
