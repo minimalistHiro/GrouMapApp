@@ -72,13 +72,15 @@
 
 ### email_otp
 - `email_otp/{uid}`: メール認証OTP
-  - `codeHash`: 認証コードのハッシュ
-  - `expiresAt`: 有効期限
-  - `attempts`: 試行回数
-  - `lastSentAt`: 最終送信日時
+  - `codeHash`: UIDを含めてSHA-256化した6桁認証コード
+  - `expiresAt`: 有効期限（発行から10分）
+  - `attempts`: 認証失敗回数（最大5回）
+  - `lastSentAt`: 最終送信日時（再送は1分間隔）
   - `targetEmail`: メール変更時の新メールアドレス（メール変更用OTP時のみ）
-  - `purpose`: OTP用途（`registration` = 新規登録時 / `emailChange` = メールアドレス変更時）
+  - `purpose`: メール変更用OTPでは `emailChange`。通常のメール認証OTPでは未設定
   - `updatedAt`: 更新日時
+  - **配送**: `requestEmailOtp` / `requestEmailChangeOtp` がResend APIを使用。Secretは `RESEND_API_KEY` / `RESEND_FROM`、送信元は `GrouMap <info@groumapapp.com>`
+  - **ライフサイクル**: 送信要求時に作成または上書きし、認証成功・期限切れ・メール配送失敗時に削除
 
 ### account_deletion_requests
 - `account_deletion_requests/{requestId}`: アカウント削除申請

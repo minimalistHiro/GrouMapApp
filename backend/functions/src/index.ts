@@ -6,7 +6,6 @@ import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
 import { defineSecret } from 'firebase-functions/params';
-import nodemailer from 'nodemailer';
 import https from 'https';
 import { createHash, randomInt, randomUUID } from 'crypto';
 import { issueQRToken, verifyQRToken } from './utils/jwt';
@@ -816,12 +815,8 @@ type ReturnRateRange = {
   rate?: number;
 };
 
-const SMTP_HOST = defineSecret('SMTP_HOST');
-const SMTP_PORT = defineSecret('SMTP_PORT');
-const SMTP_USER = defineSecret('SMTP_USER');
-const SMTP_PASS = defineSecret('SMTP_PASS');
-const SMTP_FROM = defineSecret('SMTP_FROM');
-const SMTP_SECURE = defineSecret('SMTP_SECURE');
+const RESEND_API_KEY = defineSecret('RESEND_API_KEY');
+const RESEND_FROM = defineSecret('RESEND_FROM');
 const INSTAGRAM_APP_ID = defineSecret('INSTAGRAM_APP_ID');
 const INSTAGRAM_APP_SECRET = defineSecret('INSTAGRAM_APP_SECRET');
 const INSTAGRAM_REDIRECT_URI = defineSecret('INSTAGRAM_REDIRECT_URI');
@@ -1089,28 +1084,68 @@ function buildOtpEmailText(code: string): string {
   ].join('\n');
 }
 
-function getSmtpConfig() {
-  const host = SMTP_HOST.value();
-  const port = Number(SMTP_PORT.value() ?? '587');
-  const user = SMTP_USER.value();
-  const pass = SMTP_PASS.value();
-  const from = SMTP_FROM.value();
-  const secure = (SMTP_SECURE.value() ?? 'false').toLowerCase() === 'true';
+function getResendConfig() {
+  const apiKey = RESEND_API_KEY.value();
+  const from = RESEND_FROM.value();
 
-  if (!host || !user || !pass || !from) {
+  if (!apiKey || !from) {
     throw new HttpsError('failed-precondition', 'メール送信の設定が未完了です');
   }
 
-  return {
-    host,
-    port,
-    secure,
-    auth: {
-      user,
-      pass,
+  return { apiKey, from };
+}
+
+class ResendApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly responseBody: string,
+  ) {
+    super(`Resend API request failed with status ${status}`);
+    this.name = 'ResendApiError';
+  }
+}
+
+async function sendOtpEmailWithResend({
+  to,
+  subject,
+  code,
+  uid,
+  purpose,
+}: {
+  to: string;
+  subject: string;
+  code: string;
+  uid: string;
+  purpose: 'login' | 'email-change';
+}): Promise<void> {
+  const resendConfig = getResendConfig();
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendConfig.apiKey}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': `groumap-email-otp-${purpose}-${uid}-${Date.now()}`,
     },
-    from,
-  };
+    body: JSON.stringify({
+      from: resendConfig.from,
+      to: [to],
+      subject,
+      text: buildOtpEmailText(code),
+    }),
+  });
+
+  if (response.ok) {
+    return;
+  }
+
+  let responseBody = '';
+  try {
+    responseBody = (await response.text()).slice(0, 2000);
+  } catch {
+    responseBody = '<failed to read response body>';
+  }
+
+  throw new ResendApiError(response.status, responseBody);
 }
 
 export const sendNotificationOnPublish = onDocumentWritten(
@@ -1755,7 +1790,7 @@ export const notifyPendingStoreRequest = onDocumentCreated(
 export const requestEmailOtp = onCall(
   {
     region: 'asia-northeast1',
-    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE],
+    secrets: [RESEND_API_KEY, RESEND_FROM],
   },
   async (request) => {
     if (!request.auth?.uid) {
@@ -1796,23 +1831,30 @@ export const requestEmailOtp = onCall(
     );
 
     try {
-      const smtpConfig = getSmtpConfig();
-      const transporter = nodemailer.createTransport({
-        host: smtpConfig.host,
-        port: smtpConfig.port,
-        secure: smtpConfig.secure,
-        auth: smtpConfig.auth,
-      });
-
-      await transporter.sendMail({
-        from: smtpConfig.from,
+      await sendOtpEmailWithResend({
         to: email,
         subject: '【ぐるまっぷ】メール認証コードのお知らせ',
-        text: buildOtpEmailText(code),
+        code,
+        uid,
+        purpose: 'login',
       });
     } catch (error) {
-      await otpRef.delete();
-      console.error('Failed to send OTP email:', error);
+      await otpRef.delete().catch(() => {});
+      console.error('Failed to send OTP email', {
+        provider: 'resend',
+        status: error instanceof ResendApiError ? error.status : null,
+        responseBody: error instanceof ResendApiError ? error.responseBody : null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      if (error instanceof ResendApiError && error.status === 429) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'メール送信が混み合っています。しばらくしてから再度お試しください',
+        );
+      }
       throw new HttpsError('internal', '認証コードの送信に失敗しました');
     }
 
@@ -1823,7 +1865,7 @@ export const requestEmailOtp = onCall(
 export const requestEmailChangeOtp = onCall(
   {
     region: 'asia-northeast1',
-    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM, SMTP_SECURE],
+    secrets: [RESEND_API_KEY, RESEND_FROM],
   },
   async (request) => {
     if (!request.auth?.uid) {
@@ -1883,23 +1925,30 @@ export const requestEmailChangeOtp = onCall(
     );
 
     try {
-      const smtpConfig = getSmtpConfig();
-      const transporter = nodemailer.createTransport({
-        host: smtpConfig.host,
-        port: smtpConfig.port,
-        secure: smtpConfig.secure,
-        auth: smtpConfig.auth,
-      });
-
-      await transporter.sendMail({
-        from: smtpConfig.from,
+      await sendOtpEmailWithResend({
         to: newEmail,
         subject: '【ぐるまっぷ】メールアドレス変更 認証コードのお知らせ',
-        text: buildOtpEmailText(code),
+        code,
+        uid,
+        purpose: 'email-change',
       });
     } catch (error) {
-      await otpRef.delete();
-      console.error('Failed to send email change OTP:', error);
+      await otpRef.delete().catch(() => {});
+      console.error('Failed to send email change OTP', {
+        provider: 'resend',
+        status: error instanceof ResendApiError ? error.status : null,
+        responseBody: error instanceof ResendApiError ? error.responseBody : null,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+      if (error instanceof ResendApiError && error.status === 429) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'メール送信が混み合っています。しばらくしてから再度お試しください',
+        );
+      }
       throw new HttpsError('internal', '認証コードの送信に失敗しました');
     }
 

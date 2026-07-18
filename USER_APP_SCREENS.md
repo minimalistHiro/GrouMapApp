@@ -1,6 +1,7 @@
 # ユーザー用アプリ 画面一覧（構成と説明）
 
 この一覧は `/Users/kanekohiroki/Desktop/groumapapp/lib/views` 配下の画面実装を基に整理しています。各画面の「構成」は主要なUI要素の概要、「説明」は用途の軽い要約です。
+※ 2026-07-18更新（メールOTP配送基盤移行）: ログイン時・メールアドレス変更時の6桁認証コード配送を、Google Workspace SMTPからResend APIへ変更。既存のOTP検証・有効期限・再送制限・画面遷移は維持。
 ※ 2026-07-17更新（スタンプ付与不整合修正）: QR押印とNFCチェックインの両方で、スタンプ未設定・0を含む全ユーザーへ同一店舗1日1個のスタンプを付与する仕様に統一。`lastStampDate` によるJST基準の1日1回制限は維持。
 ※ 2026-03-08更新（賑わい度凡例0人追加・個人モードtotalVisite読み込みバグ修正）: 賑わい度の凡例に「0人（グレー）= サークル表示なし」を先頭に追加。`_loadUserStamps()` で `totalVisits` フィールドを取得していなかったバグを修正（`users/{uid}/stores/{storeId}.totalVisits` を正しく読み込むよう変更）。これにより個人マップモードのピン色が実際の来店回数に連動するよう修正。
 ※ 2026-03-08更新（マップモード選択の永続化）: MapViewの選択モード（通常/個人/コミュニティ）を `SharedPreferences`（`map_mode` キー）にローカル保存し、次回起動時に自動復元するよう変更。`_loadMapModeFromPrefs()`（起動時復元）・`_saveMapModeToPrefs()`（モード変更時保存）を追加。
@@ -108,7 +109,7 @@
 
 ### EmailVerificationPendingView (`lib/views/auth/email_verification_pending_view.dart`)
 - 構成: 認証案内、注意事項、6桁コード入力、認証/再送ボタン
-- 説明: メール認証コード入力・再送画面。認証成功後は `goToUserInfoAfterVerify` フラグに加えて Firestore `users/{uid}` のプロフィール入力状態を判定し、未入力項目がある場合は `UserInfoView`、入力済みなら `MainNavigationView` へ遷移
+- 説明: Resend APIで配送されるメール認証コードの入力・再送画面。認証成功後は `goToUserInfoAfterVerify` フラグに加えて Firestore `users/{uid}` のプロフィール入力状態を判定し、未入力項目がある場合は `UserInfoView`、入力済みなら `MainNavigationView` へ遷移
 
 ### UserInfoView (`lib/views/auth/user_info_view.dart`)
 - 構成: ヘッダー（戻るボタン非表示）、ユーザー名入力（メール/Apple登録時のみ）、生年月日選択（年/月/日ドロップダウン）、性別選択（4択ドロップダウン）、友達紹介コード入力欄（キャンペーン期間中のみ常時表示・任意入力）、送信ボタン
@@ -385,7 +386,7 @@
 
 ### EmailChangeView (`lib/views/settings/email_change_view.dart`)
 - 構成: 現在のメールアドレス表示（読み取り専用）、新しいメールアドレス入力、パスワード入力（再認証用）、認証コード送信ボタン
-- 説明: メールアドレス変更画面。パスワード再認証後、新メールアドレスに6桁OTP認証コードを送信し、EmailChangeOtpViewに遷移
+- 説明: メールアドレス変更画面。パスワード再認証後、Resend APIで新メールアドレスに6桁OTP認証コードを送信し、EmailChangeOtpViewに遷移
 
 ### EmailChangeOtpView (`lib/views/settings/email_change_otp_view.dart`)
 - 構成: メールアイコン、説明文、6桁認証コード入力フィールド、認証ボタン、再送信ボタン
